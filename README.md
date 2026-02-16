@@ -74,7 +74,7 @@ Non-member visits paywalled content
 WP OJS/
 ├── README.md                          # This file
 ├── CLAUDE.md                          # AI assistant instructions and gotchas
-├── TODO.md                            # Task list, blocking questions, phased plan
+├── TODO.md                            # Task list and phased plan
 ├── docs/
 │   ├── architecture.md                # Decision trail and architecture options
 │   ├── ojs-api.md                     # OJS REST API reference, DB schema, PHP internals
@@ -82,7 +82,9 @@ WP OJS/
 │   ├── phase0-findings.md             # Raw research from API audit
 │   ├── phase0-sso-plugin-audit.md     # Source code audit of Subscription SSO plugin
 │   └── janeway-paywall-investigation.md  # Janeway backup: concrete Stripe paywall plan
-└── plugin/                            # Plugin source (once blocking questions answered)
+└── plugins/                           # Plugin source (Phase 1)
+    ├── sea-subscription-api/          # OJS plugin (TBD)
+    └── sea-ojs-sync/                  # WP plugin (TBD)
 ```
 
 ## Quick Links

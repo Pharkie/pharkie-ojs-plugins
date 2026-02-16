@@ -181,7 +181,8 @@ WP membership change
 
 - Can't install OJS plugins for some reason
 - Need something shipping immediately while Push-sync proper is being built
-- WP and OJS share a database server
+
+**Note:** WP and OJS are on different servers, so direct DB would require cross-server database access — adding network complexity. This makes the fallback less attractive for SEA specifically.
 
 ---
 
@@ -230,7 +231,6 @@ A Django app (Janeway plugin) with:
 
 Set a time-box on Push-sync. Consider Janeway seriously if:
 - **The OJS 3.5 upgrade takes more than 2 weeks** including testing and paywall verification
-- **OJS plugin installation is blocked** (hosting restrictions, admin access)
 - **The OJS user creation API genuinely doesn't work** and the custom plugin scope grows
 - **SEA wants single sign-on in future** (Janeway claims OIDC support — would need verification, but OJS OIDC is confirmed broken)
 

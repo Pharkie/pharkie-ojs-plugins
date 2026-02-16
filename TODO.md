@@ -10,7 +10,7 @@
 - [x] **Evaluate Subscription SSO plugin** — **Eliminated.** Source code audit confirmed it hijacks the OJS purchase flow. Non-members can't buy articles/issues while it's active. See `docs/phase0-sso-plugin-audit.md`.
 - [x] **Evaluate OIDC/OpenID SSO** — **Eliminated.** Only solves login not access. OJS plugin has unresolved bugs, no production-ready release for 3.5, breaks multi-journal setups. Previous developer confirmed this independently.
 
-### Still need from SEA (BLOCKING)
+### Answered by SEA (2026-02-16)
 
 - [x] **Confirm OJS version** — **3.4.0-9.** Upgrade to 3.5 required (see Phase 0.5).
 - [x] **Confirm WP membership plugin** — **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles user registration/profiles/roles. WooCommerce Subscriptions handles the actual subscription billing. Membership = WP role assignment. See `docs/wp-integration.md` for hook details.
@@ -59,7 +59,7 @@ OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This
 
 ---
 
-## Phase 1: Build it (unblocked after OJS is on 3.5+ and SEA answers above)
+## Phase 1: Build it (unblocked once OJS is on 3.5+; all SEA questions answered)
 
 ### OJS plugin (`sea-subscription-api`)
 
