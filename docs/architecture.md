@@ -2,20 +2,25 @@
 
 Last updated: 2026-02-16
 
-## Naming
+## Plan naming
 
-We use the previous developer's naming convention:
-- **Plan A** — OIDC/OpenID SSO (eliminated)
-- **Plan B** — Subscription SSO plugin (eliminated)
-- **Plan C** — WP pushes subscription changes to OJS via plugins on each side (recommended)
-- **Plan C-fallback** — Direct DB writes (degraded version of Plan C, no OJS plugin)
-- **Plan D** — Janeway migration (nuclear option)
+| Name | What it is | Status |
+|---|---|---|
+| **OIDC SSO** | OpenID Connect single sign-on | Eliminated |
+| **Pull-verify** | OJS asks WP "is this person a member?" at access time (Subscription SSO plugin) | Eliminated |
+| **Push-sync** | WP pushes subscription changes to OJS via plugins on each side | **Recommended** |
+| **Push-sync (direct DB)** | Same as Push-sync but writes to OJS database directly instead of via plugin | Fallback |
+| **Janeway migration** | Replace OJS with Janeway + custom paywall | Genuine backup |
+
+Previous developer's naming: Plan A = OIDC SSO, Plan B = Pull-verify, Plan C = Push-sync, Plan D = Janeway migration.
+
+---
 
 ## Decision trail
 
-This document records what we investigated, what we found, and why options were eliminated. The goal is to make the reasoning traceable so future decisions don't re-cover the same ground.
+This document records what we investigated, what we found, and why options were eliminated.
 
-### Step 1: Plan A — OIDC/OpenID SSO
+### Step 1: OIDC SSO (eliminated)
 
 The previous developer evaluated this thoroughly. The OJS OIDC client plugin has multiple unresolved bugs (mid-teens), reports of fatal errors on multi-journal setups, and no production-ready release for OJS 3.5 months after 3.5's release. Even if it worked, the maintenance burden would be huge — potentially breaking OJS login entirely after every major update.
 
@@ -23,9 +28,9 @@ Additionally, OIDC only solves authentication (who is this person?), not authori
 
 **Result: Eliminated.** Previous developer confirmed independently. We concur.
 
-### Step 2: Plan B — Subscription SSO plugin
+### Step 2: Pull-verify (eliminated)
 
-The previous developer rejected this for good reasons (complexity, fights with paywall, janky user flow). We initially reconsidered it because it looked simpler than originally understood — but then we read the actual source code.
+The previous developer rejected this for good reasons (complexity, fights with paywall, janky user flow). We initially reconsidered it because it looked simpler than originally understood — but then we read the actual source code of the [Subscription SSO plugin](https://github.com/asmecher/subscriptionSSO).
 
 **What it actually does (from [source code audit](./phase0-sso-plugin-audit.md)):**
 
@@ -52,19 +57,19 @@ Non-members who want to buy a £3 article get bounced to WordPress instead of se
 
 This breaks a hard requirement: non-members must be able to buy individual articles (£3), current issues (£25), and back issues (£18) through OJS.
 
-### Step 3: Original REST API idea — WP pushes subscriptions via OJS API
+### Step 3: Native REST API — WP pushes subscriptions via OJS API
 
-The initial idea behind Plan C was simple: WP calls OJS REST API to create subscriptions. The previous developer believed this was feasible using "core API endpoints."
+The initial idea behind Push-sync was simple: WP calls OJS REST API to create subscriptions. The previous developer believed this was feasible using "core API endpoints."
 
 **Result: Partially wrong.** The OJS REST API has no subscription endpoints. Not in 3.4, not in 3.5, not on main. Confirmed via the [swagger spec](https://github.com/pkp/ojs/blob/main/docs/dev/swagger-source.json), [PKP forums](https://forum.pkp.sfu.ca/t/are-there-api-or-other-options-for-subscription-management-available-in-ojs-3-3/86106), and GitHub issues. PKP has said this is "not a development priority." The user creation API is also questionable — swagger spec shows read-only endpoints.
 
-However: OJS has complete internal PHP classes for subscription CRUD (`IndividualSubscriptionDAO`). They just have no HTTP interface. **The fix is a small OJS plugin that exposes these classes as REST endpoints.** This keeps the spirit of Plan C intact — the WP side is the same, we just need to build the OJS receiving end ourselves.
+However: OJS has complete internal PHP classes for subscription CRUD (`IndividualSubscriptionDAO`). They just have no HTTP interface. **The fix is a small OJS plugin that exposes these classes as REST endpoints.** This keeps the spirit of Push-sync intact — the WP side is the same, we just need to build the OJS receiving end ourselves.
 
 See `phase0-findings.md` for full API research.
 
 ---
 
-## Plan C: Custom OJS Plugin + WP Plugin (RECOMMENDED)
+## Push-sync: Custom OJS Plugin + WP Plugin (RECOMMENDED)
 
 **Status: Recommended.** This is the previous developer's Plan C, with one addition: a small OJS plugin to expose the subscription API that OJS doesn't ship natively.
 
@@ -120,10 +125,10 @@ Non-member visits paywalled content
 ### Trade-offs
 
 - **Two plugins to build and maintain.** More initial work than a simpler approach.
-- **Requires OJS 3.5+.** SEA is currently on 3.4.0-9, so upgrade is required first.
+- **Requires OJS 3.5+.** SEA is currently on 3.4.0-9, so upgrade is required first. The 3.5 upgrade has significant breaking changes (Slim→Laravel, Vue 2→3, new config requirements). This is the biggest risk in the whole plan.
 - **Members need separate OJS accounts.** Two logins. Matched by email address. Need clear onboarding to explain this.
 - **OJS upgrades could break the OJS plugin.** Mitigated by using the DAO layer (more stable than raw SQL), but still needs testing on each OJS upgrade.
-- **Effort:** 2-4 weeks for both plugins, after OJS upgrade.
+- **Effort:** OJS 3.5 upgrade (unknown, potentially 1-2 weeks) + 2-4 weeks for both plugins.
 
 ### Blocking questions
 
@@ -137,11 +142,11 @@ Non-member visits paywalled content
 
 ---
 
-## Plan C-fallback: Direct DB Writes
+## Push-sync (direct DB): Fallback
 
 **Status: Fallback only.** Use if OJS plugins can't be installed, or as a stopgap.
 
-Same push model as Plan C, but instead of the OJS plugin receiving API calls, the WP plugin writes directly to the OJS database.
+Same push model as Push-sync, but instead of the OJS plugin receiving API calls, the WP plugin writes directly to the OJS database.
 
 ### How it works
 
@@ -156,7 +161,7 @@ WP membership change
 ### What gets built
 
 **WP plugin only** — nothing on OJS side:
-- Same membership hooks as Plan C
+- Same membership hooks as Push-sync
 - Direct database connection to OJS (PDO or wpdb with external connection)
 - Writes to `users`, `subscriptions`, `subscription_types` tables
 - Must match exact OJS schema expectations
@@ -172,38 +177,82 @@ WP membership change
 ### When to use
 
 - Can't install OJS plugins for some reason
-- Need something shipping immediately while Plan C proper is being built
+- Need something shipping immediately while Push-sync proper is being built
 - WP and OJS share a database server
 
 ---
 
-## Plan D: Janeway Migration (NUCLEAR)
+## Janeway migration: Genuine backup (not nuclear)
 
-**Status: Last resort.** Only if all OJS options prove unworkable.
+**Status: Genuine alternative, not just a last resort.** Evaluated 2026-02-16.
 
-Abandon OJS entirely. Migrate to [Janeway](https://janeway.systems/) (Python/Django, proper OAuth, good APIs). Build a custom paywall since Janeway ideologically refuses to support them.
+The initial assumption was that Janeway is a "nuclear option" — too expensive to be realistic. After proper evaluation, it's actually a different set of trade-offs with comparable total effort.
 
-**Only consider if:**
-- OJS plugin development proves impossible or disproportionately expensive
-- The total cost of OJS integration exceeds the cost of platform migration + custom paywall
+### What Janeway is
 
-**Effort:** Weeks to months. Content migration, paywall development, new hosting, staff retraining.
+[Janeway](https://janeway.systems/) is a journal publishing platform built on Python/Django by the Open Library of Humanities. It has proper OAuth/OIDC support, a real REST API (Django REST Framework), and a clean plugin system. It's actively maintained (7,200+ commits, 48 releases, latest v1.7.5 June 2025).
+
+### The paywall problem
+
+Janeway has an **ideological opposition to paywalls**. This is not a missing feature — it is a hard policy. The maintainers will never accept paywall code upstream. However, the code is AGPL-3.0, so you can fork and add paywalls. You'd maintain the paywall code yourself permanently.
+
+### What you'd actually build
+
+A Django app (Janeway plugin) with:
+- Subscription models (user, type, dates, status)
+- Access control decorator wrapping the article download views
+- Paywall UI via Janeway's template hook system
+- Stripe integration for non-member purchases (£3/£25/£18)
+- REST API endpoint for WP to push subscription changes (identical concept to Push-sync's WP plugin)
+
+### Honest comparison: Push-sync vs Janeway migration
+
+| Factor | Push-sync (OJS) | Janeway migration |
+|---|---|---|
+| **Total effort** | OJS 3.5 upgrade (1-2 weeks?) + 2-4 weeks plugins | 4-6 weeks (including content migration) |
+| **Biggest risk** | OJS 3.5 upgrade (Slim→Laravel, Vue 2→3, breaking changes) | Building the payment system for non-members from scratch |
+| **Paywall** | OJS native — already works | Must build (Django decorator + Stripe) |
+| **Non-member purchases** | OJS handles natively | Must build |
+| **API quality** | Poor (no subscription endpoints, workarounds needed) | Excellent (DRF, Swagger, proper permissions) |
+| **SSO/OIDC potential** | Broken in OJS | Works natively in Janeway |
+| **Two logins problem** | Yes (WP + OJS, no fix possible) | Solvable via native OIDC |
+| **Content migration** | Not needed | Required — [tooling exists](https://github.com/openlibhums/janeway/wiki/Importing-from-OJS) but unverified for this scale |
+| **Tech stack** | PHP + PHP | PHP (WP) + Python/Django (Janeway) — two languages |
+| **Upstream support** | OJS subscription features deprioritized by PKP | Janeway team will never help with paywall code |
+| **Ongoing maintenance** | OJS plugin may break on OJS upgrades | Paywall fork may conflict with Janeway upgrades |
+| **Staff retraining** | Minimal (OJS stays) | Required (new admin interface) |
+| **Future scalability** | Plugin pattern extends to new journals | Plugin pattern extends to new journals |
+
+### When to switch to Janeway migration
+
+Set a time-box on Push-sync. Consider Janeway seriously if:
+- **The OJS 3.5 upgrade takes more than 2 weeks** including testing and paywall verification
+- **OJS plugin installation is blocked** (hosting restrictions, admin access)
+- **The OJS user creation API genuinely doesn't work** and the custom plugin scope grows
+- **SEA wants single sign-on in future** (OIDC works in Janeway, broken in OJS)
+
+### When NOT to switch
+
+- If the OJS 3.5 upgrade goes smoothly
+- If keeping OJS means less retraining and less migration risk
+- If adding a second language (Python) to the stack is unacceptable
+- If the 35+ years of back issues make content migration impractical
 
 ---
 
 ## Eliminated options
 
-| Plan | Why eliminated |
+| Approach | Why eliminated |
 |---|---|
-| **Plan A** (OIDC/OpenID SSO) | Only solves login, not access. OJS plugin has unresolved bugs, no 3.5 release, breaks multi-journal. Previous developer confirmed. |
-| **Plan B** (Subscription SSO plugin) | Source code audit confirmed it hijacks OJS purchase flow. Non-members can't buy articles/issues. See `phase0-sso-plugin-audit.md`. |
-| **Native REST API sync** | OJS has no subscription API endpoints in any version. Plan C works around this with a custom OJS plugin. |
+| **OIDC SSO** | Only solves login, not access. OJS plugin has unresolved bugs, no 3.5 release, breaks multi-journal. Previous developer confirmed. |
+| **Pull-verify** (Subscription SSO plugin) | Source code audit confirmed it hijacks OJS purchase flow. Non-members can't buy articles/issues. See `phase0-sso-plugin-audit.md`. |
+| **Native REST API sync** | OJS has no subscription API endpoints in any version. Push-sync works around this with a custom OJS plugin. |
 
 ---
 
 ## Recommendation
 
-**Ship Plan C** (custom OJS plugin + WP plugin), preceded by an OJS 3.4 → 3.5 upgrade.
+**Ship Push-sync** (custom OJS plugin + WP plugin), preceded by an OJS 3.4 → 3.5 upgrade.
 
 Sequence:
 1. Upgrade OJS to 3.5
@@ -211,3 +260,5 @@ Sequence:
 3. Build and deploy WP plugin (`sea-ojs-sync`)
 4. Bulk sync existing members
 5. Add cosmetic OJS template changes ("set your password" prompts, "subscribe via SEA" links)
+
+**If the OJS 3.5 upgrade hits serious problems**, re-evaluate Janeway migration as a genuine alternative rather than a last resort. The total effort is comparable — the risks are just different.

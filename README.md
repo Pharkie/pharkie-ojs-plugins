@@ -11,17 +11,17 @@ Integration between the Society for Existential Analysis (SEA) WordPress members
 
 ## Architecture Decision
 
-**Custom OJS plugin + WP plugin.** A small OJS plugin exposes subscription CRUD as REST endpoints (using OJS's own internal classes). A WP plugin calls those endpoints when membership status changes.
+**Push-sync:** custom OJS plugin + WP plugin. WP pushes subscription changes to OJS on membership events. A small OJS plugin exposes subscription CRUD as REST endpoints (using OJS's own internal classes). A WP plugin calls those endpoints when membership status changes.
 
-This was reached after systematically eliminating alternatives — see [docs/architecture.md](./docs/architecture.md) for the full decision trail.
+This was reached after systematically eliminating alternatives — see [docs/architecture.md](./docs/architecture.md) for the full decision trail, including an honest evaluation of Janeway as a genuine backup.
 
 ### What was eliminated and why
 
 | Approach | Why it's dead |
 |---|---|
-| OJS REST API sync | API has no subscription endpoints. Not in 3.4, 3.5, or main. |
-| OIDC / OpenID SSO | Only solves login, not access. Plugin has unresolved bugs, no 3.5 release, breaks multi-journal. |
-| Subscription SSO plugin | Source code audit confirmed it hijacks OJS purchase flow. Non-members can't buy content. |
+| Native REST API sync | API has no subscription endpoints. Not in 3.4, 3.5, or main. |
+| OIDC SSO | Only solves login, not access. Plugin has unresolved bugs, no 3.5 release, breaks multi-journal. |
+| Pull-verify (Subscription SSO plugin) | Source code audit confirmed it hijacks OJS purchase flow. Non-members can't buy content. |
 
 ### How it works
 
