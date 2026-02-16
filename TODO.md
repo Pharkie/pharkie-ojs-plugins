@@ -12,7 +12,7 @@
 
 ### Still need from SEA (BLOCKING)
 
-- [ ] **Confirm OJS version** — 3.4.x vs 3.5.x. 3.5+ required for clean OJS plugin API.
+- [x] **Confirm OJS version** — **3.4.0-9.** Upgrade to 3.5 required (see Phase 0.5).
 - [ ] **Confirm WP membership plugin** — which plugin? (WooCommerce Memberships, Paid Memberships Pro, MemberPress, custom?)
 - [ ] **Map membership tiers** — which tiers exist? Which grant journal access? All of them?
 - [ ] **Confirm hosting/network** — same server? Same database server? Firewall?
@@ -35,8 +35,8 @@ This is the same approach the previous developer identified as "Plan C" — sync
 
 OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This must happen before any plugin development.
 
-- [ ] **Confirm current OJS version** (need from SEA)
-- [ ] **If on 3.4:** plan and execute upgrade to 3.5
+- [x] **Confirm current OJS version** — **OJS 3.4.0-9** (confirmed via meta generator tag on live site)
+- [ ] **Upgrade to 3.5** — required before plugin development
   - [ ] Read [OJS 3.5 upgrade guide](https://docs.pkp.sfu.ca/dev/upgrade-guide/en/)
   - [ ] Read [OJS 3.5 release notes / breaking changes](https://github.com/pkp/pkp-lib/issues/9276)
   - [ ] Back up OJS database and files
@@ -110,7 +110,7 @@ OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This
 1. ~~Can the OJS REST API manage subscriptions?~~ **No.**
 2. ~~Does the Subscription SSO plugin coexist with purchases?~~ **No.**
 3. Which WP membership plugin is in use? **(Need from SEA)**
-4. What OJS version? **(Need from SEA)**
+4. ~~What OJS version?~~ **3.4.0-9. Upgrade to 3.5 required.**
 5. What happens to existing OJS users who are also SEA members? (Migration/dedup plan)
 6. Are there members who need OJS access outside the standard membership? (editorial board, reviewers)
 7. Does the OJS user creation API (POST /users) work on SEA's version? (Verify on real instance)
@@ -121,7 +121,7 @@ OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This
 |---|---|---|---|
 | ~~OJS API lacks subscription endpoints~~ | — | — | **Confirmed.** Custom OJS plugin exposes them. |
 | ~~SSO plugin conflicts with purchases~~ | — | — | **Confirmed.** Eliminated. |
-| OJS version is 3.4 (no clean plugin API) | Medium | High | Upgrade to 3.5 first (Phase 0.5) |
+| ~~OJS version is 3.4~~ | — | — | **Confirmed 3.4.0-9.** Upgrade to 3.5 is Phase 0.5. |
 | User creation API doesn't exist | Medium | Medium | Custom OJS plugin handles this too |
 | Sync failures silently drop members | Medium | High | Logging, nightly reconciliation, admin alerts |
 | Members confused by two logins | High | Medium | Clear onboarding, strategic "set password" prompts |

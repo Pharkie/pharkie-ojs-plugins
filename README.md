@@ -64,7 +64,7 @@ Non-member visits paywalled content
 ## Tech Stack
 
 - WordPress (PHP) — existing SEA site
-- OJS (PHP) — journal hosting (version TBC — 3.5+ preferred)
+- OJS (PHP) — journal hosting (currently 3.4.0-9, upgrade to 3.5 required)
 - Custom OJS plugin — exposes subscription CRUD endpoints
 - Custom WP plugin — syncs membership status to OJS
 
