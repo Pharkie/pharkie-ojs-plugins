@@ -194,7 +194,7 @@ The initial assumption was that Janeway is a "nuclear option" — too expensive 
 
 ### What Janeway is
 
-[Janeway](https://janeway.systems/) is a journal publishing platform built on Python/Django by the Open Library of Humanities. It has proper OAuth/OIDC support, a real REST API (Django REST Framework), and a clean plugin system. It's actively maintained (7,200+ commits, 48 releases, latest v1.7.5 June 2025).
+[Janeway](https://janeway.systems/) is a journal publishing platform built on Python/Django by the Open Library of Humanities. It has a real REST API (Django REST Framework) and a clean plugin system. It's actively maintained (7,200+ commits, 48 releases, latest v1.7.5 June 2025).
 
 ### The paywall problem
 
@@ -218,8 +218,8 @@ A Django app (Janeway plugin) with:
 | **Paywall** | OJS native — already works | Must build (Django decorator + Stripe) |
 | **Non-member purchases** | OJS handles natively | Must build |
 | **API quality** | Poor (no subscription endpoints, workarounds needed) | Excellent (DRF, Swagger, proper permissions) |
-| **SSO/OIDC potential** | Broken in OJS (confirmed) | Claimed native support since v1.4.2 (unverified — would need testing) |
-| **Two logins problem** | Yes (WP + OJS, no fix possible) | Potentially solvable via OIDC (unverified) |
+| **SSO/OIDC potential** | Broken in OJS (confirmed) | OIDC shipped v1.4.2, built on `mozilla-django-oidc` (solid library). But WP as OIDC provider needs the "OpenID Connect Server" plugin (90 installs — red flag). Untested combination. |
+| **Two logins problem** | Yes (WP + OJS, no fix possible) | Theoretically solvable via OIDC but WP-as-provider is untested territory |
 | **Content migration** | Not needed | Required — [tooling exists](https://github.com/openlibhums/janeway/wiki/Importing-from-OJS) but unverified for this scale |
 | **Tech stack** | PHP + PHP | PHP (WP) + Python/Django (Janeway) — two languages |
 | **Upstream support** | OJS subscription features deprioritized by PKP | Janeway team will never help with paywall code |
@@ -232,7 +232,7 @@ A Django app (Janeway plugin) with:
 Set a time-box on Push-sync. Consider Janeway seriously if:
 - **The OJS 3.5 upgrade takes more than 2 weeks** including testing and paywall verification
 - **The OJS user creation API genuinely doesn't work** and the custom plugin scope grows
-- **SEA wants single sign-on in future** (Janeway claims OIDC support — would need verification, but OJS OIDC is confirmed broken)
+- **SEA wants single sign-on in future** (Janeway has OIDC built on `mozilla-django-oidc`, but WP-as-OIDC-provider relies on a plugin with only 90 installs — would need testing. OJS OIDC is confirmed broken.)
 
 ### When NOT to switch
 
