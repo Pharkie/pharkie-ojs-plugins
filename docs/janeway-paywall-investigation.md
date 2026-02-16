@@ -821,52 +821,55 @@ The risk is not "Janeway breaks the plugin system." The risk is "Janeway changes
 
 **Plugin directory: `src/plugins/sea_paywall/`**
 
-| File | Purpose | Effort |
-|---|---|---|
-| `__init__.py` | Empty | Trivial |
-| `plugin_settings.py` | Plugin metadata, `install()`, `hook_registry()` | 1 hour |
-| `models.py` | `Purchase`, `MemberAccess`, `PaywallConfiguration` | 2-3 hours |
-| `access.py` | `user_has_access()` function | 2-3 hours |
-| `views.py` | Checkout session creation, success handler, admin views | 4-6 hours |
-| `api_views.py` | REST endpoint for WP membership sync | 2-3 hours |
-| `hooks.py` | Template hook functions (sidebar purchase button, article paywall notice) | 2-3 hours |
-| `urls.py` | Plugin URL routes | 30 minutes |
-| `forms.py` | Admin configuration form | 1-2 hours |
-| `admin.py` | Django admin registration for Purchase, MemberAccess models | 1 hour |
-| `migrations/0001_initial.py` | Database migration | Auto-generated |
-| `install/settings.json` | Default plugin settings | 30 minutes |
-| `templates/sea_paywall/purchase_options.html` | Purchase buttons template | 1-2 hours |
-| `templates/sea_paywall/processing.html` | Payment processing page | 30 minutes |
-| `templates/sea_paywall/success.html` | Payment success confirmation | 30 minutes |
-| `templates/sea_paywall/admin_index.html` | Admin dashboard | 2-3 hours |
-| `static/sea_paywall/css/paywall.css` | Minimal styling for paywall elements | 1 hour |
+| File | Purpose |
+|---|---|
+| `__init__.py` | Empty |
+| `plugin_settings.py` | Plugin metadata, `install()`, `hook_registry()` |
+| `models.py` | `Purchase`, `MemberAccess`, `PaywallConfiguration` |
+| `access.py` | `user_has_access()` function |
+| `views.py` | Checkout session creation, success handler, admin views |
+| `api_views.py` | REST endpoint for WP membership sync |
+| `hooks.py` | Template hook functions (sidebar purchase button, article paywall notice) |
+| `urls.py` | Plugin URL routes |
+| `forms.py` | Admin configuration form |
+| `admin.py` | Django admin registration for Purchase, MemberAccess models |
+| `migrations/0001_initial.py` | Database migration (auto-generated) |
+| `install/settings.json` | Default plugin settings |
+| `templates/sea_paywall/purchase_options.html` | Purchase buttons template |
+| `templates/sea_paywall/processing.html` | Payment processing page |
+| `templates/sea_paywall/success.html` | Payment success confirmation |
+| `templates/sea_paywall/admin_index.html` | Admin dashboard |
+| `static/sea_paywall/css/paywall.css` | Minimal styling for paywall elements |
 
 **Core patches (the fork):**
 
-| File | Change | Effort |
-|---|---|---|
-| `src/journal/views.py` | Add access check to 5 view functions (~30 lines total) | 2 hours |
-| Theme `templates/journal/article.html` | Wrap content in `{% if has_access %}`, add paywall fallback | 2-3 hours |
+| File | Change |
+|---|---|
+| `src/journal/views.py` | Add access check to 5 view functions (~30 lines total) |
+| Theme `templates/journal/article.html` | Wrap content in `{% if has_access %}`, add paywall fallback |
 
 **Not in Janeway (separate concern):**
 
-| Component | Purpose | Effort |
-|---|---|---|
-| WP plugin (`sea-janeway-sync`) | Push membership changes to Janeway API | 2-3 days |
+| Component | Purpose |
+|---|---|
+| WP plugin (`sea-janeway-sync`) | Push membership changes to Janeway API |
+
+All plugin code can be written in 1-2 Claude Code sessions. The code patterns are documented in sections 2-4 above.
 
 ### Estimated total effort
 
+With Claude Code, the plugin coding collapses to 1-2 sessions. The real time is in migration, testing, and deployment.
+
 | Component | Estimate |
 |---|---|
-| Plugin models, access logic, views | 3-4 days |
-| Stripe integration (checkout, webhooks, refunds) | 2-3 days |
-| Core view patches + template changes | 1-2 days |
-| WP membership sync API endpoint | 1 day |
-| Admin/management interface | 1-2 days |
+| Plugin code (models, views, Stripe, access logic, API, admin) | 1-2 sessions with Claude Code |
+| Core view patches + template changes | Part of same session |
+| WP plugin (`sea-janeway-sync`) | Part of same session |
 | Testing (unit + integration + manual) | 2-3 days |
-| Content migration from OJS | 5-8 days |
-| Theme customisation (based on clean or material theme) | 3-5 days |
-| **Total** | **18-28 working days (4-6 weeks)** |
+| Content migration from OJS | 5-8 days (the wild card) |
+| Theme customisation (based on clean or material theme) | 1-2 days with Claude Code |
+| Deployment + Stripe setup | 1-2 days |
+| **Total** | **~2 weeks realistic, dominated by migration and testing** |
 
 ### Dependencies
 
@@ -933,9 +936,9 @@ The risk is not "Janeway breaks the plugin system." The risk is "Janeway changes
 
 ### Comparison to the Push-sync OJS approach
 
-The paywall plugin for Janeway is approximately the same total effort as "OJS 3.5 upgrade + two custom plugins" -- but the risks are different:
+With Claude Code, the plugin coding on either path collapses to 1-2 sessions. The real comparison is between the non-code work:
 
-- **OJS path risk**: the 3.5 upgrade breaks things in unknown ways. If it goes badly, you have spent weeks and still do not have a working system.
+- **OJS path risk**: the 3.5 upgrade breaks things in unknown ways. If it goes badly, you've lost days/weeks and still don't have a working system. The coding is fast; the upgrade is the gamble.
 - **Janeway path risk**: the content migration is tedious and the paywall fork is permanent. But the technical components (Django, Stripe, REST APIs) are well-understood and unlikely to produce surprises.
 
-The Janeway path trades "unknown unknowns" (OJS upgrade) for "known knowns" (Django development + content migration).
+The Janeway path trades "unknown unknowns" (OJS upgrade) for "known knowns" (content migration). The coding effort is comparable and fast on both paths.

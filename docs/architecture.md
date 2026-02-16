@@ -130,7 +130,7 @@ Non-member visits paywalled content
 - **Requires OJS 3.5+.** SEA is currently on 3.4.0-9, so upgrade is required first. The 3.5 upgrade has significant breaking changes (Slim→Laravel, Vue 2→3, new config requirements). This is the biggest risk in the whole plan.
 - **Members need separate OJS accounts.** Two logins. Matched by email address. Need clear onboarding to explain this.
 - **OJS upgrades could break the OJS plugin.** Mitigated by using the DAO layer (more stable than raw SQL), but still needs testing on each OJS upgrade.
-- **Effort:** OJS 3.5 upgrade (unknown, potentially 1-2 weeks) + 2-4 weeks for both plugins.
+- **Effort:** OJS 3.5 upgrade (unknown, potentially days to weeks depending on breakage) + both plugins can be written in 1-2 sessions with Claude Code. Real time is in testing, deployment, and the upgrade itself.
 
 ### Blocking questions
 
@@ -211,7 +211,7 @@ A Django app (Janeway plugin) with:
 
 | Factor | Push-sync (OJS) | Janeway migration |
 |---|---|---|
-| **Total effort** | OJS 3.5 upgrade (1-2 weeks?) + 2-4 weeks plugins | 4-6 weeks (including content migration) |
+| **Total effort** | OJS 3.5 upgrade (days to weeks?) + plugins (1-2 sessions with Claude Code) + testing/deployment | Plugin code (1-2 sessions with Claude Code) + content migration (days to weeks) + testing/deployment |
 | **Biggest risk** | OJS 3.5 upgrade (Slim→Laravel, Vue 2→3, breaking changes) | Building the payment system for non-members from scratch |
 | **Paywall** | OJS native — already works | Must build (Django decorator + Stripe) |
 | **Non-member purchases** | OJS handles natively | Must build |
