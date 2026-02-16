@@ -214,8 +214,8 @@ A Django app (Janeway plugin) with:
 | **Paywall** | OJS native — already works | Must build (Django decorator + Stripe) |
 | **Non-member purchases** | OJS handles natively | Must build |
 | **API quality** | Poor (no subscription endpoints, workarounds needed) | Excellent (DRF, Swagger, proper permissions) |
-| **SSO/OIDC potential** | Broken in OJS | Works natively in Janeway |
-| **Two logins problem** | Yes (WP + OJS, no fix possible) | Solvable via native OIDC |
+| **SSO/OIDC potential** | Broken in OJS (confirmed) | Claimed native support since v1.4.2 (unverified — would need testing) |
+| **Two logins problem** | Yes (WP + OJS, no fix possible) | Potentially solvable via OIDC (unverified) |
 | **Content migration** | Not needed | Required — [tooling exists](https://github.com/openlibhums/janeway/wiki/Importing-from-OJS) but unverified for this scale |
 | **Tech stack** | PHP + PHP | PHP (WP) + Python/Django (Janeway) — two languages |
 | **Upstream support** | OJS subscription features deprioritized by PKP | Janeway team will never help with paywall code |
@@ -229,7 +229,7 @@ Set a time-box on Push-sync. Consider Janeway seriously if:
 - **The OJS 3.5 upgrade takes more than 2 weeks** including testing and paywall verification
 - **OJS plugin installation is blocked** (hosting restrictions, admin access)
 - **The OJS user creation API genuinely doesn't work** and the custom plugin scope grows
-- **SEA wants single sign-on in future** (OIDC works in Janeway, broken in OJS)
+- **SEA wants single sign-on in future** (Janeway claims OIDC support — would need verification, but OJS OIDC is confirmed broken)
 
 ### When NOT to switch
 
