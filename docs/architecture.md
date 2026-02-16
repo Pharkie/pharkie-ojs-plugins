@@ -105,12 +105,14 @@ Non-member visits paywalled content
 - Requires OJS 3.5+ for the clean plugin API pattern ([pkp-lib #9434](https://github.com/pkp/pkp-lib/issues/9434))
 
 **WP plugin** (`sea-ojs-sync`) — installed like any WP plugin:
-- Settings page: OJS URL, API key, subscription type ID mapping
-- Hooks into WP membership plugin events (signup, renewal, lapse, cancellation)
+- Settings page: OJS URL, API key, subscription type ID mapping (WooCommerce Product → OJS Subscription Type)
+- Hooks into **WooCommerce Subscriptions** lifecycle events (`status_active`, `status_expired`, `status_cancelled`, `status_on-hold`) as primary triggers
+- Secondary hooks on Ultimate Member role changes as safety net
 - Calls OJS plugin endpoints on each event
 - Bulk sync command (WP-CLI or admin button) for initial population and drift correction
 - Error logging visible in WP admin
 - Retry logic for failed API calls
+- See `docs/wp-integration.md` for full hook details and code patterns
 
 ### Why this works
 
@@ -136,7 +138,7 @@ Non-member visits paywalled content
 |---|---|
 | OJS version? | **3.4.0-9.** Upgrade to 3.5 required. |
 | Can we install OJS plugins? | Need to confirm |
-| Which WP membership plugin? | Need from SEA |
+| Which WP membership plugin? | **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** See `docs/wp-integration.md`. |
 | Which membership tiers grant journal access? | Need from SEA |
 | OJS admin access available? | Need to confirm |
 

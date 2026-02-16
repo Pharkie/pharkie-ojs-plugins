@@ -13,8 +13,9 @@ WordPress ↔ OJS integration for the Society for Existential Analysis (SEA). WP
 
 - `docs/architecture.md` — decision trail: what was tried, what was eliminated, and why
 - `docs/ojs-api.md` — OJS REST API capabilities, DB schema, PHP internals
-- `docs/phase0-findings.md` — raw research from API audit
-- `docs/phase0-sso-plugin-audit.md` — source code audit of Subscription SSO plugin
+- `docs/wp-integration.md` — WP membership stack (Ultimate Member + WooCommerce Subscriptions), hooks, code patterns
+- `docs/phase0-sso-plugin-audit.md` — source code audit of Subscription SSO plugin (why Pull-verify was eliminated)
+- `docs/janeway-paywall-investigation.md` — concrete technical plan for Janeway backup path
 - `TODO.md` — task list with blocking questions and phased implementation plan
 
 ## Architecture decision
@@ -55,6 +56,12 @@ Previous developer called this "Plan C". Key addition: OJS REST API has no subsc
 - **Apache + PHP-FPM strips Authorization headers.** Need `CGIPassAuth on` in `.htaccess` or use `?apiToken=` query param fallback.
 - **OJS 3.5 upgrade is the biggest risk.** SEA is on 3.4.0-9. The 3.5 upgrade has significant breaking changes (Slim→Laravel, Vue 2→3). If this goes badly, re-evaluate Janeway migration.
 
+## WP membership stack
+
+**Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles registration/profiles/roles. WCS handles billing. Membership = WP role.
+
+Primary integration: hook into **WooCommerce Subscriptions** status events (`woocommerce_subscription_status_active`, `_expired`, `_cancelled`, `_on-hold`). Secondary safety net: UM role change hooks. See `docs/wp-integration.md` for full details.
+
 ## Code conventions
 
 - WordPress plugin standards (PHP)
@@ -62,7 +69,7 @@ Previous developer called this "Plan C". Key addition: OJS REST API has no subsc
 - Use WP HTTP API (`wp_remote_post` etc.) — not raw cURL
 - Use WP Cron for scheduled tasks, not system cron
 - Log all sync operations — failures must be visible in WP admin
-- Settings page for OJS URL, API key, subscription type mapping
+- Settings page for OJS URL, API key, subscription type mapping (WooCommerce Product → OJS Subscription Type)
 
 ## Don't
 

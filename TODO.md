@@ -13,7 +13,7 @@
 ### Still need from SEA (BLOCKING)
 
 - [x] **Confirm OJS version** — **3.4.0-9.** Upgrade to 3.5 required (see Phase 0.5).
-- [ ] **Confirm WP membership plugin** — which plugin? (WooCommerce Memberships, Paid Memberships Pro, MemberPress, custom?)
+- [x] **Confirm WP membership plugin** — **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles user registration/profiles/roles. WooCommerce Subscriptions handles the actual subscription billing. Membership = WP role assignment. See `docs/wp-integration.md` for hook details.
 - [ ] **Map membership tiers** — which tiers exist? Which grant journal access? All of them?
 - [ ] **Confirm hosting/network** — same server? Same database server? Firewall?
 - [ ] **Get OJS admin access** — needed for plugin installation, API key setup, subscription type config
@@ -78,7 +78,7 @@ OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This
 - [ ] Plugin skeleton
 - [ ] Settings page: OJS URL, API key, subscription type ID mapping
 - [ ] Core sync function: given a WP user + membership status → call OJS endpoints
-- [ ] Hook into WP membership plugin events (signup, renewal, lapse, cancellation)
+- [ ] Hook into WooCommerce Subscriptions events (primary integration point — see `docs/wp-integration.md`)
 - [ ] Bulk sync command (WP-CLI or admin button) for initial population
 - [ ] Error logging visible in WP admin
 - [ ] Retry logic for failed API calls
@@ -111,7 +111,7 @@ OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This
 
 1. ~~Can the OJS REST API manage subscriptions?~~ **No.**
 2. ~~Does the Subscription SSO plugin coexist with purchases?~~ **No.**
-3. Which WP membership plugin is in use? **(Need from SEA)**
+3. ~~Which WP membership plugin is in use?~~ **Ultimate Member + WooCommerce + WooCommerce Subscriptions.**
 4. ~~What OJS version?~~ **3.4.0-9. Upgrade to 3.5 required.**
 5. What happens to existing OJS users who are also SEA members? (Migration/dedup plan)
 6. Are there members who need OJS access outside the standard membership? (editorial board, reviewers)

@@ -63,10 +63,10 @@ Non-member visits paywalled content
 
 ## Tech Stack
 
-- WordPress (PHP) — existing SEA site
+- WordPress (PHP) — existing SEA site, using Ultimate Member + WooCommerce + WooCommerce Subscriptions
 - OJS (PHP) — journal hosting (currently 3.4.0-9, upgrade to 3.5 required)
-- Custom OJS plugin — exposes subscription CRUD endpoints
-- Custom WP plugin — syncs membership status to OJS
+- Custom OJS plugin (`sea-subscription-api`) — exposes subscription CRUD endpoints
+- Custom WP plugin (`sea-ojs-sync`) — hooks into WooCommerce Subscriptions events, syncs to OJS
 
 ## Repository Structure
 
@@ -78,14 +78,18 @@ WP OJS/
 ├── docs/
 │   ├── architecture.md                # Decision trail and architecture options
 │   ├── ojs-api.md                     # OJS REST API reference, DB schema, PHP internals
+│   ├── wp-integration.md              # WP membership stack, hooks, code patterns
 │   ├── phase0-findings.md             # Raw research from API audit
-│   └── phase0-sso-plugin-audit.md     # Source code audit of Subscription SSO plugin
+│   ├── phase0-sso-plugin-audit.md     # Source code audit of Subscription SSO plugin
+│   └── janeway-paywall-investigation.md  # Janeway backup: concrete Stripe paywall plan
 └── plugin/                            # Plugin source (once blocking questions answered)
 ```
 
 ## Quick Links
 
 - [Architecture decision trail](./docs/architecture.md)
+- [WP integration details](./docs/wp-integration.md)
+- [Janeway backup plan](./docs/janeway-paywall-investigation.md)
 - [TODO list](./TODO.md)
 - [OJS REST API swagger spec](https://github.com/pkp/ojs/blob/main/docs/dev/swagger-source.json)
 - [OJS subscription classes (GitHub)](https://github.com/pkp/ojs/tree/main/classes/subscription)
