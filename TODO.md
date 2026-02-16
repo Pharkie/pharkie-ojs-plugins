@@ -14,10 +14,10 @@
 
 - [x] **Confirm OJS version** — **3.4.0-9.** Upgrade to 3.5 required (see Phase 0.5).
 - [x] **Confirm WP membership plugin** — **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles user registration/profiles/roles. WooCommerce Subscriptions handles the actual subscription billing. Membership = WP role assignment. See `docs/wp-integration.md` for hook details.
-- [ ] **Map membership tiers** — which tiers exist? Which grant journal access? All of them?
-- [ ] **Confirm hosting/network** — same server? Same database server? Firewall?
-- [ ] **Get OJS admin access** — needed for plugin installation, API key setup, subscription type config
-- [ ] **Confirm: can we install OJS plugins?** — required for the recommended approach
+- [x] **Map membership tiers** — **All tiers grant journal access.** Simplifies the WP plugin: any active WCS subscription triggers an OJS subscription.
+- [x] **Confirm hosting/network** — **Different servers.** WP plugin must make HTTP calls to OJS over the network. Need to confirm OJS is reachable from WP server (no firewall blocking).
+- [x] **Get OJS admin access** — **Yes, have Site Administrator access.**
+- [x] **Confirm: can we install OJS plugins?** — **Yes.**
 
 ---
 

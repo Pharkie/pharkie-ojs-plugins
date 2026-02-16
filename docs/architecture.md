@@ -132,15 +132,16 @@ Non-member visits paywalled content
 - **OJS upgrades could break the OJS plugin.** Mitigated by using the DAO layer (more stable than raw SQL), but still needs testing on each OJS upgrade.
 - **Effort:** OJS 3.5 upgrade (unknown, potentially days to weeks depending on breakage) + both plugins can be written in 1-2 sessions with Claude Code. Real time is in testing, deployment, and the upgrade itself.
 
-### Blocking questions
+### Blocking questions (all answered)
 
 | Question | Status |
 |---|---|
 | OJS version? | **3.4.0-9.** Upgrade to 3.5 required. |
-| Can we install OJS plugins? | Need to confirm |
+| Can we install OJS plugins? | **Yes.** |
 | Which WP membership plugin? | **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** See `docs/wp-integration.md`. |
-| Which membership tiers grant journal access? | Need from SEA |
-| OJS admin access available? | Need to confirm |
+| Which membership tiers grant journal access? | **All tiers.** Any active subscription → OJS access. |
+| OJS admin access available? | **Yes.** Site Administrator level. |
+| Hosting topology? | **Different servers.** WP and OJS on separate hosts. HTTP calls over network. |
 
 ---
 
