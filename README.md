@@ -14,7 +14,7 @@ Integration layer between the Society for Existential Analysis (SEA) WordPress m
 
 **Pending.** The original plan (WP → OJS REST API sync) was invalidated by Phase 0 research: the OJS REST API has no subscription endpoints.
 
-Four options are documented in `docs/architecture.md`, ranked by delivery speed. The current recommendation is to test Option A (Subscription SSO plugin) first — see that doc for details.
+Four options are documented in [docs/architecture.md](./docs/architecture.md), ranked by delivery speed. The current recommendation is to test Option A (Subscription SSO plugin) first — see that doc for details.
 - No real-time "click and you're in" from WP to OJS
 - No modifications to OJS core or its paywall logic
 
@@ -34,7 +34,7 @@ Four options are documented in `docs/architecture.md`, ranked by delivery speed.
 - **WP is source of truth** — OJS subscriptions are derived, not authoritative
 - **OJS paywall must keep working** — non-member purchases are revenue
 - **Minimal custom code** — less to maintain, less to break
-- **No OIDC/OpenID SSO** — evaluated and rejected as too fragile
+- **No OIDC/OpenID SSO** — only solves login, not access; OJS plugin poorly maintained against 3.5 breaking changes; if it fails, nobody can log into OJS at all
 - **Subscription SSO plugin under reconsideration** — simpler than originally understood, now the fastest option pending testing
 
 ## Tech Stack
