@@ -37,6 +37,11 @@ Four options are documented in [docs/architecture.md](./docs/architecture.md), r
 - **No OIDC/OpenID SSO** — only solves login, not access; OJS plugin poorly maintained against 3.5 breaking changes; if it fails, nobody can log into OJS at all
 - **Subscription SSO plugin under reconsideration** — simpler than originally understood, now the fastest option pending testing
 
+## Live Sites
+
+- **WordPress (SEA membership):** https://community.existentialanalysis.org.uk/
+- **OJS (journal):** https://journal.existentialanalysis.org.uk/index.php/t1/index
+
 ## Tech Stack
 
 - WordPress (PHP) — existing SEA site

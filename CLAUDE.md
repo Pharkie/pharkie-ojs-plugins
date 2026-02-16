@@ -4,6 +4,11 @@
 
 WordPress ↔ OJS integration for the Society for Existential Analysis (SEA). WP manages memberships; OJS hosts the journal *Existential Analysis* behind a paywall. Goal: members get access, non-members can still buy content.
 
+## Live sites
+
+- **WP:** https://community.existentialanalysis.org.uk/
+- **OJS:** https://journal.existentialanalysis.org.uk/index.php/t1/index
+
 ## Key docs (read these first)
 
 - `docs/architecture.md` — architecture options and current recommendation
