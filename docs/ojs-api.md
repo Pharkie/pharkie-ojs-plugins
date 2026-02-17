@@ -101,6 +101,89 @@ institutional_subscriptions (1) ──< (many) institutional_subscription_ip
 
 ## Internal PHP Classes
 
+### User management (pkp-lib)
+
+OJS 3.5 uses the Repository pattern for users. All accessible from plugin context via `APP\facades\Repo`.
+
+**Finding user:**
+```php
+use APP\facades\Repo;
+
+$user = Repo::user()->getByEmail('member@example.com');       // returns ?User, skips disabled
+$user = Repo::user()->getByEmail('member@example.com', true); // includes disabled accounts
+$user = Repo::user()->get($userId);                            // by ID
+```
+
+**Creating user programmatically:**
+```php
+use APP\facades\Repo;
+use PKP\security\Validation;
+use PKP\core\Core;
+
+$user = Repo::user()->newDataObject();
+$user->setUsername(Validation::suggestUsername($firstName, $lastName)); // generates unique username
+$user->setEmail('member@example.com');
+$user->setGivenName('Jane', 'en');     // locale required
+$user->setFamilyName('Smith', 'en');
+$user->setPassword(Validation::encryptCredentials($username, bin2hex(random_bytes(16)))); // random password
+$user->setDateRegistered(Core::getCurrentDate());
+$user->setDateValidated(Core::getCurrentDate()); // marks email as verified — MUST set or OJS treats as unverified
+$user->setMustChangePassword(true);              // force password set on first login
+$user->setDisabled(false);
+
+$userId = Repo::user()->add($user); // fires User::add hook
+
+// Assign Reader role:
+$userGroup = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_READER], $contextId)->first();
+Repo::userGroup()->assignUserToGroup(userId: $userId, userGroupId: $userGroup->getId());
+```
+
+Required fields: `userName`, `email`, `dateRegistered`. Strongly recommended: `givenName`, `familyName`, `dateValidated`, `password`.
+
+**Updating user email:**
+```php
+$user = Repo::user()->getByEmail('old@example.com', true);
+Repo::user()->edit($user, ['email' => 'new@example.com']);
+```
+
+**Caveat:** OJS does not enforce email uniqueness in `edit()` — the plugin must check for duplicates before calling this.
+
+**Deleting / GDPR erasure:**
+
+OJS has no native anonymise method. Options:
+- `Repo::user()->delete($user)` — hard delete, but orphans submission records. Only safe for accounts with no submission history.
+- `APP\user\Repository::mergeUsers($oldId, $ghostId)` — transfers all assets to a ghost account, then deletes the old user. The OJS-native approach.
+- Blank PII via `edit()` — set name/email to anonymised values. Simplest for our case (sync-created accounts have no submission history).
+
+**Password reset token:**
+```php
+use PKP\security\Validation;
+
+$hash = Validation::generatePasswordResetHash($userId); // HMAC-SHA256, expiry from config
+// Default expiry: 7200 seconds (2 hours). Controlled by `security.reset_seconds` in config.inc.php.
+// For bulk welcome emails: increase to 604800 (7 days).
+```
+
+Token auto-invalidates if user logs in (hash includes `dateLastLogin`).
+
+**Sending password reset email:**
+```php
+use PKP\mail\mailables\PasswordResetRequested;
+use Illuminate\Support\Facades\Mail;
+
+$template = Repo::emailTemplate()->getByKey($contextId, PasswordResetRequested::getEmailTemplateKey());
+$mailable = (new PasswordResetRequested($site))
+    ->recipients($user)    // internally generates reset token + URL
+    ->from($site->getLocalizedContactEmail(), $site->getLocalizedContactName())
+    ->body($template->getLocalizedData('body'))
+    ->subject($template->getLocalizedData('subject'));
+Mail::send($mailable);
+```
+
+The `PasswordResetRequested` mailable uses the `PASSWORD_RESET_CONFIRM` email template and injects `{$passwordResetUrl}` automatically.
+
+### Subscription management (OJS-specific)
+
 All in `/classes/subscription/`. Uses DAO pattern (not Repository/Service).
 
 ### DAOs (full CRUD)

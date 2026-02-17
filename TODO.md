@@ -64,7 +64,7 @@ Must complete before writing any plugin code. These are the critical unknowns th
 
 - [ ] **Test user creation API** — send `POST /api/v1/users` with a Bearer token on the real OJS 3.5 staging instance. Record result in `docs/ojs-api.md`. If it doesn't exist, the OJS plugin must implement full user creation via internal PHP classes.
 - [ ] **Test Bearer token auth from WP server** — `curl` the OJS API with a Bearer token from the WP server's IP address. Confirm 200 response. If 401, enable `CGIPassAuth on` in `.htaccess` and retest.
-- [ ] **Locate OJS 3.5 password reset token class** — find the specific class/method for generating reset tokens. Verify it's accessible from plugin context. Document in `docs/ojs-api.md`.
+- [x] **Locate OJS 3.5 password reset token class** — **Found.** `PKP\security\Validation::generatePasswordResetHash($userId)` generates HMAC-SHA256 tokens. `PKP\mail\mailables\PasswordResetRequested` sends the reset email. Default expiry is 2 hours (`security.reset_seconds` in `config.inc.php`) — must increase to 604800 (7 days) for bulk welcome emails. Documented in `docs/ojs-api.md`.
 - [ ] **Confirm OJS email config** — check SPF, DKIM, DMARC records on the OJS mail domain. Check whether OJS uses a transactional email service or raw SMTP. If raw SMTP, set up a transactional relay (SES/Mailgun/Postmark) before bulk send.
 - [ ] **Document OJS server specs** — RAM, CPU, PHP memory limit, PHP max execution time, web server type, shared or dedicated hosting.
 - [x] **Confirm OJS journal structure** — **One journal.** *Existential Analysis* is a single journal in OJS. Sync creates subscriptions for one journal only.
