@@ -28,7 +28,7 @@ The plan says "REST endpoints for subscription CRUD" but never defines: URL path
 - `PUT /subscriptions/{id}/expire` — by ID or by email?
 - `GET /subscriptions` — filter params
 - `POST /send-welcome-email` — per-user, with dedup flag
-- Health/ping endpoint for connection testing
+- Health/status endpoint for connection testing + compatibility check
 
 *Flagged by: senior dev, security*
 
