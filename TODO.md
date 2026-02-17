@@ -88,22 +88,21 @@ OJS 3.5.0 was released June 2025 (LTS). Required for the custom plugin API. This
 
 Approximately 500 members already have active WP/UM subscriptions. They need OJS access from day one — not just new signups going forward.
 
+**OJS is essentially a fresh install** — a handful of admin logins and ~60 test articles across 2 recent journals. No existing member accounts, no existing subscriptions, no dedup problem.
+
 **The bulk sync process:**
-- [ ] Run bulk sync command: iterate all active WCS subscriptions, for each call OJS find-or-create user + create subscription
-- [ ] **Dedup**: Some members may already have OJS accounts (from buying articles directly). Match by email — don't create duplicates, just add the subscription to the existing account
+- [ ] Run bulk sync command: iterate all active WCS subscriptions, for each create OJS user + subscription
 - [ ] **Subscription dates**: Pull end date from WCS (`$subscription->get_date('end')`). For non-expiring subs, use a far-future date or match OJS subscription type duration
-- [ ] **Verification**: After sync, compare counts — active WCS subscriptions vs OJS subscriptions created. Log any mismatches (email not valid, API errors, etc.)
+- [ ] **Verification**: After sync, compare counts — active WCS subscriptions vs OJS subscriptions created. Log any failures (invalid email, API errors, etc.)
 - [ ] **Dry-run mode**: Bulk sync should support a dry-run that reports what it would do without making changes
 
 **The password problem:**
-New OJS users created by the sync won't have a password (the sync creates the account but can't set a password from WP). Members need to use OJS "forgot password" to set one up on first visit.
+OJS users created by the sync won't have a password (the sync creates the account but can't set a password from WP). Members need to use OJS "forgot password" to set one up on first visit.
 
 - [ ] "First time here from SEA? Set your password" message on OJS login page (prominent, not buried)
 - [ ] Launch email to all ~500 members: "You now have journal access. Go to [OJS URL]. Click 'Forgot password' to set up your login. Use the same email as your SEA membership."
 
-**Edge cases:**
-- Member's WP email ≠ OJS email (if they already have an OJS account under a different email) → manual resolution, flag in sync log
-- Member has an existing OJS subscription they paid for → sync should not overwrite or shorten it, only extend
+**Edge case:**
 - Members with multiple WCS subscriptions → should result in one OJS subscription (the longest-running)
 
 ### OJS cosmetic changes
@@ -134,8 +133,8 @@ New OJS users created by the sync won't have a password (the sync creates the ac
 2. ~~Does the Subscription SSO plugin coexist with purchases?~~ **No.**
 3. ~~Which WP membership plugin is in use?~~ **Ultimate Member + WooCommerce + WooCommerce Subscriptions.**
 4. ~~What OJS version?~~ **3.4.0-9. Upgrade to 3.5 required.**
-5. What happens to existing OJS users who are also SEA members? → **Handled by bulk sync dedup** — match by email, add subscription to existing account, don't create duplicates. See "Launch: Bulk sync" in Phase 1.
-6. Are there members who need OJS access outside the standard membership? (editorial board, reviewers) → **They already have OJS accounts with appropriate roles.** The sync only adds subscriptions — it won't interfere with existing editorial access.
+5. ~~What happens to existing OJS users who are also SEA members?~~ **Not an issue.** OJS is a fresh install — no existing member accounts. Only a handful of admin logins. ~60 test articles across 2 recent journals.
+6. Are there members who need OJS access outside the standard membership? (editorial board, reviewers) — only admin logins exist currently, no member accounts to conflict with.
 7. Does the OJS user creation API (POST /users) work on SEA's version? (Verify on real instance)
 
 ## Risk register
@@ -150,5 +149,5 @@ New OJS users created by the sync won't have a password (the sync creates the ac
 | Members confused by two logins | High | Medium | Clear onboarding, strategic "set password" prompts |
 | OJS upgrade breaks custom plugin | Medium | High | Use DAO layer (stable), test upgrades in staging |
 | WP membership plugin changes | Low | Medium | Abstract hooks behind adapter |
-| Bulk sync email mismatches | Medium | Medium | Flag in sync log, manual resolution for mismatches, dry-run mode |
+| Bulk sync failures | Low | Medium | Dry-run mode, count verification, error logging |
 | Members don't set OJS password | High | Medium | Prominent "set your password" prompt, launch email with clear instructions |
