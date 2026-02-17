@@ -67,10 +67,10 @@ Must complete before writing any plugin code. These are the critical unknowns th
 - [ ] **Locate OJS 3.5 password reset token class** — find the specific class/method for generating reset tokens. Verify it's accessible from plugin context. Document in `docs/ojs-api.md`.
 - [ ] **Confirm OJS email config** — check SPF, DKIM, DMARC records on the OJS mail domain. Check whether OJS uses a transactional email service or raw SMTP. If raw SMTP, set up a transactional relay (SES/Mailgun/Postmark) before bulk send.
 - [ ] **Document OJS server specs** — RAM, CPU, PHP memory limit, PHP max execution time, web server type, shared or dedicated hosting.
-- [ ] **Confirm OJS journal structure** — is *Existential Analysis* one journal or two contexts in OJS? Determines whether sync creates subscriptions for one or multiple journals.
+- [x] **Confirm OJS journal structure** — **One journal.** *Existential Analysis* is a single journal in OJS. Sync creates subscriptions for one journal only.
 - [ ] **Create dedicated OJS service account** — purpose-built account with minimum required role for sync operations. Generate API key. Do not use a human admin account.
-- [ ] **Discuss OJS self-registration with SEA** — if paywall handles non-member purchases without requiring registration, consider disabling self-registration to prevent email mismatch accumulation.
-- [ ] **Confirm WP email uniqueness** — verify that WP (with Ultimate Member) enforces email uniqueness and email change confirmation. If not, add this before wiring up sync hooks.
+- [x] **Discuss OJS self-registration with SEA** — **Keep enabled.** Non-members need to self-register to buy articles/issues via the paywall (£3/£25/£18). Disabling would break non-member purchases. Email mismatch risk is managed by the email change hook and daily reconciliation.
+- [x] **Confirm WP email uniqueness** — **Yes.** WP enforces unique emails at DB level (`wp_users.user_email` has unique index) and in `wp_insert_user()`. UM does not relax this. Email changes require confirmation: WP core sends a verification link to the new address; UM's account form is stricter (logs user out until confirmed). Safe for email-as-key model.
 - [ ] **Clarify UM ↔ WCS relationship** — how are Ultimate Member and WooCommerce Subscriptions connected on SEA's site? Is there a bridge plugin (e.g. "UM WooCommerce" extension)? Is UM purely the registration/profile layer while WCS is the sole authority on active subscriptions? Or does UM have its own membership state that could diverge from WCS? This determines whether WCS hooks alone are sufficient or whether UM has independent membership logic we need to account for.
 
 ---
@@ -199,8 +199,8 @@ Must complete before writing any plugin code. These are the critical unknowns th
 5. ~~What happens to existing OJS users who are also SEA members?~~ **Not an issue.** OJS is a fresh install — no existing member accounts.
 6. Are there members who need OJS access outside the standard membership? (editorial board, reviewers) — only admin logins exist currently.
 7. Does the OJS user creation API (POST /users) work on SEA's version? **Must verify on real instance — Phase 0.75.**
-8. Is *Existential Analysis* one OJS journal or two? **Must confirm — Phase 0.75.**
-9. Should OJS self-registration be disabled? **Discuss with SEA — Phase 0.75.**
+8. ~~Is *Existential Analysis* one OJS journal or two?~~ **One journal.**
+9. ~~Should OJS self-registration be disabled?~~ **No.** Non-members need it for paywall purchases.
 
 ## Risk register
 

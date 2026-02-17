@@ -204,6 +204,9 @@ When a member has **multiple active WCS subscriptions**, the plugin resolves to 
 | Membership tiers | **All tiers grant journal access.** |
 | Hosting | **Different servers.** WP and OJS on separate hosts. HTTP calls over network. |
 | OJS state | **Fresh install.** A handful of admin logins, ~60 test articles, no existing member accounts. |
+| OJS journals | **One journal** (*Existential Analysis*). Sync targets one journal ID. |
+| OJS self-registration | **Enabled.** Non-members need it to buy articles/issues via paywall. |
+| WP email uniqueness | **Enforced.** Unique index on `wp_users.user_email`. UM email changes require confirmation. |
 
 ---
 
