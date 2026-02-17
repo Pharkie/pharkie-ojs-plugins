@@ -94,7 +94,7 @@ Installed like any WP plugin:
 5. **"Set your password" emails** — bulk sync triggers a welcome email per member with a direct password-set link.
 6. **OJS template changes** — "SEA member? Set your password" on login page, "subscribe via SEA" on paywall.
 
-**If the OJS 3.5 upgrade hits serious problems**, re-evaluate Janeway migration. The total effort is comparable — the risks are just different. See [`discovery.md`](./discovery.md) for the comparison.
+If the OJS 3.5 upgrade hits serious problems, fallback options are documented in [`discovery.md`](./discovery.md).
 
 ---
 
