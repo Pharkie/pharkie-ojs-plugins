@@ -90,8 +90,12 @@ Approximately 500 members already have active WP/UM subscriptions. They need OJS
 
 **OJS is essentially a fresh install** — a handful of admin logins and ~60 test articles across 2 recent journals. No existing member accounts, no existing subscriptions, no dedup problem. Back issues will be loaded gradually after launch (launch with recent content, backfill over time).
 
+**How it works:** The bulk sync creates OJS user accounts AND subscriptions upfront for all ~500 members. When a member visits OJS, their account is already waiting — they just set a password via "forgot password". We don't wait for members to self-register (that reintroduces the Pull-verify problems we eliminated and creates a confusing experience).
+
+**Email is the key.** Same email required on both systems. Members who want a different email on OJS must update their WP/SEA email first. No mapping table, no linking flow — keeps it simple.
+
 **The bulk sync process:**
-- [ ] Run bulk sync command: iterate all active WCS subscriptions, for each create OJS user + subscription
+- [ ] Run bulk sync command: iterate all active WCS subscriptions, for each create OJS user (by email) + subscription
 - [ ] **Subscription dates**: Pull end date from WCS (`$subscription->get_date('end')`). For non-expiring subs, use a far-future date or match OJS subscription type duration
 - [ ] **Verification**: After sync, compare counts — active WCS subscriptions vs OJS subscriptions created. Log any failures (invalid email, API errors, etc.)
 - [ ] **Dry-run mode**: Bulk sync should support a dry-run that reports what it would do without making changes
@@ -100,7 +104,7 @@ Approximately 500 members already have active WP/UM subscriptions. They need OJS
 OJS users created by the sync won't have a password (the sync creates the account but can't set a password from WP). Members need to use OJS "forgot password" to set one up on first visit.
 
 - [ ] "First time here from SEA? Set your password" message on OJS login page (prominent, not buried)
-- [ ] Launch email to all ~500 members: "You now have journal access. Go to [OJS URL]. Click 'Forgot password' to set up your login. Use the same email as your SEA membership."
+- [ ] Launch email to all ~500 members: "You now have journal access. Go to [OJS URL]. Click 'Forgot password' to set up your login. Use the same email as your SEA membership. If you want a different email on the journal site, update it on your SEA account first."
 
 **Edge case:**
 - Members with multiple WCS subscriptions → should result in one OJS subscription (the longest-running)

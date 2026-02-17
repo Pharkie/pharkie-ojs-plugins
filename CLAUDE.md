@@ -39,6 +39,8 @@ Previous developer called this "Plan C". Key addition: OJS REST API has no subsc
 ## Hard constraints
 
 - **WP is source of truth** for membership. OJS is downstream.
+- **Email is the matching key.** Same email required on both systems. No separate mapping table. Members who want a different email on OJS must update their WP email first.
+- **Bulk sync creates OJS accounts.** Don't wait for members to self-register. Push user accounts + subscriptions from WP upfront (~500 existing members at launch).
 - **OJS paywall must keep working** for non-member purchases (£3 article, £25 issue, £18 back issue).
 - **No OJS core modifications.** Plugins only.
 - **Ship fast.** Project is over budget. Prefer boring, reliable solutions.
