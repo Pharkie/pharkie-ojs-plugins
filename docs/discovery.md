@@ -70,7 +70,7 @@ See `phase0-findings.md` for full API research.
 
 ---
 
-## Step 4: XML user import (doesn't solve the problem)
+## Step 4: XML user import (eliminated)
 
 Developer proposed using OJS's built-in Users XML Plugin (`Tools > Import/Export > Users XML Plugin`) as a stopgap — export WP members to XML, import into OJS periodically until the full sync is built.
 
@@ -82,7 +82,7 @@ Developer proposed using OJS's built-in Users XML Plugin (`Tools > Import/Export
 
 A working stopgap would still require a separate mechanism to create ~500 subscription records (direct SQL, or a PHP script using `IndividualSubscriptionDAO` — essentially writing a throwaway version of part of the OJS plugin). It would also have no mechanism for expiring lapsed members or handling email changes.
 
-**Result: Doesn't solve the problem.** The XML import handles the easy part (user accounts) but not the hard part (subscriptions, expiry, ongoing sync). See [`xml-import-evaluation.md`](./xml-import-evaluation.md) for the full write-up.
+**Result: Eliminated.** The XML import handles the easy part (user accounts) but not the hard part (subscriptions, expiry, ongoing sync). See [`xml-import-evaluation.md`](./xml-import-evaluation.md) for the full write-up.
 
 ---
 

@@ -2,7 +2,7 @@
 
 Last updated: 2026-02-18
 
-**Context:** Developer proposed using OJS's built-in XML user import as a temporary workaround — export WP members to XML, import into OJS periodically — while the full push-sync system is built or a platform decision is made.
+**Context:** Developer proposed using OJS's built-in XML user import as a temporary workaround — export WP members to XML, import into OJS periodically — while the full push-sync system is built or a platform decision is made. For how this fits into the decision trail, see [`discovery.md`](./discovery.md).
 
 ---
 
@@ -77,4 +77,4 @@ Does the developer have a plan for step 4 (subscription creation)? If they're as
 - [OJS XML import schema (pkp-users.xsd)](https://github.com/pkp/pkp-lib/blob/main/plugins/importexport/users/pkp-users.xsd)
 - [PKP Forum: OJS3 Bulk import subscriptions (confirmed: doesn't exist)](https://forum.pkp.sfu.ca/t/ojs3-bulk-import-subscriptions/62294)
 - [PKP Forum: Subscription management API options (confirmed: none)](https://forum.pkp.sfu.ca/t/are-there-api-or-other-options-for-subscription-management-available-in-ojs-3-3/86106)
-- [OJS subscription DB schema and DAO classes](../docs/ojs-api.md)
+- [OJS subscription DB schema and DAO classes](./ojs-api.md)
