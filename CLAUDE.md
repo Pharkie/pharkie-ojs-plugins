@@ -35,6 +35,7 @@ Previous developer called this "Plan C". Key addition: OJS REST API has no subsc
 | **Pull-verify** | Subscription SSO plugin (OJS asks WP at access time) | Eliminated |
 | **Push-sync** | WP pushes to OJS via plugins on each side | **Chosen** |
 | **Push-sync (direct DB)** | Same but writes to OJS DB directly | Fallback |
+| **XML user import** | OJS built-in XML import (users only, not subscriptions) | Evaluated — doesn't solve the problem |
 | **Janeway migration** | Replace OJS with Janeway + custom paywall | Genuine backup |
 
 ## Hard constraints

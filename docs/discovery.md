@@ -1,6 +1,6 @@
 # Discovery: What We Investigated and Why
 
-Last updated: 2026-02-17
+Last updated: 2026-02-18
 
 This document records the research phase: what approaches were evaluated, what was found, and why options were eliminated. For the forward-looking implementation plan, see [`plan.md`](./plan.md).
 
@@ -14,6 +14,7 @@ This document records the research phase: what approaches were evaluated, what w
 | **Pull-verify** | OJS asks WP "is this person a member?" at access time (Subscription SSO plugin) | Eliminated |
 | **Push-sync** | WP pushes subscription changes to OJS via plugins on each side | **Chosen** |
 | **Push-sync (direct DB)** | Same as Push-sync but writes to OJS database directly instead of via plugin | Fallback |
+| **XML user import** | Bulk-import WP members into OJS via built-in XML import | Evaluated — doesn't solve the problem |
 | **Janeway migration** | Replace OJS with Janeway + custom paywall | Genuine backup |
 
 Previous developer's naming: Plan A = OIDC SSO, Plan B = Pull-verify, Plan C = Push-sync, Plan D = Janeway migration.
@@ -66,6 +67,22 @@ The initial idea behind Push-sync was simple: WP calls OJS REST API to create su
 However: OJS has complete internal PHP classes for subscription CRUD (`IndividualSubscriptionDAO`). They just have no HTTP interface. **The fix is a small OJS plugin that exposes these classes as REST endpoints.** This keeps the spirit of Push-sync intact — the WP side is the same, we just need to build the OJS receiving end ourselves.
 
 See `phase0-findings.md` for full API research.
+
+---
+
+## Step 4: XML user import (doesn't solve the problem)
+
+Developer proposed using OJS's built-in Users XML Plugin (`Tools > Import/Export > Users XML Plugin`) as a stopgap — export WP members to XML, import into OJS periodically until the full sync is built.
+
+**What it does:** Creates user accounts and assigns journal roles (e.g. Reader). Works on OJS 3.4, no upgrade needed. Skips existing users on re-import.
+
+**What it doesn't do:** Create subscription records. The XML schema has no subscription-related fields. There is no separate subscription XML import in any OJS version — PKP has confirmed they have [no plans to build one](https://forum.pkp.sfu.ca/t/ojs3-bulk-import-subscriptions/62294).
+
+**Why this matters:** The OJS paywall checks the `subscriptions` table, not user roles. A Reader account with no subscription record is still blocked from paywalled content. So XML import alone doesn't grant members access.
+
+A working stopgap would still require a separate mechanism to create ~500 subscription records (direct SQL, or a PHP script using `IndividualSubscriptionDAO` — essentially writing a throwaway version of part of the OJS plugin). It would also have no mechanism for expiring lapsed members or handling email changes.
+
+**Result: Doesn't solve the problem.** The XML import handles the easy part (user accounts) but not the hard part (subscriptions, expiry, ongoing sync). See [`xml-import-evaluation.md`](./xml-import-evaluation.md) for the full write-up.
 
 ---
 
