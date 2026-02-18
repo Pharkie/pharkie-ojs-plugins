@@ -14,7 +14,7 @@ This document records the research phase: what approaches were evaluated, what w
 | **Pull-verify** | OJS asks WP "is this person a member?" at access time (Subscription SSO plugin) | Eliminated |
 | **Push-sync** | WP pushes subscription changes to OJS via plugins on each side | **Chosen** |
 | **Push-sync (direct DB)** | Same as Push-sync but writes to OJS database directly instead of via plugin | Fallback |
-| **XML user import** | Bulk-import WP members into OJS via built-in XML import | Evaluated — doesn't solve the problem |
+| **XML user import** | Bulk-import WP members into OJS via built-in XML import | Eliminated |
 | **Janeway migration** | Replace OJS with Janeway + custom paywall | Genuine backup |
 
 Previous developer's naming: Plan A = OIDC SSO, Plan B = Pull-verify, Plan C = Push-sync, Plan D = Janeway migration.
