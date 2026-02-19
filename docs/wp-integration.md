@@ -120,14 +120,14 @@ From the WP admin roles list (confirmed 2026-02-19):
 - Manually set international listing
 - Manually set UK listing
 
-**Open question:** Do the "Manually set" roles also grant journal access? These are assigned by admins for Exco/life members who presumably don't go through WCS checkout. If yes, the WP plugin needs to detect these roles too (not just WCS hooks). **Confirm with SEA.**
+These also grant journal access. Because they're assigned manually (not via WCS checkout), WCS hooks won't fire for them. The bulk sync and daily reconciliation must detect these roles directly, not rely solely on WCS subscription status.
 
 **Standard WP/WooCommerce/other plugin roles** (not relevant to sync):
 - Subscriber, Shop Manager, Editor, Customer, Contributor
 - SEO Manager, SEO Editor
 - GiveWP Worker, GiveWP Manager, GiveWP Donor, GiveWP Accountant
 
-The "with listing" / "no listing" distinction is a member directory feature (UM), not relevant to journal access. All six SEA membership roles trigger OJS sync via WCS hooks.
+The "with listing" / "no listing" distinction is a member directory feature (UM), not relevant to journal access. All nine SEA membership roles (six standard + three manual) grant OJS access.
 
 ## Mapping membership tiers to OJS subscription types
 

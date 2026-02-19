@@ -231,7 +231,7 @@ Must complete before writing any plugin code. These are the critical unknowns th
 7. Does the OJS user creation API (POST /users) work on SEA's version? **Must verify on real instance — Phase 0.75.**
 8. ~~Is *Existential Analysis* one OJS journal or two?~~ **One journal.**
 9. ~~Should OJS self-registration be disabled?~~ **No.** Non-members need it for paywall purchases.
-10. **Do "Manually set" roles (student/international/UK listing) grant journal access?** These are admin-assigned roles for Exco/life members who don't go through WCS checkout. If yes, the WP plugin needs to detect these roles too — WCS hooks alone won't cover them. **Ask SEA.**
+10. ~~Do "Manually set" roles grant journal access?~~ **Yes (assumed).** These are admin-assigned for Exco/life members who don't go through WCS checkout. Bulk sync and daily reconciliation must detect these roles directly — WCS hooks won't fire for them.
 
 ## Risk register
 
