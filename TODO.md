@@ -1,25 +1,27 @@
 # TODO — SEA WP ↔ OJS Integration
 
-## Phase 0: Verify assumptions
+## Established facts
 
-### Answered by research (2026-02-16)
+Confirmed during Phase 0 research (2026-02-16). Details in `docs/phase0-findings.md`, `docs/phase0-sso-plugin-audit.md`, `docs/discovery.md`.
 
-- [x] **Audit OJS REST API for subscription endpoints** — **NO subscription endpoints exist.** Not in 3.4, not in 3.5. The original REST API sync plan is not directly possible. See `docs/phase0-findings.md`.
-- [x] **Confirm OJS API auth method** — Bearer token via `Authorization` header. Token per-user at Profile > API Key. Requires `api_key_secret` in `config.inc.php`. Apache+PHP-FPM needs `CGIPassAuth on`. Fallback: `?apiToken=` query param.
-- [x] **Assess user creation via API** — Conflicting evidence. Swagger spec shows read-only user endpoints. **Must verify against actual OJS version.**
-- [x] **Evaluate Subscription SSO plugin** — **Eliminated.** Source code audit confirmed it hijacks the OJS purchase flow. Non-members can't buy articles/issues while it's active. See `docs/phase0-sso-plugin-audit.md`.
-- [x] **Evaluate OIDC/OpenID SSO** — **Eliminated.** Only solves login not access. OJS plugin has unresolved bugs, no production-ready release for 3.5, breaks multi-journal setups. Previous developer confirmed this independently.
-
-### Answered by SEA (2026-02-16)
-
-- [x] **Confirm OJS version** — **3.4.0-9.** Upgrade to 3.5 required (see Phase 0.5).
-- [x] **Confirm WP membership plugin** — **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles user registration/profiles/roles. WooCommerce Subscriptions handles the actual subscription billing. Membership = WP role assignment. See `docs/wp-integration.md` for hook details.
-- [x] **Map membership tiers** — **All tiers grant journal access.** Simplifies the WP plugin: any active WCS subscription triggers an OJS subscription.
-- [x] **Confirm hosting/network** — **Different servers.** WP plugin must make HTTP calls to OJS over the network. Need to confirm OJS is reachable from WP server (no firewall blocking).
-- [x] **Get OJS admin access** — **Yes, have Site Administrator access.**
-- [x] **Confirm: can we install OJS plugins?** — **Yes.**
-
----
+| Fact | Detail |
+|---|---|
+| OJS version (live) | 3.4.0-9. Staging upgraded to 3.5.0.3. |
+| OJS admin access | Yes. Site Administrator level. Can install plugins. |
+| WP membership stack | Ultimate Member + WooCommerce + WooCommerce Subscriptions. See `docs/wp-integration.md`. |
+| Membership tiers | All tiers grant journal access. Nine WP roles (six standard, three manual). |
+| Hosting | Different servers. WP and OJS communicate over HTTP. |
+| OJS state | Fresh install. Admin logins only, ~60 test articles, no existing member accounts. |
+| OJS journals | One journal (*Existential Analysis*). |
+| OJS self-registration | Enabled. Non-members need it for paywall purchases. |
+| WP email uniqueness | Enforced at DB level. UM email changes require confirmation. |
+| OJS API auth | Bearer token via `Authorization` header. Requires `api_key_secret` in `config.inc.php`. Apache+PHP-FPM needs `CGIPassAuth on`. |
+| OJS subscription API | Does not exist. Custom plugin exposes subscription CRUD. |
+| OJS user creation API | Unconfirmed — swagger shows read-only. Must verify on staging (Phase 0.75). |
+| OIDC SSO | Eliminated. Only solves login not access. Plugin has unresolved bugs. |
+| Subscription SSO plugin | Eliminated. Hijacks purchase flow. See `docs/phase0-sso-plugin-audit.md`. |
+| XML user import | Eliminated. Creates accounts only, not subscriptions. See `docs/xml-import-evaluation.md`. |
+| Manual member roles | Admin-assigned (Exco/life members). Grant OJS access but bypass WCS checkout — bulk sync must detect these directly. |
 
 ## Decision: Push-sync (plugins on each side)
 
@@ -89,18 +91,14 @@ Staging sites are bare installs. Before plugin development or end-to-end testing
 
 ## Phase 0.75: Verify OJS API prerequisites
 
-Must complete before writing any plugin code. These are the critical unknowns that gate the plugin design.
+Must complete before writing any plugin code. Answered items have been moved to the established facts table above.
 
-- [ ] **Test user creation API** — send `POST /api/v1/users` with a Bearer token on the real OJS 3.5 staging instance. Record result in `docs/ojs-api.md`. If it doesn't exist, the OJS plugin must implement full user creation via internal PHP classes.
-- [ ] **Test Bearer token auth from WP server** — `curl` the OJS API with a Bearer token from the WP server's IP address. Confirm 200 response. If 401, enable `CGIPassAuth on` in `.htaccess` and retest.
-- [x] **Locate OJS 3.5 password reset token class** — **Found.** `PKP\security\Validation::generatePasswordResetHash($userId)` generates HMAC-SHA256 tokens. `PKP\mail\mailables\PasswordResetRequested` sends the reset email. Default expiry is 2 hours (`security.reset_seconds` in `config.inc.php`) — must increase to 604800 (7 days) for bulk welcome emails. Documented in `docs/ojs-api.md`.
+- [ ] **Test user creation API** — send `POST /api/v1/users` with a Bearer token on OJS 3.5 staging. Record result in `docs/ojs-api.md`. If it doesn't exist, the OJS plugin must implement full user creation via internal PHP classes.
+- [ ] **Test Bearer token auth from WP server** — `curl` the OJS API with a Bearer token from the WP staging server's IP. Confirm 200 response. If 401, add `CGIPassAuth on` to `.htaccess` and retest.
 - [ ] **Confirm OJS email config** — check SPF, DKIM, DMARC records on the OJS mail domain. Check whether OJS uses a transactional email service or raw SMTP. If raw SMTP, set up a transactional relay (SES/Mailgun/Postmark) before bulk send.
 - [ ] **Document OJS server specs** — RAM, CPU, PHP memory limit, PHP max execution time, web server type, shared or dedicated hosting.
-- [x] **Confirm OJS journal structure** — **One journal.** *Existential Analysis* is a single journal in OJS. Sync creates subscriptions for one journal only.
 - [ ] **Create dedicated OJS service account** — purpose-built account with minimum required role for sync operations. Generate API key. Do not use a human admin account.
-- [x] **Discuss OJS self-registration with SEA** — **Keep enabled.** Non-members need to self-register to buy articles/issues via the paywall (£3/£25/£18). Disabling would break non-member purchases. Email mismatch risk is managed by the email change hook and daily reconciliation.
-- [x] **Confirm WP email uniqueness** — **Yes.** WP enforces unique emails at DB level (`wp_users.user_email` has unique index) and in `wp_insert_user()`. UM does not relax this. Email changes require confirmation: WP core sends a verification link to the new address; UM's account form is stricter (logs user out until confirmed). Safe for email-as-key model.
-- [ ] **Clarify UM ↔ WCS relationship** — how are Ultimate Member and WooCommerce Subscriptions connected on SEA's site? Is there a bridge plugin (e.g. "UM WooCommerce" extension)? Is UM purely the registration/profile layer while WCS is the sole authority on active subscriptions? Or does UM have its own membership state that could diverge from WCS? This determines whether WCS hooks alone are sufficient or whether UM has independent membership logic we need to account for.
+- [ ] **Clarify UM ↔ WCS relationship** — is UM purely the registration/profile layer while WCS is the sole authority on active subscriptions? Or does UM have its own membership state that could diverge from WCS? Is there a bridge plugin (e.g. "UM WooCommerce" extension)?
 
 ---
 
@@ -222,34 +220,23 @@ Must complete before writing any plugin code. These are the critical unknowns th
 
 ## Open questions
 
-1. ~~Can the OJS REST API manage subscriptions?~~ **No.**
-2. ~~Does the Subscription SSO plugin coexist with purchases?~~ **No.**
-3. ~~Which WP membership plugin is in use?~~ **Ultimate Member + WooCommerce + WooCommerce Subscriptions.**
-4. ~~What OJS version?~~ **3.4.0-9. Upgrade to 3.5 required.**
-5. ~~What happens to existing OJS users who are also SEA members?~~ **Not an issue.** OJS is a fresh install — no existing member accounts.
-6. Are there members who need OJS access outside the standard membership? (editorial board, reviewers) — only admin logins exist currently.
-7. Does the OJS user creation API (POST /users) work on SEA's version? **Must verify on real instance — Phase 0.75.**
-8. ~~Is *Existential Analysis* one OJS journal or two?~~ **One journal.**
-9. ~~Should OJS self-registration be disabled?~~ **No.** Non-members need it for paywall purchases.
-10. ~~Do "Manually set" roles grant journal access?~~ **Yes (assumed).** These are admin-assigned for Exco/life members who don't go through WCS checkout. Bulk sync and daily reconciliation must detect these roles directly — WCS hooks won't fire for them.
+1. Are there members who need OJS access outside the standard membership? (editorial board, reviewers) — only admin logins exist currently.
+2. Does the OJS user creation API (POST /users) work on 3.5? Must verify on staging — Phase 0.75.
+3. How are UM and WCS connected on the live site? Is there a bridge plugin? — Phase 0.75.
 
 ## Risk register
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| ~~OJS API lacks subscription endpoints~~ | — | — | **Confirmed.** Custom OJS plugin exposes them. |
-| ~~SSO plugin conflicts with purchases~~ | — | — | **Confirmed.** Eliminated. |
-| ~~OJS version is 3.4~~ | — | — | **Confirmed 3.4.0-9.** Upgrade to 3.5 is Phase 0.5. |
+| OJS 3.5 upgrade fails or causes data corruption | Medium | Critical | Staging first (done — 3.5.0.3 running), rollback runbook, go/no-go threshold |
 | User creation API doesn't exist | Medium | Medium | OJS plugin handles this too (Phase 0.75 verifies) |
-| OJS 3.5 upgrade fails or causes data corruption | Medium | Critical | Staging first, rollback runbook, go/no-go threshold |
 | Sync failures silently drop members | Medium | High | Async queue with retries, daily reconciliation, admin alerts |
-| Members confused by two logins | High | Medium | Welcome email, permanent login prompt, cross-links between systems, support runbook |
-| OJS upgrade breaks custom plugin | Medium | High | `/preflight` endpoint verifies every PHP class/method the plugin depends on (see plan.md endpoint spec). WP "Test connection" button calls `/ping` then `/preflight`. Run after any OJS upgrade. Also: test upgrades in staging first, annual maintenance budget. |
-| WP membership plugin changes | Low | Medium | Abstract hooks behind adapter |
-| Bulk sync failures | Low | Medium | Dry-run mode, batched execution, per-user log, resume capability |
+| Members confused by two logins | High | Medium | Welcome email, permanent login prompt, cross-links, support runbook |
+| OJS upgrade breaks custom plugin | Medium | High | `/preflight` endpoint verifies all PHP dependencies. Run after any OJS upgrade. |
 | Members don't set OJS password | High | Medium | Welcome email + permanent login prompt + 30-day follow-up (Phase 2) |
 | Email change breaks sync | Medium | High | WP email change hook propagates to OJS |
-| API key compromised | Low | Critical | `wp-config.php` constant, dedicated service account, IP allowlist, rotation runbook |
-| Bulk welcome emails spam-filtered | Medium | Medium | Transactional email relay, SPF/DKIM/DMARC, batch 50/hour, warm-up send |
+| API key compromised | Low | Critical | `wp-config.php` constant, dedicated service account, IP allowlist |
+| Bulk welcome emails spam-filtered | Medium | Medium | Transactional email relay, SPF/DKIM/DMARC, batch 50/hour |
 | Apache strips auth headers silently | Medium | High | Phase 0.75 verification from WP server IP |
 | GDPR erasure request | Low | High | Delete-user endpoint on OJS plugin, triggered on WP account deletion |
+| Manual member roles missed by sync | Medium | High | Bulk sync and reconciliation check WP roles directly, not just WCS status |

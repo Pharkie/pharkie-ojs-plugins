@@ -198,18 +198,17 @@ When a member has **multiple active WCS subscriptions**, the plugin resolves to 
 
 ## Facts established
 
-| Question | Answer |
+| Fact | Detail |
 |---|---|
-| OJS version | **3.4.0-9.** Upgrade to 3.5 required. |
-| OJS admin access | **Yes.** Site Administrator level. |
-| Can install OJS plugins | **Yes.** |
-| WP membership plugin | **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** |
-| Membership tiers | **All tiers grant journal access.** |
-| Hosting | **Different servers.** WP and OJS on separate hosts. HTTP calls over network. |
-| OJS state | **Fresh install.** A handful of admin logins, ~60 test articles, no existing member accounts. |
-| OJS journals | **One journal** (*Existential Analysis*). Sync targets one journal ID. |
-| OJS self-registration | **Enabled.** Non-members need it to buy articles/issues via paywall. |
-| WP email uniqueness | **Enforced.** Unique index on `wp_users.user_email`. UM email changes require confirmation. |
+| OJS version | Live: 3.4.0-9. Staging: **3.5.0.3** (upgraded 2026-02-19). |
+| OJS admin access | Yes. Site Administrator level. Can install plugins. |
+| WP membership plugin | Ultimate Member + WooCommerce + WooCommerce Subscriptions. |
+| Membership tiers | All nine roles grant journal access (six standard, three manual/admin-assigned). |
+| Hosting | Different servers. WP and OJS communicate over HTTP. |
+| OJS state | Fresh install. Admin logins only, ~60 test articles, no existing member accounts. |
+| OJS journals | One journal (*Existential Analysis*). Sync targets one journal ID. |
+| OJS self-registration | Enabled. Non-members need it for paywall purchases. |
+| WP email uniqueness | Enforced at DB level. UM email changes require confirmation. |
 
 ---
 
