@@ -9,7 +9,7 @@ WP pushes subscription changes to OJS via a custom plugin on each side. For how 
 ## How it works
 
 ```
-Bulk sync (~500 existing members at launch)
+Bulk sync (~700 existing members at launch)
   → WP-CLI command reads all active WCS subscriptions + users with manual member roles
   → For each member: calls OJS endpoint to find-or-create user by email
   → Calls OJS endpoint: create subscription
@@ -47,7 +47,8 @@ Installed in `plugins/generic/seaSubscriptionApi/`:
 - All endpoints are **idempotent** — safe to call repeatedly with the same payload
 - Uses OJS's own `IndividualSubscriptionDAO` internally (classes already exist and are well-tested)
 - Authenticated via OJS API key (Bearer token) on a **dedicated service account** (not Site Admin)
-- **IP allowlisting**: only accepts requests from the WP server's IP address
+- **Role-based authorization**: requires Journal Manager or Site Admin role (checked via `user_user_groups` DB query — defence-in-depth beyond IP allowlist)
+- **IP allowlisting**: only accepts requests from the WP server's IP address (uses `REMOTE_ADDR` directly, not `$request->ip()` which trusts `X-Forwarded-For`)
 - **Input validation**: email format, integer casting on IDs, max string lengths, HTTP 400 on invalid input
 - No modifications to OJS core code — standard plugin, dropped into a folder
 - Requires OJS 3.5+ for the clean plugin API pattern ([pkp-lib #9434](https://github.com/pkp/pkp-lib/issues/9434))
@@ -75,23 +76,27 @@ Installed like any WP plugin:
 
 ## OJS endpoint spec
 
-All endpoints require Bearer token auth. All are idempotent.
+All endpoints except `/ping` require Bearer token auth + Journal Manager or Site Admin role + IP allowlist. All are idempotent.
 
 **Fragility note:** These endpoints use OJS internal PHP classes (Repo facade, DAOs, Validation), not a stable public API. OJS could rename, merge, or remove any of these in a future release without notice — every OJS plugin has this risk. Mitigation: the `/preflight` endpoint verifies every class and method the plugin depends on. The WP "Test connection" button calls `/ping` then `/preflight`. **Run `/preflight` after any OJS upgrade.**
 
-| Method | Path | Request body | Response | PHP backing (see [ojs-api.md](./ojs-api.md)) |
-|---|---|---|---|---|
-| `GET` | `/ping` | — | `200 {status: "ok"}` | None (lightweight reachability check, no logic) |
-| `GET` | `/preflight` | — | `200 {compatible: bool, checks: [...]}` | Verifies every PHP class and method the plugin depends on still exists via `class_exists()` / `method_exists()` (no data read or written). Returns `compatible: true` if all pass, or `compatible: false` with a list of failures. Checks: `Repo::user()` methods (`getByEmail`, `newDataObject`, `add`, `edit`, `get`, `delete`), `Repo::userGroup()` methods (`getByRoleIds`, `assignUserToGroup`), `DAORegistry::getDAO('IndividualSubscriptionDAO')` methods (`insertObject`, `updateObject`, `getById`, `getByUserIdForJournal`, `deleteById`), `Validation` methods (`suggestUsername`, `encryptCredentials`, `generatePasswordResetHash`), `PasswordResetRequested` class, `Core::getCurrentDate()`. |
-| `POST` | `/users/find-or-create` | `{email, firstName, lastName, sendWelcomeEmail?}` | `200 {userId, created: bool}` | `Repo::user()->getByEmail()` to find; `Repo::user()->newDataObject()` + `add()` to create; `Repo::userGroup()->assignUserToGroup()` for Reader role |
-| `PUT` | `/users/{userId}/email` | `{newEmail}` | `200 {userId}` | `Repo::user()->get($userId)` + `Repo::user()->edit($user, ['email' => $newEmail])`. Plugin must check `getByEmail($newEmail)` first — OJS doesn't enforce uniqueness in `edit()`. |
-| `DELETE` | `/users/{userId}` | — | `200` or `204` | `Repo::user()->edit($user, [...])` to blank PII (safest for sync-created accounts). `Repo::user()->delete($user)` also safe if no submission history. |
-| `POST` | `/subscriptions` | `{userId, journalId, typeId, dateStart, dateEnd}` | `200 {subscriptionId}` | `DAORegistry::getDAO('IndividualSubscriptionDAO')` → `getByUserIdForJournal()` to check existing; `insertObject()` to create or `updateObject()` to extend `dateEnd`. |
-| `PUT` | `/subscriptions/{id}/expire` | — | `200` | `IndividualSubscriptionDAO::getById()` + `setStatus(SUBSCRIPTION_STATUS_OTHER)` + `updateObject()` |
-| `GET` | `/subscriptions` | `?email=` or `?userId=` | `200 [{...}]` | `IndividualSubscriptionDAO::getByUserIdForJournal()` or `Repo::user()->getByEmail()` then DAO lookup |
-| `POST` | `/welcome-email` | `{userId}` | `200` | `Validation::generatePasswordResetHash($userId)` + `PasswordResetRequested` mailable via `Mail::send()`. Requires `security.reset_seconds = 604800` in `config.inc.php`. |
+**Journal context:** All endpoints are scoped to the journal in the URL path (e.g., `/api/v1/{journal-path}/sea/subscriptions`). There is no `journalId` parameter in request bodies — the journal is always derived from the URL context via OJS's `has.context` middleware.
 
-Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not allowed), `404` (not found), `409` (conflict), `500` (server error). All errors return `{error: "message"}`.
+| Method | Path | Request body | Response | Notes |
+|---|---|---|---|---|
+| `GET` | `/ping` | — | `200 {status: "ok"}` | **No auth, no IP check** — pure reachability probe. If ping succeeds but preflight returns 403, the IP is not allowlisted. |
+| `GET` | `/preflight` | — | `200 {compatible: bool, checks: [...]}` | Verifies all PHP classes, methods, and DB tables the plugin depends on. Checks: `Repo::user()` methods, `Repo::userGroup()` methods, `Repo::emailTemplate()` methods, `IndividualSubscriptionDAO` methods, `SubscriptionTypeDAO`, `Validation` methods, `AccessKeyManager`, `PasswordResetRequested`, `Core::getCurrentDate()`, `Role::ROLE_ID_READER`, `user_user_groups` table. |
+| `GET` | `/users?email=` | — | `200 {found, userId, email, username, disabled}` or `200 {found: false}` | Read-only user lookup by email. No side effects. |
+| `POST` | `/users/find-or-create` | `{email, firstName, lastName, sendWelcomeEmail?}` | `200 {userId, created: bool}` | Finds existing user by email or creates new one with Reader role. `sendWelcomeEmail` is only honoured when `created: true` (existing users already have a password). |
+| `PUT` | `/users/{userId}/email` | `{newEmail}` | `200 {userId}` | Checks email uniqueness before updating (OJS doesn't enforce it in `edit()`). Returns `409` if email in use by another account. |
+| `DELETE` | `/users/{userId}` | — | `200 {deleted: true, userId}` | GDPR erasure: anonymises all PII (email, username, name, affiliation, biography, orcid, url, phone, mailing address), disables account, expires any active subscription, removes welcome email dedup flag. Does **not** hard-delete (safe for accounts with submission history). |
+| `POST` | `/subscriptions` | `{userId, typeId, dateStart, dateEnd}` | `200 {subscriptionId}` | Idempotent upsert. **Reactivation** (expired→active): applies all incoming values (typeId, dateStart, dateEnd). **Already active**: extends `dateEnd` only if later (prevents shortening from out-of-order events). `dateEnd: null` = non-expiring. Returns at most one subscription per user per journal. |
+| `PUT` | `/subscriptions/{id}/expire` | — | `200 {subscriptionId}` | Sets status to `SUBSCRIPTION_STATUS_OTHER`. Idempotent. |
+| `PUT` | `/subscriptions/expire-by-user/{userId}` | — | `200 {subscriptionId}` | Convenience: expires subscription by userId (saves WP plugin a lookup call). Returns `404` if no subscription found. |
+| `GET` | `/subscriptions?email=&userId=` | — | `200 [{subscriptionId, userId, journalId, typeId, status, dateStart, dateEnd}]` | Returns array with at most one item per user per journal (OJS enforces one-subscription-per-user-per-journal). Returns `[]` if user or subscription not found. |
+| `POST` | `/welcome-email` | `{userId}` | `200 {sent: true}` or `200 {sent: false, reason}` | Generates password reset access key via `AccessKeyManager::createKey()`, builds reset URL, sends `PasswordResetRequested` mailable. Dedup: atomic `insertOrIgnore` on `sea_welcome_email_sent` flag — concurrent requests are safe. If mail send fails, dedup flag is removed so it can be retried. Token expiry configured via `password_reset_timeout` in `config.inc.php` (set to 7 for bulk welcome emails). |
+
+Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not allowed or insufficient role), `404` (not found), `409` (conflict), `500` (server error). All errors return `{error: "message"}`. Error messages never include internal details (exception messages, stack traces, IP addresses).
 
 ---
 
@@ -101,10 +106,9 @@ Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not 
 
 | Setting | Storage | Notes |
 |---|---|---|
-| OJS base URL | Settings page (`wp_options`) | HTTPS enforced — reject `http://` URLs |
+| OJS base URL | Settings page (`wp_options`) | HTTPS enforced — reject `http://` URLs. Includes journal path, e.g. `https://journal.example.org/index.php/t1`. The API URL is `{base}/api/v1/sea/...` — the journal context is embedded in the URL path, not sent as a parameter. |
 | API key | `wp-config.php` constant `SEA_OJS_API_KEY` | Never stored in database |
 | Subscription type mapping | Settings page (`wp_options`) | WooCommerce Product ID → OJS Subscription Type ID |
-| Journal ID(s) | Settings page (`wp_options`) | Which OJS journal(s) to create subscriptions for |
 | WP server IP | Display only on settings page | Shown so admin can configure OJS IP allowlist |
 
 ### Database tables
@@ -123,6 +127,8 @@ Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not 
 | `next_retry_at` | DATETIME | When to retry next (null if completed/permanent_fail) |
 | `created_at` | DATETIME | When the event was queued |
 | `completed_at` | DATETIME | When it succeeded or permanently failed |
+
+**WP usermeta: `_sea_ojs_user_id`** — cached OJS userId per WP user, set on first successful `find-or-create`. Used by expire/email_change/delete actions to avoid an extra HTTP lookup. Removed on GDPR deletion.
 
 **`sea_ojs_sync_log`** — audit trail
 
@@ -151,18 +157,48 @@ Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not 
 
 When a member has **multiple active WCS subscriptions**, the plugin resolves to one OJS action: active if any subscription is active, `date_end` = latest end date across all active subscriptions.
 
+### Queue processor — API call sequences
+
+Each queue action maps to a specific sequence of OJS API calls. The queue processor stores `ojs_user_id` in WP usermeta (`_sea_ojs_user_id`) after the first successful find-or-create, so subsequent actions can skip the lookup.
+
+**`activate`** (new subscription or renewal):
+1. `POST /users/find-or-create` — `{email, firstName, lastName, sendWelcomeEmail: true}`. Returns `{userId, created}`. If `created: true`, welcome email is sent automatically. Store `userId` in usermeta.
+2. `POST /subscriptions` — `{userId, typeId, dateStart, dateEnd}`. Uses the `userId` from step 1. `typeId` from settings mapping. `dateEnd` = latest across all active WCS subs for this user (or `null` for non-expiring).
+
+**`expire`** (cancellation, expiry, on-hold):
+1. Resolve OJS userId: check `_sea_ojs_user_id` usermeta first. If not cached, call `GET /users?email=` to look up. If user not found, log and skip (never synced).
+2. `PUT /subscriptions/expire-by-user/{userId}` — single call, no need to look up subscriptionId separately. Returns `404` if no subscription (log and skip — subscription may have already been expired or never created).
+
+**`email_change`**:
+1. Resolve OJS userId: usermeta or `GET /users?email={oldEmail}`. If not found, log and skip.
+2. `PUT /users/{userId}/email` — `{newEmail}`. Returns `409` if new email already in use on OJS (alert admin — manual resolution needed).
+
+**`delete_user`** (GDPR):
+1. Resolve OJS userId: usermeta or `GET /users?email=`. If not found, log and skip (nothing to delete).
+2. `DELETE /users/{userId}` — anonymises all PII, disables account, expires subscription.
+3. Clean up: remove `_sea_ojs_user_id` from usermeta.
+
+**Error handling in queue processor:**
+- `200`: success → mark completed, log response
+- `400`: bad input → permanent fail (data issue, won't improve on retry), alert admin
+- `401`/`403`: auth/IP/role failure → permanent fail (config issue, won't improve on retry), alert admin
+- `404` on expire/email_change/delete: user or subscription doesn't exist on OJS → mark completed (nothing to do), log as warning
+- `409`: conflict (email in use) → permanent fail, alert admin for manual resolution
+- `500` or network error: transient → increment retry count, schedule next attempt
+- Any other 4xx: permanent fail, alert admin
+
 ### WP-CLI commands
 
 | Command | Description |
 |---|---|
 | `wp sea-ojs sync --dry-run` | Report what bulk sync would do without making changes |
-| `wp sea-ojs sync` | Run bulk sync: batched (50 users), 500ms delay between calls, resume from last run |
-| `wp sea-ojs sync --user=<id or email>` | Sync a single member (for support/troubleshooting) |
-| `wp sea-ojs send-welcome-emails --dry-run` | Report which members would receive welcome emails |
-| `wp sea-ojs send-welcome-emails` | Send welcome emails in batches (50/hour), skip already-sent |
+| `wp sea-ojs sync` | Run bulk sync: creates users + subscriptions (no welcome emails). Batched (50 users), 500ms delay, resume from last run |
+| `wp sea-ojs sync --user=<id or email>` | Sync a single member (sends welcome email — it's a targeted action) |
+| `wp sea-ojs send-welcome-emails --dry-run` | Report how many welcome emails would be sent |
+| `wp sea-ojs send-welcome-emails` | Send "set your password" emails to all synced users. OJS dedup prevents duplicates — safe to re-run |
 | `wp sea-ojs reconcile` | Run reconciliation now (compare WCS ↔ OJS, retry drift) |
 | `wp sea-ojs status` | Show sync stats: total synced, pending, failed, last reconciliation |
-| `wp sea-ojs test-connection` | Hit OJS `/ping` (reachability) then `/preflight` (compatibility check), report results |
+| `wp sea-ojs test-connection` | Hit OJS `/ping` (reachability, no auth) then `/preflight` (auth + IP + compatibility). Reports specific diagnostic: reachable but IP blocked, reachable but auth failed, reachable but incompatible, or all clear. |
 
 ### WP Cron schedule
 
@@ -174,7 +210,7 @@ When a member has **multiple active WCS subscriptions**, the plugin resolves to 
 
 ### Admin pages
 
-- **Settings**: OJS URL, subscription type mapping, journal IDs, test connection button, current WP server IP display
+- **Settings**: OJS URL (includes journal path), subscription type mapping, test connection button, current WP server IP display
 - **Sync log**: filterable list table (by status, date range, email search). Shows last 500 entries by default.
 - **Sync queue**: current queue status — pending items, retrying items, permanently failed items with member email and error detail
 
@@ -185,14 +221,14 @@ When a member has **multiple active WCS subscriptions**, the plugin resolves to 
 | Decision | Detail |
 |---|---|
 | **Email is the key** | Same email required on both systems. No mapping table. WP email change hook propagates changes to OJS. |
-| **Bulk push creates accounts** | Don't wait for members to self-register. Push user accounts + subscriptions from WP upfront (~500 existing members at launch). |
+| **Bulk push creates accounts** | Don't wait for members to self-register. Push user accounts + subscriptions from WP upfront (~700 existing members at launch). |
 | **All tiers grant access** | Any active WCS subscription → OJS access. Multiple WooCommerce products exist but all grant journal access. If a member has multiple subscriptions, use the latest `date_end` across all of them. |
-| **Password via welcome email** | Bulk sync triggers "set your password" email per member (not "forgot password"). Login page prompt as permanent fallback. |
+| **Password via welcome email** | Bulk sync triggers "set your password" email inline per member via `sendWelcomeEmail: true` (not a separate step). Requires transactional email relay on OJS (Mailgun/SES/Postmark). Login page prompt as permanent fallback. |
 | **Content loaded gradually** | Launch with ~60 recent articles. Back issues loaded over time. |
 | **Non-expiring subs** | WCS subscriptions with no end date → OJS subscription with `date_end = NULL` and `non_expiring` subscription type. |
 | **Async sync dispatch** | WCS hooks log intent to a queue table. WP Cron processes the queue. No inline HTTP calls on checkout. |
 | **Daily reconciliation at launch** | Not deferred. A daily WP Cron job compares WCS ↔ OJS and retries any drift. |
-| **Dedicated OJS service account** | API key belongs to a purpose-built OJS account with minimum required role, not a human admin account. |
+| **Dedicated OJS service account** | API key belongs to a purpose-built OJS account with **Journal Manager** role (minimum required — the OJS plugin enforces Manager or Site Admin). Not a human admin account. |
 
 ---
 
@@ -202,16 +238,21 @@ When a member has **multiple active WCS subscriptions**, the plugin resolves to 
 |---|---|
 | OJS version | Live: 3.4.0-9. Staging: 3.5.0.3 (upgraded 2026-02-19). |
 | OJS admin access | Yes. Site Administrator level. Can install plugins. |
-| WP membership stack | Ultimate Member (profiles) + WooCommerce Subscriptions (payments). WCS is authority on subscription status. |
+| WP membership stack | Ultimate Member 2.11.2, WooCommerce 10.5.2, WooCommerce Subscriptions 8.4.0, WooCommerce Memberships 1.27.5. WCS is authority on subscription status. |
+| WC Memberships | Active on live site. Handles membership plans and role assignment between WCS and UM. Does not affect our sync — we hook WCS status events directly. |
+| Active subscriptions | 698 (confirmed 2026-02-19). |
+| WC subscription products | 6 products: IDs 1892, 1924, 1927, 23040, 23041, 23042. See [`wp-integration.md`](./wp-integration.md#woocommerce-subscription-products-live-site) for full table. |
 | Membership tiers | All nine WP roles grant journal access (six standard, three manual/admin-assigned). |
-| Manual member roles | Admin-assigned (Exco/life members). Bypass WCS checkout — bulk sync and reconciliation must detect these via WP roles directly. |
+| Membership role slugs | Standard: `um_custom_role_1` through `_6`. Manual: `um_custom_role_7`, `_8`, `_9`. See [`wp-integration.md`](./wp-integration.md#membership-roles-on-live-site) for full table. |
+| Manual member roles | Admin-assigned (Exco/life members). Currently 1 member. Bypass WCS checkout — bulk sync and reconciliation must detect these via WP roles directly. |
 | Non-standard access | Editorial board, reviewers, etc. managed manually in OJS admin UI. Not part of WP sync. |
 | Hosting | Different servers. WP and OJS communicate over HTTP. |
 | OJS state | Fresh install. Admin logins only, ~60 test articles, no existing member accounts. |
 | OJS journals | One journal (*Existential Analysis*). Sync targets one journal ID. |
 | OJS self-registration | Enabled. Non-members need it for paywall purchases. |
-| OJS email | Assumed raw SMTP. Transactional relay (Mailgun or similar) needed before bulk welcome email send. |
+| OJS email | Transactional relay (Mailgun/SES/Postmark) required on OJS — hard prerequisite for bulk sync. SPF/DKIM/DMARC must be configured. All ~700 welcome emails sent inline during bulk sync, no batching. |
 | WP email uniqueness | Enforced at DB level. UM email changes require confirmation. |
+| WP users total | 1,418 users. 695 in membership roles + 1 manual = ~696 active members. |
 
 ---
 
@@ -222,11 +263,11 @@ When a member has **multiple active WCS subscriptions**, the plugin resolves to 
 3. **Build and deploy OJS plugin** (`sea-subscription-api`) — code review + PHPStan before production.
 4. **Build and deploy WP plugin** (`sea-ojs-sync`) — code review before production.
 5. **Smoke test** — end-to-end with 10 test users: create subscription → OJS account created → subscription active → paywall grants access → expire subscription → paywall denies access. Also test non-member purchase flow.
-6. **Bulk sync ~500 existing members** — WP-CLI, batched (50 at a time), 500ms delay between calls. Dry-run first, verify counts. Per-user success/fail log.
-7. **"Set your password" emails** — sent in batches of 50/hour. Token expiry extended to 7 days. "Welcome email sent" flag prevents duplicates on re-run.
+6. **Bulk sync ~700 existing members** — `wp sea-ojs sync --dry-run` then `wp sea-ojs sync`. Creates users + subscriptions on OJS. **Does not send welcome emails** — that's a separate step. Batched (50 at a time), 500ms delay, ~12 minutes. Verify: `wp sea-ojs status` shows correct synced count, spot-check a few users in OJS admin.
+7. **Send welcome emails** — `wp sea-ojs send-welcome-emails --dry-run` then `wp sea-ojs send-welcome-emails`. Sends "set your password" email to all synced users. OJS dedup prevents duplicates — safe to re-run if interrupted. Token expiry 7 days. **Requires transactional email relay on OJS.**
 8. **OJS template changes** — permanent "SEA member? Set your password" on login page. "SEA member? Log in for free access" above purchase options on paywall. "Your access is provided by SEA membership" in OJS footer. WCAG 2.1 AA.
 9. **WP member dashboard** — "Access Existential Analysis" link to OJS. Journal access status indicator.
-10. **Member announcement** — via SEA's normal channel (newsletter/email), sent only after steps 6-8 are confirmed working. "Check your email for instructions" not "visit the journal now."
+10. **Member announcement** — via SEA's normal channel (newsletter/email), sent only after steps 6-9 are confirmed working. "Check your email for instructions" not "visit the journal now."
 
 If the OJS 3.5 upgrade hits serious problems, fallback options are documented in [`discovery.md`](./discovery.md).
 
@@ -246,42 +287,108 @@ The OJS plugin's value is in its idempotency and upsert logic. These run against
 |---|---|
 | Create user, then create same email again → one user returned | `find-or-create` idempotency |
 | Create user with two concurrent requests → one user, no error | Race condition safety |
+| `GET /users?email=existing` → `{found: true, userId}` | User lookup |
+| `GET /users?email=nonexistent` → `{found: false}` | User lookup miss |
 | Create subscription for new `(user, journal)` → subscription inserted | Happy path |
 | Create subscription for existing `(user, journal)` with later `dateEnd` → `dateEnd` extended | Upsert extends |
-| Create subscription for existing `(user, journal)` with earlier `dateEnd` → `dateEnd` unchanged | Upsert ignores shorter |
-| Expire subscription → status set to expired | Happy path |
+| Create subscription for existing active `(user, journal)` with earlier `dateEnd` → `dateEnd` unchanged | Upsert ignores shorter (already active) |
+| Expire subscription, then create with shorter `dateEnd` → reactivated with new dates | Reactivation applies all incoming values |
+| Expire subscription → status set to OTHER | Happy path |
 | Expire already-expired subscription → no error | Idempotent expire |
+| `PUT /subscriptions/expire-by-user/{userId}` → subscription expired | Expire by user convenience endpoint |
+| `PUT /subscriptions/expire-by-user/{nonexistent}` → 404 | Expire by user miss |
 | Send welcome email, then send again → only one email sent | Welcome email dedup |
+| Send welcome email → password reset access key created, URL in email | Reset link works |
+| Send welcome email failure → dedup flag removed, returns error | Retry-safe on mail failure |
 | Create user with invalid email format → HTTP 400 | Input validation |
 | Create subscription with non-integer `typeId` → HTTP 400 | Input validation |
-| Request with no Bearer token → HTTP 401 | Auth enforcement |
+| `GET /subscriptions?email=<invalid>` → HTTP 400 | Input validation on lookup |
+| `GET /ping` with no auth → 200 | Ping bypasses auth |
+| Request with valid auth but Reader role → HTTP 403 | Role-based authorization |
+| Request with Journal Manager role → success | Role-based authorization |
 | Request from non-allowlisted IP → HTTP 403 | IP allowlist |
 | Non-expiring WCS subscription (`dateEnd = null`) → OJS subscription with `date_end = NULL` | Non-expiring handling |
 | Update user email → email changed on existing account | Email propagation |
-| Delete user → user anonymised/removed | GDPR erasure |
+| Update user email to already-used email → HTTP 409 | Email uniqueness check |
+| Delete user → all PII blanked, account disabled, subscription expired | GDPR erasure completeness |
 
 **Test environment:** OJS staging instance with a dedicated test journal and test subscription type. Tests create/clean up their own data. Can run via PHPUnit within the OJS test harness.
 
 ### WP plugin: unit tests for queue processor and sync logic
 
-The WP plugin's critical logic is the queue state machine and the multi-subscription resolution. These are pure logic that can be tested without a full WP environment by extracting them into standalone classes.
+The WP plugin's critical logic is the queue state machine, multi-subscription resolution, and API call sequencing. These are pure logic that can be tested without a full WP environment by extracting them into standalone classes.
 
 **Test cases to write:**
+
+**Queue state machine:**
 
 | Test | What it verifies |
 |---|---|
 | Queue item: pending → processing → completed (on success) | Happy path state machine |
 | Queue item: pending → processing → failed → retry at +5min | First retry timing |
+| Queue item: failed → retry at +15min → retry at +1hr | Escalating retry intervals |
 | Queue item: 3 failures → permanent_fail + admin email triggered | Retry exhaustion |
 | Queue item: already completed → skip on re-process | Idempotent queue |
+| `status_active` fires twice for same user quickly → one queue item (dedup) | Hook dedup |
+| OJS returns 400 → permanent fail immediately (no retry) | Client error = no retry |
+| OJS returns 401/403 → permanent fail immediately + admin alert | Auth/config error = no retry |
+| OJS returns 500 → retry | Server error = retry |
+| Network timeout → retry | Transient error = retry |
+| OJS returns 404 on expire → mark completed, log warning | Nothing to expire |
+| OJS returns 409 on email change → permanent fail + admin alert | Email conflict needs manual resolution |
+
+**Subscription resolution:**
+
+| Test | What it verifies |
+|---|---|
 | Member with 1 active WCS sub → `dateEnd` from that sub | Single subscription |
 | Member with 2 active WCS subs → `dateEnd` = latest of the two | Multi-subscription resolution |
 | Member with 1 active + 1 expired WCS sub → `dateEnd` from active only | Expired sub ignored |
 | WCS sub with `date_end = 0` → OJS `dateEnd = null` | Non-expiring mapping |
+| Member with 1 non-expiring + 1 dated active sub → `dateEnd = null` | Non-expiring wins |
+| Member with manual role (no WCS sub) → `dateEnd = null` | Manual role = non-expiring |
+
+**API call sequences (mock HTTP):**
+
+| Test | What it verifies |
+|---|---|
+| `activate` action → calls find-or-create then create-subscription | Correct two-step sequence |
+| `activate` for existing user (`created: false`) → no welcome email param sent | Welcome email only for new users |
+| `activate` stores returned `userId` in `_sea_ojs_user_id` usermeta | OJS userId cached |
+| `expire` with cached usermeta → calls expire-by-user directly (1 HTTP call) | Usermeta cache hit |
+| `expire` without usermeta → calls GET /users then expire-by-user (2 HTTP calls) | Usermeta cache miss |
+| `expire` when GET /users returns `found: false` → mark completed, log skip | Never-synced user |
+| `email_change` → calls GET /users (old email) then PUT /users/{id}/email | Correct sequence |
+| `email_change` when user not on OJS → skip | Nothing to update |
+| `delete_user` → calls GET /users then DELETE /users/{id}, removes usermeta | GDPR sequence |
+| `delete_user` when user not on OJS → skip, clean up usermeta | Nothing to delete |
+
+**Hook detection:**
+
+| Test | What it verifies |
+|---|---|
 | WP email change detected → `email_change` action queued with old + new email | Email change hook |
-| Bulk sync re-run → already-synced users skipped | Resume capability |
-| Bulk sync re-run → already-sent welcome emails not re-sent | Email dedup |
-| `status_active` fires twice for same user quickly → one queue item (dedup) | Hook dedup |
+| WP user deletion → `delete_user` action queued | GDPR hook |
+
+**Test connection:**
+
+| Test | What it verifies |
+|---|---|
+| Ping OK + preflight OK → "Connection successful" | Happy path |
+| Ping OK + preflight 403 → "OJS reachable but IP not allowlisted" | IP mismatch diagnostic |
+| Ping fails → "OJS not reachable" | Network/URL problem |
+| Ping OK + preflight returns `compatible: false` → show failed checks | Incompatible OJS version |
+
+**Bulk sync and reconciliation:**
+
+| Test | What it verifies |
+|---|---|
+| Bulk sync re-run → already-synced users skipped (via usermeta) | Resume capability |
+| Bulk sync dry-run → no HTTP calls, correct count reported | Dry-run safety |
+| Bulk sync batching → 50 users per batch, 500ms delay between calls | Pacing |
+| Reconciliation: active WCS user with no OJS subscription → queues activate | Drift detection |
+| Reconciliation: expired WCS user with active OJS subscription → queues expire | Drift detection (reverse) |
+| Reconciliation: manual role member included | Non-WCS members detected |
 
 **Test environment:** PHPUnit with WP test framework (`WP_UnitTestCase`). Mock the HTTP layer (don't call real OJS during unit tests) — the OJS side has its own integration tests.
 

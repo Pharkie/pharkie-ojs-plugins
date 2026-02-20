@@ -23,7 +23,7 @@ WordPress ↔ OJS integration for the Society for Existential Analysis (SEA). WP
 
 **Push-sync** (custom OJS plugin + WP plugin). A plugin on each side: the OJS plugin exposes REST endpoints for user and subscription CRUD (OJS has no native subscription API). The WP plugin calls those endpoints. Two modes of operation:
 
-1. **Initial bulk sync (~500 existing members):** WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts and subscription records for each member via the OJS plugin endpoints, then sends "set your password" welcome emails. This is how existing members get access at launch.
+1. **Initial bulk sync (~700 existing members):** WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts and subscription records for each member via the OJS plugin endpoints, then sends "set your password" welcome emails. This is how existing members get access at launch.
 2. **Ongoing sync (after launch):** WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and pushes changes to OJS automatically via an async queue.
 
 Previous developer called this "Plan C". See `docs/plan.md` for full details, `docs/discovery.md` for how we got here.
@@ -45,7 +45,7 @@ Previous developer called this "Plan C". See `docs/plan.md` for full details, `d
 
 - **WP is source of truth** for membership. OJS is downstream.
 - **Email is the matching key.** Same email required on both systems. No separate mapping table. Members who want a different email on OJS must update their WP email first.
-- **Bulk sync creates OJS accounts.** Don't wait for members to self-register. Push user accounts + subscriptions from WP upfront (~500 existing members at launch).
+- **Bulk sync creates OJS accounts.** Don't wait for members to self-register. Push user accounts + subscriptions from WP upfront (~700 existing members at launch).
 - **OJS paywall must keep working** for non-member purchases (£3 article, £25 issue, £18 back issue).
 - **No OJS core modifications.** Plugins only.
 - **Ship fast.** Project is over budget. Prefer boring, reliable solutions.

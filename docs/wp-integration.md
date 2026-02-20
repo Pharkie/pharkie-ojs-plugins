@@ -1,18 +1,22 @@
 # WP Integration: Ultimate Member + WooCommerce Subscriptions
 
-Last updated: 2026-02-17.
+Last updated: 2026-02-19.
 
 This doc covers the WP membership stack and the raw hooks available. For the full WP plugin spec (queue tables, CLI commands, cron schedule, admin pages), see [`plan.md`](./plan.md#wp-plugin-spec).
 
 ## Stack
 
-SEA uses **Ultimate Member + WooCommerce + WooCommerce Subscriptions**:
+SEA uses **Ultimate Member + WooCommerce + WooCommerce Subscriptions + WooCommerce Memberships**:
 
-- **Ultimate Member** — user registration, profiles, role management
-- **WooCommerce** — e-commerce layer (products, orders, checkout)
-- **WooCommerce Subscriptions** — recurring subscription billing, status management
+- **Ultimate Member 2.11.2** — user registration, profiles, role management
+- **WooCommerce 10.5.2** — e-commerce layer (products, orders, checkout)
+- **WooCommerce Subscriptions 8.4.0** — recurring subscription billing, status management
+- **WooCommerce Memberships 1.27.5** — membership plans, role assignment, content restriction
+- **Ultimate Member - WooCommerce 2.4.4** — bridges UM profiles with WC data
 
-Membership = WP role assignment. When a user buys a subscription via WooCommerce, WooCommerce Subscriptions manages the billing cycle and Ultimate Member assigns/removes the corresponding WP role.
+Membership = WP role assignment. When a user buys a subscription, WCS manages the billing cycle, WC Memberships manages the membership plan (including role assignment), and UM handles profile display.
+
+**WC Memberships note:** WooCommerce Memberships (SkyVerge) is active on the live site. It sits between WCS and UM in the role assignment chain: WCS subscription status → WC Memberships plan status → UM role. This does **not** affect our sync approach — we hook into WCS status events directly, which fire regardless of what WC Memberships does downstream. Several WC Memberships add-ons are deactivated (Directory Shortcode, Adjust Excerpt Length, Role Handler, Sensei Member Area) but the core plugin is active.
 
 ## Hooks used for OJS sync
 
@@ -105,35 +109,58 @@ foreach ($subscriptions as $sub) {
 
 ## Membership roles on live site
 
-From the WP admin roles list (confirmed 2026-02-19):
+From WP admin (confirmed 2026-02-19 via Playwright):
 
 **SEA membership roles** (all grant journal access):
-- SEA student member (with listing)
-- SEA student member (no listing)
-- SEA international member (with listing)
-- SEA international member (no listing)
-- SEA UK member (with listing)
-- SEA UK member (no listing)
+
+| Role slug | Display name | Members |
+|---|---|---|
+| `um_custom_role_4` | SEA student member (with listing) | 39 |
+| `um_custom_role_3` | SEA student member (no listing) | 202 |
+| `um_custom_role_6` | SEA international member (with listing) | 32 |
+| `um_custom_role_5` | SEA international member (no listing) | 58 |
+| `um_custom_role_2` | SEA UK member (with listing) | 129 |
+| `um_custom_role_1` | SEA UK member (no listing) | 234 |
 
 **Manual/admin roles** (for Exco/life members — set by admin, not via WCS checkout):
-- Manually set student listing
-- Manually set international listing
-- Manually set UK listing
+
+| Role slug | Display name | Members |
+|---|---|---|
+| `um_custom_role_9` | Manually set student listing | 0 |
+| `um_custom_role_8` | Manually set international listing | 0 |
+| `um_custom_role_7` | Manually set UK listing | 1 |
 
 These also grant journal access. Because they're assigned manually (not via WCS checkout), WCS hooks won't fire for them. The bulk sync and daily reconciliation must detect these roles directly, not rely solely on WCS subscription status.
 
+**Total active members by role: 695.** Active WCS subscriptions: 698. The small discrepancy is expected (some subscriptions may be in transition or belong to users with non-standard role states).
+
 **Standard WP/WooCommerce/other plugin roles** (not relevant to sync):
-- Subscriber, Shop Manager, Editor, Customer, Contributor
-- SEO Manager, SEO Editor
-- GiveWP Worker, GiveWP Manager, GiveWP Donor, GiveWP Accountant
+- `subscriber` (181), `customer` (629), `editor`, `contributor`, `shop_manager`
+- `wpseo_manager`, `wpseo_editor`
+- `give_worker`, `give_manager`, `give_donor`, `give_accountant`
 
 The "with listing" / "no listing" distinction is a member directory feature (UM), not relevant to journal access. All nine SEA membership roles (six standard + three manual) grant OJS access.
 
+## WooCommerce subscription products (live site)
+
+Confirmed 2026-02-19 via Playwright:
+
+| WC Product ID | Product name | Price |
+|---|---|---|
+| 1892 | UK Membership (no directory listing) | £50/yr |
+| 1924 | International Membership (no directory listing) | £60/yr |
+| 1927 | Student Membership (no directory listing) | £35/yr |
+| 23040 | Student Membership (with directory listing) | £35/yr |
+| 23041 | International Membership (with directory listing) | £60/yr |
+| 23042 | UK Membership (with directory listing) | £50/yr |
+
+698 active subscriptions at time of capture.
+
 ## Mapping membership tiers to OJS subscription types
 
-**All membership tiers grant journal access**, but there are **multiple WooCommerce Subscription products** (e.g. different tiers like student, full, etc.). Any active subscription triggers OJS access regardless of tier.
+**All membership tiers grant journal access.** Any active WCS subscription → OJS access regardless of tier. The WP plugin settings page includes a mapping table: WC Product ID → OJS Subscription Type ID. Even though all tiers grant access, the mapping keeps things explicit and supports future differentiation.
 
-The WP plugin settings page includes a mapping table: WooCommerce Product ID → OJS Subscription Type ID. Even though all tiers grant access, the mapping keeps things explicit and supports future differentiation if needed.
+Since all six products grant identical journal access, they can all map to a single OJS subscription type — or to separate types if SEA wants to track tier breakdowns in OJS admin. Decision deferred until OJS subscription types are created on staging.
 
 ```php
 // Check which product the subscription is for:
