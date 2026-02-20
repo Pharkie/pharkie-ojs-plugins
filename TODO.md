@@ -18,14 +18,19 @@ Staging upgraded to 3.5.0.3 (2026-02-19). Live is still 3.4.0-9.
 
 ## Phase 0.55: Docker dev environment — DONE
 
-Local dev environment with WP + OJS + two MariaDB instances on Docker. Both plugins bind-mounted for live editing. See `docker/README.md` for quick reference, `docs/ojs-issues-log.md` for bugs encountered.
+Local dev environment with WP + OJS + two MariaDB instances on Docker. Bedrock (Composer-managed WP), OJS config templating, fully scripted setup. Both plugins bind-mounted for live editing. See `docker/README.md` for quick reference, `docs/ojs-issues-log.md` for bugs encountered.
 
 - [x] Docker Compose setup (base + override + staging configs)
-- [x] OJS automated install script (`docker/reset-ojs.sh`) — works around two pkp/containers bugs
-- [x] WP-CLI entrypoint wrapper (`docker/wp/install-wp-cli.sh`)
+- [x] Bedrock WP project (Composer pins WP core + plugins, config from `.env`)
+- [x] Custom WP Dockerfile (`docker/wp/Dockerfile`) — PHP 8.2 + Composer + WP-CLI
+- [x] Custom OJS Dockerfile (`docker/ojs/Dockerfile`) — extends PKP image + envsubst + mariadb client
+- [x] OJS config templating (`docker/ojs/config.inc.php.tmpl` + `entrypoint.sh`)
+- [x] OJS automated install (entrypoint auto-installs via curl, no wizard)
+- [x] OJS reset script (`docker/reset-ojs.sh`)
+- [x] WP setup script (`scripts/setup-wp.sh`) — WP-CLI: install, activate plugins, set options
+- [x] OJS setup script (`scripts/setup-ojs.sh`) — REST API: create journal, SQL: subscription type + plugin
 - [x] Import anonymized WP users (727 users from live export, emails → `@example.com`)
 - [x] Import OJS content from live export (2 issues, 43 articles — required XML fix for pkp/pkp-lib#12276)
-- [x] Install WooCommerce + Ultimate Member in WP
 - [x] File pkp/containers#26 (CLI install broken for OJS 3.5)
 - [x] Document OJS bugs encountered (`docs/ojs-issues-log.md`)
 

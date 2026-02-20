@@ -1,5 +1,5 @@
 #!/bin/bash
-# Reset OJS to a clean state. Config is generated from template by entrypoint.
+# Reset OJS to a clean state. Entrypoint generates config + runs install automatically.
 # Usage: ./docker/reset-ojs.sh
 set -e
 
@@ -25,15 +25,20 @@ done
 echo "==> Resetting OJS database..."
 docker compose exec ojs-db mariadb -u root -p"${OJS_DB_ROOT_PASSWORD:-devroot123}" -e "DROP DATABASE IF EXISTS ojs; CREATE DATABASE ojs;"
 
-echo "==> Restarting OJS (entrypoint will generate config from template)..."
+echo "==> Restarting OJS (entrypoint generates config + runs install automatically)..."
 docker compose restart ojs
 
-echo "==> Waiting for OJS to respond..."
-until curl -s -o /dev/null http://localhost:8081; do
+echo "==> Waiting for OJS to be installed..."
+for i in $(seq 1 60); do
+    if docker compose exec ojs grep -q "installed = On" /var/www/html/config.inc.php 2>/dev/null; then
+        echo "==> OJS reset + install complete."
+        echo "    URL:      http://localhost:8081"
+        echo "    Admin:    admin / admin123"
+        echo "    Next:     docker compose exec ojs bash /scripts/setup-ojs.sh"
+        exit 0
+    fi
     sleep 2
 done
 
-echo "==> OJS reset complete."
-echo "    URL:   http://localhost:8081"
-echo "    Config generated from docker/ojs/config.inc.php.tmpl"
-echo "    Complete install via browser, then run: docker compose exec ojs bash /scripts/setup-ojs.sh"
+echo "==> WARNING: OJS install didn't complete within 2 minutes. Check logs."
+echo "    docker compose logs ojs --tail=30"

@@ -7,8 +7,10 @@
 ;;;;;;;;;;;;;;;;;;
 
 [general]
+app_key = ${OJS_APP_KEY}
 installed = Off
 base_url = "${OJS_BASE_URL}"
+restful_urls = On
 session_cookie_name = OJSSID
 session_lifetime = 30
 scheduled_tasks = On
@@ -17,7 +19,16 @@ date_format_short = Y-m-d
 date_format_long = F j, Y
 datetime_format_short = Y-m-d h:i A
 datetime_format_long = F j, Y - h:i A
+time_format = h:i A
 allowed_html = a[href|target|title],em,strong,cite,code,ul,ol,li[class],dl,dt,dd,b,i,u,img[src|alt],sup,sub,br,p
+
+;;;;;;;;;;;;;;;;;;;;;;;
+; Localization Settings
+;;;;;;;;;;;;;;;;;;;;;;;
+
+[i18n]
+locale = en
+connection_charset = utf8
 
 ;;;;;;;;;;;;;;;;;;;
 ; Database Settings
@@ -61,6 +72,7 @@ public_files_dir = public
 ;;;;;;;;;;;;;;;;;;
 
 [email]
+default = sendmail
 default_envelope_sender = ${OJS_MAIL_FROM}
 smtp = ${OJS_SMTP_ENABLED}
 smtp_server = ${OJS_SMTP_HOST}

@@ -17,10 +17,12 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
     && chmod +x wp-cli.phar && mv wp-cli.phar /usr/local/bin/wp
 
-# Apache: enable rewrite, set DocumentRoot to Bedrock's web/
+# Apache: enable rewrite, set DocumentRoot to Bedrock's web/, allow .htaccess
 RUN a2enmod rewrite
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/web
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-    /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf
+    /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf \
+    && sed -ri -e 's/AllowOverride None/AllowOverride All/g' \
+    /etc/apache2/apache2.conf
 
 WORKDIR /var/www/html

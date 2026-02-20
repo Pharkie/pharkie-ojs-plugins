@@ -57,7 +57,10 @@ services:
       OJS_CLI_INSTALL: "0"
       OJS_BASE_URL: ${OJS_BASE_URL:-http://localhost:8081}
       OJS_TIMEZONE: ${OJS_TIMEZONE:-Europe/London}
-      SEA_OJS_API_KEY_SECRET: ${SEA_OJS_API_KEY}
+      OJS_ADMIN_USER: ${OJS_ADMIN_USER:-admin}
+      OJS_ADMIN_PASSWORD: ${OJS_ADMIN_PASSWORD:-admin123}
+      OJS_ADMIN_EMAIL: ${OJS_ADMIN_EMAIL:-admin@example.com}
+      SEA_OJS_API_KEY_SECRET: ${SEA_OJS_API_KEY_SECRET:-dev-api-key-local}
       SEA_ALLOWED_IPS: ${SEA_ALLOWED_IPS:-172.0.0.0/8}
       OJS_SMTP_ENABLED: ${OJS_SMTP_ENABLED:-Off}
       OJS_SMTP_HOST: ${OJS_SMTP_HOST:-}

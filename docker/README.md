@@ -1,53 +1,73 @@
 # Docker Quick Reference
 
-## Versions
+## Architecture
 
-| Service | Image | App version | Notes |
-|---------|-------|-------------|-------|
-| WordPress | `wordpress:6.9.1-php8.2-apache` | WP 6.9.1, PHP 8.2 | Matches live |
-| OJS | `pkpofficial/ojs:3_5_0-3` | OJS 3.5.0.3, PHP 8.3 | Matches staging |
+| Service | Image / Build | App version | Notes |
+|---------|---------------|-------------|-------|
+| WordPress | Custom `docker/wp/Dockerfile` (from `php:8.2-apache`) | WP 6.9.1 (Bedrock), PHP 8.2 | Composer-managed deps |
+| OJS | Custom `docker/ojs/Dockerfile` (from `pkpofficial/ojs:3_5_0-3`) | OJS 3.5.0.3, PHP 8.3 | Adds envsubst + mariadb client |
 | MariaDB (both) | `mariadb:10.11` | 10.11 | — |
 
 Do not use Docker tag `3_5_0-2` — it has a [known install bug](https://github.com/pkp/pkp-lib/issues/12144).
+
+### WP: Bedrock layout
+
+WordPress uses [Bedrock](https://roots.io/bedrock/) — Composer manages WP core + plugins, config reads from `.env`.
+
+```
+wordpress/
+├── composer.json         # Pins WP core + all plugins
+├── composer.lock         # Locked versions (committed)
+├── config/
+│   └── application.php   # Main config — reads .env
+├── web/
+│   ├── wp/               # WP core (gitignored, Composer-managed)
+│   ├── app/plugins/      # Plugins (gitignored, Composer-managed)
+│   ├── index.php         # Bedrock loader
+│   └── wp-config.php     # Tiny delegator to config/application.php
+└── wp-cli.yml            # Tells WP-CLI where WP core lives
+```
+
+### OJS: config templating
+
+OJS config is generated from `docker/ojs/config.inc.php.tmpl` by the entrypoint script. Environment variables are substituted at container start. OJS installs automatically on first boot (no wizard).
+
+## Getting started
+
+```bash
+# 1. Build and start
+docker compose up -d --build
+
+# 2. Wait for OJS auto-install (check logs)
+docker compose logs -f ojs
+
+# 3. Run setup scripts
+docker compose exec wp bash /var/www/html/scripts/setup-wp.sh
+docker compose exec ojs bash /scripts/setup-ojs.sh
+```
 
 ## URLs
 
 | Service | Browser URL | Internal (container-to-container) |
 |---------|------------|-----------------------------------|
 | WordPress | http://localhost:8080 | http://wp:80 |
+| WP admin | http://localhost:8080/wp/wp-admin/ | — |
 | OJS | http://localhost:8081 | http://ojs:80 |
+| OJS journal | http://localhost:8081/index.php/t1 | http://ojs:80/index.php/t1 |
 | OJS API (from WP) | — | http://ojs:80/index.php/t1/api/v1/sea/... |
 
-## Database credentials
+## Credentials (local dev)
 
 | | WordPress | OJS |
 |--|-----------|-----|
-| Host | `wp-db` | `ojs-db` |
-| Database | `wordpress` | `ojs` |
-| User | `wordpress` | `ojs` |
-| Password | `devpass123` | `devpass123` |
+| Admin user | `admin` / `admin123` | `admin` / `admin123` |
+| DB host | `wp-db` | `ojs-db` |
+| DB name | `wordpress` | `ojs` |
+| DB user | `wordpress` | `ojs` |
+| DB password | `devpass123` | `devpass123` |
 | Root password | `devroot123` | `devroot123` |
 
-## OJS install
-
-Run `./docker/reset-ojs.sh` — it installs OJS automatically, no wizard needed.
-
-Admin login: `admin` / `admin123`
-
-If you need to run the wizard manually (e.g. first time without the script):
-
-| Field | Value |
-|-------|-------|
-| Upload directory | `/var/www/files` |
-| Database driver | MariaDB |
-| Host | `ojs-db` |
-| Username | `ojs` |
-| Password | `devpass123` |
-| Database name | `ojs` |
-
-## API key
-
-Shared key for WP → OJS sync: `dev-api-key-local` (set in `.env`).
+API key for WP → OJS sync: `dev-api-key-local` (set in `.env`).
 
 ## Commands
 
@@ -55,14 +75,23 @@ Shared key for WP → OJS sync: `dev-api-key-local` (set in `.env`).
 # Start
 docker compose up -d
 
+# Start + rebuild images
+docker compose up -d --build
+
 # Stop
 docker compose down
 
-# Stop and delete all data (fresh start — both WP and OJS)
+# Stop and delete all data (full fresh start)
 docker compose down -v
 
-# Reset OJS only (wipes DB + volumes, reinstalls automatically — no wizard)
+# Reset OJS only (wipes DB + volumes, reinstalls automatically)
 ./docker/reset-ojs.sh
+
+# Run WP setup (install core, activate plugins, set options)
+docker compose exec wp bash /var/www/html/scripts/setup-wp.sh
+
+# Run OJS setup (create journal, subscription type, enable plugin)
+docker compose exec ojs bash /scripts/setup-ojs.sh
 
 # View logs
 docker compose logs -f        # all
@@ -91,10 +120,8 @@ This handles everything in one shot:
 1. Stops containers
 2. Deletes the `ojs_data` volume (code) and `ojs_files` volume
 3. Resets the OJS database
-4. Starts containers (Docker repopulates volumes from the image)
-5. Runs the install automatically (no wizard)
-
-OJS admin after reset: `admin` / `admin123`
+4. Starts containers — entrypoint generates config + auto-installs
+5. Run `setup-ojs.sh` to create journal + subscription type
 
 **Why all three steps matter:** OJS has state in three places — the database, the code volume (`ojs_data`), and `config.inc.php` (inside `ojs_data`). If any one of these is stale, the install will fail. The reset script handles all three.
 
@@ -106,5 +133,15 @@ Edits on your host are reflected immediately in the containers:
 
 | Host path | Container path |
 |-----------|---------------|
-| `plugins/sea-ojs-sync/` | WP: `/var/www/html/wp-content/plugins/sea-ojs-sync/` |
+| `plugins/sea-ojs-sync/` | WP: `/var/www/html/web/app/plugins/sea-ojs-sync/` |
 | `plugins/sea-subscription-api/` | OJS: `/var/www/html/plugins/generic/seaSubscriptionApi/` |
+
+## Environment variables
+
+All config is in `.env` (gitignored). See `.env.example` for the full list. Key groups:
+
+- **WP (Bedrock):** `DB_*`, `WP_HOME`, `WP_SITEURL`, `WP_ENV`, auth salts
+- **SEA integration:** `SEA_OJS_API_KEY`, `SEA_OJS_BASE_URL`
+- **OJS:** `OJS_DB_*`, `OJS_BASE_URL`, `OJS_TIMEZONE`, `OJS_ADMIN_*`
+- **OJS email:** `OJS_SMTP_*`, `OJS_MAIL_FROM`
+- **OJS security:** `SEA_OJS_API_KEY_SECRET`, `SEA_ALLOWED_IPS`
