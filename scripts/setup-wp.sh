@@ -4,19 +4,14 @@
 # Run inside the WP container: docker compose exec wp bash /var/www/html/scripts/setup-wp.sh
 set -e
 
-# Wait for database
-until wp db check --allow-root 2>/dev/null; do
-  echo "Waiting for database..."; sleep 2
-done
-
-# Install core if not already
+# Install core if not already (DB healthcheck handled by docker-compose depends_on)
 if ! wp core is-installed --allow-root 2>/dev/null; then
   wp core install \
     --url="${WP_HOME}" \
     --title="SEA Community" \
     --admin_user=admin \
     --admin_password="${WP_ADMIN_PASSWORD:-admin123}" \
-    --admin_email=admin@localhost \
+    --admin_email=admin@example.com \
     --skip-email \
     --allow-root
 fi

@@ -44,10 +44,11 @@ services:
       - sea-net
 
   ojs:
-    image: pkpofficial/ojs:3_5_0-3  # OJS 3.5.0.3 — matches staging. Do not use 3_5_0-2 (install bug). If changing tag, delete ojs_data volume first.
+    build:
+      context: .
+      dockerfile: docker/ojs/Dockerfile  # Extends pkpofficial/ojs:3_5_0-3 — adds gettext for envsubst
     restart: unless-stopped
     entrypoint: /etc/ojs/entrypoint.sh
-    command: ["apache2-foreground"]
     environment:
       OJS_DB_HOST: ojs-db
       OJS_DB_USER: ojs

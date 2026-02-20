@@ -3,9 +3,12 @@
 .env.staging
 .env.production
 
-# WordPress (Bedrock)
+# WordPress (Bedrock) — all Composer-managed
 wordpress/web/wp/
 wordpress/vendor/
+wordpress/web/app/plugins/
+wordpress/web/app/mu-plugins/
+wordpress/web/app/themes/
 wordpress/web/app/uploads/
 wordpress/paid-plugins/*/
 !wordpress/paid-plugins/README.md

@@ -51,6 +51,7 @@ Config::define('DB_PASSWORD', env('DB_PASSWORD'));
 Config::define('DB_HOST', env('DB_HOST') ?: 'localhost');
 Config::define('DB_CHARSET', 'utf8mb4');
 Config::define('DB_COLLATE', '');
+Config::define('MYSQL_CLIENT_FLAGS', 0);
 $table_prefix = env('DB_PREFIX') ?: 'wp_';
 
 /**

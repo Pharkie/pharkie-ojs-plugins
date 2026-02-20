@@ -12,20 +12,14 @@
     "vlucas/phpdotenv": "^5.6",
     "oscarotero/env": "^2.1",
     "wpackagist-plugin/woocommerce": "^9.8",
-    "wpackagist-plugin/ultimate-member": "^2.11",
-    "sea/sea-ojs-sync": "*"
+    "wpackagist-plugin/ultimate-member": "^2.11"
   },
   "repositories": [
     {
       "type": "composer",
       "url": "https://wpackagist.org",
       "only": ["wpackagist-plugin/*", "wpackagist-theme/*"]
-    },
-    {
-      "type": "path",
-      "url": "../plugins/sea-ojs-sync",
-      "options": { "symlink": true }
-    },
+    }
   ],
   "extra": {
     "installer-paths": {
