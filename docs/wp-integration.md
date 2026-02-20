@@ -6,47 +6,59 @@ This doc covers the WP membership stack and the raw hooks available. For the ful
 
 ## Plugin stack
 
-SEA's membership system is built from five WordPress plugins that layer on top of each other. Two are free (available from wordpress.org), three are paid (require licence downloads).
+SEA's membership system is five WordPress plugins layered on top of each other. None of them is a membership system on its own — each answers one question:
 
-### Free plugins
+| Plugin | Question it answers | Without it... |
+|--------|-------------------|---------------|
+| **WooCommerce** | "Can we take payments?" | No shop, no checkout, no orders. |
+| **WC Subscriptions** | "Has this person paid?" | WooCommerce can only do one-off purchases. No recurring billing, no auto-renewal, no expiry. |
+| **WC Memberships** | "What access do they get?" | Paying doesn't grant anything. Someone has to manually assign roles after each payment. |
+| **Ultimate Member** | "What's their experience?" | No registration forms, no profiles, no member directory. Just raw WP user accounts. |
+| **UM-WooCommerce** | "Can UM see WooCommerce data?" | UM profiles and WC purchase history are disconnected. No order history on profiles, no synced fields. |
 
-| Plugin | Version | Source | What it does |
-|--------|---------|--------|-------------|
-| **WooCommerce** | 10.5.2 | wordpress.org | E-commerce engine. Products, orders, checkout, payments. The foundation everything else builds on. |
-| **Ultimate Member** | 2.11.2 | wordpress.org | User registration, login, profiles, member directory. Manages custom roles (the `um_custom_role_*` slugs). |
-
-### Paid plugins
-
-| Plugin | Version | Source | What it does |
-|--------|---------|--------|-------------|
-| **WooCommerce Subscriptions** | 8.4.0 | woocommerce.com | Adds recurring billing to WooCommerce. Turns one-off products into subscriptions with automatic renewal, expiry, cancellation. This is what manages the membership billing cycle. |
-| **WooCommerce Memberships** | 1.27.5 | woocommerce.com | Adds membership plans that tie to WooCommerce products. When a subscription is active, the membership plan assigns a UM role. Sits between WCS and UM in the chain. |
-| **Ultimate Member - WooCommerce** | 2.4.4 | ultimatemember.com | Bridge plugin. Connects UM profiles with WooCommerce data — shows purchase history on profiles, syncs account fields between the two systems. |
-
-### How they fit together
+### How they chain together
 
 ```
 Member signs up and pays
         │
         ▼
-   WooCommerce          ← processes the payment
+   WooCommerce          ← processes the payment (Stripe, PayPal, etc.)
         │
         ▼
-   WC Subscriptions     ← creates a recurring subscription, manages renewals/expiry
+   WC Subscriptions     ← turns it into a recurring subscription
+        │                   handles renewals, failed payments, cancellations
         │
         ▼
-   WC Memberships       ← subscription status → membership plan status → assigns UM role
+   WC Memberships       ← "subscription active" → assigns a WordPress role
+        │                   "subscription expired" → removes the role
         │
         ▼
-   Ultimate Member      ← role determines profile type, directory listing, what the member sees
+   Ultimate Member      ← role determines: profile template, directory listing,
+        │                   what the member sees on the site
         │
         ▼
-   UM-WooCommerce       ← glues UM profiles to WC data (purchase history on profile, etc.)
+   UM-WooCommerce       ← glues UM profiles to WC data (purchase history, etc.)
 ```
 
-**For our OJS sync, the critical plugin is WooCommerce Subscriptions.** We hook into its status events (`active`, `expired`, `cancelled`, `on-hold`) to push changes to OJS. Everything downstream of WCS (Memberships, UM roles) is irrelevant to the sync — we tap in at the subscription level.
+### Why this matters for our OJS sync
 
-**WC Memberships note:** WooCommerce Memberships (SkyVerge) is active on the live site. It sits between WCS and UM in the role assignment chain: WCS subscription status → WC Memberships plan status → UM role. This does **not** affect our sync approach — we hook into WCS status events directly, which fire regardless of what WC Memberships does downstream. Several WC Memberships add-ons are deactivated (Directory Shortcode, Adjust Excerpt Length, Role Handler, Sensei Member Area) but the core plugin is active.
+We only care about **WC Subscriptions**. It fires status events (`active`, `expired`, `cancelled`, `on-hold`) that tell us whether someone should have journal access. Everything downstream (Memberships assigning roles, UM rendering profiles) is irrelevant to the sync.
+
+### Why this is fragile
+
+Five plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with independent update cycles, database tables, hooks, and paid licences (~£200+/year for WCS alone). A breaking update in any one of them can silently break the membership chain. This stack is a strong candidate for future replacement — see [`membership-platform.md`](./membership-platform.md).
+
+### Plugin versions and sources
+
+| Plugin | Version | Source | Licence |
+|--------|---------|--------|---------|
+| WooCommerce | 10.5.2 | wordpress.org | Free |
+| Ultimate Member | 2.11.2 | wordpress.org | Free |
+| WooCommerce Subscriptions | 8.4.0 | woocommerce.com | Paid |
+| WooCommerce Memberships | 1.27.5 | woocommerce.com | Paid |
+| Ultimate Member - WooCommerce | 2.4.4 | ultimatemember.com | Paid |
+
+**WC Memberships note:** Several WC Memberships add-ons are deactivated on the live site (Directory Shortcode, Adjust Excerpt Length, Role Handler, Sensei Member Area) but the core plugin is active.
 
 ## Hooks used for OJS sync
 
