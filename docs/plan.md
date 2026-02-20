@@ -53,7 +53,7 @@ Installed in `plugins/generic/seaSubscriptionApi/`:
 - No modifications to OJS core code — standard plugin, dropped into a folder
 - Requires OJS 3.5+ for the clean plugin API pattern ([pkp-lib #9434](https://github.com/pkp/pkp-lib/issues/9434))
 - "Set your password" welcome email: generates reset token, sends branded email on user creation
-- Custom login page message (permanent): "SEA member? First time here? Set your password"
+- UI messages via plugin hooks: login hint, paywall hint for non-subscribers, site footer. Config: `[sea] wp_member_url`, `support_email`
 - Delete-user endpoint for GDPR erasure propagation from WP
 
 ### WP plugin (`sea-ojs-sync`)
@@ -266,8 +266,8 @@ Each queue action maps to a specific sequence of OJS API calls. The queue proces
 5. **Smoke test** — end-to-end with 10 test users: create subscription → OJS account created → subscription active → paywall grants access → expire subscription → paywall denies access. Also test non-member purchase flow.
 6. **Bulk sync ~700 existing members** — `wp sea-ojs sync --dry-run` then `wp sea-ojs sync`. Creates users + subscriptions on OJS. **Does not send welcome emails** — that's a separate step. Batched (50 at a time), 500ms delay, ~12 minutes. Verify: `wp sea-ojs status` shows correct synced count, spot-check a few users in OJS admin.
 7. **Send welcome emails** — `wp sea-ojs send-welcome-emails --dry-run` then `wp sea-ojs send-welcome-emails`. Sends "set your password" email to all synced users. OJS dedup prevents duplicates — safe to re-run if interrupted. Token expiry 7 days. **Requires transactional email relay on OJS.**
-8. **OJS template changes** — permanent "SEA member? Set your password" on login page. "SEA member? Log in for free access" above purchase options on paywall. "Your access is provided by SEA membership" in OJS footer. WCAG 2.1 AA.
-9. **WP member dashboard** — "Access Existential Analysis" link to OJS. Journal access status indicator.
+8. **OJS template changes** — DONE. Login hint ("First time? Set your password"), paywall hint for logged-in non-subscribers ("Contact support"), site footer ("Access provided by SEA membership"). Implemented via plugin hooks (`TemplateManager::display`, `Templates::Article::Footer::PageFooter`, `Templates::Common::Footer::PageFooter`). Messages read `wp_member_url` + `support_email` from `config.inc.php [sea]`.
+9. **WP member dashboard** — DONE. "Access Existential Analysis" card on WooCommerce My Account page. Shows active/inactive status with expiry date.
 10. **Member announcement** — via SEA's normal channel (newsletter/email), sent only after steps 6-9 are confirmed working. "Check your email for instructions" not "visit the journal now."
 
 If the OJS 3.5 upgrade hits serious problems, fallback options are documented in [`discovery.md`](./discovery.md).

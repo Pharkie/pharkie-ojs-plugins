@@ -145,3 +145,4 @@ All config is in `.env` (gitignored). See `.env.example` for the full list. Key 
 - **OJS:** `OJS_DB_*`, `OJS_BASE_URL`, `OJS_TIMEZONE`, `OJS_ADMIN_*`
 - **OJS email:** `OJS_SMTP_*`, `OJS_MAIL_FROM`
 - **OJS security:** `SEA_OJS_API_KEY_SECRET`, `SEA_ALLOWED_IPS`
+- **SEA UI messages:** `SEA_WP_MEMBER_URL`, `SEA_SUPPORT_EMAIL`
