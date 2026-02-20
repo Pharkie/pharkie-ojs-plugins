@@ -62,6 +62,8 @@ services:
       OJS_ADMIN_EMAIL: ${OJS_ADMIN_EMAIL:-admin@example.com}
       SEA_OJS_API_KEY_SECRET: ${SEA_OJS_API_KEY_SECRET:-dev-api-key-local}
       SEA_ALLOWED_IPS: ${SEA_ALLOWED_IPS:-172.0.0.0/8}
+      SEA_WP_MEMBER_URL: ${SEA_WP_MEMBER_URL:-http://localhost:8080}
+      SEA_SUPPORT_EMAIL: ${SEA_SUPPORT_EMAIL:-support@existentialanalysis.org.uk}
       OJS_SMTP_ENABLED: ${OJS_SMTP_ENABLED:-Off}
       OJS_SMTP_HOST: ${OJS_SMTP_HOST:-}
       OJS_SMTP_PORT: ${OJS_SMTP_PORT:-587}

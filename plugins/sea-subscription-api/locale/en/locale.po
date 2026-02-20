@@ -15,4 +15,13 @@ msgid "plugins.generic.seaSubscriptionApi.displayName"
 msgstr "SEA Subscription API"
 
 msgid "plugins.generic.seaSubscriptionApi.description"
-msgstr "Exposes REST endpoints for managing user accounts and subscriptions, used by the SEA WordPress membership sync plugin."
+msgstr "Exposes REST endpoints for managing user accounts and subscriptions, used by the SEA WordPress membership sync plugin. Also adds login, paywall, and footer messages for members."
+
+msgid "plugins.generic.seaSubscriptionApi.loginHint"
+msgstr "SEA member? First time here? <a href=\"{$lostPasswordUrl}\">Set your password</a> to access journal content."
+
+msgid "plugins.generic.seaSubscriptionApi.paywallHint"
+msgstr "SEA member? If you should have access to this content, please contact <a href=\"mailto:{$supportEmail}\">{$supportEmail}</a>."
+
+msgid "plugins.generic.seaSubscriptionApi.footerMessage"
+msgstr "Your journal access is provided by your SEA membership. <a href=\"{$wpUrl}\">Manage your membership</a>."

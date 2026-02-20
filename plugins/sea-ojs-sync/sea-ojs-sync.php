@@ -30,6 +30,7 @@ require_once SEA_OJS_PLUGIN_DIR . 'includes/class-sea-ojs-resolver.php';
 require_once SEA_OJS_PLUGIN_DIR . 'includes/class-sea-ojs-sync.php';
 require_once SEA_OJS_PLUGIN_DIR . 'includes/class-sea-ojs-hooks.php';
 require_once SEA_OJS_PLUGIN_DIR . 'includes/class-sea-ojs-cron.php';
+require_once SEA_OJS_PLUGIN_DIR . 'includes/class-sea-ojs-dashboard.php';
 
 if ( is_admin() ) {
     require_once SEA_OJS_PLUGIN_DIR . 'includes/admin/class-sea-ojs-settings.php';
@@ -63,6 +64,10 @@ function sea_ojs_init() {
     // Register cron handlers.
     $cron = new SEA_OJS_Cron( $sync, $resolver, $api_client, $queue, $logger );
     $cron->register();
+
+    // Member-facing dashboard widget.
+    $dashboard = new SEA_OJS_Dashboard( $resolver );
+    $dashboard->register();
 
     // Admin pages.
     if ( is_admin() ) {

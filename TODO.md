@@ -55,21 +55,21 @@ Code complete. 11 endpoints, reviewed by 4 agents (QA, security, PHP architect, 
 **What's built:** Plugin skeleton (SeaSubscriptionApiPlugin.php, SeaApiController.php, version.xml, locale). Endpoints: `GET /ping` (no auth), `GET /preflight`, `GET /users?email=`, `POST /users/find-or-create`, `PUT /users/{id}/email`, `DELETE /users/{id}`, `POST /subscriptions`, `PUT /subscriptions/{id}/expire`, `PUT /subscriptions/expire-by-user/{id}`, `GET /subscriptions`, `POST /welcome-email`. Auth: Bearer token + Journal Manager/Site Admin role + IP allowlist (REMOTE_ADDR). Full PII anonymisation on delete. Idempotent upserts. Atomic welcome email dedup. Password reset via AccessKeyManager.
 
 **Remaining before deploy:**
-- [ ] Set `password_reset_timeout = 7` in config.inc.php
-- [ ] Custom login page message: "SEA member? First time here? Set your password"
-- [ ] Paywall message for logged-in users with no subscription: "SEA member? Contact [support email]"
-- [ ] OJS footer: "Your journal access is provided by your SEA membership. Manage at [WP URL]"
+- [x] Set `password_reset_timeout = 7` in config.inc.php
+- [x] Custom login page message: "SEA member? First time here? Set your password"
+- [x] Paywall message for logged-in users with no subscription: "SEA member? Contact [support email]"
+- [x] OJS footer: "Your journal access is provided by your SEA membership. Manage at [WP URL]"
 - [x] Run PHPStan (1 real fix: renamed `authorize()` → `checkAuth()` to avoid parent clash; rest are OJS autoloader false positives)
 - [ ] Code review (second pair of eyes)
 
 ### WP plugin (`sea-ojs-sync`) — CODE COMPLETE
 
-13 files. PHP syntax verified. Internal consistency reviewed (constructor args, method names, hook names, DB columns, settings keys — all match).
+14 files. PHP syntax verified. Internal consistency reviewed (constructor args, method names, hook names, DB columns, settings keys — all match).
 
 **What's built:** Plugin bootstrap, activator (DB tables + cron scheduling), API client (10 OJS endpoint methods, Bearer auth, error classification), queue (dedup, retry, status transitions), logger (paginated queries, cleanup), subscription resolver (multi-sub resolution, manual roles, active member query), sync processor (activate/expire/email_change/delete_user with correct API call sequences, retry logic 5min/15min/1hr, admin alerts), WCS hooks + profile_update + deleted_user, cron handlers (queue processor, daily reconciliation, daily digest), settings page (OJS URL, type mapping, manual roles, test connection AJAX, server info), admin log viewer (WP_List_Table with filters), admin queue viewer (WP_List_Table with retry action), WP-CLI commands (sync, reconcile, status, test-connection).
 
 **Remaining before deploy:**
-- [ ] **Member dashboard**: "Access Existential Analysis" link, access status indicator
+- [x] **Member dashboard**: "Access Existential Analysis" link, access status indicator (WooCommerce My Account)
 - [ ] Configure settings: type mapping (WC Product IDs → OJS Type IDs), manual roles (`um_custom_role_7`, `_8`, `_9`)
 - [ ] Code review
 
