@@ -49,7 +49,7 @@ Things that any replacement would need to handle, learned from building the push
 - **Email as matching key.** The OJS sync uses email to match WP users to OJS users. A replacement platform must have stable, unique email addresses as user identifiers — or provide a better matching strategy.
 - **GDPR erasure.** When a member is deleted, their data must be cleaned up on OJS too. The sync captures user data *before* WP deletes it (pre-delete hook), then sends the OJS delete request. A replacement must support pre-deletion hooks or events.
 - **Bulk operations.** Initial sync pushes ~700 members to OJS at once. The membership platform needs to support bulk reads efficiently (not one API call per member with rate limits).
-- **UK payment gateways.** Stripe is essential. GoCardless (direct debit) is a bonus — preferred by many UK professional societies for annual renewals.
+- **UK payment gateway.** Stripe (or any mainstream processor that handles GBP recurring payments).
 
 ## Platform comparison (~500 members)
 
@@ -57,17 +57,17 @@ Evaluated 2026-02-21. Pricing verified from official websites.
 
 ### Summary
 
-| Platform | Type | Cost (~500 members) | API | GoCardless | Verdict |
-|----------|------|---------------------|-----|------------|---------|
-| **WP + current stack** | Self-hosted WP | ~£400/yr (plugin licences) + hosting | WP hooks (PHP) | No | Current. Fragile but working. |
-| **WildApricot** | SaaS | ~$125/mo (~£1,200/yr, 2yr prepay) | Yes (REST, well-documented) | No | Strong features, but USD-only billing, no GoCardless |
-| **Join It** | SaaS | ~£79/mo (~£950/yr) | Yes (Total tier+) | No | Expensive, 2% transaction surcharge |
-| **membermojo** | SaaS | ~£8/mo (~£95/yr) | No | No | Cheapest, but no API — dealbreaker |
-| **White Fuse** | SaaS | ~£83/mo (~£1,000/yr) | No | Yes | Best UK all-in-one, but no API — dealbreaker |
-| **Salesforce Nonprofit** | SaaS/CRM | Free (10 licences) + £10-30k setup | Yes (comprehensive) | Via add-on | Massive overkill for a 500-member society |
-| **MemberPress** | WP plugin | £280–500/yr | Yes (Scale tier only, £500+/yr) | No | API locked to expensive tier |
-| **Paid Memberships Pro** | WP plugin | Free–£240/yr | Yes (all tiers, basic) | No | Best value WP option, but API is limited |
-| **Baserow** | Self-hosted DB | Free (self-hosted) | Yes | N/A | Not a membership platform — you'd build everything |
+| Platform | Type | Cost (~500 members) | API | Verdict |
+|----------|------|---------------------|-----|---------|
+| **WP + current stack** | Self-hosted WP | ~£400/yr (plugin licences) + hosting | WP hooks (PHP) | Current. Fragile but working. |
+| **WildApricot** | SaaS | ~$125/mo (~£1,200/yr, 2yr prepay) | Yes (REST, well-documented) | Strongest SaaS option. GBP via Stripe. |
+| **Join It** | SaaS | ~£79/mo (~£950/yr) | Yes (Total tier+) | Expensive, 2% transaction surcharge |
+| **membermojo** | SaaS | ~£8/mo (~£95/yr) | No | Cheapest, but no API — dealbreaker |
+| **White Fuse** | SaaS | ~£83/mo (~£1,000/yr) | No | No API — dealbreaker |
+| **Salesforce Nonprofit** | SaaS/CRM | Free (10 licences) + £10-30k setup | Yes (comprehensive) | Massive overkill for a 500-member society |
+| **MemberPress** | WP plugin | £280–500/yr | Yes (Scale tier only, £500+/yr) | API locked to expensive tier |
+| **Paid Memberships Pro** | WP plugin | Free–£240/yr | Yes (all tiers, basic) | Best value WP option, but API is limited |
+| **Baserow** | Self-hosted DB | Free (self-hosted) | Yes | Not a membership platform — you'd build everything |
 
 ### Detailed notes
 
@@ -75,8 +75,8 @@ Evaluated 2026-02-21. Pricing verified from official websites.
 
 All-in-one SaaS: members, payments, events, email, website, API. The best-documented API in this comparison (Swagger/OpenAPI, GitHub code samples). Tiers are by contact count only — all features included.
 
-- **Pro:** Mature REST API, all features included, large user base
-- **Con:** USD-only billing, no GoCardless, no GBP-native experience. Export is CSV-only (no full backup). North American focus.
+- **Pro:** Mature REST API, all features included, large user base. Supports GBP billing via Stripe.
+- **Con:** Platform subscription billed in USD (~$125/mo). Export is CSV-only (no full backup). North American company, but currency support is flexible.
 - **OJS integration:** Good. Webhook or API polling to read membership status and push to OJS.
 
 #### Join It (~£950/yr)
@@ -84,7 +84,7 @@ All-in-one SaaS: members, payments, events, email, website, API. The best-docume
 Modern SaaS membership platform. API requires the Total plan ($99/mo). Adds a 2% transaction surcharge on top of Stripe fees.
 
 - **Pro:** Clean UI, Stripe integration, API available
-- **Con:** Expensive. 2% surcharge on payments. API locked to higher tier. Smaller company.
+- **Con:** Expensive. 2% surcharge on payments (on top of Stripe fees). API locked to higher tier. Smaller company.
 - **OJS integration:** Possible at Total tier, but expensive for what you get.
 
 #### membermojo (~£95/yr)
@@ -92,15 +92,15 @@ Modern SaaS membership platform. API requires the Total plan ($99/mo). Adds a 2%
 UK-based, ultra-cheap. Handles basic membership, Stripe payments, email, directory. No frills.
 
 - **Pro:** By far the cheapest. UK-native, GBP billing. Simple.
-- **Con:** No API at all. No GoCardless. Limited features. Small company.
+- **Con:** No API at all. Limited features. Small company.
 - **OJS integration:** Not viable. No API means no automation.
 
 #### White Fuse (~£1,000/yr)
 
-UK-focused all-in-one: website, membership, email, events. The only platform here with both Stripe AND GoCardless. Month-to-month, no contracts.
+UK-focused all-in-one: website, membership, email, events. Month-to-month, no contracts.
 
-- **Pro:** GoCardless support (unique in this comparison). Full-featured. UK-native. Data portable.
-- **Con:** No API. 1% transaction surcharge on Stripe. Most expensive UK option.
+- **Pro:** Full-featured. UK-native. Data portable. GoCardless + Stripe.
+- **Con:** No API. 1% transaction surcharge on Stripe. ~£1,000/yr.
 - **OJS integration:** Not viable without an API. Would need CSV-export workaround.
 
 #### Salesforce Nonprofit Cloud (free licences + £10-30k setup)
@@ -117,7 +117,7 @@ Enterprise CRM. 10 free licences via Power of Us Programme. Comprehensive API.
 WordPress membership plugin. Replaces WCS + WCM + UM in one plugin. API and webhooks on Scale tier only (£500+/yr).
 
 - **Pro:** Single WP plugin replaces the current 6-plugin stack. Stripe on all tiers. Unlimited members.
-- **Con:** API locked to Scale tier (£500+/yr, doubles after year 1). No GoCardless. No native events. Email via third-party only. Migration from WCS+UM is non-trivial.
+- **Con:** API locked to Scale tier (£500+/yr, doubles after year 1). No native events. Email via third-party only. Migration from WCS+UM is non-trivial.
 - **OJS integration:** Good on Scale plan (REST API + webhooks). Expensive to get there.
 
 #### Paid Memberships Pro (free–£240/yr)
@@ -125,14 +125,14 @@ WordPress membership plugin. Replaces WCS + WCM + UM in one plugin. API and webh
 Open-source WordPress membership plugin. REST API on all tiers including free. Replaces WCS + WCM + UM.
 
 - **Pro:** Free tier with Stripe + API (unique). Open-source core. Active community. WooCommerce compatible.
-- **Con:** API is basic (7 endpoints). Directory/profiles require Plus tier (£240+/yr). No GoCardless. Email via third-party. Same migration effort as MemberPress.
+- **Con:** API is basic (7 endpoints). Directory/profiles require Plus tier (£240+/yr). Email via third-party. Same migration effort as MemberPress.
 - **OJS integration:** Possible. API is basic but sufficient for push-sync. WP hooks (PHP) are well-documented.
 
 #### Baserow (free self-hosted)
 
 Open-source Airtable alternative. A database, not a membership platform. Excellent API.
 
-- **Verdict:** Not viable. You would need to build payments, renewals, email, portal, directory, and auth from scratch. The opposite of "ship fast."
+- **Verdict:** Not viable. You'd build a bespoke membership system from scratch — payments, renewals, email, portal, directory, auth. Beyond the initial build cost, the real problem is sustainability: a custom system is all eggs in one basket. If the developer who built it moves on, SEA is left with an undocumented system that nobody else knows how to maintain. This needs to last 10-15 years. Off-the-shelf platforms have documentation, support teams, and communities. Custom builds have one person's head.
 
 ## Recommendation
 
@@ -149,14 +149,14 @@ Eliminating platforms with no API (membermojo, White Fuse — can't integrate wi
 | **Cost** | ~£1,200/yr ($125/mo, 2yr prepay) | Free–£240/yr | £280–500/yr (doubles yr 2) |
 | **Leaves WordPress** | Yes | No | No |
 | **API** | Full REST, well-documented | Basic (7 endpoints), all tiers | Full REST, Scale tier only (£500+) |
-| **GoCardless** | No | No | No |
+| **GBP payments** | Yes (via Stripe) | Yes (via Stripe) | Yes (via Stripe) |
 | **Migration effort** | High (new platform, data export, retrain staff) | Medium (new WP plugin, same database) | Medium (new WP plugin, same database) |
 | **Ongoing maintenance** | Low (SaaS, they manage it) | Medium (still WordPress) | Medium (still WordPress) |
 | **OJS integration** | Rebuild sync against WildApricot API | Minimal change (same WP hooks) | Minimal change (same WP hooks) |
 
 ### Assessment
 
-1. **WildApricot** is the strongest option *if* SEA wants to leave WordPress entirely. Full-featured SaaS, mature API, no server maintenance. The USD billing and lack of GoCardless are real drawbacks but not dealbreakers. The OJS sync would need rebuilding against the WildApricot API (webhooks + REST), but the pattern is identical. The bigger cost is staff retraining and content migration.
+1. **WildApricot** is the strongest option *if* SEA wants to leave WordPress entirely. Full-featured SaaS, mature API, no server maintenance. Supports GBP member billing via Stripe. The OJS sync would need rebuilding against the WildApricot API (webhooks + REST), but the pattern is identical. The bigger cost is staff retraining and content migration.
 
 2. **Paid Memberships Pro** is the pragmatic middle ground. Stays on WordPress (lower migration risk), replaces the 6-plugin stack with one open-source plugin, API available on the free tier. The sync plugin would need minor changes (different hooks, different membership check). Still WordPress though — still fragile, still needs hosting and maintenance.
 
@@ -168,7 +168,6 @@ This is a decision for SEA, not a technical call. The questions are:
 
 - **Does SEA want to stop managing WordPress?** → WildApricot. ~£1,200/yr, lower maintenance, clean break.
 - **Does SEA want to stay on WordPress but simplify?** → Paid Memberships Pro. Lower cost, moderate migration, still self-hosted.
-- **Is GoCardless essential?** → Neither option supports it natively. White Fuse does but has no API. This may force a compromise.
 - **What's the budget?** → PMPro is free. WildApricot is ~£1,200/yr. The current stack is ~£400/yr in licences plus hosting plus developer time that dwarfs both.
 
 The OJS sync work is not wasted regardless of which path SEA chooses — the push-sync pattern ports to any platform with an API.
