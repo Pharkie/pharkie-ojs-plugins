@@ -61,11 +61,13 @@ class SEA_OJS_Resolver {
             return null;
         }
 
-        $type_mapping = get_option( 'sea_ojs_type_mapping', array() );
-        $default_type = (int) get_option( 'sea_ojs_default_type_id', 0 );
-        $latest_end   = '';
-        $type_id      = $default_type;
-        $non_expiring = false;
+        $type_mapping   = get_option( 'sea_ojs_type_mapping', array() );
+        $default_type   = (int) get_option( 'sea_ojs_default_type_id', 0 );
+        $latest_end     = '';
+        $type_id        = $default_type;
+        $non_expiring   = false;
+        $found_type     = false;
+        $earliest_start = null;
 
         foreach ( $subscriptions as $sub ) {
             $end = $sub->get_date( 'end' );
@@ -77,13 +79,23 @@ class SEA_OJS_Resolver {
                 $latest_end = $end;
             }
 
+            // Track earliest start date across all active subscriptions.
+            $start = $sub->get_date( 'start' );
+            if ( $start && ( $earliest_start === null || $start < $earliest_start ) ) {
+                $earliest_start = $start;
+            }
+
             // Resolve type_id from the subscription's product.
-            $items = $sub->get_items();
-            foreach ( $items as $item ) {
-                $product_id = $item->get_product_id();
-                if ( isset( $type_mapping[ $product_id ] ) ) {
-                    $type_id = (int) $type_mapping[ $product_id ];
-                    break;
+            // Break out of both loops once found.
+            if ( ! $found_type ) {
+                $items = $sub->get_items();
+                foreach ( $items as $item ) {
+                    $product_id = $item->get_product_id();
+                    if ( isset( $type_mapping[ $product_id ] ) ) {
+                        $type_id    = (int) $type_mapping[ $product_id ];
+                        $found_type = true;
+                        break;
+                    }
                 }
             }
         }
@@ -95,9 +107,16 @@ class SEA_OJS_Resolver {
             $date_end = substr( $date_end, 0, 10 );
         }
 
+        // Use the subscription's actual start date, not today.
+        if ( $earliest_start ) {
+            $date_start = gmdate( 'Y-m-d', strtotime( $earliest_start ) );
+        } else {
+            $date_start = gmdate( 'Y-m-d' );
+        }
+
         return array(
             'type_id'    => $type_id ?: $default_type,
-            'date_start' => gmdate( 'Y-m-d' ),
+            'date_start' => $date_start,
             'date_end'   => $date_end,
         );
     }
@@ -169,16 +188,23 @@ class SEA_OJS_Resolver {
      * Check if a WP user is an active member (via WCS or manual role).
      *
      * @param int $wp_user_id
+     * @param int $exclude_subscription_id Optional subscription ID to exclude from the check.
+     *                                     Used when a subscription is being cancelled/expired
+     *                                     to avoid stale cache returning it as still active.
      * @return bool
      */
-    public function is_active_member( $wp_user_id ) {
+    public function is_active_member( $wp_user_id, $exclude_subscription_id = 0 ) {
         // Check WCS subscriptions.
         if ( function_exists( 'wcs_get_subscriptions' ) ) {
             $subs = wcs_get_subscriptions( array(
                 'subscription_status' => 'active',
                 'customer_id'         => $wp_user_id,
             ) );
-            if ( ! empty( $subs ) ) {
+            foreach ( $subs as $sub ) {
+                if ( $exclude_subscription_id && $sub->get_id() === $exclude_subscription_id ) {
+                    continue;
+                }
+                // Found an active subscription that isn't the excluded one.
                 return true;
             }
         }

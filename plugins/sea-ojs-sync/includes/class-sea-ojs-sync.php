@@ -1,364 +1,367 @@
 <?php
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 
 class SEA_OJS_Sync {
 
-    /** @var SEA_OJS_API_Client */
-    private $api;
+	/** @var SEA_OJS_API_Client */
+	private $api;
 
-    /** @var SEA_OJS_Queue */
-    private $queue;
+	/** @var SEA_OJS_Logger */
+	private $logger;
 
-    /** @var SEA_OJS_Logger */
-    private $logger;
+	/** @var SEA_OJS_Resolver */
+	private $resolver;
 
-    /** @var SEA_OJS_Resolver */
-    private $resolver;
+	public function __construct( SEA_OJS_API_Client $api, SEA_OJS_Logger $logger, SEA_OJS_Resolver $resolver ) {
+		$this->api      = $api;
+		$this->logger   = $logger;
+		$this->resolver = $resolver;
+	}
 
-    /** Retry intervals in seconds: 5 min, 15 min, 1 hour. */
-    const RETRY_INTERVALS = array( 300, 900, 3600 );
+	/**
+	 * Register Action Scheduler callbacks for each sync action.
+	 */
+	public function register() {
+		add_action( 'sea_ojs_sync_activate', array( $this, 'handle_activate' ) );
+		add_action( 'sea_ojs_sync_expire', array( $this, 'handle_expire' ) );
+		add_action( 'sea_ojs_sync_email_change', array( $this, 'handle_email_change' ) );
+		add_action( 'sea_ojs_sync_delete_user', array( $this, 'handle_delete_user' ) );
+	}
 
-    /** Max retry attempts. */
-    const MAX_RETRIES = 3;
+	/**
+	 * Handle activate: find-or-create user + create subscription.
+	 *
+	 * Called by Action Scheduler. On failure, throws an exception so AS
+	 * retries automatically (default: 5 retries with exponential backoff).
+	 *
+	 * We pass sendWelcomeEmail: true here. This is intentional -- the OJS
+	 * endpoint only honours it when the user is newly created (created: true).
+	 * For existing users (renewals), OJS ignores it. So it's safe to always
+	 * pass true for hook-triggered activations.
+	 *
+	 * @param array $args { wp_user_id: int }
+	 */
+	public function handle_activate( $args ) {
+		$wp_user_id = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
 
-    public function __construct( SEA_OJS_API_Client $api, SEA_OJS_Queue $queue, SEA_OJS_Logger $logger, SEA_OJS_Resolver $resolver ) {
-        $this->api      = $api;
-        $this->queue    = $queue;
-        $this->logger   = $logger;
-        $this->resolver = $resolver;
-    }
+		$user = get_userdata( $wp_user_id );
+		if ( ! $user ) {
+			$this->logger->log( $wp_user_id, '', 'activate', 'fail', 0, 'WP user not found' );
+			// Permanent failure: no point retrying a non-existent user.
+			return;
+		}
 
-    /**
-     * Process a single queue item. Dispatches to the appropriate handler.
-     *
-     * @param object $item Queue row object.
-     */
-    public function process( $item ) {
-        $this->queue->mark_processing( $item->id );
+		$email      = $user->user_email;
+		$first_name = $user->first_name ?: $user->display_name;
+		$last_name  = $user->last_name ?: '';
 
-        $payload = json_decode( $item->payload, true ) ?: array();
+		// Step 1: Find or create OJS user.
+		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, true );
+		if ( ! $result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'] );
+			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
+				$this->send_admin_alert(
+					'OJS Sync: Permanent Failure',
+					sprintf( "Action: activate\nEmail: %s\nWP User ID: %d\nHTTP %d: %s", $email, $wp_user_id, $result['code'], $result['error'] )
+				);
+				return; // Don't retry permanent failures.
+			}
+			throw new Exception( 'find_or_create_user failed: ' . $result['error'] );
+		}
 
-        switch ( $item->action ) {
-            case 'activate':
-                $result = $this->handle_activate( $item, $payload );
-                break;
-            case 'expire':
-                $result = $this->handle_expire( $item, $payload );
-                break;
-            case 'email_change':
-                $result = $this->handle_email_change( $item, $payload );
-                break;
-            case 'delete_user':
-                $result = $this->handle_delete_user( $item, $payload );
-                break;
-            default:
-                $this->logger->log( $item->wp_user_id, $item->email, $item->action, 'fail', 0, 'Unknown action: ' . $item->action );
-                $this->queue->mark_permanent_fail( $item->id );
-                return;
-        }
+		$ojs_user_id = $result['body']['userId'];
 
-        $this->finalize( $item, $result );
-    }
+		// Cache OJS userId in usermeta.
+		update_user_meta( $wp_user_id, '_sea_ojs_user_id', $ojs_user_id );
 
-    /**
-     * Handle activate: find-or-create user + create subscription.
-     */
-    private function handle_activate( $item, $payload ) {
-        $user = get_userdata( $item->wp_user_id );
-        if ( ! $user ) {
-            return array( 'success' => false, 'code' => 0, 'error' => 'WP user not found', 'permanent' => true );
-        }
+		// Log user creation if new.
+		if ( ! empty( $result['body']['created'] ) ) {
+			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+		}
 
-        $email      = $user->user_email;
-        $first_name = $user->first_name ?: $user->display_name;
-        $last_name  = $user->last_name ?: '';
+		// Step 2: Resolve subscription data and create subscription.
+		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
+		if ( ! $sub_data || ! $sub_data['type_id'] ) {
+			// User is a member but we can't resolve a type -- log and complete (user was created).
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', 0, 'Could not resolve subscription type. Check type mapping settings.' );
+			$this->send_admin_alert(
+				'OJS Sync: No Subscription Type',
+				sprintf( "Action: activate\nEmail: %s\nWP User ID: %d\nNo subscription type resolved. Check type mapping settings.", $email, $wp_user_id )
+			);
+			return; // Don't retry -- config issue, not transient.
+		}
 
-        // Step 1: Find or create OJS user.
-        $result = $this->api->find_or_create_user( $email, $first_name, $last_name, true );
-        if ( ! $result['success'] ) {
-            return $result;
-        }
+		$sub_result = $this->api->create_subscription(
+			$ojs_user_id,
+			$sub_data['type_id'],
+			$sub_data['date_start'],
+			$sub_data['date_end']
+		);
 
-        $ojs_user_id = $result['body']['userId'];
+		if ( ! $sub_result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'] );
+			if ( $this->api->is_permanent_fail( $sub_result['code'] ) ) {
+				$this->send_admin_alert(
+					'OJS Sync: Permanent Failure',
+					sprintf( "Action: activate (subscription)\nEmail: %s\nWP User ID: %d\nHTTP %d: %s", $email, $wp_user_id, $sub_result['code'], $sub_result['error'] )
+				);
+				return;
+			}
+			throw new Exception( 'create_subscription failed: ' . $sub_result['error'] );
+		}
 
-        // Cache OJS userId in usermeta.
-        update_user_meta( $item->wp_user_id, '_sea_ojs_user_id', $ojs_user_id );
+		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ) );
+	}
 
-        // Log user creation if new.
-        if ( ! empty( $result['body']['created'] ) ) {
-            $this->logger->log( $item->wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
-        }
+	/**
+	 * Handle expire: expire subscription by OJS userId.
+	 *
+	 * @param array $args { wp_user_id: int }
+	 */
+	public function handle_expire( $args ) {
+		$wp_user_id = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
 
-        // Step 2: Resolve subscription data and create subscription.
-        $sub_data = $this->resolver->resolve_subscription_data( $item->wp_user_id );
-        if ( ! $sub_data || ! $sub_data['type_id'] ) {
-            // User is a member but we can't resolve a type — log and complete anyway (user was created).
-            $this->logger->log( $item->wp_user_id, $email, 'activate', 'fail', 0, 'Could not resolve subscription type. Check type mapping settings.' );
-            return array( 'success' => false, 'code' => 0, 'error' => 'No subscription type resolved', 'permanent' => true );
-        }
+		$user  = get_userdata( $wp_user_id );
+		$email = $user ? $user->user_email : '';
 
-        $sub_result = $this->api->create_subscription(
-            $ojs_user_id,
-            $sub_data['type_id'],
-            $sub_data['date_start'],
-            $sub_data['date_end']
-        );
+		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $email );
+		if ( ! $ojs_user_id ) {
+			// User never synced to OJS. Nothing to expire.
+			$this->logger->log( $wp_user_id, $email, 'expire', 'success', 0, 'User not found on OJS -- nothing to expire' );
+			return;
+		}
 
-        return $sub_result;
-    }
+		$result = $this->api->expire_subscription_by_user( $ojs_user_id );
 
-    /**
-     * Handle expire: expire subscription by OJS userId.
-     */
-    private function handle_expire( $item, $payload ) {
-        $ojs_user_id = $this->resolve_ojs_user_id( $item->wp_user_id, $item->email );
-        if ( ! $ojs_user_id ) {
-            // User never synced to OJS. Nothing to expire.
-            $this->logger->log( $item->wp_user_id, $item->email, 'expire', 'success', 0, 'User not found on OJS — nothing to expire' );
-            return array( 'success' => true, 'code' => 200, 'body' => array(), 'error' => '' );
-        }
+		// 404 = no subscription to expire -- that's fine.
+		if ( ! $result['success'] && $result['code'] === 404 ) {
+			$this->logger->log( $wp_user_id, $email, 'expire', 'success', 404, 'No OJS subscription found -- nothing to expire' );
+			return;
+		}
 
-        $result = $this->api->expire_subscription_by_user( $ojs_user_id );
+		if ( ! $result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'expire', 'fail', $result['code'], $result['error'] );
+			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
+				$this->send_admin_alert(
+					'OJS Sync: Permanent Failure',
+					sprintf( "Action: expire\nEmail: %s\nWP User ID: %d\nHTTP %d: %s", $email, $wp_user_id, $result['code'], $result['error'] )
+				);
+				return;
+			}
+			throw new Exception( 'expire_subscription failed: ' . $result['error'] );
+		}
 
-        // 404 = no subscription to expire — that's fine.
-        if ( ! $result['success'] && $result['code'] === 404 ) {
-            $this->logger->log( $item->wp_user_id, $item->email, 'expire', 'success', 404, 'No OJS subscription found — nothing to expire' );
-            return array( 'success' => true, 'code' => 404, 'body' => array(), 'error' => '' );
-        }
+		$this->logger->log( $wp_user_id, $email, 'expire', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+	}
 
-        return $result;
-    }
+	/**
+	 * Handle email_change: update OJS user email.
+	 *
+	 * @param array $args { wp_user_id: int, old_email: string, new_email: string }
+	 */
+	public function handle_email_change( $args ) {
+		$wp_user_id = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
+		$old_email  = isset( $args['old_email'] ) ? $args['old_email'] : '';
+		$new_email  = isset( $args['new_email'] ) ? $args['new_email'] : '';
 
-    /**
-     * Handle email_change: update OJS user email.
-     */
-    private function handle_email_change( $item, $payload ) {
-        $old_email = isset( $payload['old_email'] ) ? $payload['old_email'] : '';
-        $new_email = isset( $payload['new_email'] ) ? $payload['new_email'] : '';
+		if ( ! $old_email || ! $new_email ) {
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', 0, 'Missing old/new email in args' );
+			return; // Permanent: bad data, don't retry.
+		}
 
-        if ( ! $old_email || ! $new_email ) {
-            return array( 'success' => false, 'code' => 0, 'error' => 'Missing old/new email in payload', 'permanent' => true );
-        }
+		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $old_email );
+		if ( ! $ojs_user_id ) {
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'success', 0, 'User not found on OJS -- nothing to update' );
+			return;
+		}
 
-        $ojs_user_id = $this->resolve_ojs_user_id( $item->wp_user_id, $old_email );
-        if ( ! $ojs_user_id ) {
-            $this->logger->log( $item->wp_user_id, $old_email, 'email_change', 'success', 0, 'User not found on OJS — nothing to update' );
-            return array( 'success' => true, 'code' => 200, 'body' => array(), 'error' => '' );
-        }
+		$result = $this->api->update_user_email( $ojs_user_id, $new_email );
 
-        $result = $this->api->update_user_email( $ojs_user_id, $new_email );
+		// 409 = new email already in use on OJS. Permanent fail, admin must resolve.
+		if ( ! $result['success'] && $result['code'] === 409 ) {
+			$this->send_admin_alert(
+				'OJS Sync: Email Conflict',
+				sprintf(
+					"Email change for WP user #%d failed. New email '%s' is already in use on OJS.\nOld email: %s\nManual resolution required in OJS admin.",
+					$wp_user_id,
+					$new_email,
+					$old_email
+				)
+			);
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', 409, $result['error'] );
+			return; // Don't retry 409.
+		}
 
-        // 409 = new email already in use on OJS. Permanent fail, admin must resolve.
-        if ( ! $result['success'] && $result['code'] === 409 ) {
-            $this->send_admin_alert(
-                'OJS Sync: Email Conflict',
-                sprintf(
-                    "Email change for WP user #%d failed. New email '%s' is already in use on OJS.\nOld email: %s\nManual resolution required in OJS admin.",
-                    $item->wp_user_id,
-                    $new_email,
-                    $old_email
-                )
-            );
-        }
+		if ( ! $result['success'] ) {
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', $result['code'], $result['error'] );
+			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
+				return;
+			}
+			throw new Exception( 'update_user_email failed: ' . $result['error'] );
+		}
 
-        return $result;
-    }
+		$this->logger->log( $wp_user_id, $new_email, 'email_change', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+	}
 
-    /**
-     * Handle delete_user: GDPR erasure.
-     */
-    private function handle_delete_user( $item, $payload ) {
-        $ojs_user_id = $this->resolve_ojs_user_id( $item->wp_user_id, $item->email );
-        if ( ! $ojs_user_id ) {
-            $this->logger->log( $item->wp_user_id, $item->email, 'delete_user', 'success', 0, 'User not found on OJS — nothing to delete' );
-            // Clean up usermeta just in case.
-            delete_user_meta( $item->wp_user_id, '_sea_ojs_user_id' );
-            return array( 'success' => true, 'code' => 200, 'body' => array(), 'error' => '' );
-        }
+	/**
+	 * Handle delete_user: GDPR erasure.
+	 *
+	 * The WP user has already been deleted by the time this runs.
+	 * The email and ojs_user_id were captured in pre_delete_user()
+	 * and passed via AS args.
+	 *
+	 * @param array $args { wp_user_id: int, email: string, ojs_user_id: int|null }
+	 */
+	public function handle_delete_user( $args ) {
+		$wp_user_id  = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
+		$email       = isset( $args['email'] ) ? $args['email'] : '';
+		$ojs_user_id = isset( $args['ojs_user_id'] ) ? (int) $args['ojs_user_id'] : 0;
 
-        $result = $this->api->delete_user( $ojs_user_id );
+		if ( ! $ojs_user_id && $email ) {
+			// Try API lookup by email as fallback.
+			$lookup = $this->api->find_user( $email );
+			if ( $lookup['success'] && ! empty( $lookup['body']['found'] ) ) {
+				$ojs_user_id = (int) $lookup['body']['userId'];
+			}
+		}
 
-        if ( $result['success'] ) {
-            delete_user_meta( $item->wp_user_id, '_sea_ojs_user_id' );
-        }
+		if ( ! $ojs_user_id ) {
+			$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', 0, 'User not found on OJS -- nothing to delete' );
+			return;
+		}
 
-        return $result;
-    }
+		$result = $this->api->delete_user( $ojs_user_id );
 
-    /**
-     * Resolve OJS userId: check usermeta first, fall back to API lookup.
-     *
-     * @param int    $wp_user_id
-     * @param string $email
-     * @return int|null OJS userId or null if not found.
-     */
-    public function resolve_ojs_user_id( $wp_user_id, $email ) {
-        // Check usermeta cache first.
-        $cached = get_user_meta( $wp_user_id, '_sea_ojs_user_id', true );
-        if ( $cached ) {
-            return (int) $cached;
-        }
+		if ( ! $result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'delete_user', 'fail', $result['code'], $result['error'] );
+			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
+				$this->send_admin_alert(
+					'OJS Sync: GDPR Delete Failed',
+					sprintf( "Action: delete_user\nEmail: %s\nOJS User ID: %d\nHTTP %d: %s", $email, $ojs_user_id, $result['code'], $result['error'] )
+				);
+				return;
+			}
+			throw new Exception( 'delete_user failed: ' . $result['error'] );
+		}
 
-        // Fall back to API lookup.
-        $result = $this->api->find_user( $email );
-        if ( $result['success'] && ! empty( $result['body']['found'] ) ) {
-            $ojs_user_id = (int) $result['body']['userId'];
-            // Cache for future use.
-            update_user_meta( $wp_user_id, '_sea_ojs_user_id', $ojs_user_id );
-            return $ojs_user_id;
-        }
+		// User is already deleted from WP, so no usermeta to clean up.
+		$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+	}
 
-        return null;
-    }
+	/**
+	 * Resolve OJS userId: check usermeta first, fall back to API lookup.
+	 *
+	 * @param int    $wp_user_id
+	 * @param string $email
+	 * @return int|null OJS userId or null if not found.
+	 */
+	public function resolve_ojs_user_id( $wp_user_id, $email ) {
+		// Check usermeta cache first.
+		$cached = get_user_meta( $wp_user_id, '_sea_ojs_user_id', true );
+		if ( $cached ) {
+			return (int) $cached;
+		}
 
-    /**
-     * Finalize a queue item based on the API result.
-     *
-     * @param object $item   Queue row.
-     * @param array  $result API result array.
-     */
-    private function finalize( $item, $result ) {
-        $code     = isset( $result['code'] ) ? $result['code'] : 0;
-        $error    = isset( $result['error'] ) ? $result['error'] : '';
-        $body_str = isset( $result['body'] ) ? wp_json_encode( $result['body'] ) : '';
-        $attempts = (int) $item->attempts + 1;
+		// Fall back to API lookup.
+		if ( ! $email ) {
+			return null;
+		}
 
-        if ( ! empty( $result['success'] ) ) {
-            // Success.
-            $this->queue->mark_completed( $item->id );
-            $this->logger->log( $item->wp_user_id, $item->email, $item->action, 'success', $code, $body_str, $attempts );
-            return;
-        }
+		$result = $this->api->find_user( $email );
+		if ( $result['success'] && ! empty( $result['body']['found'] ) ) {
+			$ojs_user_id = (int) $result['body']['userId'];
+			// Cache for future use.
+			update_user_meta( $wp_user_id, '_sea_ojs_user_id', $ojs_user_id );
+			return $ojs_user_id;
+		}
 
-        // Permanent fail?
-        $is_permanent = ! empty( $result['permanent'] ) || $this->api->is_permanent_fail( $code );
+		return null;
+	}
 
-        if ( $is_permanent ) {
-            $this->queue->mark_permanent_fail( $item->id );
-            $this->logger->log( $item->wp_user_id, $item->email, $item->action, 'fail', $code, $error . ' | ' . $body_str, $attempts );
-            $this->send_admin_alert(
-                'OJS Sync: Permanent Failure',
-                sprintf(
-                    "Action: %s\nEmail: %s\nWP User ID: %d\nHTTP %d: %s\n\nThis item will not be retried. Check OJS Sync settings or resolve manually.",
-                    $item->action,
-                    $item->email,
-                    $item->wp_user_id,
-                    $code,
-                    $error
-                )
-            );
-            return;
-        }
+	/**
+	 * Send an admin alert email.
+	 */
+	private function send_admin_alert( $subject, $message ) {
+		$to = get_option( 'admin_email' );
+		wp_mail( $to, $subject, $message );
+	}
 
-        // Retryable?
-        if ( $attempts < self::MAX_RETRIES ) {
-            $interval      = self::RETRY_INTERVALS[ $attempts - 1 ] ?? self::RETRY_INTERVALS[2];
-            $next_retry_at = gmdate( 'Y-m-d H:i:s', time() + $interval );
-            $this->queue->mark_failed( $item->id, $next_retry_at );
-            $this->logger->log( $item->wp_user_id, $item->email, $item->action, 'fail', $code, $error . ' | retry scheduled', $attempts );
-        } else {
-            // Max retries exhausted.
-            $this->queue->mark_permanent_fail( $item->id );
-            $this->logger->log( $item->wp_user_id, $item->email, $item->action, 'fail', $code, $error . ' | max retries exhausted', $attempts );
-            $this->send_admin_alert(
-                'OJS Sync: Max Retries Exhausted',
-                sprintf(
-                    "Action: %s\nEmail: %s\nWP User ID: %d\nHTTP %d: %s\nAttempts: %d\n\nMax retries exhausted. Check OJS availability and review the sync queue.",
-                    $item->action,
-                    $item->email,
-                    $item->wp_user_id,
-                    $code,
-                    $error,
-                    $attempts
-                )
-            );
-        }
-    }
+	/**
+	 * Sync a single user directly (for CLI / manual use).
+	 * Does not go through Action Scheduler -- calls OJS directly.
+	 *
+	 * @param int  $wp_user_id
+	 * @param bool $dry_run
+	 * @param bool $send_welcome_email Whether to send welcome email on user creation.
+	 * @return array Result info.
+	 */
+	public function sync_user( $wp_user_id, $dry_run = false, $send_welcome_email = false ) {
+		$user = get_userdata( $wp_user_id );
+		if ( ! $user ) {
+			return array( 'success' => false, 'message' => 'WP user not found.' );
+		}
 
-    /**
-     * Send an admin alert email.
-     */
-    private function send_admin_alert( $subject, $message ) {
-        $to = get_option( 'admin_email' );
-        wp_mail( $to, $subject, $message );
-    }
+		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
+		if ( ! $sub_data ) {
+			return array( 'success' => false, 'message' => 'User is not an active member.' );
+		}
 
-    /**
-     * Sync a single user directly (for CLI / manual use).
-     * Does not go through the queue — calls OJS directly.
-     *
-     * @param int  $wp_user_id
-     * @param bool $dry_run
-     * @param bool $send_welcome_email Whether to send welcome email on user creation.
-     * @return array Result info.
-     */
-    public function sync_user( $wp_user_id, $dry_run = false, $send_welcome_email = false ) {
-        $user = get_userdata( $wp_user_id );
-        if ( ! $user ) {
-            return array( 'success' => false, 'message' => 'WP user not found.' );
-        }
+		if ( $dry_run ) {
+			return array(
+				'success' => true,
+				'message' => sprintf(
+					'Would sync: %s (type_id=%d, date_end=%s)',
+					$user->user_email,
+					$sub_data['type_id'],
+					$sub_data['date_end'] ?? 'non-expiring'
+				),
+			);
+		}
 
-        $sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
-        if ( ! $sub_data ) {
-            return array( 'success' => false, 'message' => 'User is not an active member.' );
-        }
+		$email      = $user->user_email;
+		$first_name = $user->first_name ?: $user->display_name;
+		$last_name  = $user->last_name ?: '';
 
-        if ( $dry_run ) {
-            return array(
-                'success' => true,
-                'message' => sprintf(
-                    'Would sync: %s (type_id=%d, date_end=%s)',
-                    $user->user_email,
-                    $sub_data['type_id'],
-                    $sub_data['date_end'] ?? 'non-expiring'
-                ),
-            );
-        }
+		// Step 1: Find or create OJS user.
+		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $send_welcome_email );
+		if ( ! $result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'] );
+			return array( 'success' => false, 'message' => 'Find-or-create failed: ' . $result['error'] );
+		}
 
-        $email      = $user->user_email;
-        $first_name = $user->first_name ?: $user->display_name;
-        $last_name  = $user->last_name ?: '';
+		$ojs_user_id = $result['body']['userId'];
+		update_user_meta( $wp_user_id, '_sea_ojs_user_id', $ojs_user_id );
 
-        // Step 1: Find or create OJS user.
-        $result = $this->api->find_or_create_user( $email, $first_name, $last_name, $send_welcome_email );
-        if ( ! $result['success'] ) {
-            $this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'] );
-            return array( 'success' => false, 'message' => 'Find-or-create failed: ' . $result['error'] );
-        }
+		if ( ! empty( $result['body']['created'] ) ) {
+			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+		}
 
-        $ojs_user_id = $result['body']['userId'];
-        update_user_meta( $wp_user_id, '_sea_ojs_user_id', $ojs_user_id );
+		// Step 2: Create subscription.
+		$sub_result = $this->api->create_subscription(
+			$ojs_user_id,
+			$sub_data['type_id'],
+			$sub_data['date_start'],
+			$sub_data['date_end']
+		);
 
-        if ( ! empty( $result['body']['created'] ) ) {
-            $this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
-        }
+		if ( ! $sub_result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'] );
+			return array( 'success' => false, 'message' => 'Create subscription failed: ' . $sub_result['error'] );
+		}
 
-        // Step 2: Create subscription.
-        $sub_result = $this->api->create_subscription(
-            $ojs_user_id,
-            $sub_data['type_id'],
-            $sub_data['date_start'],
-            $sub_data['date_end']
-        );
+		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ) );
 
-        if ( ! $sub_result['success'] ) {
-            $this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'] );
-            return array( 'success' => false, 'message' => 'Create subscription failed: ' . $sub_result['error'] );
-        }
-
-        $this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ) );
-
-        return array(
-            'success' => true,
-            'message' => sprintf(
-                'Synced: %s → OJS user %d, subscription %s',
-                $email,
-                $ojs_user_id,
-                isset( $sub_result['body']['subscriptionId'] ) ? $sub_result['body']['subscriptionId'] : '?'
-            ),
-        );
-    }
+		return array(
+			'success' => true,
+			'message' => sprintf(
+				'Synced: %s -> OJS user %d, subscription %s',
+				$email,
+				$ojs_user_id,
+				isset( $sub_result['body']['subscriptionId'] ) ? $sub_result['body']['subscriptionId'] : '?'
+			),
+		);
+	}
 }

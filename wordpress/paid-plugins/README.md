@@ -26,7 +26,7 @@ For each paid plugin:
 | Plugin | Directory name | Version |
 |--------|---------------|---------|
 | WooCommerce Subscriptions | `woocommerce-subscriptions` | 8.4.0 |
-| WooCommerce Memberships | `woocommerce-memberships` | latest |
+| WooCommerce Memberships | `woocommerce-memberships` | 1.27.5 |
 | Ultimate Member - WooCommerce | `um-woocommerce` | latest |
 
 ## Important

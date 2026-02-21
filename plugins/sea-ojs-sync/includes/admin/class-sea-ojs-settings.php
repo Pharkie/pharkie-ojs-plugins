@@ -258,20 +258,12 @@ class SEA_OJS_Settings {
                     </td>
                 </tr>
                 <tr>
-                    <th>Queue Status</th>
+                    <th>Sync Queue</th>
                     <td>
-                        <?php
-                        $queue = new SEA_OJS_Queue();
-                        $stats = $queue->get_stats();
-                        printf(
-                            'Pending: %d | Processing: %d | Failed: %d | Permanent: %d | Completed: %d',
-                            $stats['pending'],
-                            $stats['processing'],
-                            $stats['failed'],
-                            $stats['permanent_fail'],
-                            $stats['completed']
-                        );
-                        ?>
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=action-scheduler&status=pending&group=sea-ojs-sync' ) ); ?>">
+                            View scheduled actions &rarr;
+                        </a>
+                        <p class="description">Sync actions are managed by Action Scheduler (Tools &rarr; Scheduled Actions).</p>
                     </td>
                 </tr>
             </table>

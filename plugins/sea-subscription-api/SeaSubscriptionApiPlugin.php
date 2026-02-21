@@ -79,6 +79,21 @@ class SeaSubscriptionApiPlugin extends GenericPlugin
                 'lostPassword'
             );
 
+            // Build HTML server-side with proper escaping (matches paywall/footer pattern)
+            $hintHtml = __('plugins.generic.seaSubscriptionApi.loginHint', [
+                'lostPasswordUrl' => htmlspecialchars($lostPasswordUrl, ENT_QUOTES, 'UTF-8'),
+            ]);
+
+            // Escape for safe embedding inside a JS string literal
+            $jsEscapedHtml = strtr($hintHtml, [
+                '\\' => '\\\\',
+                "'" => "\\'",
+                '"' => '\\"',
+                "\n" => '\\n',
+                "\r" => '\\r',
+                '</' => '<\\/',  // prevent </script> breaking out
+            ]);
+
             $templateMgr->addHeader('sea-login-message', '<style>
 .sea-login-hint { background: #e8f4f8; border: 1px solid #b8daff; border-radius: 4px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; line-height: 1.5; }
 .sea-login-hint a { color: #0056b3; text-decoration: underline; }
@@ -89,7 +104,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (h1) {
         var div = document.createElement("div");
         div.className = "sea-login-hint";
-        div.innerHTML = "' . __('plugins.generic.seaSubscriptionApi.loginHint', ['lostPasswordUrl' => $lostPasswordUrl]) . '";
+        div.innerHTML = "' . $jsEscapedHtml . '";
         h1.insertAdjacentElement("afterend", div);
     }
 });

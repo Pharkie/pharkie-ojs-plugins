@@ -138,7 +138,11 @@ class SeaApiController extends PKPBaseController
 
     private function getJournalId(): int
     {
-        return Application::get()->getRequest()->getContext()->getId();
+        $context = Application::get()->getRequest()->getContext();
+        if (!$context) {
+            throw new \RuntimeException('No journal context');
+        }
+        return $context->getId();
     }
 
     private function isValidDate(string $date): bool
@@ -174,7 +178,7 @@ class SeaApiController extends PKPBaseController
         // Repo::user() methods
         foreach (['getByEmail', 'newDataObject', 'add', 'edit', 'get', 'delete'] as $method) {
             $ok = method_exists(Repo::user(), $method);
-            $checks[] = ['check' => "Repo::user()->{$method}()", 'ok' => $ok];
+            $checks[] = ['name' => "Repo::user()->{$method}()", 'ok' => $ok];
             if (!$ok) {
                 $compatible = false;
             }
@@ -183,7 +187,7 @@ class SeaApiController extends PKPBaseController
         // Repo::userGroup() methods
         foreach (['getByRoleIds', 'assignUserToGroup'] as $method) {
             $ok = method_exists(Repo::userGroup(), $method);
-            $checks[] = ['check' => "Repo::userGroup()->{$method}()", 'ok' => $ok];
+            $checks[] = ['name' => "Repo::userGroup()->{$method}()", 'ok' => $ok];
             if (!$ok) {
                 $compatible = false;
             }
@@ -192,7 +196,7 @@ class SeaApiController extends PKPBaseController
         // Repo::emailTemplate() methods
         foreach (['getByKey'] as $method) {
             $ok = method_exists(Repo::emailTemplate(), $method);
-            $checks[] = ['check' => "Repo::emailTemplate()->{$method}()", 'ok' => $ok];
+            $checks[] = ['name' => "Repo::emailTemplate()->{$method}()", 'ok' => $ok];
             if (!$ok) {
                 $compatible = false;
             }
@@ -201,12 +205,12 @@ class SeaApiController extends PKPBaseController
         // IndividualSubscriptionDAO
         $subDao = DAORegistry::getDAO('IndividualSubscriptionDAO');
         if (!$subDao) {
-            $checks[] = ['check' => 'IndividualSubscriptionDAO', 'ok' => false];
+            $checks[] = ['name' => 'IndividualSubscriptionDAO', 'ok' => false];
             $compatible = false;
         } else {
             foreach (['insertObject', 'updateObject', 'getById', 'getByUserIdForJournal', 'deleteById'] as $method) {
                 $ok = method_exists($subDao, $method);
-                $checks[] = ['check' => "IndividualSubscriptionDAO::{$method}()", 'ok' => $ok];
+                $checks[] = ['name' => "IndividualSubscriptionDAO::{$method}()", 'ok' => $ok];
                 if (!$ok) {
                     $compatible = false;
                 }
@@ -216,20 +220,20 @@ class SeaApiController extends PKPBaseController
         // SubscriptionTypeDAO
         $typeDao = DAORegistry::getDAO('SubscriptionTypeDAO');
         if (!$typeDao) {
-            $checks[] = ['check' => 'SubscriptionTypeDAO', 'ok' => false];
+            $checks[] = ['name' => 'SubscriptionTypeDAO', 'ok' => false];
             $compatible = false;
         } else {
             $ok = method_exists($typeDao, 'getById');
-            $checks[] = ['check' => 'SubscriptionTypeDAO::getById()', 'ok' => $ok];
+            $checks[] = ['name' => 'SubscriptionTypeDAO::getById()', 'ok' => $ok];
             if (!$ok) {
                 $compatible = false;
             }
         }
 
         // Validation methods
-        foreach (['suggestUsername', 'encryptCredentials', 'generatePasswordResetHash'] as $method) {
+        foreach (['suggestUsername', 'encryptCredentials'] as $method) {
             $ok = method_exists(Validation::class, $method);
-            $checks[] = ['check' => "Validation::{$method}()", 'ok' => $ok];
+            $checks[] = ['name' => "Validation::{$method}()", 'ok' => $ok];
             if (!$ok) {
                 $compatible = false;
             }
@@ -237,28 +241,34 @@ class SeaApiController extends PKPBaseController
 
         // AccessKeyManager (needed for welcome email password reset links)
         $ok = class_exists(AccessKeyManager::class);
-        $checks[] = ['check' => 'AccessKeyManager class', 'ok' => $ok];
+        $checks[] = ['name' => 'AccessKeyManager class', 'ok' => $ok];
+        if (!$ok) {
+            $compatible = false;
+        }
+
+        $ok = class_exists(AccessKeyManager::class) && method_exists(AccessKeyManager::class, 'createKey');
+        $checks[] = ['name' => 'AccessKeyManager::createKey()', 'ok' => $ok];
         if (!$ok) {
             $compatible = false;
         }
 
         // PasswordResetRequested mailable
         $ok = class_exists(PasswordResetRequested::class);
-        $checks[] = ['check' => 'PasswordResetRequested class', 'ok' => $ok];
+        $checks[] = ['name' => 'PasswordResetRequested class', 'ok' => $ok];
         if (!$ok) {
             $compatible = false;
         }
 
         // Core::getCurrentDate()
         $ok = method_exists(Core::class, 'getCurrentDate');
-        $checks[] = ['check' => 'Core::getCurrentDate()', 'ok' => $ok];
+        $checks[] = ['name' => 'Core::getCurrentDate()', 'ok' => $ok];
         if (!$ok) {
             $compatible = false;
         }
 
         // Role constants
         $ok = defined(Role::class . '::ROLE_ID_READER');
-        $checks[] = ['check' => 'Role::ROLE_ID_READER constant', 'ok' => $ok];
+        $checks[] = ['name' => 'Role::ROLE_ID_READER constant', 'ok' => $ok];
         if (!$ok) {
             $compatible = false;
         }
@@ -266,9 +276,9 @@ class SeaApiController extends PKPBaseController
         // DB tables needed for role check
         try {
             DB::table('user_user_groups')->limit(1)->exists();
-            $checks[] = ['check' => 'user_user_groups table', 'ok' => true];
+            $checks[] = ['name' => 'user_user_groups table', 'ok' => true];
         } catch (\Exception $e) {
-            $checks[] = ['check' => 'user_user_groups table', 'ok' => false];
+            $checks[] = ['name' => 'user_user_groups table', 'ok' => false];
             $compatible = false;
         }
 
@@ -374,8 +384,8 @@ class SeaApiController extends PKPBaseController
                     userGroupId: $readerGroup->getId()
                 );
             }
-        } catch (\Exception $e) {
-            // Race condition: another request may have created this user concurrently
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Duplicate key = race condition: another request created this user
             $raceUser = Repo::user()->getByEmail($email, true);
             if ($raceUser) {
                 return response()->json([
@@ -383,6 +393,11 @@ class SeaApiController extends PKPBaseController
                     'created' => false,
                 ], Response::HTTP_OK);
             }
+            return response()->json(
+                ['error' => 'Failed to create user'],
+                Response::HTTP_INTERNAL_SERVER_ERROR
+            );
+        } catch (\Exception $e) {
             return response()->json(
                 ['error' => 'Failed to create user'],
                 Response::HTTP_INTERNAL_SERVER_ERROR
@@ -476,6 +491,7 @@ class SeaApiController extends PKPBaseController
             'url' => '',
             'phone' => '',
             'mailingAddress' => '',
+            'datePasswordResetRequested' => null,
             'disabled' => true,
         ]);
 
@@ -488,11 +504,11 @@ class SeaApiController extends PKPBaseController
             $dao->updateObject($sub);
         }
 
-        // Remove welcome email dedup flag
-        DB::table('user_settings')
-            ->where('user_id', $userId)
-            ->where('setting_name', 'sea_welcome_email_sent')
-            ->delete();
+        // Remove access keys (password reset tokens)
+        DB::table('access_keys')->where('user_id', $userId)->delete();
+
+        // Remove all user_settings (may contain PII like preferredPublicName)
+        DB::table('user_settings')->where('user_id', $userId)->delete();
 
         return response()->json([
             'deleted' => true,
