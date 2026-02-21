@@ -110,14 +110,24 @@ WP OJS/
 │   ├── phase0-findings.md             # Raw research from API audit
 │   ├── phase0-sso-plugin-audit.md     # Source code audit of Subscription SSO plugin
 │   ├── xml-import-evaluation.md       # Why OJS XML import doesn't work as a stopgap
-│   └── janeway-paywall-investigation.md  # Janeway backup: concrete Stripe paywall plan
+│   ├── janeway-paywall-investigation.md  # Janeway backup: concrete Stripe paywall plan
+│   ├── membership-platform.md        # Future: WP replacement evaluation + platform comparison
+│   ├── ojs-issues-log.md             # OJS bugs encountered (evidence for Janeway eval)
+│   ├── code-review-ojs-plugin.md     # OJS plugin code review findings
+│   └── code-review-wp-plugin.md      # WP plugin code review findings
 ├── launch/                            # Pre-launch deliverables (drafts)
 │   ├── welcome-email.md              # "Set your password" email copy
 │   ├── support-runbook.md            # Staff guide for member queries
 │   └── member-faq.md                 # Member-facing FAQ
-└── plugins/                           # Plugin source (Phase 1)
-    ├── sea-subscription-api/          # OJS plugin (TBD)
-    └── sea-ojs-sync/                  # WP plugin (TBD)
+├── plugins/                           # Plugin source
+│   ├── sea-subscription-api/          # OJS plugin — subscription CRUD endpoints
+│   └── sea-ojs-sync/                  # WP plugin — hooks into WCS, syncs to OJS
+├── wordpress/                         # Bedrock WP project (Composer-managed)
+│   ├── composer.json                  # Pins WP core + all plugins
+│   └── paid-plugins/                  # Paid plugin ZIPs (gitignored, Composer stubs)
+├── docker/                            # Docker config, Dockerfiles, OJS entrypoint
+├── scripts/                           # Setup scripts (WP + OJS bootstrap)
+└── docker-compose.yml                 # Dev environment (WP + OJS + 2x MariaDB)
 ```
 
 ## Quick Links
@@ -129,6 +139,9 @@ WP OJS/
 - [OJS API reference](./docs/ojs-api.md)
 - [XML import evaluation](./docs/xml-import-evaluation.md)
 - [Janeway backup plan](./docs/janeway-paywall-investigation.md)
+- [Membership platform replacement](./docs/membership-platform.md)
+- [OJS issues log](./docs/ojs-issues-log.md)
+- [Docker quick reference](./docker/README.md)
 - [TODO list](./TODO.md)
 - [OJS REST API swagger spec](https://github.com/pkp/ojs/blob/main/docs/dev/swagger-source.json)
 - [OJS subscription classes (GitHub)](https://github.com/pkp/ojs/tree/main/classes/subscription)

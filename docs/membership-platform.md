@@ -60,7 +60,7 @@ Evaluated 2026-02-21. Pricing verified from official websites.
 | Platform | Type | Cost (~500 members) | API | GoCardless | Verdict |
 |----------|------|---------------------|-----|------------|---------|
 | **WP + current stack** | Self-hosted WP | ~£400/yr (plugin licences) + hosting | WP hooks (PHP) | No | Current. Fragile but working. |
-| **WildApricot** | SaaS | ~£50/mo (~£600/yr) | Yes (REST, well-documented) | No | Strong features, but USD-only billing, no GoCardless |
+| **WildApricot** | SaaS | ~$125/mo (~£1,200/yr, 2yr prepay) | Yes (REST, well-documented) | No | Strong features, but USD-only billing, no GoCardless |
 | **Join It** | SaaS | ~£79/mo (~£950/yr) | Yes (Total tier+) | No | Expensive, 2% transaction surcharge |
 | **membermojo** | SaaS | ~£8/mo (~£95/yr) | No | No | Cheapest, but no API — dealbreaker |
 | **White Fuse** | SaaS | ~£83/mo (~£1,000/yr) | No | Yes | Best UK all-in-one, but no API — dealbreaker |
@@ -71,7 +71,7 @@ Evaluated 2026-02-21. Pricing verified from official websites.
 
 ### Detailed notes
 
-#### WildApricot (~£600/yr)
+#### WildApricot (~£1,200/yr)
 
 All-in-one SaaS: members, payments, events, email, website, API. The best-documented API in this comparison (Swagger/OpenAPI, GitHub code samples). Tiers are by contact count only — all features included.
 
@@ -146,7 +146,7 @@ Eliminating platforms with no API (membermojo, White Fuse — can't integrate wi
 
 | | WildApricot | Paid Memberships Pro | MemberPress |
 |---|---|---|---|
-| **Cost** | ~£600/yr | Free–£240/yr | £280–500/yr (doubles yr 2) |
+| **Cost** | ~£1,200/yr ($125/mo, 2yr prepay) | Free–£240/yr | £280–500/yr (doubles yr 2) |
 | **Leaves WordPress** | Yes | No | No |
 | **API** | Full REST, well-documented | Basic (7 endpoints), all tiers | Full REST, Scale tier only (£500+) |
 | **GoCardless** | No | No | No |
@@ -166,9 +166,9 @@ Eliminating platforms with no API (membermojo, White Fuse — can't integrate wi
 
 This is a decision for SEA, not a technical call. The questions are:
 
-- **Does SEA want to stop managing WordPress?** → WildApricot. Higher cost, lower maintenance, clean break.
+- **Does SEA want to stop managing WordPress?** → WildApricot. ~£1,200/yr, lower maintenance, clean break.
 - **Does SEA want to stay on WordPress but simplify?** → Paid Memberships Pro. Lower cost, moderate migration, still self-hosted.
 - **Is GoCardless essential?** → Neither option supports it natively. White Fuse does but has no API. This may force a compromise.
-- **What's the budget?** → PMPro is free. WildApricot is £600/yr. The current stack is ~£400/yr in licences plus hosting plus developer time that dwarfs both.
+- **What's the budget?** → PMPro is free. WildApricot is ~£1,200/yr. The current stack is ~£400/yr in licences plus hosting plus developer time that dwarfs both.
 
 The OJS sync work is not wasted regardless of which path SEA chooses — the push-sync pattern ports to any platform with an API.
