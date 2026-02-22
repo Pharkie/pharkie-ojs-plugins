@@ -93,7 +93,7 @@ UK-built charity CRM with membership management. Designed for UK charities and n
 | **MemberPress** (£280–500/yr) | API locked to Scale tier (£500+/yr, doubles after year 1). Same objection as PMPro — still WordPress. |
 | **membermojo** (~£95/yr) | No API. Cheapest option but can't integrate with OJS. |
 | **White Fuse** (~£1,000/yr) | No API. Good UK all-in-one otherwise. |
-| **Join It** (~£950/yr) | Expensive. 2% transaction surcharge on top of Stripe fees. API locked to $99/mo tier. |
+| **Join It** (~$99-149/mo) | Similar price to WildApricot/Beacon but weaker: 2% transaction surcharge on top of Stripe fees (others: none), API is read-only (no write endpoints, launched 2022), no native events (Eventbrite integration only), no GoCardless/BACS, weak email (recommends Mailchimp). Less for the same money. |
 | **Salesforce Nonprofit** (free + £10-30k setup) | Massive overkill. Requires dedicated admin expertise SEA doesn't have. |
 | **Novi AMS** (~$829/mo) | Far too expensive for a 500-member society. |
 | **MemberClicks** (~$375/mo) | Expensive, US-focused. Designed for larger associations. |
