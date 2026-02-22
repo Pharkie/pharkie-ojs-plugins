@@ -210,6 +210,25 @@ if ( ! empty( $members ) ) {
 			);
 		}
 
+		// 7. Populate WCS customer subscription cache (wp_usermeta).
+		// WCS maintains a per-user cache of subscription IDs in the
+		// _wcs_subscription_ids_cache user meta key. Direct SQL inserts
+		// bypass the hooks that update this cache, so we must set it
+		// explicitly. Without this, wcs_get_subscriptions(customer_id)
+		// returns empty results for seeded users.
+		WP_CLI::log( '  Populating WCS customer cache...' );
+		foreach ( array_chunk( $user_ids, $batch_size ) as $chunk ) {
+			$values = array();
+			foreach ( $chunk as $uid ) {
+				$cache = serialize( array( $sub_map[ $uid ] ) );
+				$values[] = $wpdb->prepare( '(%d, %s, %s)', $uid, '_wcs_subscription_ids_cache', $cache );
+			}
+			$wpdb->query(
+				"INSERT INTO {$wpdb->usermeta} (user_id, meta_key, meta_value)
+				 VALUES " . implode( ', ', $values )
+			);
+		}
+
 		WP_CLI::log( sprintf( '  %d subscriptions created.', count( $user_ids ) ) );
 	}
 }

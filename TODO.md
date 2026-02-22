@@ -8,7 +8,7 @@
 - Member dashboard widget (WooCommerce My Account)
 - UI messages (OJS login hint, paywall hint, footer)
 
-## Before deploying
+## Before deploying to production
 
 - [ ] Upgrade OJS to 3.5 (required for the plugin API)
 - [ ] Set up transactional email relay on OJS server (SPF/DKIM/DMARC)
