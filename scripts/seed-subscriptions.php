@@ -216,7 +216,15 @@ if ( ! empty( $members ) ) {
 		// bypass the hooks that update this cache, so we must set it
 		// explicitly. Without this, wcs_get_subscriptions(customer_id)
 		// returns empty results for seeded users.
+		//
+		// The user_register hook (fired during wp user import-csv) sets
+		// an empty cache for each new user. We must delete those first,
+		// then insert the real cache values.
 		WP_CLI::log( '  Populating WCS customer cache...' );
+		$wpdb->query(
+			"DELETE FROM {$wpdb->usermeta}
+			 WHERE meta_key = '_wcs_subscription_ids_cache' AND user_id IN ($user_ids_csv)"
+		);
 		foreach ( array_chunk( $user_ids, $batch_size ) as $chunk ) {
 			$values = array();
 			foreach ( $chunk as $uid ) {
