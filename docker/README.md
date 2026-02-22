@@ -89,7 +89,7 @@ docker compose down -v
 
 # Run WP setup (install core, activate plugins, set options)
 docker compose exec wp bash /var/www/html/scripts/setup-wp.sh
-# ...with 727 anonymised test users:
+# ...with ~1400 anonymised test users + WCS subscriptions:
 docker compose exec wp bash /var/www/html/scripts/setup-wp.sh --with-sample-data
 
 # Run OJS setup (create journal, subscription type, enable plugin)
@@ -111,6 +111,22 @@ docker compose exec wp curl http://ojs:80/index.php/journal/api/v1/wpojs/ping
 # Staging (on remote server)
 docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
 ```
+
+## Sample data (`--with-sample-data`)
+
+The `--with-sample-data` flag on `setup-wp.sh` runs a three-step pipeline that populates the dev environment with realistic membership data from the live site:
+
+| Step | Script | What it does | Speed |
+|------|--------|-------------|-------|
+| 1. Import users | `wp user import-csv` | Imports ~1,400 anonymised users from `docker/test-users.csv` as `subscriber` | ~2 min |
+| 2. Apply roles | `scripts/apply-roles.php` | Reads `original_role` column from CSV, updates `wp_usermeta` directly (UM roles can't be assigned via `wp user import-csv`) | ~2s |
+| 3. Seed subscriptions | `scripts/seed-subscriptions.php` | Creates 6 WC subscription products + batch-inserts WCS subscription records for ~683 members with `um_custom_role_1–6` | ~1.5s |
+
+Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find active subscriptions: `wp_posts` (subscription post), `wp_postmeta` (dates + customer), `wp_woocommerce_order_items` (line item), and `wp_woocommerce_order_itemmeta` (product ID). It also configures the `wpojs_*` options the sync plugin needs (type mapping, member roles, manual roles).
+
+**Result:** `wp ojs-sync status` shows ~684 active members (683 WCS + 1 manual role). The environment is ready for `wp ojs-sync sync`.
+
+All three steps are idempotent — running `setup-wp.sh --with-sample-data` again skips already-imported data.
 
 ## Resetting OJS
 

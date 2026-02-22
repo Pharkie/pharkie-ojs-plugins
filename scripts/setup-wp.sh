@@ -4,7 +4,7 @@
 #
 # Usage:
 #   scripts/setup-wp.sh                    # Base setup only
-#   scripts/setup-wp.sh --with-sample-data # Base setup + import ~1400 anonymised test users
+#   scripts/setup-wp.sh --with-sample-data # Base setup + import ~1400 test users + seed subscriptions
 #
 # Run inside the WP container:
 #   docker compose exec wp bash /var/www/html/scripts/setup-wp.sh [--with-sample-data]
