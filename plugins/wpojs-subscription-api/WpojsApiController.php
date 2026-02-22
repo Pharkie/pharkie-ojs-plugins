@@ -260,7 +260,7 @@ class WpojsApiController extends PKPBaseController
         }
 
         // Validation methods
-        foreach (['suggestUsername', 'encryptCredentials'] as $method) {
+        foreach (['encryptCredentials'] as $method) {
             $ok = method_exists(Validation::class, $method);
             $checks[] = ['name' => "Validation::{$method}()", 'ok' => $ok];
             if (!$ok) {
@@ -383,7 +383,16 @@ class WpojsApiController extends PKPBaseController
 
         try {
             $user = Repo::user()->newDataObject();
-            $username = Validation::suggestUsername($firstName, $lastName);
+            // Generate unique username (reimplements Validation::suggestUsername
+            // to avoid PHP 8.3 deprecation on empty-string increment — pkp/pkp-lib#12377)
+            $base = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($firstName) . strtolower($lastName));
+            if ($base === '') {
+                $base = 'user';
+            }
+            $username = $base;
+            for ($i = 1; Repo::user()->getByUsername($username, true); $i++) {
+                $username = $base . $i;
+            }
             $user->setUsername($username);
             $user->setEmail($email);
             $user->setGivenName($firstName, 'en');
