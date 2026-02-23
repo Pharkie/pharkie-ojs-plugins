@@ -21,7 +21,8 @@ class WpojsApiLog
                 'created_at'  => Core::getCurrentDate(),
             ]);
         } catch (\Exception $e) {
-            // Silently fail — logging should never break the API.
+            // Logging should never break the API, but record the failure.
+            error_log('[wpojs-api-log] Failed to log request: ' . $e->getMessage());
         }
     }
 
@@ -58,6 +59,7 @@ class WpojsApiLog
                 ->where('created_at', '<', $cutoff)
                 ->delete();
         } catch (\Exception $e) {
+            error_log('[wpojs-api-log] Cleanup failed: ' . $e->getMessage());
             return 0;
         }
     }

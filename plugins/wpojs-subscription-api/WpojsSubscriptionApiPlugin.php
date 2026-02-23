@@ -262,6 +262,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 ->toArray();
         } catch (\Exception $e) {
             // Tables may not exist yet.
+            error_log('[wpojs-status] Subscription query failed: ' . $e->getMessage());
         }
 
         try {
@@ -271,6 +272,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 ->count();
         } catch (\Exception $e) {
             // OK if no entries yet.
+            error_log('[wpojs-status] Sync-created user count query failed: ' . $e->getMessage());
         }
 
         // Recent API activity log.

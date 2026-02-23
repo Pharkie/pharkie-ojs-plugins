@@ -236,11 +236,11 @@ class WPOJS_Log_List_Table extends WP_List_Table {
             case 'ojs_response_code':
                 return $item->ojs_response_code ? esc_html( $item->ojs_response_code ) : '—';
             case 'ojs_response_body':
-                $body = esc_html( $item->ojs_response_body );
-                if ( strlen( $body ) > 100 ) {
-                    return '<span title="' . esc_attr( $item->ojs_response_body ) . '">' . substr( $body, 0, 100 ) . '...</span>';
+                $raw = $item->ojs_response_body;
+                if ( strlen( $raw ) > 100 ) {
+                    return '<span title="' . esc_attr( $raw ) . '">' . esc_html( substr( $raw, 0, 100 ) ) . '...</span>';
                 }
-                return $body;
+                return esc_html( $raw );
             case 'attempt_count':
                 return esc_html( $item->attempt_count );
             default:
