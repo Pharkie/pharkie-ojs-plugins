@@ -19,6 +19,7 @@ use PKP\db\DAORegistry;
 use PKP\mail\mailables\PasswordResetRequested;
 use PKP\security\Role;
 use PKP\security\Validation;
+use APP\plugins\generic\wpojsSubscriptionApi\WpojsApiLog;
 
 class WpojsApiController extends PKPBaseController
 {
@@ -159,10 +160,36 @@ class WpojsApiController extends PKPBaseController
     /**
      * Combined authorization: IP allowlist + API key.
      * Call at the start of every protected endpoint.
+     * Logs the request on both success and auth failure.
      */
     private function checkAuth(Request $request): ?JsonResponse
     {
-        return $this->checkIp($request) ?? $this->checkApiKey($request);
+        $ipError = $this->checkIp($request);
+        if ($ipError) {
+            $this->logRequest($request, $ipError->getStatusCode());
+            return $ipError;
+        }
+
+        $keyError = $this->checkApiKey($request);
+        if ($keyError) {
+            $this->logRequest($request, $keyError->getStatusCode());
+            return $keyError;
+        }
+
+        $this->logRequest($request, 200);
+        return null;
+    }
+
+    /**
+     * Write an entry to the API request log.
+     */
+    private function logRequest(Request $request, int $httpStatus): void
+    {
+        $endpoint = $request->path();
+        $method = $request->method();
+        $sourceIp = $request->server('REMOTE_ADDR', 'unknown');
+
+        WpojsApiLog::log($endpoint, $method, $sourceIp, $httpStatus);
     }
 
     private function getJournalId(): int
@@ -416,6 +443,14 @@ class WpojsApiController extends PKPBaseController
                     userGroupId: $readerGroup->getKey()
                 );
             }
+
+            // Mark this user as created by sync (for status page stats).
+            DB::table('user_settings')->insertOrIgnore([
+                'user_id' => $userId,
+                'locale' => '',
+                'setting_name' => 'wpojs_created_by_sync',
+                'setting_value' => Core::getCurrentDate(),
+            ]);
         } catch (\Illuminate\Database\QueryException $e) {
             // Duplicate key = race condition: another request created this user
             $raceUser = Repo::user()->getByEmail($email, true);

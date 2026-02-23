@@ -25,10 +25,12 @@
 namespace APP\plugins\generic\wpojsSubscriptionApi;
 
 use APP\core\Application;
+use Illuminate\Support\Facades\DB;
 use PKP\config\Config;
 use PKP\db\DAORegistry;
 use PKP\plugins\GenericPlugin;
 use PKP\plugins\Hook;
+use APP\plugins\generic\wpojsSubscriptionApi\WpojsApiLog;
 
 class WpojsSubscriptionApiPlugin extends GenericPlugin
 {
@@ -156,6 +158,132 @@ document.addEventListener("DOMContentLoaded", function() {
             . '</div>';
 
         return Hook::CONTINUE;
+    }
+
+    public function getActions($request, $actionArgs)
+    {
+        $actions = parent::getActions($request, $actionArgs);
+
+        if (!$this->getEnabled()) {
+            return $actions;
+        }
+
+        $router = $request->getRouter();
+
+        array_unshift($actions, new \PKP\linkAction\LinkAction(
+            'status',
+            new \PKP\linkAction\request\AjaxModal(
+                $router->url(
+                    $request,
+                    null,
+                    null,
+                    'manage',
+                    null,
+                    ['verb' => 'status', 'plugin' => $this->getName(), 'category' => 'generic']
+                ),
+                __('plugins.generic.wpojsSubscriptionApi.status')
+            ),
+            __('plugins.generic.wpojsSubscriptionApi.status')
+        ));
+
+        return $actions;
+    }
+
+    public function manage($args, $request)
+    {
+        if ($request->getUserVar('verb') !== 'status') {
+            return parent::manage($args, $request);
+        }
+
+        // Cleanup old API log entries on page load.
+        WpojsApiLog::cleanup(30);
+
+        $data = $this->gatherStatusData();
+
+        $templateMgr = \APP\template\TemplateManager::getManager($request);
+        $templateMgr->assign($data);
+
+        return new \PKP\core\JSONMessage(
+            true,
+            $templateMgr->fetch($this->getTemplateResource('status.tpl'))
+        );
+    }
+
+    private function gatherStatusData(): array
+    {
+        // Config health checks.
+        $apiKeyDefined = !empty(Config::getVar('wpojs', 'api_key_secret', ''))
+            || !empty(Config::getVar('security', 'api_key_secret', ''));
+        $allowedIps = Config::getVar('wpojs', 'allowed_ips', '');
+        $wpMemberUrl = Config::getVar('wpojs', 'wp_member_url', '');
+        $supportEmail = Config::getVar('wpojs', 'support_email', '');
+
+        $configChecks = [
+            ['name' => 'API key defined', 'ok' => $apiKeyDefined],
+            ['name' => 'Allowed IPs configured', 'ok' => !empty($allowedIps), 'detail' => $allowedIps ?: '(none)'],
+            ['name' => 'WP member URL set', 'ok' => !empty($wpMemberUrl), 'detail' => $wpMemberUrl ?: '(not set)'],
+            ['name' => 'Support email set', 'ok' => !empty($supportEmail), 'detail' => $supportEmail ?: '(not set)'],
+        ];
+
+        $allGreen = true;
+        foreach ($configChecks as $check) {
+            if (!$check['ok']) {
+                $allGreen = false;
+                break;
+            }
+        }
+
+        // Sync stats.
+        $context = Application::get()->getRequest()->getContext();
+        $journalId = $context ? $context->getId() : 0;
+
+        $activeSubCount = 0;
+        $syncCreatedCount = 0;
+        $subTypeCounts = [];
+
+        try {
+            $dao = DAORegistry::getDAO('IndividualSubscriptionDAO');
+
+            // Active subscriptions count.
+            $activeSubCount = (int) DB::table('subscriptions')
+                ->join('subscription_types', 'subscriptions.type_id', '=', 'subscription_types.type_id')
+                ->where('subscription_types.journal_id', $journalId)
+                ->where('subscriptions.status', self::SUB_STATUS_ACTIVE)
+                ->count();
+
+            // Subscription types in use.
+            $subTypeCounts = DB::table('subscriptions')
+                ->join('subscription_types', 'subscriptions.type_id', '=', 'subscription_types.type_id')
+                ->where('subscription_types.journal_id', $journalId)
+                ->where('subscriptions.status', self::SUB_STATUS_ACTIVE)
+                ->select('subscription_types.type_name', DB::raw('COUNT(*) as count'))
+                ->groupBy('subscription_types.type_id', 'subscription_types.type_name')
+                ->get()
+                ->toArray();
+        } catch (\Exception $e) {
+            // Tables may not exist yet.
+        }
+
+        try {
+            // Users created by sync.
+            $syncCreatedCount = (int) DB::table('user_settings')
+                ->where('setting_name', 'wpojs_created_by_sync')
+                ->count();
+        } catch (\Exception $e) {
+            // OK if no entries yet.
+        }
+
+        // Recent API activity log.
+        $recentLogs = WpojsApiLog::getRecent(50);
+
+        return [
+            'configChecks'    => $configChecks,
+            'allGreen'        => $allGreen,
+            'activeSubCount'  => $activeSubCount,
+            'syncCreatedCount' => $syncCreatedCount,
+            'subTypeCounts'   => $subTypeCounts,
+            'recentLogs'      => $recentLogs,
+        ];
     }
 
     public function getDisplayName()

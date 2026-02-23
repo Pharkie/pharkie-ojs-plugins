@@ -34,6 +34,7 @@ class WPOJS_Cron {
 	public function register() {
 		add_action( 'wpojs_daily_reconcile', array( $this, 'daily_reconcile' ) );
 		add_action( 'wpojs_daily_digest', array( $this, 'daily_digest' ) );
+		add_action( 'wpojs_log_cleanup', array( $this, 'log_cleanup' ) );
 	}
 
 	/**
@@ -119,6 +120,13 @@ class WPOJS_Cron {
 				$errors
 			)
 		);
+	}
+
+	/**
+	 * Weekly log cleanup: delete log entries older than 90 days.
+	 */
+	public function log_cleanup() {
+		$this->logger->cleanup_old( 90 );
 	}
 
 	/**

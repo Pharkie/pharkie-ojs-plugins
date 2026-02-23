@@ -20,6 +20,7 @@ class WPOJS_Activator {
 	public static function deactivate() {
 		wp_clear_scheduled_hook( 'wpojs_daily_reconcile' );
 		wp_clear_scheduled_hook( 'wpojs_daily_digest' );
+		wp_clear_scheduled_hook( 'wpojs_log_cleanup' );
 	}
 
 	private static function create_tables() {
@@ -57,6 +58,10 @@ class WPOJS_Activator {
 
 		if ( ! wp_next_scheduled( 'wpojs_daily_digest' ) ) {
 			wp_schedule_event( time(), 'daily', 'wpojs_daily_digest' );
+		}
+
+		if ( ! wp_next_scheduled( 'wpojs_log_cleanup' ) ) {
+			wp_schedule_event( time(), 'weekly', 'wpojs_log_cleanup' );
 		}
 	}
 }

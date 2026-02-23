@@ -18,18 +18,22 @@ class WPOJS_CLI {
 	/** @var WPOJS_Logger */
 	private $logger;
 
-	public function __construct( WPOJS_Sync $sync, WPOJS_Resolver $resolver, WPOJS_API_Client $api, WPOJS_Logger $logger ) {
+	/** @var WPOJS_Stats */
+	private $stats;
+
+	public function __construct( WPOJS_Sync $sync, WPOJS_Resolver $resolver, WPOJS_API_Client $api, WPOJS_Logger $logger, WPOJS_Stats $stats ) {
 		$this->sync     = $sync;
 		$this->resolver = $resolver;
 		$this->api      = $api;
 		$this->logger   = $logger;
+		$this->stats    = $stats;
 	}
 
 	/**
 	 * Register WP-CLI commands.
 	 */
-	public static function register( WPOJS_Sync $sync, WPOJS_Resolver $resolver, WPOJS_API_Client $api, WPOJS_Logger $logger ) {
-		$instance = new self( $sync, $resolver, $api, $logger );
+	public static function register( WPOJS_Sync $sync, WPOJS_Resolver $resolver, WPOJS_API_Client $api, WPOJS_Logger $logger, WPOJS_Stats $stats ) {
+		$instance = new self( $sync, $resolver, $api, $logger, $stats );
 		WP_CLI::add_command( 'ojs-sync sync', array( $instance, 'sync' ) );
 		WP_CLI::add_command( 'ojs-sync send-welcome-emails', array( $instance, 'send_welcome_emails' ) );
 		WP_CLI::add_command( 'ojs-sync reconcile', array( $instance, 'reconcile' ) );
@@ -383,24 +387,11 @@ class WPOJS_CLI {
 		WP_CLI::log( 'Action Scheduler Queue (wpojs-sync)' );
 		WP_CLI::log( '======================================' );
 
+		$queue = $this->stats->get_queue_counts();
 		if ( class_exists( 'ActionScheduler' ) ) {
-			$store    = ActionScheduler::store();
-			$statuses = array(
-				'Pending'    => ActionScheduler_Store::STATUS_PENDING,
-				'Running'    => ActionScheduler_Store::STATUS_RUNNING,
-				'Failed'     => ActionScheduler_Store::STATUS_FAILED,
-				'Complete'   => ActionScheduler_Store::STATUS_COMPLETE,
-			);
-
 			$rows = array();
-			foreach ( $statuses as $label => $status ) {
-				$rows[] = array(
-					'Status' => $label,
-					'Count'  => (int) $store->query_actions( array(
-						'status' => $status,
-						'group'  => 'wpojs-sync',
-					), 'count' ),
-				);
+			foreach ( array( 'Pending' => 'pending', 'Running' => 'running', 'Failed' => 'failed', 'Complete' => 'complete' ) as $label => $key ) {
+				$rows[] = array( 'Status' => $label, 'Count' => $queue[ $key ] );
 			}
 			WP_CLI\Utils\format_items( 'table', $rows, array( 'Status', 'Count' ) );
 		} else {
@@ -409,31 +400,25 @@ class WPOJS_CLI {
 
 		// Active members.
 		WP_CLI::log( 'Resolving active members...' );
-		$members = $this->resolver->get_all_active_members();
+		$active = $this->stats->get_active_member_count();
+		$synced = $this->stats->get_synced_member_count();
 		WP_CLI::log( '' );
-		WP_CLI::log( sprintf( 'Active WP members: %d', count( $members ) ) );
-
-		// Synced members (those with _wpojs_user_id).
-		global $wpdb;
-		$synced = (int) $wpdb->get_var(
-			"SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta} WHERE meta_key = '_wpojs_user_id'"
-		);
+		WP_CLI::log( sprintf( 'Active WP members: %d', $active ) );
 		WP_CLI::log( sprintf( 'Members synced to OJS: %d', $synced ) );
 
 		// Recent failures.
-		$since = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
-		$failures = $this->logger->get_failure_count_since( $since );
+		$failures = $this->stats->get_failure_count_hours( 24 );
 		WP_CLI::log( sprintf( 'Failures in last 24h: %d', $failures ) );
 
 		// Cron status.
-		$next_recon  = wp_next_scheduled( 'wpojs_daily_reconcile' );
-		$next_digest = wp_next_scheduled( 'wpojs_daily_digest' );
+		$cron = $this->stats->get_cron_schedule();
 
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Cron Schedule' );
 		WP_CLI::log( '=============' );
-		WP_CLI::log( sprintf( 'Reconciliation: %s', $next_recon ? gmdate( 'Y-m-d H:i:s', $next_recon ) : 'Not scheduled' ) );
-		WP_CLI::log( sprintf( 'Daily digest:   %s', $next_digest ? gmdate( 'Y-m-d H:i:s', $next_digest ) : 'Not scheduled' ) );
+		WP_CLI::log( sprintf( 'Reconciliation: %s', $cron['reconcile'] ? gmdate( 'Y-m-d H:i:s', $cron['reconcile'] ) : 'Not scheduled' ) );
+		WP_CLI::log( sprintf( 'Daily digest:   %s', $cron['digest'] ? gmdate( 'Y-m-d H:i:s', $cron['digest'] ) : 'Not scheduled' ) );
+		WP_CLI::log( sprintf( 'Log cleanup:    %s', $cron['log_cleanup'] ? gmdate( 'Y-m-d H:i:s', $cron['log_cleanup'] ) : 'Not scheduled' ) );
 	}
 
 	/**

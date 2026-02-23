@@ -25,3 +25,6 @@ msgstr "If you should have access to this content, please contact <a href=\"mail
 
 msgid "plugins.generic.wpojsSubscriptionApi.footerMessage"
 msgstr "Your journal access is provided by your membership. <a href=\"{$wpUrl}\">Manage your membership</a>."
+
+msgid "plugins.generic.wpojsSubscriptionApi.status"
+msgstr "Status"
