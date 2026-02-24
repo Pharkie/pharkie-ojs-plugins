@@ -57,7 +57,7 @@ Things that any replacement would need to handle, learned from building the push
 
 ## Platform comparison (~500 members)
 
-Evaluated 2026-02-21. Pricing verified from official websites.
+Pricing originally verified 2026-02-21 from official websites. Vendor risk and architecture assessments added 2026-02-24.
 
 ### Shortlisted
 
@@ -65,7 +65,7 @@ All prices excl. VAT (20% applies to all — WildApricot as reverse-charge on im
 
 | Platform | Cost (~500 members, excl. VAT) | API | Verdict |
 |----------|-------------------------------|-----|---------|
-| **WildApricot** | ~$125/mo (~£1,200/yr) | Yes (REST, Swagger docs) | Strongest turnkey option. All features included. GBP via Stripe. Lowest setup effort. |
+| **WildApricot** | ~$125/mo (~£1,200/yr, rising ~25% every 2yr) | Yes (REST, Swagger docs) | Turnkey, all features included, lowest setup effort. But private-equity-owned with aggressive price increases and serious support problems (Trustpilot: 1.6/5). |
 | **CiviCRM** (self-hosted standalone) | ~£115/yr (DigitalOcean droplet; software is free) | Yes (REST APIv4, full CRUD) | Most capable and extensible. Best API. Cheapest ongoing cost. But highest setup complexity. |
 | **Beacon CRM** | ~£78/mo (~£936/yr) | Yes (REST) | UK-native charity CRM with REST API. Membership features are add-ons — less proven for association management than WildApricot or CiviCRM. |
 
@@ -73,18 +73,30 @@ All prices excl. VAT (20% applies to all — WildApricot as reverse-charge on im
 
 #### WildApricot (~£1,200/yr)
 
-All-in-one SaaS: members, payments, events, email, website, API. The best-documented API in this comparison (Swagger/OpenAPI, GitHub code samples). Tiers are by contact count only — all features included at every tier.
+All-in-one SaaS: members, payments, events, email, website, API. Swagger-documented REST API. Tiers are by contact count only — all features included at every tier. Founded 2006 in Canada.
 
-- **Pro:** Mature REST API, all features included, large user base. Supports GBP billing via Stripe. No server to manage. Lowest setup effort.
-- **Con:** Platform subscription billed in USD (~$125/mo for 500 contacts, 2yr prepay). Export is CSV-only (no full backup). North American company.
+- **Pro:** All features included, large user base (15,000-32,000 organisations). Supports GBP billing via Stripe. No server to manage. Lowest setup effort. REST API with webhooks covers the OJS integration use case.
+- **Con:** Platform subscription billed in USD (~$125/mo for 500 contacts, 2yr prepay). No single-operation full backup (must export each data type separately; supports CSV, XLS, and XML). North American company — data hosted in US/Canada (AWS). API rate limits are tight (40 requests/min for contact lists). No SLA or uptime guarantee.
 - **OJS integration:** Rebuild sync against WildApricot API (webhooks + REST). Same push-sync pattern, different source.
+
+**Vendor risk: private equity ownership and declining support.**
+
+WildApricot was acquired by Personify in 2017 (backed by private equity firm Rubicon), then Personify was sold to another private equity firm (Pamlico Capital) in 2018. The original founder (Dmitry Buterin) left after the acquisition. Two private equity flips in two years.
+
+- **Support quality has declined significantly post-acquisition.** This is the most consistent complaint across review sites. Trustpilot: 1.6/5 (154 reviews). Capterra: 4.4/5 (554 reviews). The gap is stark — Trustpilot captures more complaint-driven reviews, but 1.6/5 with 154 reviews is not noise. Users describe email/chat-only support with weeks-long response times.
+- **Aggressive price increases.** ~25% increases every two years with 60 days notice. At this rate, prices roughly double every 6 years. Users report "zero product improvement despite multiple large price increases."
+- **Team size is uncertain.** Reports range from 17 to 200 employees. Glassdoor reviews describe layoffs and loss of engineering staff post-acquisition. One review described "only 8-9 people in an office space designed for 150+."
+- **No contractual data portability after termination.** Data is exportable while your account is active, but the Terms of Use contain no provisions for data export after account termination.
+- **Another acquisition is likely.** Pamlico has held Personify since 2018 (7+ years, approaching typical private equity hold period). Another sale could mean price hikes, product sunset, or absorption into a larger platform.
+
+**Bottom line:** WildApricot works well as a turnkey membership platform today. But the private equity ownership model is optimised for revenue extraction, not product investment. The risks are corporate/commercial (declining support, price instability, potential acquisition, no source code access) rather than CiviCRM's community/sustainability risks (small team, key-person dependency, financial stress). Neither is risk-free; they fail in different ways.
 
 #### CiviCRM (~£115/yr self-hosted)
 
 Open-source CRM (AGPL). Since v6.0 (March 2025) can run standalone — no WordPress/Drupal required. CiviMember for memberships, CiviEvent for events, CiviMail for email. Used by Amnesty International, EFF, Wikimedia Foundation, and over 9,000 organisations worldwide. Ranked #1 for cost-effectiveness in the 2025 UK Charity CRM Survey.
 
 - **Pricing:** Software is free. Hosting ~£115/yr (DigitalOcean droplet, $12/mo — 2GB RAM for PHP + MySQL on one server). CiviCRM Spark (managed cloud) is $15-50/mo but too limited for SEA — can't install custom extensions needed for OJS integration and CPD tracking.
-- **Pro:** Best API in this comparison (APIv4 — full CRUD on all entities, API Explorer built in). Properly normalised relational schema (not serialised PHP blobs like WordPress's `wp_usermeta`). Symfony DI container and EventDispatcher. Stripe + GoCardless for GBP recurring payments. CiviMember handles tiered memberships, auto-renewal, manual/honorary members, status lifecycle. CiviEvent is mature for workshops/conferences. No vendor lock-in. Data ownership. Standalone mode eliminates WordPress entirely. Strong UK ecosystem.
+- **Pro:** Best API in this comparison (APIv4 — full CRUD on all entities, API Explorer built in). Stripe + GoCardless for GBP recurring payments. CiviMember handles tiered memberships, auto-renewal, manual/honorary members, status lifecycle. CiviEvent is mature for workshops/conferences. No vendor lock-in. Data ownership. Standalone mode eliminates WordPress entirely. Strong UK ecosystem. See "Architecture" section below for detailed comparison with WordPress.
 - **Con:** Not turnkey — requires implementation and ongoing technical maintenance. No native outbound webhooks (membership lifecycle hooks exist for building custom extensions, and CiviRules can automate actions on triggers). Member directory requires configuration (SearchKit + FormBuilder) rather than being built-in. Admin interface is functional rather than polished. CPD/accreditation tracking has no production-ready extension — would need custom build using CiviCase or custom fields.
 - **OJS integration:** Build a custom CiviCRM extension using `hook_civicrm_post` on Membership entity changes to push updates to OJS via HTTP. Architecturally identical to the current WP push-sync — replacing the WP side with CiviCRM. API and hooks to support this exist; integration code does not.
 - **UK tech partners** available if needed (e.g. Circle Interactive, Third Sector Design).
@@ -95,7 +107,7 @@ CiviCRM is still PHP/MySQL — but the problem with the current WP stack is Word
 
 However:
 
-- **Bus factor is high.** Two developers (Eileen McNaughton and Coleman Watts) account for 43% of all 72,704 commits and dominate current weekly activity. Core team is 7 people. Only 19 contributors active in the last month. If key contributors stopped, the project would be in trouble.
+- **Key-person dependency is high.** Two developers (Eileen McNaughton and Coleman Watts) account for 43% of all 72,704 commits and dominate current weekly activity. Core team is 7 people. Only 19 contributors active in the last month. If key contributors stopped, the project would be in trouble.
 - **Financial health is weak.** Charitable income down ~30% YoY. Running a budget deficit. Health score 60/100. Subscription income is growing but not enough to offset the decline.
 - **Mid-modernisation codebase.** Legacy `CRM_*` classes (no namespaces, 2000s-era PHP) coexist with modern `\Civi\*` code (namespaces, PSR-0, Symfony components). The transition has been going on for years and is not complete. You will encounter both styles.
 - **Upgrades can break things.** Monthly releases with forward-only migrations (no rollback). Users report "after every update there are things that break" (Capterra: 3.9/5 stars). Better than WordPress's complete lack of migrations, but not modern.
@@ -129,7 +141,29 @@ UK-built charity CRM with membership management. Designed for UK charities and n
 | **sheepCRM** (~£399/mo) | UK-native but too expensive for 500 members. |
 | **Outseta** (~$37-47/mo) | Cheap with API, but no member directory. 2% transaction fee. SaaS/startup-oriented, not association-focused. |
 | **Tendenci** (~$249/mo hosted) | Open-source AMS but immature API, small community, expensive hosting. |
-| **Baserow** (free) | Database, not a membership platform. Would mean building everything custom — unsustainable. If the developer who built it moves on, SEA is left with a bespoke system nobody else can maintain. This needs to last 10-15 years. |
+| **Baserow** (free) | Database, not a membership platform. See "Custom-build option" below. |
+
+### Custom-build option
+
+Build a bespoke membership system on a modern stack (e.g. Node/TypeScript, Astro, Postgres, Stripe Billing for recurring payments). For ~500 members the core requirements are genuinely simple: a users table, a Stripe subscription per member, a webhook handler for payment events, a member directory page, and an API endpoint for the OJS sync. No off-the-shelf platform needed. Hosting cost would be minimal (~£115/yr on a DigitalOcean droplet, or less on a serverless platform).
+
+**What you'd gain:**
+
+- **Exactly what SEA needs, nothing more.** No fighting a platform's assumptions or working around features designed for a different use case.
+- **Modern, clean architecture.** Proper schema, TypeScript, tested code, version-controlled, infrastructure as code from day one. No PHP, no legacy codebase, no mid-modernisation inconsistency.
+- **Stripe does the hard part.** Recurring billing, payment retries, dunning, invoices, webhook events — all handled by Stripe. You don't build a payment system, you integrate with one.
+- **OJS integration is trivial.** The sync is just another webhook handler or API call in the same codebase. No separate plugin, no cross-system hooks.
+- **Total control.** No vendor lock-in, no price increases, no private equity acquisition risk, no declining support. Data stays on your own infrastructure.
+- **Cheapest option.** Hosting only, no licence fees. Stripe's standard transaction fees (1.5% + 20p for UK cards) apply regardless of platform.
+
+**Why this is probably too risky for SEA:**
+
+- **Key-person dependency.** This is the fundamental problem. If the developer who builds it moves on, SEA is left with a bespoke system that nobody else can maintain. Off-the-shelf platforms (even flawed ones) have communities, documentation, and consultants. A custom build has one person's knowledge.
+- **Ongoing maintenance.** Dependencies need updating, Stripe's API evolves, security patches need applying, bugs need fixing. Someone has to do this indefinitely. SEA is a volunteer-run society, not a tech company.
+- **Scope creep.** The core requirements are simple, but the full list (CPD tracking, accreditation forms, event management, email communications, member directory with opt-in/out) adds up. What starts as "just a few tables and Stripe" becomes a real application.
+- **10-15 year horizon.** SEA needs this to last. Bespoke systems built by one person rarely survive that long without that person. The technology choices that feel modern today (Node, Astro) may feel dated in 10 years, and the next developer may not want to maintain them.
+
+**Verdict:** Technically the best solution. Practically the riskiest. The right choice only if SEA has a developer committed to maintaining it long-term — and even then, it's a bet on one person.
 
 ## What leaving WordPress fixes
 
@@ -153,12 +187,12 @@ The point of moving isn't to get a shinier UI. It's to get off a platform that f
 - **Stop paying for six plugin licences.** WCS (~£206/yr) + WCM (~£147/yr) + UM extensions. All replaced by one platform.
 - **Stop maintaining Bedrock/Composer/Docker.** The infrastructure-as-code wrapper we built is impressive but shouldn't be necessary.
 
-### What you gain (any replacement)
+### What you gain (any off-the-shelf replacement)
 
 - **A real API.** REST endpoints with documented schema. Any developer can integrate with it, in any language, without learning WordPress internals.
 - **One source of truth.** Members, payments, events, email — all in one system with one data model. No more querying across plugin tables.
 - **Portability.** The OJS sync becomes a service calling a REST API — not tied to WordPress. If you later change platform, the sync adapts by changing API calls, not rewriting a plugin.
-- **Sustainability.** Any developer can pick this up. The API is documented, the data is accessible. No single person's WordPress plugin knowledge required.
+- **Sustainability.** Any developer can pick this up. The API is documented, the platform is maintained by someone else, the data is accessible. No single person's WordPress plugin knowledge required. (This does not apply to a custom build — see "Custom-build option" above.)
 
 ### Trade-offs by platform
 
@@ -175,10 +209,11 @@ The point of moving isn't to get a shinier UI. It's to get off a platform that f
 
 **Replace WordPress for membership management.** The current stack is not viable long-term. Six plugins from three vendors, paid licences, role assignment chains that break during bootstrap, no native API, test data that can't be seeded without SQL workarounds. This is technical debt, not a platform.
 
-This is a decision for SEA, not a technical call. Three paths:
+This is a decision for SEA, not a technical call. Four paths:
 
 - **Stay on WordPress** (~£400-500/yr in plugin licences plus hosting) — the current stack is working and the OJS sync is built. It's fragile but functional. Don't migrate to another WP plugin (PMPro, MemberPress) — same infrastructure, all migration cost, no architectural benefit.
-- **WildApricot** (~£1,200/yr) — all-in-one SaaS. Lowest setup effort, highest ongoing cost. Mature REST API with native webhooks. No servers to manage. Trade-off: vendor lock-in, US-hosted data, no custom code.
+- **WildApricot** (~£1,200/yr, likely to increase) — all-in-one SaaS. Lowest setup effort, highest ongoing cost. REST API with native webhooks. No servers to manage. **Serious red flag:** Trustpilot 1.6/5 (154 reviews) — support quality has collapsed post-acquisition. Private-equity-owned with ~25% price increases every 2 years, vendor lock-in, US-hosted data, no SLA.
 - **CiviCRM standalone** (~£115/yr hosting; software free) — open-source, self-hosted on a DigitalOcean droplet. Best API and most extensible. Genuinely better architecture than WordPress (proper schema, Symfony DI, APIv4). No vendor lock-in, data ownership. Trade-off: small community (7-person core team, key-person dependency risk), financial health concerns, mid-modernisation codebase, needs ongoing technical maintenance.
+- **Custom build** (~£115/yr hosting) — bespoke system on a modern stack (Node/TypeScript, Astro, Postgres, Stripe Billing). Technically the cleanest solution: exactly what SEA needs, no platform compromises, cheapest to run. But the key-person dependency is too high — if the developer moves on, SEA is left with a bespoke system nobody else can maintain. Only viable if someone is committed to maintaining it long-term.
 
-Beacon CRM (~£936/yr excl. VAT) is also shortlisted but is the weakest of the three — less proven for association management, with membership and events as paid add-ons rather than core features.
+Beacon CRM (~£936/yr excl. VAT) is also shortlisted but is the weakest of the shortlisted options — less proven for association management, with membership and events as paid add-ons rather than core features.
