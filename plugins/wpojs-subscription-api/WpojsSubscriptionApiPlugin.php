@@ -39,9 +39,9 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
 {
     private const SUB_STATUS_ACTIVE = 1;
 
-    public const DEFAULT_LOGIN_HINT = 'Does your membership elsewhere include journal access? <a href="{lostPasswordUrl}">Set your password</a> to get started.';
-    public const DEFAULT_PAYWALL_HINT = 'If your membership elsewhere should grant you access to this content, please contact <a href="mailto:{supportEmail}">{supportEmail}</a>.';
-    public const DEFAULT_FOOTER_MESSAGE = 'Your journal access may be linked to your membership elsewhere. <a href="{wpUrl}">Manage your membership</a>.';
+    public const DEFAULT_LOGIN_HINT = 'Does your membership elsewhere include journal access? {lostPasswordUrl} to get started.';
+    public const DEFAULT_PAYWALL_HINT = 'If your membership elsewhere should grant you access to this content, please contact {supportEmail}.';
+    public const DEFAULT_FOOTER_MESSAGE = 'Your journal access may be linked to your membership elsewhere. {wpUrl}';
 
     public function register($category, $path, $mainContextId = null)
     {
@@ -115,10 +115,11 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
             );
 
             $messageTemplate = $this->getMessage('loginHint', 'default_login_hint', self::DEFAULT_LOGIN_HINT);
+            $escapedUrl = htmlspecialchars($lostPasswordUrl, ENT_QUOTES, 'UTF-8');
             $hintHtml = str_replace(
                 '{lostPasswordUrl}',
-                htmlspecialchars($lostPasswordUrl, ENT_QUOTES, 'UTF-8'),
-                $messageTemplate
+                '<a href="' . $escapedUrl . '">Set your password</a>',
+                htmlspecialchars($messageTemplate, ENT_QUOTES, 'UTF-8')
             );
 
             // Escape for safe embedding inside a JS string literal
@@ -176,10 +177,11 @@ document.addEventListener("DOMContentLoaded", function() {
             $supportEmail = Config::getVar('wpojs', 'support_email', '');
             if (!empty($supportEmail)) {
                 $messageTemplate = $this->getMessage('paywallHint', 'default_paywall_hint', self::DEFAULT_PAYWALL_HINT);
+                $escapedEmail = htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8');
                 $messageHtml = str_replace(
                     '{supportEmail}',
-                    htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8'),
-                    $messageTemplate
+                    '<a href="mailto:' . $escapedEmail . '">' . $escapedEmail . '</a>',
+                    htmlspecialchars($messageTemplate, ENT_QUOTES, 'UTF-8')
                 );
                 $output .= '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:12px 16px;margin-top:16px;font-size:14px;">'
                     . $messageHtml
@@ -203,10 +205,11 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         $messageTemplate = $this->getMessage('footerMessage', 'default_footer_message', self::DEFAULT_FOOTER_MESSAGE);
+        $escapedUrl = htmlspecialchars($wpUrl, ENT_QUOTES, 'UTF-8');
         $messageHtml = str_replace(
             '{wpUrl}',
-            htmlspecialchars($wpUrl, ENT_QUOTES, 'UTF-8'),
-            $messageTemplate
+            '<a href="' . $escapedUrl . '">Manage your membership</a>',
+            htmlspecialchars($messageTemplate, ENT_QUOTES, 'UTF-8')
         );
         $output .= '<div style="text-align:center;padding:8px 16px;font-size:13px;color:#666;border-top:1px solid #eee;margin-top:8px;">'
             . $messageHtml
@@ -263,6 +266,30 @@ document.addEventListener("DOMContentLoaded", function() {
 
     public function manage($args, $request)
     {
+        // Verify caller is a journal manager or site admin (OJS 3.5-compatible DB query)
+        $user = $request->getUser();
+        if (!$user) {
+            return new \PKP\core\JSONMessage(false, 'Not authenticated');
+        }
+
+        $context = $request->getContext();
+        $contextId = $context ? $context->getId() : 0;
+
+        $hasPermission = DB::table('user_user_groups')
+            ->join('user_groups', 'user_user_groups.user_group_id', '=', 'user_groups.user_group_id')
+            ->where('user_user_groups.user_id', $user->getId())
+            ->where(function ($q) use ($contextId) {
+                $q->where(function ($q2) use ($contextId) {
+                    $q2->where('user_groups.role_id', \PKP\security\Role::ROLE_ID_MANAGER)
+                       ->where('user_groups.context_id', $contextId);
+                })->orWhere('user_groups.role_id', \PKP\security\Role::ROLE_ID_SITE_ADMIN);
+            })
+            ->exists();
+
+        if (!$hasPermission) {
+            return new \PKP\core\JSONMessage(false, 'Permission denied');
+        }
+
         $verb = $request->getUserVar('verb');
 
         if ($verb === 'settings') {
@@ -293,9 +320,9 @@ document.addEventListener("DOMContentLoaded", function() {
         $contextId = $context ? $context->getId() : 0;
 
         if ($request->isPost()) {
-            $this->updateSetting($contextId, 'loginHint', $request->getUserVar('loginHint') ?? '');
-            $this->updateSetting($contextId, 'paywallHint', $request->getUserVar('paywallHint') ?? '');
-            $this->updateSetting($contextId, 'footerMessage', $request->getUserVar('footerMessage') ?? '');
+            $this->updateSetting($contextId, 'loginHint', strip_tags($request->getUserVar('loginHint') ?? ''));
+            $this->updateSetting($contextId, 'paywallHint', strip_tags($request->getUserVar('paywallHint') ?? ''));
+            $this->updateSetting($contextId, 'footerMessage', strip_tags($request->getUserVar('footerMessage') ?? ''));
 
             return new \PKP\core\JSONMessage(true);
         }
