@@ -5,6 +5,7 @@ import {
   createSubscription,
   deleteSubscription,
   getSubscriptionProductId,
+  clearTestSyncData,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -39,6 +40,7 @@ test.describe('OJS API request logging', () => {
     try { deleteUser(wpUserId); } catch {}
     deleteOjsUser(EMAIL);
     clearOjsApiLog();
+    clearTestSyncData();
   });
 
   test('API requests logged after sync', () => {

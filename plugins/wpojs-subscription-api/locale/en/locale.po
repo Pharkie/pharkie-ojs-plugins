@@ -33,7 +33,7 @@ msgid "plugins.generic.wpojsSubscriptionApi.settings"
 msgstr "Settings"
 
 msgid "plugins.generic.wpojsSubscriptionApi.settings.description"
-msgstr "Customise the messages shown to users on the login page, paywall, and site footer. HTML is allowed. Use the placeholders shown below each field."
+msgstr "Customise the messages shown to users on the login page, paywall, and site footer. Use the placeholders shown below each field."
 
 msgid "plugins.generic.wpojsSubscriptionApi.settings.loginHint"
 msgstr "Login page hint"

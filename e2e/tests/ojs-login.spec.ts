@@ -5,6 +5,7 @@ import {
   createSubscription,
   deleteSubscription,
   getSubscriptionProductId,
+  clearTestSyncData,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -33,6 +34,7 @@ test.describe('Synced user logs in to OJS', () => {
     try { deleteSubscription(subId); } catch {}
     try { deleteUser(wpUserId); } catch {}
     deleteOjsUser(EMAIL);
+    clearTestSyncData();
   });
 
   test('set password and log in to OJS', async ({ page }) => {
@@ -55,5 +57,7 @@ test.describe('Synced user logs in to OJS', () => {
     await expect(
       page.locator('.pkp_navigation_user, .app__userNav, [class*="navigation_user"]').first(),
     ).toBeVisible({ timeout: 15_000 });
+
+    await page.screenshot({ path: 'e2e/screenshots/ojs-login-success.png', fullPage: true });
   });
 });

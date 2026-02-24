@@ -413,7 +413,7 @@ The smoke test checklist in TODO.md covers the full integration path. Most are n
 | `wp-dashboard.spec.ts` | My Account journal access widget (active member + non-member) |
 | `ojs-ui-messages.spec.ts` | Login hint, footer message, paywall hint for non-subscriber |
 
-Tests run against the Docker dev environment (`--with-sample-data`). Each test creates unique users, processes the Action Scheduler queue, and cleans up in `afterAll`. Serial execution (`workers: 1`) avoids data conflicts. Run with `cd e2e && npm test`.
+Tests run against the Docker dev environment (`--with-sample-data`). Each test creates unique users, processes the Action Scheduler queue, and cleans up in `afterAll`. Serial execution (`workers: 1`) avoids data conflicts. Run with `npm test`.
 
 ---
 

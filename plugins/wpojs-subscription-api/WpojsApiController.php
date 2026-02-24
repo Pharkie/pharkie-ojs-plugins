@@ -99,9 +99,13 @@ class WpojsApiController extends PKPBaseController
             if (str_contains($entry, '/')) {
                 // CIDR notation (e.g. 172.16.0.0/12)
                 [$subnet, $bits] = explode('/', $entry, 2);
+                $bits = (int) $bits;
+                if ($bits < 0 || $bits > 32) {
+                    continue; // invalid CIDR prefix length
+                }
                 $subnetLong = ip2long($subnet);
                 $clientLong = ip2long($clientIp);
-                $mask = -1 << (32 - (int)$bits);
+                $mask = -1 << (32 - $bits);
                 if ($subnetLong !== false && $clientLong !== false
                     && ($clientLong & $mask) === ($subnetLong & $mask)) {
                     $matched = true;
@@ -158,7 +162,7 @@ class WpojsApiController extends PKPBaseController
     }
 
     /**
-     * Combined authorization: IP allowlist + API key.
+     * Combined authorization: IP allowlist + API key + rate limit.
      * Call at the start of every protected endpoint.
      * Logs the request on both success and auth failure.
      */
@@ -176,7 +180,45 @@ class WpojsApiController extends PKPBaseController
             return $keyError;
         }
 
+        $rateLimitError = $this->checkRateLimit($request);
+        if ($rateLimitError) {
+            $this->logRequest($request, 429);
+            return $rateLimitError;
+        }
+
         $this->logRequest($request, 200);
+        return null;
+    }
+
+    /**
+     * Check per-IP rate limit using the existing API log table.
+     * Returns 429 response if limit exceeded, null if OK.
+     * Set rate_limit_requests = 0 in config to disable.
+     */
+    private function checkRateLimit(Request $request): ?JsonResponse
+    {
+        $maxRequests = (int) Config::getVar('wpojs', 'rate_limit_requests', 300);
+        $windowSecs  = (int) Config::getVar('wpojs', 'rate_limit_window', 60);
+
+        if ($maxRequests <= 0) {
+            return null; // rate limiting disabled
+        }
+
+        $clientIp = $request->server('REMOTE_ADDR', 'unknown');
+        $cutoff   = date('Y-m-d H:i:s', time() - $windowSecs);
+
+        $count = DB::table('wpojs_api_log')
+            ->where('source_ip', $clientIp)
+            ->where('created_at', '>=', $cutoff)
+            ->count();
+
+        if ($count >= $maxRequests) {
+            return response()->json(
+                ['error' => 'Rate limit exceeded. Please retry later.'],
+                Response::HTTP_TOO_MANY_REQUESTS
+            )->withHeaders(['Retry-After' => $windowSecs]);
+        }
+
         return null;
     }
 

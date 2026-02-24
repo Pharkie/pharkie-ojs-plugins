@@ -6,6 +6,7 @@ import {
   deleteSubscription,
   updateSubscriptionStatus,
   getSubscriptionProductId,
+  clearTestSyncData,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -32,6 +33,7 @@ test.describe('WCS activate/expire → OJS subscription', () => {
     try { deleteSubscription(subId); } catch { /* may already be gone */ }
     try { deleteUser(wpUserId); } catch { /* may already be gone */ }
     deleteOjsUser(EMAIL);
+    clearTestSyncData();
   });
 
   test('activate WCS subscription → OJS user + active subscription', () => {

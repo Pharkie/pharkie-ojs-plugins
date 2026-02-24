@@ -6,6 +6,7 @@ import {
   deleteSubscription,
   updateSubscriptionStatus,
   getSubscriptionProductId,
+  clearTestSyncData,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -24,6 +25,8 @@ test.describe('OJS UI messages', () => {
     await expect(hint).toBeVisible({ timeout: 10_000 });
     // Should mention password-related action.
     await expect(hint).toContainText(/password/i);
+
+    await page.screenshot({ path: 'e2e/screenshots/ojs-login-hint.png', fullPage: true });
   });
 
   test('site footer shows membership message', async ({ page }) => {
@@ -33,6 +36,8 @@ test.describe('OJS UI messages', () => {
     await expect(footer).toBeVisible({ timeout: 10_000 });
     const link = page.locator('a[href*="localhost:8080"]').last();
     await expect(link).toBeVisible();
+
+    await page.screenshot({ path: 'e2e/screenshots/ojs-footer-message.png', fullPage: true });
   });
 
   test.describe('paywall hint for non-subscriber', () => {
@@ -64,6 +69,7 @@ test.describe('OJS UI messages', () => {
       try { deleteSubscription(subId); } catch {}
       try { deleteUser(wpUserId); } catch {}
       deleteOjsUser(EMAIL);
+      clearTestSyncData();
     });
 
     test('article page shows paywall hint for logged-in non-subscriber', async ({
@@ -98,6 +104,8 @@ test.describe('OJS UI messages', () => {
       // It may contain "access" or support email text.
       const paywallHint = page.locator('[style*="fff3cd"]');
       await expect(paywallHint).toBeVisible({ timeout: 10_000 });
+
+      await page.screenshot({ path: 'e2e/screenshots/ojs-paywall-hint.png', fullPage: true });
     });
   });
 });

@@ -6,6 +6,7 @@ import {
   deleteUser,
   insertLogEntry,
   deleteLogEntries,
+  clearTestSyncData,
 } from '../helpers/wp';
 
 const ADMIN_USER = 'admin';
@@ -13,6 +14,10 @@ const ADMIN_PASS = 'admin';
 const LOG_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync-log';
 
 test.describe('Admin monitoring: Sync Log page', () => {
+  test.beforeAll(() => {
+    clearTestSyncData();
+  });
+
   test('stats cards visible with correct labels', async ({ page }) => {
     await wpLogin(page, ADMIN_USER, ADMIN_PASS);
     await page.goto(LOG_PAGE);
@@ -35,6 +40,8 @@ test.describe('Admin monitoring: Sync Log page', () => {
     for (const label of labels) {
       await expect(cards).toContainText(label);
     }
+
+    await page.screenshot({ path: 'e2e/screenshots/wp-admin-sync-log.png', fullPage: true });
   });
 
   test('nonce field present for bulk actions', async ({ page }) => {
@@ -72,6 +79,8 @@ test.describe('Admin monitoring: Sync Log page', () => {
       // Click retry — the JS replaces the link with "Queued"
       retryLink.click();
       await expect(row.locator('text=Queued')).toBeVisible({ timeout: 10_000 });
+
+      await page.screenshot({ path: 'e2e/screenshots/wp-admin-retry-queued.png', fullPage: true });
     });
 
     test('bulk retry with checkboxes shows success alert', async ({

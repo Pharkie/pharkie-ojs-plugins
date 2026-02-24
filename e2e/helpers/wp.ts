@@ -191,6 +191,27 @@ export function deleteLogEntries(email: string): void {
 }
 
 /**
+ * Delete sync log and Action Scheduler entries created by E2E tests.
+ * Targets e2e_ prefixed emails, empty-email rows (from deleted-user hook firings),
+ * and test domain addresses. Also cleans up failed Action Scheduler jobs.
+ */
+export function clearTestSyncData(): void {
+  const php = `
+    global $wpdb;
+    $log = $wpdb->prefix . 'wpojs_sync_log';
+    $wpdb->query("DELETE FROM {$log} WHERE email LIKE 'e2e_%'");
+    $wpdb->query("DELETE FROM {$log} WHERE email = ''");
+    $wpdb->query("DELETE FROM {$log} WHERE email LIKE '%test.example.com'");
+    $wpdb->query("DELETE FROM {$log} WHERE email LIKE '%test.invalid'");
+    // Clean up failed/pending Action Scheduler jobs from sync hooks
+    $as = $wpdb->prefix . 'actionscheduler_actions';
+    $wpdb->query("DELETE FROM {$as} WHERE hook LIKE 'wpojs_%' AND status = 'failed'");
+    $wpdb->query("DELETE FROM {$as} WHERE hook LIKE 'wpojs_%' AND status = 'pending'");
+  `;
+  wpEval(php);
+}
+
+/**
  * Count Action Scheduler actions matching a hook and status.
  */
 export function getActionSchedulerCount(

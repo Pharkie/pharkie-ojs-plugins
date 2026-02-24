@@ -61,13 +61,14 @@ Pricing originally verified 2026-02-21 from official websites. Vendor risk and a
 
 ### Shortlisted
 
-All prices excl. VAT (20% applies to all — WildApricot as reverse-charge on imported services, Beacon and CiviCRM hosting as UK VAT).
+All prices excl. VAT (20% applies to all — WildApricot and Outseta as reverse-charge on imported services, Beacon and CiviCRM hosting as UK VAT).
 
 | Platform | Cost (~500 members, excl. VAT) | API | Verdict |
 |----------|-------------------------------|-----|---------|
 | **WildApricot** | ~$125/mo (~£1,200/yr, rising ~25% every 2yr) | Yes (REST, Swagger docs) | Turnkey, all features included, lowest setup effort. But private-equity-owned with aggressive price increases and serious support problems (Trustpilot: 1.6/5). |
 | **CiviCRM** (self-hosted standalone) | ~£115/yr (DigitalOcean droplet; software is free) | Yes (REST APIv4, full CRUD) | Most capable and extensible. Best API. Cheapest ongoing cost. But highest setup complexity. |
 | **Beacon CRM** | ~£78/mo (~£936/yr) | Yes (REST) | UK-native charity CRM with REST API. Membership features are add-ons — less proven for association management than WildApricot or CiviCRM. |
+| **Outseta** | ~$67/mo (~£640/yr) + 1% transaction surcharge | Yes (REST + webhooks) | All-in-one SaaS like WildApricot but cheaper, bootstrapped, no PE risk. Good API. Missing member directory and events. |
 
 ### Detailed notes
 
@@ -124,6 +125,27 @@ UK-built charity CRM with membership management. Designed for UK charities and n
 - **Con:** Leans more charity/fundraising than association management. Memberships and Events are paid add-ons, not included in base price. Less feature depth than WildApricot or CiviCRM for tiered membership levels and member directories.
 - **OJS integration:** Possible via REST API. Would need investigation.
 
+#### Outseta (~£640/yr + 1% surcharge)
+
+All-in-one SaaS: billing, CRM, email marketing, authentication, help desk. All features included at every tier — no add-ons. Tiers are by contact count only. Founded 2016 in San Diego, USA. Bootstrapped (no VC, no private equity). ~6,000 customers. Team of 7 with equity stakes. Profitable.
+
+- **Pricing:** Start-up plan $87/mo ($67/mo on annual billing) for up to 5,000 contacts. All features included. Billed in USD. **1% transaction surcharge** on top of Stripe's standard payment processing fees (1.5% + 20p for UK cards). The Founder tier ($37/mo, 1,000 contacts) is cheaper but has a 2% surcharge — and SEA would likely exceed 1,000 contacts once lapsed members, prospects, and admin accounts are counted. At $67/mo annual, that's ~$804/yr (~£640/yr). The 1% surcharge on ~£32,500/yr of membership revenue (~650 members x ~£50 avg) adds ~£325/yr, making the **effective cost ~£965/yr** — comparable to Beacon, cheaper than WildApricot. **Nuance on transaction fees:** Outseta handles subscription/recurring logic itself and only uses Stripe Payments to process each charge — so you don't pay Stripe Billing's additional 0.7% fee. Outseta claims most other membership platforms create Stripe Subscription objects under the hood, triggering that hidden 0.7%. If true, the real gap between Outseta's 1% surcharge and a platform with no surcharge but Stripe Billing is only ~0.3%. However, we haven't confirmed whether WildApricot, Beacon, or other shortlisted platforms actually use Stripe Billing — so take Outseta's comparison at face value but verify before relying on it.
+- **Pro:** Genuinely all-in-one at a fraction of WildApricot's price. REST API with webhooks (POST callbacks on membership events, SHA256 signature verification, 20 retries at 20-minute intervals on failure). GBP billing supported (any Stripe-supported currency). Email marketing with drip sequences and CRM segmentation. Self-service member portal (profile management, subscription management, payment updates). Team/group memberships supported. Bootstrapped and profitable — no private equity risk, no aggressive price increases, founders have a track record (co-founder Dimitris Georgakopoulos previously co-founded Buildium, acquired by RealPage for $580M). Reviews are positive: Capterra 4.4/5, Product Hunt 4.9/5 — though review volume is low across all platforms.
+- **Con:** **No member directory** — this is a real gap for SEA, which needs a public opt-in/opt-out directory. Outseta provides self-service profiles and a CRM, but no public-facing directory page. Building one would mean querying the API externally and rendering it yourself. **No event management** — SEA runs workshops and conferences; would need a separate tool (e.g. Eventbrite, Tito). **1% transaction surcharge** on the Start-up tier. Outseta claims this is partially offset because they don't use Stripe Billing (saving 0.7% that other platforms incur silently) — but we haven't verified which competitors actually use Stripe Billing (see pricing note above). **Honorary/manual members require a workaround** — create a $0 plan or apply a 100% discount code; not a first-class feature. **API documentation has gaps** — rate limits are not documented, webhook event types are not fully enumerated, Postman collection is the best reference. **Data export is limited** — CSV export from CRM, API-based extraction possible, but no "export everything" button. **Small team** (7 people) — same bus-factor concern as CiviCRM. **SaaS-startup roots** — originally built for SaaS companies, not associations, though they now actively market to associations and have 24+ association/club customers (BHRLA, NIFA, IADS, Mezcla Media Collective, UK Soul Choirs, etc.). **US-hosted** — data sovereignty same concern as WildApricot. **No Trustpilot presence** — too small for independent review volume.
+- **OJS integration:** Rebuild sync against Outseta API. Webhooks fire on subscription events → push to OJS. REST API for bulk member reads. Same push-sync pattern as the current WP approach. The API is adequate for this; the real question is whether it handles edge cases (subscription status transitions, multiple subscriptions per person) cleanly. Outseta uses one subscription per account, which is cleaner than WCS's multiple-subscription model.
+
+**Vendor risk: small but stable.**
+
+Outseta is the anti-WildApricot in terms of ownership structure. Bootstrapped for 9 years, no external investors, all 7 team members hold equity. Revenue growing 55% YoY. The founders have significant SaaS experience (Buildium exit). There's no PE firm optimising for revenue extraction.
+
+However:
+
+- **Team of 7.** If Outseta were acquired, wound down, or lost key people, there's no open-source code to fork and no large community to fall back on. You'd need to migrate away, same as any SaaS.
+- **Young product.** Founded 2016, ~6,000 customers. WildApricot has 15,000-32,000. CiviCRM has 9,000+. Outseta is smaller and less proven at scale.
+- **Low review volume.** Capterra: 9 reviews. G2: minimal. Product Hunt: 17. The positive sentiment is real, but the sample size is small. Hard to know how it performs under stress (platform outages, billing disputes, complex migrations).
+
+**Bottom line:** Outseta is a compelling WildApricot alternative — same all-in-one model, much cheaper, better ownership structure. The API and webhooks cover the OJS integration use case. The two real gaps are **no member directory** (SEA needs this) and **no event management** (SEA needs this). If those can be solved externally (custom directory page via API, separate events tool), Outseta deserves serious consideration. The 1% transaction surcharge is a cost to factor in but doesn't change the overall value proposition. The biggest risk is the small team and young product — you're betting on a 7-person company being around in 10 years.
+
 ### Also evaluated (not shortlisted)
 
 | Platform | Why excluded |
@@ -139,7 +161,6 @@ UK-built charity CRM with membership management. Designed for UK charities and n
 | **MemberClicks** (~$375/mo) | Expensive, US-focused. Designed for larger associations. |
 | **GrowthZone** (~$250-325/mo) | Expensive, US chamber-of-commerce focused. |
 | **sheepCRM** (~£399/mo) | UK-native but too expensive for 500 members. |
-| **Outseta** (~$37-47/mo) | Cheap with API, but no member directory. 2% transaction fee. SaaS/startup-oriented, not association-focused. |
 | **Tendenci** (~$249/mo hosted) | Open-source AMS but immature API, small community, expensive hosting. |
 | **Baserow** (free) | Database, not a membership platform. See "Custom-build option" below. |
 
@@ -171,15 +192,15 @@ The point of moving isn't to get a shinier UI. It's to get off a platform that f
 
 ### Architecture comparison
 
-| | WordPress (current) | WildApricot | CiviCRM (standalone) |
-|---|---|---|---|
-| **"Is this person a member?"** | Query WCS subscription status across multiple DB tables, check role assignment chain, handle manual roles separately, write custom PHP | One API call: `GET /contacts/{id}` — returns membership level and status | One API call: `GET /api4/Membership/get` — returns status, type, dates |
-| **Integrating with external systems** | Write a custom WP plugin, hook into PHP internals, manage Action Scheduler background jobs, deploy to a server, pray the six-plugin chain doesn't break | Call the REST API or receive a webhook. Standard HTTP. Any language. | REST APIv4 with full CRUD. Build a CiviCRM extension using PHP hooks, or poll the API externally. |
-| **Membership status changes** | Hook into `woocommerce_subscription_status_*`, which only fires if WCS is active, loaded in the right order, and not broken by an update | Webhook fires on membership status change. Documented. Reliable. | `hook_civicrm_post` fires on membership changes. No native outbound webhooks, but CiviRules can trigger actions. |
-| **Querying members in bulk** | `wp user list` + WP_User_Query + manual joins to subscription tables. Or raw SQL. | OData filtering, pagination, all fields | APIv4 with joins, filtering, pagination. API Explorer built in. |
-| **Dev environment** | Bedrock + Composer + Docker + custom Dockerfiles + scripted setup + SQL workarounds for role seeding. Days of work. | Sign up for a sandbox account. | Composer install. Simpler than WP+6 plugins, but still self-hosted. |
-| **Deploying changes** | SSH to a server, manage PHP versions, Apache config, database backups, plugin updates that might break each other | Nothing to deploy. It's SaaS. | Still a server to manage (PHP, MySQL, backups). But one application, not six plugins. |
-| **Data model** | Serialized PHP arrays in `wp_usermeta`. No ORM. No schema. Six plugins each with their own tables and conventions. | Structured JSON via API. Documented schema. | Structured schema with proper ORM. Documented API. |
+| | WordPress (current) | WildApricot | CiviCRM (standalone) | Outseta |
+|---|---|---|---|---|
+| **"Is this person a member?"** | Query WCS subscription status across multiple DB tables, check role assignment chain, handle manual roles separately, write custom PHP | One API call: `GET /contacts/{id}` — returns membership level and status | One API call: `GET /api4/Membership/get` — returns status, type, dates | One API call: `GET /crm/accounts/{id}` — returns subscription plan and status |
+| **Integrating with external systems** | Write a custom WP plugin, hook into PHP internals, manage Action Scheduler background jobs, deploy to a server, pray the six-plugin chain doesn't break | Call the REST API or receive a webhook. Standard HTTP. Any language. | REST APIv4 with full CRUD. Build a CiviCRM extension using PHP hooks, or poll the API externally. | REST API + webhooks. Standard HTTP. Any language. |
+| **Membership status changes** | Hook into `woocommerce_subscription_status_*`, which only fires if WCS is active, loaded in the right order, and not broken by an update | Webhook fires on membership status change. Documented. Reliable. | `hook_civicrm_post` fires on membership changes. No native outbound webhooks, but CiviRules can trigger actions. | Webhook fires on subscription activity. SHA256 signed. 20 retries. |
+| **Querying members in bulk** | `wp user list` + WP_User_Query + manual joins to subscription tables. Or raw SQL. | OData filtering, pagination, all fields | APIv4 with joins, filtering, pagination. API Explorer built in. | REST API with pagination and filtering. Rate limits undocumented. |
+| **Dev environment** | Bedrock + Composer + Docker + custom Dockerfiles + scripted setup + SQL workarounds for role seeding. Days of work. | Sign up for a sandbox account. | Composer install. Simpler than WP+6 plugins, but still self-hosted. | Sign up for a trial account. 7-day free trial. |
+| **Deploying changes** | SSH to a server, manage PHP versions, Apache config, database backups, plugin updates that might break each other | Nothing to deploy. It's SaaS. | Still a server to manage (PHP, MySQL, backups). But one application, not six plugins. | Nothing to deploy. It's SaaS. |
+| **Data model** | Serialized PHP arrays in `wp_usermeta`. No ORM. No schema. Six plugins each with their own tables and conventions. | Structured JSON via API. Documented schema. | Structured schema with proper ORM. Documented API. | Structured JSON via API. One subscription per account. |
 
 ### What you stop doing (any replacement)
 
@@ -196,23 +217,26 @@ The point of moving isn't to get a shinier UI. It's to get off a platform that f
 
 ### Trade-offs by platform
 
-| | WildApricot | CiviCRM (standalone) |
-|---|---|---|
-| **Infrastructure** | None. It's SaaS. | Still a server to manage, but one application instead of six plugins. UK hosting providers available. |
-| **Codebase control** | Black box. If they don't support something, you can't fix it. | Open source (AGPL). Full control. Can extend with custom code. |
-| **Data sovereignty** | Data on WildApricot's servers (US/Canada). | Data on your own server (or UK hosting provider). |
-| **Webhooks** | Native outbound webhooks on membership changes. | No native outbound webhooks. Hooks and CiviRules exist for building equivalent functionality. |
-| **Website** | Built-in website builder (limited). | No CMS included. |
-| **SEA's existing WP site** | Move to WildApricot's website builder (limited), or rebuild with a static site generator (e.g. Astro). | No CMS included. Rebuild website with a static site generator (e.g. Astro). |
+| | WildApricot | CiviCRM (standalone) | Outseta |
+|---|---|---|---|
+| **Infrastructure** | None. It's SaaS. | Still a server to manage, but one application instead of six plugins. UK hosting providers available. | None. It's SaaS. |
+| **Codebase control** | Black box. If they don't support something, you can't fix it. | Open source (AGPL). Full control. Can extend with custom code. | Black box, same as WildApricot. |
+| **Data sovereignty** | Data on WildApricot's servers (US/Canada). | Data on your own server (or UK hosting provider). | Data on Outseta's servers (US). |
+| **Webhooks** | Native outbound webhooks on membership changes. | No native outbound webhooks. Hooks and CiviRules exist for building equivalent functionality. | Native outbound webhooks with SHA256 signing. |
+| **Website** | Built-in website builder (limited). | No CMS included. | No CMS. Designed to embed into any website (Webflow, Squarespace, custom). |
+| **SEA's existing WP site** | Move to WildApricot's website builder (limited), or rebuild with a static site generator (e.g. Astro). | No CMS included. Rebuild website with a static site generator (e.g. Astro). | Embed Outseta widgets into existing site or rebuild with static site generator. More flexible than WildApricot. |
+| **Member directory** | Built-in. | Configurable (SearchKit + FormBuilder). | Not included. Must build externally via API. |
+| **Events** | Built-in. | CiviEvent (mature). | Not included. Separate tool needed. |
 
 ## Recommendation
 
 **Replace WordPress for membership management.** The current stack is not viable long-term. Six plugins from three vendors, paid licences, role assignment chains that break during bootstrap, no native API, test data that can't be seeded without SQL workarounds. This is technical debt, not a platform.
 
-This is a decision for SEA, not a technical call. Four paths:
+This is a decision for SEA, not a technical call. Five paths:
 
 - **Stay on WordPress** (~£400-500/yr in plugin licences plus hosting) — the current stack is working and the OJS sync is built. It's fragile but functional. Don't migrate to another WP plugin (PMPro, MemberPress) — same infrastructure, all migration cost, no architectural benefit.
-- **WildApricot** (~£1,200/yr, likely to increase) — all-in-one SaaS. Lowest setup effort, highest ongoing cost. REST API with native webhooks. No servers to manage. **Serious red flag:** Trustpilot 1.6/5 (154 reviews) — support quality has collapsed post-acquisition. Private-equity-owned with ~25% price increases every 2 years, vendor lock-in, US-hosted data, no SLA.
+- **Outseta** (~£890/yr effective cost incl. 1% surcharge, Start-up tier) — all-in-one SaaS like WildApricot but cheaper and bootstrapped. REST API with signed webhooks covers the OJS integration. No servers to manage. No PE risk, no aggressive price increases. **Gaps:** no member directory (would need custom build via API) and no event management (separate tool needed). Small team (7 people), young product (~6,000 customers), low review volume. The best WildApricot alternative if the missing features can be solved externally.
+- **WildApricot** (~£1,200/yr, likely to increase) — all-in-one SaaS. Most features included (directory, events, email, website). Lowest setup effort, highest ongoing cost. REST API with native webhooks. No servers to manage. **Serious red flag:** Trustpilot 1.6/5 (154 reviews) — support quality has collapsed post-acquisition. Private-equity-owned with ~25% price increases every 2 years, vendor lock-in, US-hosted data, no SLA.
 - **CiviCRM standalone** (~£115/yr hosting; software free) — open-source, self-hosted on a DigitalOcean droplet. Best API and most extensible. Genuinely better architecture than WordPress (proper schema, Symfony DI, APIv4). No vendor lock-in, data ownership. Trade-off: small community (7-person core team, key-person dependency risk), financial health concerns, mid-modernisation codebase, needs ongoing technical maintenance.
 - **Custom build** (~£115/yr hosting) — bespoke system on a modern stack (Node/TypeScript, Astro, Postgres, Stripe Billing). Technically the cleanest solution: exactly what SEA needs, no platform compromises, cheapest to run. But the key-person dependency is too high — if the developer moves on, SEA is left with a bespoke system nobody else can maintain. Only viable if someone is committed to maintaining it long-term.
 

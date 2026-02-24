@@ -7,6 +7,7 @@ import {
   getSubscriptionProductId,
   setUserPassword,
   wpLogin,
+  clearTestSyncData,
 } from '../helpers/wp';
 import { deleteOjsUser, waitForSync } from '../helpers/ojs';
 
@@ -36,6 +37,7 @@ test.describe('WP My Account journal access widget', () => {
       try { deleteSubscription(subId); } catch {}
       try { deleteUser(wpUserId); } catch {}
       deleteOjsUser(EMAIL);
+      clearTestSyncData();
     });
 
     test('shows active journal access card', async ({ page }) => {
@@ -47,6 +49,8 @@ test.describe('WP My Account journal access widget', () => {
       await expect(card.locator('.wpojs-status--active')).toBeVisible();
       // Should have a link to the journal.
       await expect(card.locator('a[href*="journal"]')).toBeVisible();
+
+      await page.screenshot({ path: 'e2e/screenshots/wp-dashboard-active-member.png', fullPage: true });
     });
   });
 
@@ -73,6 +77,8 @@ test.describe('WP My Account journal access widget', () => {
       await expect(card).toBeVisible();
       await expect(card.locator('.wpojs-status--inactive')).toBeVisible();
       await expect(card).toContainText(/no active access/i);
+
+      await page.screenshot({ path: 'e2e/screenshots/wp-dashboard-non-member.png', fullPage: true });
     });
   });
 });
