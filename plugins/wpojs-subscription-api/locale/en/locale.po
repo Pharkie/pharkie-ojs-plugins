@@ -28,3 +28,27 @@ msgstr "Your journal access is provided by your membership. <a href=\"{$wpUrl}\"
 
 msgid "plugins.generic.wpojsSubscriptionApi.status"
 msgstr "Status"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings"
+msgstr "Settings"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.description"
+msgstr "Customise the messages shown to users on the login page, paywall, and site footer. HTML is allowed. Use the placeholders shown below each field."
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.loginHint"
+msgstr "Login page hint"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.paywallHint"
+msgstr "Paywall hint (shown to logged-in users without a subscription)"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.footerMessage"
+msgstr "Site footer message"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.save"
+msgstr "Save"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.restoreDefaults"
+msgstr "Restore defaults"
+
+msgid "plugins.generic.wpojsSubscriptionApi.settings.saved"
+msgstr "Saved."

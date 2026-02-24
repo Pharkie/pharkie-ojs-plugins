@@ -109,3 +109,12 @@ api_key_secret = ${WPOJS_API_KEY_SECRET}
 allowed_ips = ${WPOJS_ALLOWED_IPS}
 wp_member_url = ${WPOJS_WP_MEMBER_URL}
 support_email = ${WPOJS_SUPPORT_EMAIL}
+rate_limit_requests = 300
+rate_limit_window = 60
+
+; Instance-specific default UI messages (override generic plugin defaults).
+; These pre-populate the Settings form. Admins can further edit via the UI.
+; Available placeholders: {lostPasswordUrl}, {supportEmail}, {wpUrl}
+default_login_hint = "SEA member? First time here? <a href=\"{lostPasswordUrl}\">Set your password</a> to access journal content."
+default_paywall_hint = "If you believe you should have access through your SEA membership, please contact <a href=\"mailto:{supportEmail}\">{supportEmail}</a>."
+default_footer_message = "Your journal access is provided by your SEA membership. <a href=\"{wpUrl}\">Manage your membership</a>."
