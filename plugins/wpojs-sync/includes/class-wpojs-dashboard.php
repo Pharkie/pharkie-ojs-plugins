@@ -52,10 +52,11 @@ class WPOJS_Dashboard {
             $status_class = 'wpojs-status--inactive';
         }
 
-        $journal_url = $this->ojs_url ?: '#';
+        $journal_url  = $this->ojs_url ?: '#';
+        $journal_name = get_option( 'wpojs_journal_name', 'Journal' );
         ?>
         <div class="wpojs-journal-access" style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:20px;margin-bottom:24px;">
-            <h3 style="margin:0 0 8px;font-size:16px;"><?php echo esc_html( get_option( 'wpojs_journal_name', 'Journal' ) ); ?></h3>
+            <h3 style="margin:0 0 8px;font-size:16px;"><?php esc_html_e( 'Journal Access', 'wpojs-sync' ); ?></h3>
             <p style="margin:0 0 12px;font-size:14px;color:#555;">
                 <span class="<?php echo esc_attr( $status_class ); ?>" style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;<?php
                     echo $is_member
@@ -66,13 +67,16 @@ class WPOJS_Dashboard {
                 </span>
             </p>
             <?php if ( $is_member && $this->ojs_url ) : ?>
+                <p style="margin:0 0 12px;font-size:14px;color:#555;">
+                    <?php echo esc_html( sprintf( __( 'Your membership includes access to %s.', 'wpojs-sync' ), $journal_name ) ); ?>
+                </p>
                 <a href="<?php echo esc_url( $journal_url ); ?>" target="_blank" rel="noopener"
                    style="display:inline-block;background:#0073aa;color:#fff;padding:8px 20px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:500;">
-                    <?php echo esc_html( sprintf( 'Access %s', get_option( 'wpojs_journal_name', 'Journal' ) ) ); ?> &rarr;
+                    <?php echo esc_html( sprintf( __( 'Read %s', 'wpojs-sync' ), $journal_name ) ); ?> &rarr;
                 </a>
             <?php elseif ( ! $is_member ) : ?>
                 <p style="margin:0;font-size:13px;color:#666;">
-                    <?php esc_html_e( 'Journal access is included with your membership. If you believe this is an error, please contact support.', 'wpojs-sync' ); ?>
+                    <?php esc_html_e( 'If you have a membership and can\'t access journal content, please contact support.', 'wpojs-sync' ); ?>
                 </p>
             <?php endif; ?>
         </div>
