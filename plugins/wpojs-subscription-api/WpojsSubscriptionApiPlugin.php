@@ -41,7 +41,7 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
 
     public const DEFAULT_LOGIN_HINT = 'Does your membership elsewhere include journal access? <a href="{lostPasswordUrl}">Set your password</a> to get started.';
     public const DEFAULT_PAYWALL_HINT = 'If your membership elsewhere should grant you access to this content, please contact <a href="mailto:{supportEmail}">{supportEmail}</a>.';
-    public const DEFAULT_FOOTER_MESSAGE = 'Your journal access is linked to your membership elsewhere. <a href="{wpUrl}">Manage your membership</a>.';
+    public const DEFAULT_FOOTER_MESSAGE = 'Your journal access may be linked to your membership elsewhere. <a href="{wpUrl}">Manage your membership</a>.';
 
     public function register($category, $path, $mainContextId = null)
     {
