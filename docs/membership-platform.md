@@ -66,7 +66,7 @@ All prices excl. VAT (20% applies to all — WildApricot as reverse-charge on im
 | Platform | Cost (~500 members, excl. VAT) | API | Verdict |
 |----------|-------------------------------|-----|---------|
 | **WildApricot** | ~$125/mo (~£1,200/yr) | Yes (REST, Swagger docs) | Strongest turnkey option. All features included. GBP via Stripe. Lowest setup effort. |
-| **CiviCRM** (self-hosted standalone) | ~£60-600/yr (hosting only; software is free) | Yes (REST APIv4, full CRUD) | Most capable and extensible. Best API. Cheapest ongoing cost. But highest setup complexity — needs professional implementation (~£1,000-5,000 upfront). |
+| **CiviCRM** (self-hosted standalone) | ~£115/yr (DigitalOcean droplet; software is free) | Yes (REST APIv4, full CRUD) | Most capable and extensible. Best API. Cheapest ongoing cost. But highest setup complexity. |
 | **Beacon CRM** | ~£78/mo (~£936/yr) | Yes (REST) | UK-native charity CRM with REST API. Membership features are add-ons — less proven for association management than WildApricot or CiviCRM. |
 
 ### Detailed notes
@@ -79,15 +79,15 @@ All-in-one SaaS: members, payments, events, email, website, API. The best-docume
 - **Con:** Platform subscription billed in USD (~$125/mo for 500 contacts, 2yr prepay). Export is CSV-only (no full backup). North American company.
 - **OJS integration:** Rebuild sync against WildApricot API (webhooks + REST). Same push-sync pattern, different source.
 
-#### CiviCRM (~£60-600/yr self-hosted)
+#### CiviCRM (~£115/yr self-hosted)
 
 Open-source CRM (AGPL). Since v6.0 (March 2025) can run standalone — no WordPress/Drupal required. CiviMember for memberships, CiviEvent for events, CiviMail for email. Used by Amnesty International, EFF, Wikimedia Foundation, and over 9,000 organisations worldwide. Ranked #1 for cost-effectiveness in the 2025 UK Charity CRM Survey.
 
-- **Pricing:** Software is free. Hosting from ~£60-120/yr on a basic VPS (e.g. DigitalOcean droplet, self-managed) up to ~£200-600/yr with a specialist CiviCRM hosting provider (Xpdient, 2020Media, CiviHosting — managed upgrades, backups, etc). Professional implementation ~£1,000-5,000 upfront (one-off, not annual). CiviCRM Spark (managed cloud) is $15-50/mo but too limited for SEA — can't install custom extensions needed for OJS integration and CPD tracking.
+- **Pricing:** Software is free. Hosting ~£115/yr (DigitalOcean droplet, $12/mo — 2GB RAM for PHP + MySQL on one server). CiviCRM Spark (managed cloud) is $15-50/mo but too limited for SEA — can't install custom extensions needed for OJS integration and CPD tracking.
 - **Pro:** Best API in this comparison (APIv4 — full CRUD on all entities, API Explorer built in). Strong UK ecosystem (Circle Interactive, Third Sector Design, artfulrobot). Stripe + GoCardless for GBP recurring payments. CiviMember handles tiered memberships, auto-renewal, manual/honorary members, status lifecycle. CiviEvent is mature for workshops/conferences. No vendor lock-in. Data ownership. Standalone mode eliminates WordPress entirely.
 - **Con:** Not turnkey — requires professional implementation and ongoing technical maintenance. No native outbound webhooks (membership lifecycle hooks exist for building custom extensions, and CiviRules can automate actions on triggers). Member directory requires configuration (SearchKit + FormBuilder) rather than being built-in. Admin interface is functional rather than polished. CPD/accreditation tracking has no production-ready extension — would need custom build using CiviCase or custom fields.
 - **OJS integration:** Build a custom CiviCRM extension using `hook_civicrm_post` on Membership entity changes to push updates to OJS via HTTP. Architecturally identical to the current WP push-sync — replacing the WP side with CiviCRM. API and hooks to support this exist; integration code does not.
-- **UK partners for implementation:** Circle Interactive (Bristol, Gold Partner), Third Sector Design (UK, working with CiviCRM since 2008).
+- **UK tech partners** available if needed (e.g. Circle Interactive, Third Sector Design).
 
 #### Beacon CRM (~£936/yr excl. VAT)
 
@@ -165,6 +165,6 @@ This is a decision for SEA, not a technical call. Three paths:
 
 - **Stay on WordPress** (~£400-500/yr in plugin licences plus hosting) — the current stack is working and the OJS sync is built. It's fragile but functional. Don't migrate to another WP plugin (PMPro, MemberPress) — same infrastructure, all migration cost, no architectural benefit.
 - **WildApricot** (~£1,200/yr) — all-in-one SaaS. Lowest setup effort, highest ongoing cost. Mature REST API with native webhooks. No servers to manage. Trade-off: vendor lock-in, US-hosted data, no custom code.
-- **CiviCRM standalone** (~£60-600/yr hosting; software free; ~£1,000-5,000 one-off implementation) — open-source, self-hosted. Best API and most extensible. Strongest membership and event features. No vendor lock-in, data ownership. Strong UK partner ecosystem. Trade-off: not turnkey, needs ongoing technical maintenance. Next step if interested: contact Circle Interactive or Third Sector Design (UK-based CiviCRM partners) for a scoping conversation.
+- **CiviCRM standalone** (~£115/yr hosting; software free) — open-source, self-hosted on a DigitalOcean droplet. Best API and most extensible. Strongest membership and event features. No vendor lock-in, data ownership. Trade-off: not turnkey, needs ongoing technical maintenance.
 
 Beacon CRM (~£936/yr excl. VAT) is also shortlisted but is the weakest of the three — less proven for association management, with membership and events as paid add-ons rather than core features.
