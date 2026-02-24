@@ -45,9 +45,11 @@
 
 ## Future improvements
 
-- Rate limiting on OJS endpoints
-- Differential reconciliation (compare counts before full scan)
-- Follow-up email for members who haven't set OJS password
-- Admin dashboard: per-member sync status
-- API key rotation support
-- On-hold grace period (configurable)
+- [ ] On-hold grace period — currently on-hold immediately expires OJS access. Add configurable grace period (e.g. 14 days) so members with payment hiccups keep access while it's resolved. Low effort: split `on_subscription_inactive()`, delay the expire action, cancel on reactivation.
+- [ ] Admin per-member sync status — the Sync Log page shows global stats but no per-user view. Data already exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI. Useful for support ("is this member synced?").
+- [ ] Follow-up email for members who haven't set OJS password — requires a new OJS endpoint to query users with `must_change_password=true`, or direct DB query. Implement post-launch once you have data on how many members actually set their passwords.
+
+Dropped (not worth the complexity):
+- ~~Rate limiting~~ — IP allowlist + API key already enforced; only caller is our own WP plugin via Action Scheduler.
+- ~~Differential reconciliation~~ — current full scan already batches (chunks of 100). Fast enough for thousands of members.
+- ~~API key rotation~~ — single shared secret between two systems we control. Rotation is an ops procedure (update both configs), not a code feature.
