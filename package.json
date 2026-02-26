@@ -7,6 +7,7 @@
     "test:debug": "playwright test --debug"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0"
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^25.3.1"
   }
 }
