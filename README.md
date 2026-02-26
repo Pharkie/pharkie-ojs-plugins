@@ -153,39 +153,29 @@ The **expanded resilience suite** (`expanded-resilience.spec.ts`, 19 tests) cove
 npx playwright test expanded-resilience     # just the resilience suite
 ```
 
-## Architecture
+## Documentation
 
-For the full implementation plan, see [docs/plan.md](./docs/plan.md).
+### Design and architecture
 
-For the decision trail -- what was tried, what was eliminated, and why -- see [docs/discovery.md](./docs/discovery.md).
+- [Implementation plan](docs/plan.md) — what we're building, how it works, endpoint specs, launch sequence, testing approach
+- [Decision trail](docs/discovery.md) — what was tried, what was eliminated, and why
+- [Plan review findings](docs/review-findings.md) — multi-perspective review and how findings were resolved
 
-## Repository structure
+### Technical reference
 
-```
-.
-├── README.md
-├── LICENSE.md
-├── CLAUDE.md                              # AI assistant instructions
-├── TODO.md                                # Task checklist
-├── docker-compose.yml                     # Dev environment
-├── docs/
-│   ├── plan.md                            # Implementation plan
-│   ├── discovery.md                       # Decision trail
-│   ├── review-findings.md                 # Plan review findings
-│   ├── ojs-api.md                         # OJS REST API reference
-│   ├── wp-integration.md                  # WP membership stack details
-│   ├── hosting-requirements.md            # OJS + WP hosting and access requirements
-│   └── support-runbook.md                 # Support staff quick reference
-├── plugins/
-│   ├── wpojs-sync/                        # WP plugin
-│   └── wpojs-subscription-api/            # OJS plugin
-├── playwright.config.ts                   # Playwright config (testDir: e2e/tests)
-├── e2e/                                   # Playwright E2E browser tests
-├── docker/                                # Docker config and Dockerfiles
-├── scripts/                               # Setup and bootstrap scripts
-├── discovery-screenshots/                 # WP admin pages, plugin configs (from audit phase)
-└── launch-comms/                          # Welcome email copy, member FAQ, support runbook
-```
+- [OJS API reference](docs/ojs-api.md) — OJS REST API capabilities, DB schema, PHP internals
+- [WP integration](docs/wp-integration.md) — WP membership stack (Ultimate Member + WooCommerce Subscriptions), hooks, code patterns
+- [Janeway backup path](docs/janeway-paywall-investigation.md) — concrete technical plan if OJS 3.5 upgrade fails
+
+### Deployment and operations
+
+- [Hosting requirements](docs/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
+- [Support runbook](docs/support-runbook.md) — quick reference for support staff handling member access issues
+- [TODO / roadmap](TODO.md) — what's done, what's left before production
+
+### Future planning
+
+- [Membership platform comparison](docs/membership-platform.md) — WildApricot, CiviCRM, Beacon, Outseta evaluation
 
 ## AI disclosure
 
