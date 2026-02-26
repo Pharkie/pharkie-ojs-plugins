@@ -4,43 +4,29 @@ What we need to deploy, test, and maintain the WP-OJS sync integration.
 
 ---
 
-## Recommended provider setup
+## OJS hosting (new — we can specify)
 
-| System | Provider | Plan | Why |
-|---|---|---|---|
-| **OJS** | **DigitalOcean** (London region) | Droplet, 2 GB RAM / 1 vCPU / 25 GB SSD (~$12/mo) | Full root access, Docker support, UK data centre. OJS is a fresh deployment — we can specify exactly what we need. |
-| **WP** | **Krystal** (existing) | Current shared hosting plan | Already running. Has SSH, WP-CLI, file access — everything the sync plugin needs. No migration required. |
+OJS is a fresh deployment. The dev environment runs OJS in Docker, and production should match that as closely as possible.
 
-The two systems communicate over standard HTTPS on the public internet. No VPN, shared network, or same-provider requirement. This is the same way WP already talks to Stripe, payment gateways, and other external services.
+### Recommended setup
 
----
+Run OJS as a Docker container on a Linux VPS. This mirrors the dev environment exactly and makes upgrades, backups, and troubleshooting straightforward.
 
-## OJS on DigitalOcean
+**Minimum spec:** 2 GB RAM, 1 vCPU, 25 GB SSD. OJS is a PHP/MySQL app with light traffic (~700 members, not concurrent). This is comfortable for staging and production. Scale up if article traffic grows significantly.
 
-OJS is a fresh deployment. A DigitalOcean droplet in the London region mirrors the Docker dev environment exactly and gives us full control over the server.
+### What we need
 
-**Spec:** 2 GB RAM, 1 vCPU, 25 GB SSD (~$12/mo). OJS is a PHP/MySQL app with light traffic (~700 members, not concurrent). This is comfortable for staging and production. Scale up if article traffic grows significantly. Two droplets needed — one for staging, one for production.
-
-### What DigitalOcean provides (all included with a standard droplet)
-
-| Requirement | DigitalOcean | Notes |
-|---|---|---|
-| **SSH access** | Yes — root by default | Deploy plugin files, edit `config.inc.php`, restart services |
-| **Docker + Docker Compose** | Yes — one-click Docker image or install manually | Run OJS the same way as dev |
-| **Root access** | Yes | Full control over the server |
-| **MariaDB/MySQL access** | Yes — runs in Docker container | For troubleshooting and data verification |
-| **Firewall control** | Yes — UFW on server + DigitalOcean cloud firewall | Accept HTTPS on 443, restrict SSH |
-| **SSL/TLS certificate** | Yes — Let's Encrypt via Caddy or nginx | HTTPS required (WP plugin rejects `http://`) |
-| **DNS control** | Yes — DigitalOcean DNS or external | Point journal subdomain at droplet |
-| **Automated backups** | Yes — droplet backups ($2.40/mo) or manual snapshots | Database + uploaded files, daily |
-
-### What we configure ourselves
-
-| Item | Detail |
+| Requirement | Why |
 |---|---|
-| **SMTP relay** | Transactional email (Mailgun, SES, or Postmark) with SPF/DKIM/DMARC for the OJS sending domain. Required for welcome emails and password resets. |
-| **OJS `config.inc.php`** | `[wpojs]` section: `allowed_ips` (Krystal's outbound IP), `wp_member_url`, `support_email`, `api_key_secret` |
-| **OJS subscription type** | Create in OJS admin, record the `type_id` for WP plugin config |
+| **SSH access** | Deploy plugin files, edit `config.inc.php`, restart services, troubleshoot |
+| **Docker + Docker Compose** | Run OJS the same way as dev — reproducible, easy upgrades |
+| **Root or sudo** | Manage containers, install packages, configure firewall |
+| **MariaDB/MySQL access** | Not for normal operations (the plugin uses the OJS API), but essential for troubleshooting sync issues, verifying data, and running the `/preflight` health check |
+| **Firewall control** | OJS needs to accept traffic on port 443 (HTTPS). The API IP allowlist is handled in `config.inc.php`, but the server firewall should also be configured |
+| **SSL/TLS certificate** | HTTPS required — the WP plugin rejects `http://` URLs. Let's Encrypt via Caddy or nginx reverse proxy |
+| **SMTP relay** | Transactional email (Mailgun, SES, or Postmark) with SPF/DKIM/DMARC configured for the OJS sending domain. Required for welcome emails and password resets |
+| **DNS control** | Point the journal subdomain at the server, configure MX/SPF/DKIM records for email |
+| **Automated backups** | Database + uploaded files. Daily, retained for 30 days minimum |
 
 ### Docker architecture
 
@@ -72,27 +58,27 @@ This is why Docker matters — you can test the upgrade on staging by rebuilding
 
 ---
 
-## WP on Krystal (existing — no migration needed)
+## WP hosting (existing — what access we need)
 
-WP stays on its current Krystal shared hosting. Krystal provides everything the sync plugin needs — no hosting changes required.
+WP is on existing hosting. We don't need to change the hosting setup, but we need specific access to deploy and configure the sync plugin.
 
-### What Krystal provides
+### Access required
 
-| Requirement | Krystal shared hosting | Notes |
-|---|---|---|
-| **SSH access** | Yes (all plans except Amethyst) | Deploy files, run WP-CLI |
-| **WP-CLI** | Yes — installed by default | Bulk sync, test connection, reconciliation |
-| **WP Admin access** | Yes | Configure plugin settings, view sync log |
-| **`wp-config.php` edit access** | Yes — via SSH or cPanel file manager | Add `WPOJS_API_KEY` constant (one-time) |
-| **File upload to plugins dir** | Yes — SSH, SFTP, or cPanel | Deploy the `wpojs-sync` plugin |
-| **Outbound HTTPS** | Yes — not restricted | WP calls OJS API over standard HTTPS |
+| Requirement | Why |
+|---|---|
+| **SSH access** | Deploy plugin files, run WP-CLI commands (bulk sync, test connection, reconciliation) |
+| **WP-CLI** | All sync operations are WP-CLI commands. Without it, bulk sync and troubleshooting become much harder. Most hosts have it or it can be installed. |
+| **WP Admin access** (Administrator role) | Configure plugin settings (OJS URL, type mapping), view sync log, test connection |
+| **`wp-config.php` edit access** | Add `WPOJS_API_KEY` constant. This is a one-time change. |
+| **File upload to `wp-content/plugins/`** | Deploy the `wpojs-sync` plugin. Can be done via SSH, SFTP, or WP Admin plugin upload. |
+| **Outbound HTTPS from WP server** | WP needs to reach the OJS server on port 443. Some managed hosts restrict outbound connections — verify this works. |
 
-### What we do NOT need from Krystal
+### What we do NOT need
 
-- Direct database access (all WP operations go through WP-CLI and the plugin)
+- Direct database access (all WP operations go through WP-CLI and the WP plugin API)
 - Root/sudo access
-- PHP version changes (plugin works with PHP 7.4+, Krystal supports this)
-- Server configuration changes (no Apache/nginx changes on the WP side)
+- PHP version changes (plugin works with PHP 7.4+, which any current WP host supports)
+- Server configuration changes (no Apache/nginx changes needed on the WP side)
 
 ### WP server IP
 
@@ -121,20 +107,14 @@ wp ojs-sync test-connection
 
 ---
 
-## How the two systems connect
+## Cross-provider connectivity
 
-Krystal (WP) and DigitalOcean (OJS) communicate over standard HTTPS on the public internet. No VPN, shared network, or same-provider requirement.
+OJS and WP do not need to be on the same host, network, or data centre. The entire integration is authenticated HTTPS requests over the public internet — the same way WP already talks to Stripe, payment gateways, and other external services.
 
 Configuration needed:
 
-1. **WP side (Krystal):** Set the OJS URL in plugin settings (e.g. `https://journal.example.org/index.php/journal`) and add `WPOJS_API_KEY` to `wp-config.php`
-2. **OJS side (DigitalOcean):** Add Krystal's outbound IP to `allowed_ips` in `config.inc.php` and set the same API key
-
-To find Krystal's outbound IP:
-
-```bash
-wp eval 'echo file_get_contents("https://api.ipify.org");' --allow-root
-```
+1. **WP side:** Set the OJS URL in plugin settings and add `WPOJS_API_KEY` to `wp-config.php`
+2. **OJS side:** Add the WP server's outbound IP to `allowed_ips` in `config.inc.php` and set the same API key
 
 The `test-connection` command verifies end-to-end connectivity, auth, and IP allowlisting in one step.
 
@@ -156,3 +136,47 @@ Both environments need the same access. Deploy to staging first, smoke test with
 | `send-welcome-emails` | Test with 1-2 addresses | After bulk sync verified |
 
 The launch sequence in [`plan.md`](./plan.md) has the full checklist.
+
+---
+
+## SEA-specific: Krystal (WP) + DigitalOcean (OJS)
+
+SEA's WordPress is hosted on Krystal shared hosting. OJS is a new deployment with no existing hosting. The recommended setup is OJS on a DigitalOcean droplet (London region), with WP staying on Krystal.
+
+### Krystal vs WP requirements
+
+| Requirement | Krystal shared hosting | Status |
+|---|---|---|
+| SSH access | Yes (all plans except Amethyst) | Met |
+| WP-CLI | Yes — installed by default | Met |
+| WP Admin access | Yes | Met |
+| `wp-config.php` edit | Yes — via SSH or cPanel file manager | Met |
+| File upload to plugins dir | Yes — SSH, SFTP, or cPanel | Met |
+| Outbound HTTPS | Yes — not restricted | Met |
+
+Krystal does not offer root access, Docker, or VPS-level control on shared plans — but none of that is needed for WP. No migration required.
+
+### DigitalOcean vs OJS requirements
+
+| Requirement | DigitalOcean droplet | Status |
+|---|---|---|
+| SSH access | Yes — root by default | Met |
+| Docker + Docker Compose | Yes — one-click Docker image available, or install manually | Met |
+| Root or sudo | Yes | Met |
+| MariaDB/MySQL access | Yes — runs in Docker container | Met |
+| Firewall control | Yes — UFW on server + DigitalOcean cloud firewall | Met |
+| SSL/TLS certificate | Yes — Let's Encrypt via Caddy or nginx | Met |
+| DNS control | Yes — DigitalOcean DNS or external | Met |
+| Automated backups | Yes — droplet backups (~$2.40/mo) or manual snapshots | Met |
+
+**Cost:** ~$12/mo per droplet (~£10/mo). Two droplets needed for staging + production = ~$24/mo (~£20/mo). Backups add ~$4.80/mo total.
+
+**SMTP relay** and **OJS config** are configured by us on the droplet, not provided by DigitalOcean.
+
+### Why this split works
+
+- WP stays where it is — zero migration risk, zero downtime
+- OJS gets the Docker/root/DB access it needs on a clean VPS
+- Both in UK data centres (Krystal: UK, DigitalOcean: London)
+- Standard HTTPS between them — no special networking
+- Total additional hosting cost: ~£25/mo for both OJS droplets
