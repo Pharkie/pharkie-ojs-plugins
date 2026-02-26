@@ -8,6 +8,7 @@ import {
   getOjsSetting,
   setOjsSetting,
   clearTestSyncData,
+  wpEval,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -57,7 +58,14 @@ test.describe('Error recovery: OJS unreachable → retry succeeds', () => {
     // Restore the correct OJS URL
     setOjsSetting(originalOjsUrl);
 
-    // Process queue again — Action Scheduler will retry the failed action
+    // Action Scheduler defers retries into the future (5+ min), so the failed
+    // action won't re-run immediately. Schedule a fresh activate action to
+    // simulate what reconciliation or a manual retry would do.
+    wpEval(`
+      as_schedule_single_action(time(), 'wpojs_sync_activate', [['wp_user_id' => ${wpUserId}]], 'wpojs-sync');
+    `);
+
+    // Process queue — the fresh action should succeed with the restored URL
     waitForSync();
 
     // Now the OJS user should exist with an active subscription
