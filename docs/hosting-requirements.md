@@ -107,6 +107,25 @@ wp ojs-sync test-connection
 
 ---
 
+## Can OJS and WP be on different providers?
+
+Yes. OJS and WP do not need to be on the same host, network, or data centre. The entire integration is authenticated HTTPS requests over the public internet — the same way WP already talks to Stripe, payment gateways, and other external services.
+
+For example, WP on Krystal shared hosting and OJS on a DigitalOcean droplet works fine. The only configuration needed:
+
+1. **WP side:** Set the OJS URL in plugin settings (e.g. `https://journal.example.org/index.php/journal`)
+2. **OJS side:** Add the WP server's outbound IP to `allowed_ips` in `config.inc.php`
+
+To find WP's outbound IP:
+
+```bash
+wp eval 'echo file_get_contents("https://api.ipify.org");' --allow-root
+```
+
+The `test-connection` command verifies end-to-end connectivity, auth, and IP allowlisting in one step.
+
+---
+
 ## Staging vs production
 
 Both environments need the same access. Deploy to staging first, smoke test with a few users, then repeat on production.
