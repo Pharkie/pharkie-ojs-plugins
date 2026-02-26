@@ -141,7 +141,7 @@ The launch sequence in [`plan.md`](./plan.md) has the full checklist.
 
 ## SEA-specific: Krystal (WP) + DigitalOcean (OJS)
 
-SEA's WordPress is hosted on Krystal shared hosting. OJS is a new deployment with no existing hosting. The recommended setup is OJS on a DigitalOcean droplet (London region), with WP staying on Krystal.
+SEA's WordPress is hosted on Krystal shared hosting. OJS has an existing staging instance but hasn't gone live yet — this is the right time to set up hosting that gives us the access we need. The recommended setup is OJS on a DigitalOcean droplet (London region), with WP staying on Krystal.
 
 ### Krystal vs WP requirements
 
