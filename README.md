@@ -138,13 +138,19 @@ A `docker-compose.yml` is included that provides a local development setup with 
 
 ## E2E tests
 
-Playwright browser tests in `e2e/` verify the full integration: sync lifecycle, OJS login, WP dashboard widget, and OJS UI messages (login hint, paywall, footer). Requires the Docker dev environment with `--with-sample-data`.
+Playwright browser tests in `e2e/` verify the full integration against the Docker dev environment (requires `--with-sample-data`). 11 spec files, 29 tests total.
 
 ```bash
 npm install && npx playwright install chromium
-npm test                    # all tests (headless)
+npm test                    # all tests (headless, ~4 min)
 npm run test:headed         # watch in browser
 npx playwright test e2e/tests/wp-dashboard.spec.ts  # single file
+```
+
+The **expanded resilience suite** (`expanded-resilience.spec.ts`, 19 tests) covers edge cases: out-of-order events, multiple subscriptions, rapid status changes, user data edge cases, reconciliation drift detection, welcome email dedup, and OJS API validation. It runs as part of `npm test` but can also be run separately:
+
+```bash
+npx playwright test expanded-resilience     # just the resilience suite
 ```
 
 ## Architecture
