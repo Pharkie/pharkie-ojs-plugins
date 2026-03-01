@@ -5,15 +5,18 @@
   },
 
   // Mount Docker socket so we can manage the project's compose stack
-  // Mount ~/.claude so Claude Code picks up your existing auth
+  // Named volume for Claude Code config — survives container rebuilds without
+  // depending on ${localEnv:HOME} expansion (which silently fails on macOS
+  // when VS Code is launched from Spotlight or the env isn't fully loaded).
   "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
+    "source=claude-code-config,target=/home/vscode/.claude,type=volume",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,readonly"
   ],
 
   // Add vscode user to docker group so docker commands work without sudo
-  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && npm install && npx playwright install chromium",
+  // Fix ownership on the Claude Code named volume (created as root by Docker)
+  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && sudo chown -R vscode:vscode /home/vscode/.claude && npm install && npx playwright install chromium",
 
   // Forward the WP and OJS ports from compose services
   "forwardPorts": [8080, 8081],
