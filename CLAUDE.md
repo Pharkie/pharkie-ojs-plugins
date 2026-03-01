@@ -78,6 +78,10 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 - API key stored as `wp-config.php` constant (`WPOJS_API_KEY`), not in the database
 - Settings page for OJS URL, subscription type mapping (WooCommerce Product -> OJS Subscription Type), journal ID(s)
 
+## Pre-commit hooks
+
+Installed via `./setup-hooks.sh` (runs automatically in dev container). Symlinks `.git/hooks/pre-commit` to `scripts/pre-commit`. Checks: secret detection, env var documentation, YAML syntax, doc link validation. Modular checks live in `scripts/lib/`.
+
 ## Don't
 
 - Modify OJS source code

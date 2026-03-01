@@ -19,7 +19,7 @@
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
   },
 
-  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && npm install && npx playwright install chromium",
+  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && npm install && npx playwright install chromium && bash setup-hooks.sh",
 
   // Forward the WP and OJS ports from compose services
   "forwardPorts": [8080, 8081],

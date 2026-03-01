@@ -132,6 +132,16 @@ wp ojs-sync test-connection
 ```
 Verify OJS connectivity, API key validity, and version compatibility.
 
+## Pre-commit hooks
+
+Run once after cloning (automatic in dev containers):
+
+```bash
+./setup-hooks.sh
+```
+
+This installs a pre-commit hook that checks for secrets, environment variable documentation, YAML syntax, and broken documentation links. To test manually: `./scripts/pre-commit`
+
 ## Docker dev environment
 
 A `docker-compose.yml` is included that provides a local development setup with WordPress, OJS, and MariaDB. See [docker/README.md](./docker/README.md) for setup instructions and usage.
