@@ -9,11 +9,12 @@
   // (confirmed by binary inspection — same path as CLI, no VS Code SecretStorage).
   // Bind-mounting host ~/.claude makes this immune to rebuilds AND docker prune.
   // Official ref: https://github.com/anthropics/claude-code/tree/main/.devcontainer
-  "initializeCommand": "mkdir -p ${localEnv:HOME}/.claude",
+  "initializeCommand": "mkdir -p ${localEnv:HOME}/.claude ${localEnv:HOME}/Screenshots",
   "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,readonly",
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
+    "source=${localEnv:HOME}/Screenshots,target=/home/vscode/Screenshots,type=bind,readonly"
   ],
   "containerEnv": {
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
