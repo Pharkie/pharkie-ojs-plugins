@@ -24,8 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-# GitHub CLI + Python pip
-RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip \
+# GitHub CLI + Python pip + DNS tools
+RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Claude Code CLI (update npm first to suppress version warnings)
