@@ -29,13 +29,22 @@ class WPOJS_Settings {
 
     public function add_menu() {
         add_menu_page(
-            'OJS Sync',
+            'OJS Sync Settings',
             'OJS Sync',
             'manage_options',
             'wpojs-sync',
             array( $this, 'render_settings_page' ),
             'dashicons-update',
             80
+        );
+
+        // Override the auto-generated first submenu item label (defaults to parent menu title).
+        add_submenu_page(
+            'wpojs-sync',
+            'OJS Sync Settings',
+            'Settings',
+            'manage_options',
+            'wpojs-sync'
         );
     }
 
@@ -152,27 +161,93 @@ class WPOJS_Settings {
         );
     }
 
-    public function render_type_mapping_field() {
-        $mapping = get_option( 'wpojs_type_mapping', array() );
-        echo '<div id="wpojs-type-mapping">';
-        if ( empty( $mapping ) ) {
-            $mapping = array( '' => '' );
+    /**
+     * Fetch OJS subscription type names, cached for 5 minutes.
+     * Returns [ type_id => name, ... ] or empty array on failure.
+     */
+    private function get_ojs_type_names() {
+        $cached = get_transient( 'wpojs_ojs_type_names' );
+        if ( is_array( $cached ) ) {
+            return $cached;
         }
-        foreach ( $mapping as $product_id => $type_id ) {
-            printf(
-                '<div class="wpojs-mapping-row" style="margin-bottom:5px;">' .
-                '<input type="number" name="wpojs_type_mapping[%s]" value="%s" placeholder="OJS Type ID" style="width:120px;" />' .
-                ' <span class="description">← WC Product ID: %s</span>' .
-                ' <button type="button" class="button wpojs-remove-mapping" style="margin-left:5px;">Remove</button>' .
-                '</div>',
-                esc_attr( $product_id ),
-                esc_attr( $type_id ),
-                esc_html( $product_id ?: '(new)' )
-            );
+
+        $result = $this->api->get_subscription_types();
+        $names  = array();
+        if ( $result['success'] && ! empty( $result['body']['types'] ) ) {
+            foreach ( $result['body']['types'] as $type ) {
+                $names[ (int) $type['id'] ] = $type['name'];
+            }
+        }
+        set_transient( 'wpojs_ojs_type_names', $names, 5 * MINUTE_IN_SECONDS );
+        return $names;
+    }
+
+    public function render_type_mapping_field() {
+        $mapping    = get_option( 'wpojs_type_mapping', array() );
+        $ojs_types  = $this->get_ojs_type_names();
+
+        echo '<div id="wpojs-type-mapping">';
+        if ( ! empty( $mapping ) ) {
+            foreach ( $mapping as $product_id => $type_id ) {
+                // WC product label.
+                $product_label = '';
+                if ( $product_id && function_exists( 'wc_get_product' ) ) {
+                    $product = wc_get_product( (int) $product_id );
+                    if ( $product ) {
+                        $product_label = sprintf(
+                            '&ldquo;%s&rdquo; (#%d)',
+                            esc_html( $product->get_name() ),
+                            (int) $product_id
+                        );
+                    } else {
+                        $product_label = sprintf(
+                            '<span style="color:#d63638;">Product #%d not found &#9888;</span>',
+                            (int) $product_id
+                        );
+                    }
+                } elseif ( $product_id ) {
+                    $product_label = sprintf( 'Product #%d', (int) $product_id );
+                }
+
+                // OJS type label.
+                $type_label = '';
+                if ( $type_id && isset( $ojs_types[ (int) $type_id ] ) ) {
+                    $type_label = sprintf(
+                        '<span class="description">&ldquo;%s&rdquo;</span>',
+                        esc_html( $ojs_types[ (int) $type_id ] )
+                    );
+                } elseif ( $type_id && ! empty( $ojs_types ) ) {
+                    $type_label = '<span style="color:#d63638;">not found in OJS &#9888;</span>';
+                }
+
+                printf(
+                    '<div class="wpojs-mapping-row" style="margin-bottom:5px;">' .
+                    '<span class="description">WC Product: %s &rarr; OJS Type:</span> ' .
+                    '<input type="number" name="wpojs_type_mapping[%s]" value="%s" placeholder="Type ID" style="width:80px;" />' .
+                    ' %s' .
+                    ' <button type="button" class="button wpojs-remove-mapping" style="margin-left:5px;">Remove</button>' .
+                    '</div>',
+                    $product_label,
+                    esc_attr( $product_id ),
+                    esc_attr( $type_id ),
+                    $type_label
+                );
+            }
         }
         echo '</div>';
         echo '<button type="button" class="button" id="wpojs-add-mapping">+ Add Mapping</button>';
-        echo '<p class="description">Map WooCommerce Product IDs to OJS Subscription Type IDs.</p>';
+        echo '<p class="description">Each WooCommerce subscription product maps to an OJS subscription type. When a member purchases a product, they get the corresponding OJS subscription.</p>';
+
+        // Show available OJS types for reference.
+        if ( ! empty( $ojs_types ) ) {
+            echo '<p class="description" style="margin-top:4px;">Available OJS types: ';
+            $parts = array();
+            foreach ( $ojs_types as $id => $name ) {
+                $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
+            }
+            echo implode( ', ', $parts );
+            echo '</p>';
+        }
 
         // Inline JS for add/remove mapping rows.
         ?>
@@ -180,8 +255,8 @@ class WPOJS_Settings {
         jQuery(function($) {
             $('#wpojs-add-mapping').on('click', function() {
                 var html = '<div class="wpojs-mapping-row" style="margin-bottom:5px;">' +
-                    '<input type="number" class="wpojs-mapping-pid" value="" placeholder="WC Product ID" style="width:120px;" /> → ' +
-                    '<input type="number" class="wpojs-mapping-tid" value="" placeholder="OJS Type ID" style="width:120px;" />' +
+                    'WC Product ID: <input type="number" class="wpojs-mapping-pid" value="" placeholder="e.g. 17" style="width:80px;" />' +
+                    ' &rarr; OJS Type ID: <input type="number" class="wpojs-mapping-tid" value="" placeholder="e.g. 1" style="width:80px;" />' +
                     ' <button type="button" class="button wpojs-remove-mapping" style="margin-left:5px;">Remove</button></div>';
                 $('#wpojs-type-mapping').append(html);
             });
@@ -209,11 +284,21 @@ class WPOJS_Settings {
     }
 
     public function render_default_type_field() {
-        $value = get_option( 'wpojs_default_type_id', '' );
+        $value     = get_option( 'wpojs_default_type_id', '' );
+        $ojs_types = $this->get_ojs_type_names();
+
+        $type_label = '';
+        if ( $value && isset( $ojs_types[ (int) $value ] ) ) {
+            $type_label = sprintf( ' <span class="description">&ldquo;%s&rdquo;</span>', esc_html( $ojs_types[ (int) $value ] ) );
+        } elseif ( $value && ! empty( $ojs_types ) ) {
+            $type_label = ' <span style="color:#d63638;">not found in OJS &#9888;</span>';
+        }
+
         printf(
-            '<input type="number" name="wpojs_default_type_id" value="%s" class="small-text" />' .
-            '<p class="description">OJS Subscription Type ID for manual role members (no WC product mapping).</p>',
-            esc_attr( $value )
+            '<input type="number" name="wpojs_default_type_id" value="%s" class="small-text" />%s' .
+            '<p class="description">Used for members granted access by role (see Manual Member Roles below), not by purchasing a product.</p>',
+            esc_attr( $value ),
+            $type_label
         );
     }
 
@@ -231,7 +316,7 @@ class WPOJS_Settings {
             );
         }
         echo '</fieldset>';
-        echo '<p class="description">Roles that grant OJS access without a WCS subscription (e.g. Exco/life members).</p>';
+        echo '<p class="description">WordPress roles that should automatically get an OJS journal subscription, even without purchasing a WooCommerce product. Useful for committee members, life members, or other honorary access.</p>';
     }
 
     public function render_journal_name_field() {
@@ -254,6 +339,7 @@ class WPOJS_Settings {
         ?>
         <div class="wrap">
             <h1>OJS Sync Settings</h1>
+            <p>Synchronises WooCommerce Subscriptions membership data to OJS (Open Journal Systems). When members purchase or renew a subscription in WooCommerce, their OJS journal access is updated automatically.</p>
 
             <form method="post" action="options.php">
                 <?php
@@ -265,7 +351,7 @@ class WPOJS_Settings {
 
             <hr />
 
-            <h2>Connection Test</h2>
+            <h2>Diagnostics</h2>
             <p>
                 <button type="button" class="button button-secondary" id="wpojs-test-connection">Test Connection</button>
                 <span id="wpojs-test-result" style="margin-left:10px;"></span>
@@ -280,8 +366,7 @@ class WPOJS_Settings {
                         $ip = isset( $_SERVER['SERVER_ADDR'] ) ? sanitize_text_field( $_SERVER['SERVER_ADDR'] ) : 'Unknown';
                         echo esc_html( $ip );
                         ?>
-                        <p class="description">Add this IP to the OJS plugin's allowed IP list.</p>
-                        <p class="description">This is the server's local IP. Behind a load balancer or NAT, the outbound IP may differ. Verify with your hosting provider or use <code>curl -s https://api.ipify.org</code> from the server.</p>
+                        <p class="description">Add this IP to the OJS plugin's allowed IP list. May differ from the outbound IP behind a load balancer.</p>
                     </td>
                 </tr>
                 <tr>
@@ -299,10 +384,10 @@ class WPOJS_Settings {
                 <tr>
                     <th>Sync Queue</th>
                     <td>
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=action-scheduler&status=pending&group=wpojs-sync' ) ); ?>">
-                            View scheduled actions &rarr;
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=action-scheduler&status=pending&s=wpojs' ) ); ?>">
+                            View pending OJS Sync actions &rarr;
                         </a>
-                        <p class="description">Sync actions are managed by Action Scheduler (Tools &rarr; Scheduled Actions).</p>
+                        <p class="description">Queued sync actions (activate, expire, delete). Empty when idle.</p>
                     </td>
                 </tr>
             </table>
@@ -401,7 +486,26 @@ class WPOJS_Settings {
             foreach ( $mapping as $product_id => $type_id ) {
                 $product = wc_get_product( (int) $product_id );
                 if ( ! $product ) {
-                    $warnings[] = sprintf( 'WC Product ID %d in type mapping does not exist.', $product_id );
+                    $warnings[] = sprintf( 'WC Product #%d in type mapping does not exist.', $product_id );
+                }
+            }
+        }
+
+        // Validate OJS type IDs against what OJS actually has.
+        if ( $result['ok'] ) {
+            $types_result = $client->get_subscription_types();
+            if ( $types_result['success'] && ! empty( $types_result['body']['types'] ) ) {
+                $valid_ids = array_map( function ( $t ) {
+                    return (int) $t['id'];
+                }, $types_result['body']['types'] );
+
+                foreach ( $mapping as $product_id => $type_id ) {
+                    if ( ! in_array( (int) $type_id, $valid_ids, true ) ) {
+                        $warnings[] = sprintf( 'OJS Type ID %d (mapped from Product #%d) does not exist in OJS — please fix and resave.', $type_id, $product_id );
+                    }
+                }
+                if ( $default_tid && ! in_array( (int) $default_tid, $valid_ids, true ) ) {
+                    $warnings[] = sprintf( 'Default OJS Type ID %d does not exist in OJS — please fix and resave.', $default_tid );
                 }
             }
         }

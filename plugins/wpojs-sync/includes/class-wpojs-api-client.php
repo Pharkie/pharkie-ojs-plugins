@@ -31,6 +31,13 @@ class WPOJS_API_Client {
     }
 
     /**
+     * Get subscription types from OJS.
+     */
+    public function get_subscription_types() {
+        return $this->get( '/wpojs/subscription-types' );
+    }
+
+    /**
      * Find user by email. Returns ['success' => true, 'body' => ['found' => bool, ...]].
      */
     public function find_user( $email ) {

@@ -182,7 +182,7 @@ class WPOJS_Cron {
 			$pending_count,
 			$failed_count,
 			admin_url( 'admin.php?page=wpojs-sync-log&status=fail' ),
-			admin_url( 'admin.php?page=action-scheduler&status=pending&group=wpojs-sync' )
+			admin_url( 'admin.php?page=action-scheduler&status=pending&s=wpojs' )
 		);
 
 		wp_mail( $to, $subject, $message );

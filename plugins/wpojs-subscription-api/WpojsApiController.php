@@ -59,6 +59,7 @@ class WpojsApiController extends PKPBaseController
         Route::get('ping', $this->ping(...))->name('wpojs.ping');
 
         Route::get('preflight', $this->preflight(...))->name('wpojs.preflight');
+        Route::get('subscription-types', $this->getSubscriptionTypes(...))->name('wpojs.subscriptionTypes');
         Route::get('users', $this->findUser(...))->name('wpojs.users.find');
         Route::post('users/find-or-create', $this->findOrCreateUser(...))->name('wpojs.users.findOrCreate');
         Route::put('users/{userId}/email', $this->updateUserEmail(...))->name('wpojs.users.updateEmail');
@@ -476,6 +477,43 @@ class WpojsApiController extends PKPBaseController
             'compatible' => $compatible,
             'checks' => $checks,
         ]);
+    }
+
+    // ---------------------------------------------------------------
+    // GET /wpojs/subscription-types
+    // List subscription types for the current journal.
+    // ---------------------------------------------------------------
+
+    public function getSubscriptionTypes(Request $request): JsonResponse
+    {
+        $authError = $this->checkAuth($request);
+        if ($authError) {
+            return $authError;
+        }
+
+        $journalId = $this->getJournalIdOrFail();
+        if ($journalId instanceof JsonResponse) {
+            return $journalId;
+        }
+
+        $locale = Application::get()->getRequest()->getContext()?->getPrimaryLocale() ?? 'en';
+
+        $types = DB::table('subscription_types')
+            ->leftJoin('subscription_type_settings', function ($join) use ($locale) {
+                $join->on('subscription_types.type_id', '=', 'subscription_type_settings.type_id')
+                     ->where('subscription_type_settings.setting_name', '=', 'name')
+                     ->where('subscription_type_settings.locale', '=', $locale);
+            })
+            ->where('subscription_types.journal_id', $journalId)
+            ->select(
+                'subscription_types.type_id as id',
+                DB::raw("COALESCE(subscription_type_settings.setting_value, CONCAT('Type #', subscription_types.type_id)) as name")
+            )
+            ->orderBy('subscription_types.seq')
+            ->get()
+            ->toArray();
+
+        return $this->jsonResponse($request, ['types' => $types]);
     }
 
     // ---------------------------------------------------------------

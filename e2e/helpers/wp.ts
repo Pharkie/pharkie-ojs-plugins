@@ -211,10 +211,11 @@ export function clearTestSyncData(): void {
     $wpdb->query("DELETE FROM {$log} WHERE email = ''");
     $wpdb->query("DELETE FROM {$log} WHERE email LIKE '%test.example.com'");
     $wpdb->query("DELETE FROM {$log} WHERE email LIKE '%test.invalid'");
-    // Clean up failed/pending Action Scheduler jobs from sync hooks
+    // Clean up Action Scheduler jobs created by sync hooks during tests
     $as = $wpdb->prefix . 'actionscheduler_actions';
-    $wpdb->query("DELETE FROM {$as} WHERE hook LIKE 'wpojs_%' AND status = 'failed'");
-    $wpdb->query("DELETE FROM {$as} WHERE hook LIKE 'wpojs_%' AND status = 'pending'");
+    $wpdb->query("DELETE FROM {$as} WHERE hook LIKE 'wpojs_%' AND status IN ('failed','pending','complete')");
+    // WCS report cache rebuilds triggered by test subscription churn
+    $wpdb->query("DELETE FROM {$as} WHERE hook = 'wcs_report_update_cache' AND status = 'pending'");
   `;
   wpEval(php);
 }
