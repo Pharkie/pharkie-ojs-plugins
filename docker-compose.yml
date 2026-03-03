@@ -66,6 +66,23 @@ services:
       WPOJS_ALLOWED_IPS: ${WPOJS_ALLOWED_IPS:-172.0.0.0/8}
       WPOJS_WP_MEMBER_URL: ${WPOJS_WP_MEMBER_URL:-http://localhost:8080}
       WPOJS_SUPPORT_EMAIL: ${WPOJS_SUPPORT_EMAIL:-}
+      # Journal metadata (used by setup-ojs.sh)
+      OJS_JOURNAL_PATH: ${OJS_JOURNAL_PATH:-journal}
+      OJS_JOURNAL_NAME: ${OJS_JOURNAL_NAME:-}
+      OJS_JOURNAL_ACRONYM: ${OJS_JOURNAL_ACRONYM:-}
+      OJS_JOURNAL_CONTACT_NAME: ${OJS_JOURNAL_CONTACT_NAME:-}
+      OJS_JOURNAL_CONTACT_EMAIL: ${OJS_JOURNAL_CONTACT_EMAIL:-}
+      OJS_JOURNAL_PUBLISHER: ${OJS_JOURNAL_PUBLISHER:-}
+      OJS_JOURNAL_PUBLISHER_URL: ${OJS_JOURNAL_PUBLISHER_URL:-}
+      OJS_JOURNAL_PRINT_ISSN: ${OJS_JOURNAL_PRINT_ISSN:-}
+      OJS_JOURNAL_ONLINE_ISSN: ${OJS_JOURNAL_ONLINE_ISSN:-}
+      OJS_JOURNAL_COUNTRY: ${OJS_JOURNAL_COUNTRY:-}
+      OJS_JOURNAL_DESCRIPTION: ${OJS_JOURNAL_DESCRIPTION:-}
+      OJS_JOURNAL_ABOUT: ${OJS_JOURNAL_ABOUT:-}
+      OJS_JOURNAL_SUBSCRIPTION_INFO: ${OJS_JOURNAL_SUBSCRIPTION_INFO:-}
+      OJS_SUB_TYPES: ${OJS_SUB_TYPES:-}
+      OJS_PURCHASE_ARTICLE_FEE: ${OJS_PURCHASE_ARTICLE_FEE:-0}
+      OJS_PURCHASE_ISSUE_FEE: ${OJS_PURCHASE_ISSUE_FEE:-0}
       OJS_SMTP_ENABLED: ${OJS_SMTP_ENABLED:-Off}
       OJS_SMTP_HOST: ${OJS_SMTP_HOST:-}
       OJS_SMTP_PORT: ${OJS_SMTP_PORT:-587}
@@ -83,7 +100,7 @@ services:
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro
       - ./docker/ojs/apache.conf:/etc/apache2/conf-enabled/sea-cgipassauth.conf:ro
       - ./scripts:/scripts:ro
-      - ./data export/ojs-import-clean.xml:/data/ojs-import-clean.xml:ro
+      - "./data export/ojs-import-clean.xml:/data/ojs-import-clean.xml:ro"
     depends_on:
       ojs-db:
         condition: service_healthy

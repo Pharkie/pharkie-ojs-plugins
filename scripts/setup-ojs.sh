@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bootstrap OJS: create journal, subscription type, enable plugin.
+# Bootstrap OJS: create journal, subscription types, enable plugins, configure paywall.
 # Idempotent — safe to run repeatedly.
 #
 # Usage:
@@ -18,6 +18,12 @@ for arg in "$@"; do
 done
 
 MARIADB="mariadb --skip-ssl -h${OJS_DB_HOST} -u${OJS_DB_USER} -p${OJS_DB_PASSWORD} ${OJS_DB_NAME}"
+
+# Escape a string for safe embedding in a JSON value (handles quotes, backslashes, newlines, unicode).
+# Outputs the escaped content WITHOUT surrounding quotes — the caller provides those in the template.
+json_escape() {
+  jq -nr --arg v "$1" '$v | tojson | .[1:-1]'
+}
 
 echo "[OJS] Setting up OJS..."
 
@@ -48,65 +54,162 @@ JWT_PAYLOAD=$(echo -n "[\"$API_KEY\"]" | base64 | tr -d '=' | tr '/+' '_-' | tr 
 JWT_SIGNATURE=$(echo -n "${JWT_HEADER}.${JWT_PAYLOAD}" | openssl dgst -sha256 -hmac "$API_SECRET" -binary | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 JWT_TOKEN="${JWT_HEADER}.${JWT_PAYLOAD}.${JWT_SIGNATURE}"
 
-# Helper function for authenticated API calls
+# Helper function for authenticated API calls.
+# Returns the response body. Aborts on HTTP errors (retries 5xx up to 5 times
+# to handle the post-install race where OJS isn't fully initialized yet).
 ojs_api() {
   local METHOD=$1 URL=$2 DATA=$3
-  curl -s -X "$METHOD" "http://localhost:80${URL}" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $JWT_TOKEN" \
-    ${DATA:+-d "$DATA"}
+  local HTTP_CODE BODY TMPFILE ATTEMPT MAX_RETRIES=5
+
+  for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    TMPFILE=$(mktemp)
+    HTTP_CODE=$(curl -s -o "$TMPFILE" -w '%{http_code}' -X "$METHOD" "http://localhost:80${URL}" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $JWT_TOKEN" \
+      ${DATA:+-d "$DATA"})
+    BODY=$(cat "$TMPFILE")
+    rm -f "$TMPFILE"
+
+    if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+      echo "$BODY"
+      return 0
+    fi
+
+    if [ "$HTTP_CODE" -ge 500 ] && [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+      echo "[OJS] API $METHOD $URL returned HTTP $HTTP_CODE, retrying in 5s (attempt $ATTEMPT/$MAX_RETRIES)..." >&2
+      sleep 5
+      continue
+    fi
+
+    echo "[OJS] ERROR: API $METHOD $URL returned HTTP $HTTP_CODE" >&2
+    echo "$BODY" | head -10 >&2
+    exit 1
+  done
 }
 
-# --- Journal creation via API ---
-JOURNAL_PATH="${OJS_JOURNAL_PATH:-journal}"
-JOURNAL_NAME="${OJS_JOURNAL_NAME:-My Journal}"
+# --- Journal settings (all from env — no hardcoded defaults) ---
+JOURNAL_PATH="${OJS_JOURNAL_PATH:?OJS_JOURNAL_PATH not set}"
+JOURNAL_NAME="${OJS_JOURNAL_NAME:?OJS_JOURNAL_NAME not set}"
+JOURNAL_ACRONYM="${OJS_JOURNAL_ACRONYM:-}"
+JOURNAL_CONTACT_NAME="${OJS_JOURNAL_CONTACT_NAME:?OJS_JOURNAL_CONTACT_NAME not set}"
+JOURNAL_CONTACT_EMAIL="${OJS_JOURNAL_CONTACT_EMAIL:?OJS_JOURNAL_CONTACT_EMAIL not set}"
+JOURNAL_PUBLISHER="${OJS_JOURNAL_PUBLISHER:-}"
+JOURNAL_PUBLISHER_URL="${OJS_JOURNAL_PUBLISHER_URL:-}"
+JOURNAL_PRINT_ISSN="${OJS_JOURNAL_PRINT_ISSN:-}"
+JOURNAL_ONLINE_ISSN="${OJS_JOURNAL_ONLINE_ISSN:-}"
+JOURNAL_COUNTRY="${OJS_JOURNAL_COUNTRY:-}"
 
 JOURNAL_EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM journals WHERE path='$JOURNAL_PATH'")
 
 if [ "$JOURNAL_EXISTS" = "0" ]; then
-  echo "[OJS] Creating journal '$JOURNAL_PATH' via API..."
+  echo "[OJS] Creating journal '$JOURNAL_NAME' ($JOURNAL_ACRONYM) via API..."
 
   RESULT=$(ojs_api POST "/index/api/v1/contexts" "{
-    \"urlPath\": \"$JOURNAL_PATH\",
-    \"name\": {\"en\": \"$JOURNAL_NAME\"},
+    \"urlPath\": \"$(json_escape "$JOURNAL_PATH")\",
+    \"name\": {\"en\": \"$(json_escape "$JOURNAL_NAME")\"},
+    \"acronym\": {\"en\": \"$(json_escape "$JOURNAL_ACRONYM")\"},
     \"primaryLocale\": \"en\",
     \"supportedLocales\": [\"en\"],
     \"supportedSubmissionLocales\": [\"en\"],
+    \"contactName\": \"$(json_escape "$JOURNAL_CONTACT_NAME")\",
+    \"contactEmail\": \"$(json_escape "$JOURNAL_CONTACT_EMAIL")\",
     \"enabled\": true
   }")
 
   if echo "$RESULT" | grep -q "\"urlPath\":\"$JOURNAL_PATH\""; then
-    echo "[OJS] Journal '$JOURNAL_PATH' created."
+    echo "[OJS] Journal '$JOURNAL_NAME' created."
   else
     echo "[OJS] WARNING: Journal creation may have failed:"
     echo "$RESULT" | head -5
   fi
 else
-  echo "[OJS] Journal '$JOURNAL_PATH' already exists, skipping."
+  echo "[OJS] Journal '$JOURNAL_PATH' already exists."
 fi
 
-# --- Subscription type ---
-SUB_TYPE_EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM subscription_types WHERE journal_id=1")
+# --- Journal metadata (idempotent — always ensures correct values) ---
+JOURNAL_ID_META=$($MARIADB -N -e "SELECT journal_id FROM journals WHERE path='$JOURNAL_PATH'")
+echo "[OJS] Configuring journal metadata..."
 
-if [ "$SUB_TYPE_EXISTS" = "0" ]; then
-  echo "[OJS] Creating subscription type..."
-  # duration = NULL means non-expiring. OJS validates subscriptions by checking
-  # (st.duration IS NULL OR (checkDate >= s.date_start AND checkDate <= s.date_end)).
-  # With duration = NULL, subscriptions with date_end = NULL pass validation.
-  # With duration = 365, OJS would require date_end to be set on every subscription.
-  $MARIADB <<'SQL'
-    INSERT INTO subscription_types (journal_id, cost, currency_code_alpha, duration, format, institutional, membership, disable_public_display, seq)
-    VALUES (1, 0.00, 'GBP', NULL, 1, 0, 0, 1, 1);
-SQL
-  echo "[OJS] Subscription type created."
+# Use a single API PUT to set all journal-level settings.
+# Fields reference: /lib/pkp/schemas/context.json + /schemas/context.json
+# About text and subscription info come from env; description/about can be overridden.
+JOURNAL_DESCRIPTION="${OJS_JOURNAL_DESCRIPTION:-}"
+JOURNAL_ABOUT="${OJS_JOURNAL_ABOUT:-}"
+JOURNAL_SUBSCRIPTION_INFO="${OJS_JOURNAL_SUBSCRIPTION_INFO:-}"
+
+META_RESULT=$(ojs_api PUT "/$JOURNAL_PATH/api/v1/contexts/$JOURNAL_ID_META" "{
+  \"name\": {\"en\": \"$(json_escape "$JOURNAL_NAME")\"},
+  \"acronym\": {\"en\": \"$(json_escape "$JOURNAL_ACRONYM")\"},
+  \"description\": {\"en\": \"$(json_escape "$JOURNAL_DESCRIPTION")\"},
+  \"about\": {\"en\": \"$(json_escape "$JOURNAL_ABOUT")\"},
+  \"contactName\": \"$(json_escape "$JOURNAL_CONTACT_NAME")\",
+  \"contactEmail\": \"$(json_escape "$JOURNAL_CONTACT_EMAIL")\",
+  \"contactAffiliation\": {\"en\": \"$(json_escape "$JOURNAL_PUBLISHER")\"},
+  \"supportName\": \"$(json_escape "$JOURNAL_CONTACT_NAME")\",
+  \"supportEmail\": \"$(json_escape "$JOURNAL_CONTACT_EMAIL")\",
+  \"country\": \"$(json_escape "$JOURNAL_COUNTRY")\",
+  \"printIssn\": \"$(json_escape "$JOURNAL_PRINT_ISSN")\",
+  \"onlineIssn\": \"$(json_escape "$JOURNAL_ONLINE_ISSN")\",
+  \"publisherInstitution\": \"$(json_escape "$JOURNAL_PUBLISHER")\",
+  \"publisherUrl\": \"$(json_escape "$JOURNAL_PUBLISHER_URL")\",
+  \"copyrightHolderType\": \"context\",
+  \"subscriptionName\": \"$(json_escape "$JOURNAL_NAME") Subscriptions\",
+  \"subscriptionEmail\": \"$(json_escape "$JOURNAL_CONTACT_EMAIL")\",
+  \"subscriptionAdditionalInformation\": {\"en\": \"$(json_escape "$JOURNAL_SUBSCRIPTION_INFO")\"}
+}")
+
+# Verify critical fields were actually saved
+for FIELD in country printIssn onlineIssn publisherInstitution; do
+  if ! echo "$META_RESULT" | grep -q "\"$FIELD\""; then
+    echo "[OJS] ERROR: Field '$FIELD' missing from API response — metadata PUT may have failed." >&2
+    echo "[OJS] Response (first 500 chars): $(echo "$META_RESULT" | head -c 500)" >&2
+    exit 1
+  fi
+done
+
+echo "[OJS] Journal metadata configured."
+
+# --- Subscription types ---
+# Defined via OJS_SUB_TYPES env var: pipe-separated entries of "name:cost" in GBP.
+# Example: "UK Membership:50|Student Membership:35|International Membership:60"
+# duration = NULL means non-expiring. OJS validates subscriptions by checking
+# (st.duration IS NULL OR (checkDate >= s.date_start AND checkDate <= s.date_end)).
+JOURNAL_ID_SUB=$($MARIADB -N -e "SELECT journal_id FROM journals WHERE path='$JOURNAL_PATH'")
+SUB_TYPE_COUNT=$($MARIADB -N -e "SELECT COUNT(*) FROM subscription_types WHERE journal_id=$JOURNAL_ID_SUB")
+
+OJS_SUB_TYPES="${OJS_SUB_TYPES:-}"
+
+if [ "$SUB_TYPE_COUNT" = "0" ] && [ -n "$OJS_SUB_TYPES" ]; then
+  echo "[OJS] Creating subscription types..."
+  SEQ=1
+  IFS='|' read -ra TYPES <<< "$OJS_SUB_TYPES"
+  for TYPE_DEF in "${TYPES[@]}"; do
+    TYPE_NAME="${TYPE_DEF%%:*}"
+    TYPE_COST="${TYPE_DEF##*:}"
+    # Validate cost is numeric
+    if ! [[ "$TYPE_COST" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+      echo "[OJS] ERROR: Invalid cost '$TYPE_COST' for subscription type '$TYPE_NAME'" >&2
+      exit 1
+    fi
+    # Escape single quotes in name for SQL
+    TYPE_NAME_SQL="${TYPE_NAME//\'/\'\'}"
+    echo "[OJS]   $TYPE_NAME (£$TYPE_COST)"
+    $MARIADB -e "INSERT INTO subscription_types (journal_id, cost, currency_code_alpha, duration, format, institutional, membership, disable_public_display, seq) VALUES ($JOURNAL_ID_SUB, $TYPE_COST, 'GBP', NULL, 1, 0, 0, 0, $SEQ)"
+    TYPE_ID=$($MARIADB -N -e "SELECT type_id FROM subscription_types WHERE journal_id=$JOURNAL_ID_SUB AND seq=$SEQ")
+    $MARIADB -e "INSERT INTO subscription_type_settings (type_id, locale, setting_name, setting_value, setting_type) VALUES ($TYPE_ID, 'en', 'name', '$TYPE_NAME_SQL', 'string')"
+    SEQ=$((SEQ + 1))
+  done
+  echo "[OJS] Subscription types created."
+elif [ "$SUB_TYPE_COUNT" = "0" ]; then
+  echo "[OJS] WARNING: No subscription types created (OJS_SUB_TYPES not set)."
 else
-  # Fix existing type if it has a duration set (breaks non-expiring subscriptions).
-  WRONG_DURATION=$($MARIADB -N -e "SELECT COUNT(*) FROM subscription_types WHERE journal_id=1 AND duration IS NOT NULL")
+  # Fix existing types if they have a duration set (breaks non-expiring subscriptions).
+  WRONG_DURATION=$($MARIADB -N -e "SELECT COUNT(*) FROM subscription_types WHERE journal_id=$JOURNAL_ID_SUB AND duration IS NOT NULL")
   if [ "$WRONG_DURATION" -gt "0" ]; then
     echo "[OJS] Fixing subscription type duration (NULL = non-expiring)..."
-    $MARIADB -e "UPDATE subscription_types SET duration = NULL WHERE journal_id = 1"
+    $MARIADB -e "UPDATE subscription_types SET duration = NULL WHERE journal_id = $JOURNAL_ID_SUB"
   fi
-  echo "[OJS] Subscription type already exists, skipping."
+  echo "[OJS] Subscription types already exist ($SUB_TYPE_COUNT type(s)), skipping."
 fi
 
 # --- Enable WP-OJS plugin ---
@@ -128,6 +231,48 @@ if [ "$PUB_MODE" != "1" ]; then
   echo "[OJS] Publishing mode set."
 else
   echo "[OJS] Publishing mode already set to 'Subscription', skipping."
+fi
+
+# --- Enable payments + PayPal plugin ---
+# Payments must be enabled for the paywall to work. The PayPal plugin handles
+# non-member purchases (single articles, issues, back issues).
+PAYMENTS_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='paymentsEnabled'" 2>/dev/null)
+
+ARTICLE_FEE="${OJS_PURCHASE_ARTICLE_FEE:-0}"
+ISSUE_FEE="${OJS_PURCHASE_ISSUE_FEE:-0}"
+
+if [ "$PAYMENTS_ENABLED" != "1" ]; then
+  echo "[OJS] Enabling payments (article £$ARTICLE_FEE, issue £$ISSUE_FEE)..."
+  ojs_api PUT "/$JOURNAL_PATH/api/v1/contexts/$JOURNAL_ID" "{
+    \"paymentsEnabled\": true,
+    \"paymentPluginName\": \"PaypalPayment\",
+    \"currency\": \"GBP\",
+    \"purchaseArticleFee\": $ARTICLE_FEE,
+    \"purchaseArticleFeeEnabled\": true,
+    \"purchaseIssueFee\": $ISSUE_FEE,
+    \"purchaseIssueFeeEnabled\": true,
+    \"membershipFee\": 0
+  }" > /dev/null
+  echo "[OJS] Payments enabled."
+else
+  echo "[OJS] Payments already enabled, skipping."
+fi
+
+# Enable PayPal payment plugin + test mode
+PAYPAL_ENABLED=$($MARIADB -N -e "SELECT COUNT(*) FROM plugin_settings WHERE plugin_name='paypalpayment' AND context_id=$JOURNAL_ID AND setting_name='enabled' AND setting_value='1'" 2>/dev/null)
+if [ "$PAYPAL_ENABLED" = "0" ]; then
+  echo "[OJS] Enabling PayPal payment plugin (test mode)..."
+  $MARIADB <<SQL
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('paypalpayment', $JOURNAL_ID, 'enabled', '1', 'bool')
+    ON DUPLICATE KEY UPDATE setting_value='1';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('paypalpayment', $JOURNAL_ID, 'testMode', '1', 'bool')
+    ON DUPLICATE KEY UPDATE setting_value='1';
+SQL
+  echo "[OJS] PayPal plugin enabled (test mode)."
+else
+  echo "[OJS] PayPal plugin already enabled, skipping."
 fi
 
 echo "[OJS] OJS setup complete."

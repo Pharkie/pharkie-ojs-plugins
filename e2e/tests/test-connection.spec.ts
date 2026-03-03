@@ -1,13 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { wpLogin } from '../helpers/wp';
+import { wpLogin, WP_ADMIN_USER, getAdminPassword } from '../helpers/wp';
 
-const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'admin';
 const SETTINGS_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync';
 
 test.describe('Test Connection button', () => {
   test('shows success when OJS is reachable and configured', async ({ page }) => {
-    await wpLogin(page, ADMIN_USER, ADMIN_PASS);
+    await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
     await page.goto(SETTINGS_PAGE);
 
     const btn = page.locator('#wpojs-test-connection');

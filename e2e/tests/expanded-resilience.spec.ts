@@ -530,7 +530,7 @@ test.describe('Reconciliation catches drift', () => {
 
       // Run reconciliation — should detect missing sub and schedule activate
       runReconciliation();
-      waitForSync();
+      waitForSync(120_000);
 
       // Subscription should be recreated
       expect(hasActiveSubscription(ojsUserId!)).toBe(true);
@@ -570,7 +570,7 @@ test.describe('Reconciliation catches drift', () => {
 
       // Run reconciliation — should detect stale access and schedule expire
       runReconciliation();
-      waitForSync();
+      waitForSync(120_000);
 
       // OJS subscription should now be expired (status 16)
       expect(getSubscriptionStatus(ojsUserId!)).toBe(16);

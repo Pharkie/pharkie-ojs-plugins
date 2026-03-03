@@ -7,10 +7,9 @@ import {
   insertLogEntry,
   deleteLogEntries,
   clearTestSyncData,
+  WP_ADMIN_USER,
+  getAdminPassword,
 } from '../helpers/wp';
-
-const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'admin';
 const LOG_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync-log';
 
 test.describe('Admin monitoring: Sync Log page', () => {
@@ -19,7 +18,7 @@ test.describe('Admin monitoring: Sync Log page', () => {
   });
 
   test('stats cards visible with correct labels', async ({ page }) => {
-    await wpLogin(page, ADMIN_USER, ADMIN_PASS);
+    await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
     await page.goto(LOG_PAGE);
 
     const cards = page.locator('.wpojs-stats-cards');
@@ -45,7 +44,7 @@ test.describe('Admin monitoring: Sync Log page', () => {
   });
 
   test('nonce field present for bulk actions', async ({ page }) => {
-    await wpLogin(page, ADMIN_USER, ADMIN_PASS);
+    await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
     await page.goto(LOG_PAGE);
 
     await expect(page.locator('input[name="_wpojs_nonce"]')).toBeAttached();
@@ -66,7 +65,7 @@ test.describe('Admin monitoring: Sync Log page', () => {
     }) => {
       insertLogEntry(FAIL_EMAIL_1, 'activate', 'fail');
 
-      await wpLogin(page, ADMIN_USER, ADMIN_PASS);
+      await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
       await page.goto(LOG_PAGE + '&status=fail');
 
       // Find the row with our test email
@@ -92,7 +91,7 @@ test.describe('Admin monitoring: Sync Log page', () => {
       insertLogEntry(FAIL_EMAIL_1, 'activate', 'fail');
       insertLogEntry(FAIL_EMAIL_2, 'activate', 'fail');
 
-      await wpLogin(page, ADMIN_USER, ADMIN_PASS);
+      await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
       await page.goto(LOG_PAGE + '&status=fail');
 
       // Check both rows

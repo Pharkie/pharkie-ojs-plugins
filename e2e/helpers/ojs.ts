@@ -110,12 +110,13 @@ export function deleteOjsUser(email: string): void {
 
 /**
  * Run Action Scheduler to process pending sync actions.
+ * @param timeout - ms to wait (default 30s; use longer after reconciliation)
  */
-export function waitForSync(): void {
+export function waitForSync(timeout = 30_000): void {
   dockerExec(
     'wp',
     'wp action-scheduler run --allow-root 2>/dev/null',
-    { timeout: 30_000 },
+    { timeout },
   );
 }
 

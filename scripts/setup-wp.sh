@@ -34,16 +34,23 @@ if ! wp theme is-installed twentytwentyfive --allow-root 2>/dev/null; then
   wp theme install twentytwentyfive --activate --allow-root
 fi
 
-# Activate plugins (idempotent — already-active plugins are skipped)
-wp plugin activate \
-  woocommerce \
-  woocommerce-subscriptions \
-  woocommerce-memberships \
-  ultimate-member \
-  um-notifications \
-  um-woocommerce \
-  wpojs-sync \
-  --allow-root 2>/dev/null || true
+# Activate plugins — each separately so failures are visible.
+# "already active" is fine (exit 0); genuine errors (missing plugin, PHP fatal) must fail loud.
+REQUIRED_PLUGINS=(
+  woocommerce
+  woocommerce-subscriptions
+  woocommerce-memberships
+  ultimate-member
+  um-notifications
+  um-woocommerce
+  wpojs-sync
+)
+for PLUGIN in "${REQUIRED_PLUGINS[@]}"; do
+  if ! wp plugin is-active "$PLUGIN" --allow-root 2>/dev/null; then
+    echo "Activating $PLUGIN..."
+    wp plugin activate "$PLUGIN" --allow-root
+  fi
+done
 
 # Critical WooCommerce settings
 wp option update woocommerce_currency GBP --allow-root

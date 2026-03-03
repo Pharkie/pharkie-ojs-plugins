@@ -1,6 +1,14 @@
 import { type Page } from '@playwright/test';
 import { dockerExec } from './docker';
 
+/** Admin credentials — must match .env / setup-wp.sh. */
+export const WP_ADMIN_USER = 'admin';
+export function getAdminPassword(): string {
+  const p = process.env.WP_ADMIN_PASSWORD;
+  if (!p) throw new Error('WP_ADMIN_PASSWORD env var not set — required for admin login tests');
+  return p;
+}
+
 /**
  * Run a WP-CLI command inside the wp container.
  */
@@ -261,9 +269,14 @@ export function getActionSchedulerCount(
 /**
  * Run the daily reconciliation synchronously.
  * Fires the wpojs_daily_reconcile action which compares WP members vs OJS subs.
+ * Extended timeout: reconciliation iterates all active WCS subscriptions.
  */
 export function runReconciliation(): void {
-  wpEval(`do_action('wpojs_daily_reconcile');`);
+  dockerExec(
+    'wp',
+    'f=$(mktemp /tmp/_wpojs_eval_XXXXXX.php) && cat > "$f" && wp eval-file "$f" --allow-root; rm -f "$f"',
+    { stdin: "<?php\ndo_action('wpojs_daily_reconcile');", timeout: 120_000 },
+  );
 }
 
 /**
