@@ -80,6 +80,13 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 - API key stored as `wp-config.php` constant (`WPOJS_API_KEY`), not in the database
 - Settings page for OJS URL, subscription type mapping (WooCommerce Product -> OJS Subscription Type), journal ID(s)
 
+## Dev environment
+
+- **`scripts/rebuild-dev.sh`** — full nuke-and-pave: tears down containers+volumes, rebuilds images, brings up stack, runs setup, runs tests. Devcontainer-only (hardcoded host path for DinD volume mounts). Flags: `--with-sample-data`, `--skip-tests`.
+- **`scripts/setup-dev.sh`** — portable setup: assumes containers are already running. Waits for services, runs OJS + WP setup scripts. Flags: `--with-sample-data`.
+- **Why two scripts?** Docker-in-Docker in the devcontainer requires a hardcoded host path for `--project-directory`. `rebuild-dev.sh` bakes this in. `setup-dev.sh` is the portable inner script other devs can use with their own container setup.
+- **Post-rebuild prompt:** `docs/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
+
 ## Pre-commit hooks
 
 Installed via `./setup-hooks.sh` (runs automatically in dev container). Symlinks `.git/hooks/pre-commit` to `scripts/pre-commit`. Checks: secret detection, env var documentation, YAML syntax, doc link validation. Modular checks live in `scripts/lib/`.
