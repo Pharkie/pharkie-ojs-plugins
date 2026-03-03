@@ -8,6 +8,7 @@
 - Member dashboard widget (WooCommerce My Account)
 - UI messages (OJS login hint, paywall hint, footer)
 - Non-Docker deployment guide — `docs/deployment.md`
+- Dev environment clean rebuild verified (2026-03-03) — all 35 e2e tests passing
 
 ## Staging test results (2026-03-02)
 
