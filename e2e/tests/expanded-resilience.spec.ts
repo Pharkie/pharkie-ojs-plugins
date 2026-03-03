@@ -11,6 +11,7 @@ import {
   wpEval,
   runReconciliation,
   getUserMeta,
+  pruneQueueExcept,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -528,8 +529,11 @@ test.describe('Reconciliation catches drift', () => {
       deleteOjsSubscription(ojsUserId!);
       expect(hasActiveSubscription(ojsUserId!)).toBe(false);
 
-      // Run reconciliation — should detect missing sub and schedule activate
+      // Run reconciliation — should detect missing sub and schedule activate.
+      // Prune queue to only this test user's actions (reconciliation also
+      // schedules actions for all 683 seeded members, which would time out).
       runReconciliation();
+      pruneQueueExcept(wpUserId);
       waitForSync(120_000);
 
       // Subscription should be recreated
@@ -568,8 +572,10 @@ test.describe('Reconciliation catches drift', () => {
         wcs_get_subscription(${subId})->update_status('expired');
       `);
 
-      // Run reconciliation — should detect stale access and schedule expire
+      // Run reconciliation — should detect stale access and schedule expire.
+      // Prune queue to only this test user's actions (see comment above).
       runReconciliation();
+      pruneQueueExcept(wpUserId);
       waitForSync(120_000);
 
       // OJS subscription should now be expired (status 16)

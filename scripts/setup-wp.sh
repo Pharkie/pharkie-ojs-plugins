@@ -64,6 +64,13 @@ wp option get wpojs_url --allow-root 2>/dev/null || \
 wp rewrite structure '/%postname%/' --allow-root
 wp rewrite flush --allow-root
 
+# --- Suppress admin notices (dev environment noise) ---
+# Create UM core pages (suppresses "needs to create pages" notice)
+wp eval-file /var/www/html/scripts/create-um-pages.php --allow-root
+
+# Dismiss UM license + exif notices, WC onboarding/store notices
+wp eval-file /var/www/html/scripts/dismiss-notices.php --allow-root
+
 echo "WordPress setup complete."
 
 # --- Sample data (dev/staging only) ---
@@ -94,6 +101,15 @@ if [ "$SAMPLE_DATA" = true ]; then
 
     echo "Seeding WooCommerce subscriptions..."
     wp eval-file /var/www/html/scripts/seed-subscriptions.php "$CSV" --allow-root
+
+    # Sync seeded subscriptions to HPOS (High-Performance Order Storage).
+    # seed-subscriptions.php uses direct SQL into wp_posts (legacy storage) for speed.
+    # WooCommerce 8+ defaults to HPOS and tries to auto-enable it on first admin visit.
+    # Without syncing, WC throws a fatal: "orders out of sync". This backfills the
+    # wp_wc_orders table so HPOS can be enabled cleanly.
+    echo "Syncing orders to HPOS..."
+    wp wc hpos sync --allow-root
+    wp wc hpos enable --allow-root
 
     TOTAL=$(wp user list --format=count --allow-root 2>/dev/null)
     echo "Total WP users: $TOTAL"

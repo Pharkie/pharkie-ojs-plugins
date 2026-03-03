@@ -27,6 +27,23 @@ json_escape() {
 
 echo "[OJS] Setting up OJS..."
 
+# --- Wait for OJS install to finish (admin user must exist) ---
+# The entrypoint runs the install wizard in the background. HTTP may respond
+# before the admin user is created, so we wait for user_id=1 to appear.
+echo "[OJS] Waiting for admin user (install may still be running)..."
+for i in $(seq 1 60); do
+  ADMIN_EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM users WHERE user_id=1" 2>/dev/null || echo "0")
+  if [ "$ADMIN_EXISTS" = "1" ]; then
+    break
+  fi
+  if [ "$i" = "60" ]; then
+    echo "[OJS] ERROR: Admin user not found after 120s — install may have failed."
+    exit 1
+  fi
+  sleep 2
+done
+echo "[OJS] Admin user ready."
+
 # --- Enable admin API key for scripted access ---
 API_KEY_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM user_settings WHERE user_id=1 AND setting_name='apiKeyEnabled'")
 if [ "$API_KEY_ENABLED" != "1" ]; then

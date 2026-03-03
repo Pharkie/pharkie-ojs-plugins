@@ -220,6 +220,23 @@ export function clearTestSyncData(): void {
 }
 
 /**
+ * Delete all pending wpojs_ Action Scheduler actions EXCEPT those whose
+ * args contain the given WP user ID. Use after runReconciliation() to
+ * avoid processing hundreds of seeded-member actions in tests.
+ */
+export function pruneQueueExcept(wpUserId: number): void {
+  const php = `
+    global $wpdb;
+    $as = $wpdb->prefix . 'actionscheduler_actions';
+    $wpdb->query($wpdb->prepare(
+      "DELETE FROM {$as} WHERE hook LIKE 'wpojs_%%' AND status = 'pending' AND args NOT LIKE %s",
+      '%"wp_user_id":${wpUserId}%'
+    ));
+  `;
+  wpEval(php);
+}
+
+/**
  * Change a WP user's email address.
  * Fires the profile_update hook which our plugin listens on.
  */

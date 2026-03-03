@@ -75,8 +75,8 @@ test.describe('Admin monitoring: Sync Log page', () => {
       const retryLink = row.locator('.wpojs-retry-link');
       await expect(retryLink).toBeVisible();
 
-      // Click retry — the JS replaces the link with "Queued"
-      retryLink.click();
+      // Click retry — the JS replaces the link with "Queued".
+      await retryLink.click();
       await expect(row.locator('text=Queued')).toBeVisible({ timeout: 10_000 });
 
       await page.screenshot({ path: 'e2e/screenshots/wp-admin-retry-queued.png', fullPage: true });
