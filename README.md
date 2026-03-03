@@ -117,7 +117,7 @@ All commands are available under the `wp ojs-sync` namespace.
 ```
 wp ojs-sync sync [--dry-run] [--member=<id-or-email>] [--batch-size=<n>] [--delay=<ms>] [--yes]
 ```
-Bulk sync all active members to OJS, or sync a single member. Use `--dry-run` to preview without making changes. `--yes` skips the confirmation prompt. `--delay` controls the pause between API calls (default 500ms).
+Bulk sync all active members to OJS, or sync a single member. Use `--dry-run` to preview without making changes. `--yes` skips the confirmation prompt. `--delay` controls the pause between API calls (default 500ms). Unrecognised flags are rejected to prevent accidental bulk syncs (e.g. `--user=` instead of `--member=`).
 
 ```
 wp ojs-sync send-welcome-emails [--dry-run]

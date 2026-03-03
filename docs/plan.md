@@ -180,7 +180,7 @@ Each queue action maps to a specific sequence of OJS API calls. The queue proces
 | Command | Description |
 |---|---|
 | `wp ojs-sync sync --dry-run` | Report what bulk sync would do without making changes |
-| `wp ojs-sync sync` | Run bulk sync: creates users + subscriptions (no welcome emails). Batched (50 users), 500ms delay, resume from last run |
+| `wp ojs-sync sync` | Run bulk sync: creates users + subscriptions (no welcome emails). Batched (50 users), 500ms delay, resume from last run. Rejects unknown flags (e.g. `--user=` errors instead of silently running bulk). |
 | `wp ojs-sync sync --member=<id or email>` | Sync a single member (sends welcome email — it's a targeted action) |
 | `wp ojs-sync send-welcome-emails --dry-run` | Report how many welcome emails would be sent |
 | `wp ojs-sync send-welcome-emails` | Send "set your password" emails to all synced users. OJS dedup prevents duplicates — safe to re-run |
