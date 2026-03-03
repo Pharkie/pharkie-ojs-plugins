@@ -75,6 +75,15 @@ class WPOJS_CLI {
 	 * @param array $assoc_args
 	 */
 	public function sync( $args, $assoc_args ) {
+		// Reject unknown flags to prevent silent fallthrough to bulk sync.
+		// e.g. --user= (wrong flag) would otherwise ignore the flag and run
+		// a full bulk sync instead of targeting one member.
+		$known_flags = array( 'dry-run', 'member', 'batch-size', 'delay', 'yes' );
+		$unknown     = array_diff( array_keys( $assoc_args ), $known_flags );
+		if ( ! empty( $unknown ) ) {
+			WP_CLI::error( 'Unknown flag(s): --' . implode( ', --', $unknown ) . '. Did you mean --member=<id-or-email>?' );
+		}
+
 		$dry_run = isset( $assoc_args['dry-run'] );
 
 		// Single user sync.
