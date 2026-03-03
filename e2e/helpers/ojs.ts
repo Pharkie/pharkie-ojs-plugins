@@ -97,15 +97,22 @@ Illuminate\\Support\\Facades\\DB::table('users')->where('user_id', ${userId})->u
 }
 
 /**
+ * Delete an OJS user by ID — cascading cleanup.
+ */
+export function deleteOjsUserById(userId: number): void {
+  ojsQuery(`DELETE FROM subscriptions WHERE user_id = ${userId}`);
+  ojsQuery(`DELETE FROM user_settings WHERE user_id = ${userId}`);
+  ojsQuery(`DELETE FROM user_user_groups WHERE user_id = ${userId}`);
+  ojsQuery(`DELETE FROM users WHERE user_id = ${userId}`);
+}
+
+/**
  * Delete an OJS user by email — cascading cleanup.
  */
 export function deleteOjsUser(email: string): void {
   const userId = findOjsUser(email);
   if (userId === null) return;
-  ojsQuery(`DELETE FROM subscriptions WHERE user_id = ${userId}`);
-  ojsQuery(`DELETE FROM user_settings WHERE user_id = ${userId}`);
-  ojsQuery(`DELETE FROM user_user_groups WHERE user_id = ${userId}`);
-  ojsQuery(`DELETE FROM users WHERE user_id = ${userId}`);
+  deleteOjsUserById(userId);
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   hasActiveSubscription,
   getSubscriptionStatus,
   deleteOjsUser,
+  deleteOjsUserById,
   waitForSync,
   ojsQuery,
   getOjsUserEmail,
@@ -141,6 +142,7 @@ test.describe('Out-of-order events', () => {
     let wpUserId2: number;
     let subId1: number;
     let subId2: number;
+    let ojsUserId1: number | null = null;
     const productId = getSubscriptionProductId();
 
     try {
@@ -149,7 +151,7 @@ test.describe('Out-of-order events', () => {
       subId1 = createSubscription(wpUserId1, productId, 'active');
       waitForSync();
 
-      const ojsUserId1 = findOjsUser(email);
+      ojsUserId1 = findOjsUser(email);
       expect(ojsUserId1).not.toBeNull();
 
       // Delete WP user (GDPR) and sync
@@ -173,7 +175,9 @@ test.describe('Out-of-order events', () => {
     } finally {
       try { deleteSubscription(subId2!); } catch { /* ok */ }
       try { deleteUser(wpUserId2!); } catch { /* ok */ }
+      // Delete the re-created user (by email) and the anonymised original (by ID)
       deleteOjsUser(email);
+      if (ojsUserId1 !== null) deleteOjsUserById(ojsUserId1);
       clearTestSyncData();
     }
   });

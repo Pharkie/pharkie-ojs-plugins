@@ -13,7 +13,7 @@ import {
   isOjsUserDisabled,
   getOjsUserEmail,
   getSubscriptionStatus,
-  deleteOjsUser,
+  deleteOjsUserById,
   waitForSync,
 } from '../helpers/ojs';
 
@@ -24,6 +24,7 @@ const LOGIN = `e2e_delete_${TS}`;
 let wpUserId: number;
 let subId: number;
 let productId: number;
+let ojsUserId: number | null;
 
 test.describe('User deletion / GDPR erasure', () => {
   test.beforeAll(() => {
@@ -31,12 +32,12 @@ test.describe('User deletion / GDPR erasure', () => {
     wpUserId = createUser(LOGIN, EMAIL);
     subId = createSubscription(wpUserId, productId, 'active');
     waitForSync();
+    ojsUserId = findOjsUser(EMAIL);
   });
 
   test.afterAll(() => {
-    // Clean up OJS user if still present (anonymised email)
-    deleteOjsUser(EMAIL);
-    deleteOjsUser(`deleted_${findOjsUser(EMAIL) ?? 0}@anonymised.invalid`);
+    // Delete by ID — email may have been anonymised by the test
+    if (ojsUserId !== null) deleteOjsUserById(ojsUserId);
     clearTestSyncData();
   });
 

@@ -135,7 +135,25 @@ wp option get wpojs_url --allow-root 2>/dev/null || \
 # rewrite structure already flushes, no separate flush needed.
 wp_quiet rewrite structure '/%postname%/'
 
-# --- Suppress admin notices (dev environment noise) ---
+# --- Suppress noisy notices ---
+# WooCommerce Memberships triggers _load_textdomain_just_in_time on every
+# WP-CLI call (WP 6.7+). A mu-plugin silences it at the WP level so all
+# CLI commands (including wp ojs-sync) get clean output.
+MU_DIR="/var/www/html/web/app/mu-plugins"
+mkdir -p "$MU_DIR"
+cat > "$MU_DIR/suppress-textdomain-notice.php" <<'MUEOF'
+<?php
+// Silence _load_textdomain_just_in_time notices from WooCommerce Memberships.
+// This is a third-party plugin bug (loads translations before init), harmless
+// but floods CLI output. Only suppresses this specific notice, not all.
+add_filter('doing_it_wrong_trigger_error', function ($trigger, $function_name) {
+    if ($function_name === '_load_textdomain_just_in_time') {
+        return false;
+    }
+    return $trigger;
+}, 10, 2);
+MUEOF
+
 # Create UM core pages (suppresses "needs to create pages" notice)
 wp_quiet eval-file /var/www/html/scripts/create-um-pages.php
 
