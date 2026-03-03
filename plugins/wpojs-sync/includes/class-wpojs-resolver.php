@@ -158,24 +158,20 @@ class WPOJS_Resolver {
      * @return array Array of WP user IDs.
      */
     public function get_all_active_members() {
+        global $wpdb;
         $user_ids = array();
 
-        // WCS subscribers — paginated to avoid memory issues with large member counts.
-        if ( function_exists( 'wcs_get_subscriptions' ) ) {
-            $page = 1;
-            do {
-                $subscriptions = wcs_get_subscriptions( array(
-                    'subscription_status'    => 'active',
-                    'subscriptions_per_page' => 500,
-                    'paged'                  => $page,
-                ) );
-
-                foreach ( $subscriptions as $sub ) {
-                    $user_ids[] = $sub->get_user_id();
-                }
-
-                $page++;
-            } while ( count( $subscriptions ) === 500 );
+        // WCS subscribers — direct HPOS query for user IDs only (avoids hydrating
+        // full WC_Subscription objects which is extremely slow at scale).
+        $wcs_ids = $wpdb->get_col(
+            "SELECT DISTINCT customer_id
+            FROM {$wpdb->prefix}wc_orders
+            WHERE type = 'shop_subscription'
+            AND status = 'wc-active'
+            AND customer_id > 0"
+        );
+        if ( $wcs_ids ) {
+            $user_ids = array_map( 'intval', $wcs_ids );
         }
 
         // Manual role members.

@@ -40,9 +40,9 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
 {
     private const SUB_STATUS_ACTIVE = 1;
 
-    public const DEFAULT_LOGIN_HINT = 'Does your membership elsewhere include journal access? {lostPasswordUrl} to get started.';
-    public const DEFAULT_PAYWALL_HINT = 'If your membership elsewhere should grant you access to this content, please contact {supportEmail}.';
-    public const DEFAULT_FOOTER_MESSAGE = 'Your journal access may be linked to your membership elsewhere. {wpUrl}';
+    public const DEFAULT_LOGIN_HINT = 'Member? First time here? <a href="{lostPasswordUrl}">Set your password</a> to access journal content.';
+    public const DEFAULT_PAYWALL_HINT = 'If you believe you should have access through your membership, please contact <a href="mailto:{supportEmail}">{supportEmail}</a>.';
+    public const DEFAULT_FOOTER_MESSAGE = 'Your journal access is provided by your membership. <a href="{wpUrl}">Manage your membership</a>.';
 
     public function register($category, $path, $mainContextId = null)
     {
@@ -119,8 +119,8 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
             $escapedUrl = htmlspecialchars($lostPasswordUrl, ENT_QUOTES, 'UTF-8');
             $hintHtml = str_replace(
                 '{lostPasswordUrl}',
-                '<a href="' . $escapedUrl . '">Set your password</a>',
-                htmlspecialchars($messageTemplate, ENT_QUOTES, 'UTF-8')
+                $escapedUrl,
+                $messageTemplate
             );
 
             // Escape for safe embedding inside a JS string literal
@@ -181,8 +181,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 $escapedEmail = htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8');
                 $messageHtml = str_replace(
                     '{supportEmail}',
-                    '<a href="mailto:' . $escapedEmail . '">' . $escapedEmail . '</a>',
-                    htmlspecialchars($messageTemplate, ENT_QUOTES, 'UTF-8')
+                    $escapedEmail,
+                    $messageTemplate
                 );
                 $output .= '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:12px 16px;margin-top:16px;font-size:14px;">'
                     . $messageHtml
@@ -209,8 +209,8 @@ document.addEventListener("DOMContentLoaded", function() {
         $escapedUrl = htmlspecialchars($wpUrl, ENT_QUOTES, 'UTF-8');
         $messageHtml = str_replace(
             '{wpUrl}',
-            '<a href="' . $escapedUrl . '">Manage your membership</a>',
-            htmlspecialchars($messageTemplate, ENT_QUOTES, 'UTF-8')
+            $escapedUrl,
+            $messageTemplate
         );
         $output .= '<div style="text-align:center;padding:8px 16px;font-size:13px;color:#666;border-top:1px solid #eee;margin-top:8px;">'
             . $messageHtml

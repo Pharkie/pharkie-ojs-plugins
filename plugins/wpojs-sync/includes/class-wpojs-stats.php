@@ -21,7 +21,27 @@ class WPOJS_Stats {
 	 * Count of active WP members.
 	 */
 	public function get_active_member_count() {
-		return count( $this->resolver->get_all_active_members() );
+		global $wpdb;
+		$count = 0;
+
+		// Count active WCS subscribers via direct DB query (avoid loading full objects).
+		// Uses HPOS table (wc_orders) where customer_id is a direct column.
+		$count += (int) $wpdb->get_var(
+			"SELECT COUNT(DISTINCT customer_id)
+			FROM {$wpdb->prefix}wc_orders
+			WHERE type = 'shop_subscription'
+			AND status = 'wc-active'"
+		);
+
+		// Count manual role members.
+		$manual_roles = get_option( 'wpojs_manual_roles', array() );
+		if ( ! empty( $manual_roles ) ) {
+			foreach ( $manual_roles as $role ) {
+				$count += count( get_users( array( 'role' => $role, 'fields' => 'ID' ) ) );
+			}
+		}
+
+		return $count;
 	}
 
 	/**
