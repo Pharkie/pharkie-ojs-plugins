@@ -6,16 +6,16 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 ## Key docs (read these first)
 
-- `docs/plan.md` — implementation plan: what we're building, how it works, endpoint specs, launch sequence, testing approach
+- `docs/private/plan.md` — implementation plan: what we're building, how it works, endpoint specs, launch sequence, testing approach
 - `docs/discovery.md` — decision trail: what was tried, what was eliminated, and why
-- `docs/review-findings.md` — multi-perspective plan review and how findings were resolved
+- `docs/private/review-findings.md` — multi-perspective plan review and how findings were resolved
 - `docs/ojs-api.md` — OJS REST API capabilities, DB schema, PHP internals
 - `docs/wp-integration.md` — WP membership stack (Ultimate Member + WooCommerce Subscriptions), hooks, code patterns
-- `docs/janeway-paywall-investigation.md` — concrete technical plan for Janeway backup path
+- `docs/private/janeway-paywall-investigation.md` — concrete technical plan for Janeway backup path
 - `docs/deployment.md` — non-Docker deployment guide: plugin installation, config, troubleshooting
-- `docs/hosting-requirements.md` — OJS + WP hosting specs and access requirements for staging/production
+- `docs/private/hosting-requirements.md` — OJS + WP hosting specs and access requirements for staging/production
 - `docs/support-runbook.md` — support staff quick reference for common member issues
-- `docs/membership-platform.md` — membership platform comparison (WildApricot, CiviCRM, Beacon, Outseta)
+- `docs/private/membership-platform.md` — membership platform comparison (WildApricot, CiviCRM, Beacon, Outseta)
 - `TODO.md` — roadmap with phased implementation steps
 
 ## Architecture decision
@@ -25,7 +25,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 1. **Initial bulk sync:** WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts and subscription records for each member via the OJS plugin endpoints, then sends "set your password" welcome emails. This is how existing members get access at launch.
 2. **Ongoing sync (after launch):** WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and pushes changes to OJS automatically via an async queue.
 
-See `docs/plan.md` for full details, `docs/discovery.md` for how we got here.
+See `docs/private/plan.md` for full details, `docs/discovery.md` for how we got here.
 
 **Janeway migration** is a genuine backup (not a nuclear option) if the OJS 3.5 upgrade proves too costly. See `docs/discovery.md` for the comparison.
 
@@ -68,7 +68,7 @@ See `docs/plan.md` for full details, `docs/discovery.md` for how we got here.
 
 **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles registration/profiles/roles. WCS handles billing. Membership = WP role.
 
-Primary integration: hook into **WooCommerce Subscriptions** status events (`woocommerce_subscription_status_active`, `_expired`, `_cancelled`, `_on-hold`). All sync calls are async (queued via Action Scheduler, not inline). Daily reconciliation catches any drift. See `docs/wp-integration.md` for WCS hook details and `docs/plan.md` for the full WP plugin spec.
+Primary integration: hook into **WooCommerce Subscriptions** status events (`woocommerce_subscription_status_active`, `_expired`, `_cancelled`, `_on-hold`). All sync calls are async (queued via Action Scheduler, not inline). Daily reconciliation catches any drift. See `docs/wp-integration.md` for WCS hook details and `docs/private/plan.md` for the full WP plugin spec.
 
 ## Code conventions
 
@@ -82,10 +82,10 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 
 ## Dev environment
 
-- **`scripts/rebuild-dev.sh`** — full nuke-and-pave: tears down containers+volumes, rebuilds images, brings up stack, runs setup, runs tests. Devcontainer-only (hardcoded host path for DinD volume mounts). Flags: `--with-sample-data`, `--skip-tests`.
+- **`scripts/rebuild-dev.sh`** — full grave-and-pave: tears down containers+volumes, rebuilds images, brings up stack, runs setup, runs tests. Devcontainer-only (hardcoded host path for DinD volume mounts). Flags: `--with-sample-data`, `--skip-tests`.
 - **`scripts/setup-dev.sh`** — portable setup: assumes containers are already running. Waits for services, runs OJS + WP setup scripts. Flags: `--with-sample-data`.
 - **Why two scripts?** Docker-in-Docker in the devcontainer requires a hardcoded host path for `--project-directory`. `rebuild-dev.sh` bakes this in. `setup-dev.sh` is the portable inner script other devs can use with their own container setup.
-- **Post-rebuild prompt:** `docs/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
+- **Post-rebuild prompt:** `docs/private/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
 
 ## Pre-commit hooks
 

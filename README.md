@@ -86,7 +86,7 @@ Navigate to **OJS Sync** in the WP Admin sidebar and configure:
 
 ## Configuration reference
 
-### WP settings page (Settings -> OJS Sync)
+### WP settings page (OJS Sync in admin sidebar)
 
 | Setting | Description |
 |---|---|
@@ -174,26 +174,26 @@ npx playwright test expanded-resilience     # just the resilience suite
 
 ### Design and architecture
 
-- [Implementation plan](docs/plan.md) — what we're building, how it works, endpoint specs, launch sequence, testing approach
+- [Implementation plan](docs/private/plan.md) — what we're building, how it works, endpoint specs, launch sequence, testing approach
 - [Decision trail](docs/discovery.md) — what was tried, what was eliminated, and why
-- [Plan review findings](docs/review-findings.md) — multi-perspective review and how findings were resolved
+- [Plan review findings](docs/private/review-findings.md) — multi-perspective review and how findings were resolved
 
 ### Technical reference
 
 - [OJS API reference](docs/ojs-api.md) — OJS REST API capabilities, DB schema, PHP internals
 - [WP integration](docs/wp-integration.md) — WP membership stack (Ultimate Member + WooCommerce Subscriptions), hooks, code patterns
-- [Janeway backup path](docs/janeway-paywall-investigation.md) — concrete technical plan if OJS 3.5 upgrade fails
+- [Janeway backup path](docs/private/janeway-paywall-investigation.md) — concrete technical plan if OJS 3.5 upgrade fails
 
 ### Deployment and operations
 
 - [Deployment guide](docs/deployment.md) — non-Docker deployment: plugin installation, config, folder naming, troubleshooting
-- [Hosting requirements](docs/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
+- [Hosting requirements](docs/private/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
 - [Support runbook](docs/support-runbook.md) — quick reference for support staff handling member access issues
 - [TODO / roadmap](TODO.md) — what's done, what's left before production
 
 ### Future planning
 
-- [Membership platform comparison](docs/membership-platform.md) — WildApricot, CiviCRM, Beacon, Outseta evaluation
+- [Membership platform comparison](docs/private/membership-platform.md) — WildApricot, CiviCRM, Beacon, Outseta evaluation
 
 ## AI disclosure
 

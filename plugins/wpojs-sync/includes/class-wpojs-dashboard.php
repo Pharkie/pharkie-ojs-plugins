@@ -59,12 +59,6 @@ class WPOJS_Dashboard {
         // Query last successful sync timestamp for this user.
         $last_synced = null;
         if ( $this->logger ) {
-            $entries = $this->logger->get_entries( array(
-                'status'   => 'success',
-                'per_page' => 1,
-                'offset'   => 0,
-            ) );
-            // Filter to this user's entries via a direct query for efficiency.
             global $wpdb;
             $table = $wpdb->prefix . 'wpojs_sync_log';
             $last_synced = $wpdb->get_var( $wpdb->prepare(

@@ -329,7 +329,7 @@ class WPOJS_Sync {
 				'code'    => $find['code'],
 				'body'    => array(
 					'userId'  => $find['body']['userId'],
-					'created' => true,
+					'created' => false,
 				),
 				'error'   => '',
 			);
@@ -341,7 +341,7 @@ class WPOJS_Sync {
 	/**
 	 * Send an admin alert email.
 	 */
-	private function send_admin_alert( $subject, $message ) {
+	public function send_admin_alert( $subject, $message ) {
 		$to = get_option( 'admin_email' );
 		wp_mail( $to, $subject, $message );
 	}

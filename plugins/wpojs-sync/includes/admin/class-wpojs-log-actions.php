@@ -111,6 +111,10 @@ class WPOJS_Log_Actions {
 		$wp_user_id = (int) $entry->wp_user_id;
 		$action     = $entry->action;
 
+		if ( $action === 'delete_user' ) {
+			return array( 'success' => false, 'message' => 'Cannot retry: user already deleted. Resolve manually in OJS admin.' );
+		}
+
 		// Map log action to Action Scheduler hook.
 		$action_map = array(
 			'activate'           => 'wpojs_sync_activate',
@@ -133,7 +137,8 @@ class WPOJS_Log_Actions {
 
 		// For email_change, we can't reconstruct old/new email from the log entry alone.
 		// Schedule an activate instead (it will ensure the user+subscription are correct).
-		if ( $action === 'email_change' ) {
+		$is_email_change = ( $action === 'email_change' );
+		if ( $is_email_change ) {
 			$as_hook = 'wpojs_sync_activate';
 		}
 
@@ -143,6 +148,10 @@ class WPOJS_Log_Actions {
 		}
 
 		as_schedule_single_action( time(), $as_hook, $as_args, 'wpojs-sync' );
+
+		if ( $is_email_change ) {
+			return array( 'success' => true, 'message' => 'Retried as full sync — email change data unavailable. Warning: if the member\'s old OJS account still exists, a duplicate may have been created. Check OJS admin and merge/remove the old account if needed.' );
+		}
 
 		return array( 'success' => true, 'message' => 'Queued for retry.' );
 	}

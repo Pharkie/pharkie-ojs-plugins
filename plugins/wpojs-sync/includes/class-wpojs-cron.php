@@ -88,23 +88,34 @@ class WPOJS_Cron {
 		}
 
 		// Stale access check: find synced users who are no longer active WP members.
+		// Paginated to avoid memory issues with large member counts.
 		global $wpdb;
-		$synced_users = $wpdb->get_col(
-			"SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = '_wpojs_user_id'"
-		);
 		$active_set = array_flip( $active_members );
-		foreach ( $synced_users as $uid ) {
-			$uid = (int) $uid;
-			if ( ! isset( $active_set[ $uid ] ) ) {
-				// This user was synced but is no longer active -- schedule expire.
-				$args = array( array( 'wp_user_id' => $uid ) );
-				if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
-					as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
-					$this->logger->log( $uid, '', 'reconcile_expire', 'queued', 0, 'Stale access: synced user no longer active member' );
-					$expired++;
+		$page_size  = 500;
+		$offset     = 0;
+
+		do {
+			$synced_users = $wpdb->get_col( $wpdb->prepare(
+				"SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = '_wpojs_user_id' LIMIT %d OFFSET %d",
+				$page_size,
+				$offset
+			) );
+
+			foreach ( $synced_users as $uid ) {
+				$uid = (int) $uid;
+				if ( ! isset( $active_set[ $uid ] ) ) {
+					// This user was synced but is no longer active -- schedule expire.
+					$args = array( array( 'wp_user_id' => $uid ) );
+					if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
+						as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
+						$this->logger->log( $uid, '', 'reconcile_expire', 'queued', 0, 'Stale access: synced user no longer active member' );
+						$expired++;
+					}
 				}
 			}
-		}
+
+			$offset += $page_size;
+		} while ( count( $synced_users ) === $page_size );
 
 		$this->logger->log(
 			0,
@@ -120,6 +131,13 @@ class WPOJS_Cron {
 				$errors
 			)
 		);
+
+		if ( $errors > 0 ) {
+			$this->sync->send_admin_alert(
+				'OJS Sync: Reconciliation API Errors',
+				sprintf( "Daily reconciliation encountered %d API errors. %d members could not be checked.\nReview: %s", $errors, $errors, admin_url( 'admin.php?page=wpojs-sync-log' ) )
+			);
+		}
 	}
 
 	/**

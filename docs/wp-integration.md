@@ -2,11 +2,11 @@
 
 Last updated: 2026-02-19.
 
-This doc covers the WP membership stack and the raw hooks available. For the full WP plugin spec (queue tables, CLI commands, cron schedule, admin pages), see [`plan.md`](./plan.md#wp-plugin-spec).
+This doc covers the WP membership stack and the raw hooks available. For the full WP plugin spec (queue tables, CLI commands, cron schedule, admin pages), see [`plan.md`](./private/plan.md#wp-plugin-spec).
 
 ## Plugin stack
 
-SEA's membership system is six WordPress plugins layered on top of each other. None of them is a membership system on its own — each answers one question:
+The membership system is six WordPress plugins layered on top of each other. None of them is a membership system on its own — each answers one question:
 
 | Plugin | Question it answers | Without it... |
 |--------|-------------------|---------------|
@@ -47,7 +47,7 @@ We only care about **WC Subscriptions**. It fires status events (`active`, `expi
 
 ### Why this is fragile
 
-Six plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with independent update cycles, database tables, hooks, and paid licences (~£200+/year for WCS alone). A breaking update in any one of them can silently break the membership chain. This stack is a strong candidate for future replacement — see [`membership-platform.md`](./membership-platform.md).
+Six plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with independent update cycles, database tables, hooks, and paid licences (~£200+/year for WCS alone). A breaking update in any one of them can silently break the membership chain. This stack is a strong candidate for future replacement — see [`membership-platform.md`](./private/membership-platform.md).
 
 ### Plugin versions and sources
 
@@ -84,7 +84,7 @@ add_action('woocommerce_subscription_status_cancelled', 'wpojs_queue_expire');
 add_action('woocommerce_subscription_status_on-hold', 'wpojs_queue_expire');
 ```
 
-**Important: all hooks queue a sync intent, they do not make inline HTTP calls.** The WP Cron queue processor handles the actual OJS API calls asynchronously. This prevents OJS downtime from blocking WP checkout.
+**Important: all hooks queue a sync intent, they do not make inline HTTP calls.** Action Scheduler handles the actual OJS API calls asynchronously. This prevents OJS downtime from blocking WP checkout.
 
 ### Additional hooks
 
@@ -151,60 +151,31 @@ foreach ($subscriptions as $sub) {
 }
 ```
 
-## Membership roles on live site
+## Membership roles
 
-From WP admin (confirmed 2026-02-19 via Playwright):
+The WP plugin needs to know which WordPress roles represent members with journal access. There are two categories:
 
-**SEA membership roles** (all grant journal access):
+**WCS-managed roles** — assigned automatically when a subscription becomes active, removed when it expires/cancels. WCS hooks fire for these, so the sync is automatic.
 
-| Role slug | Display name | Members |
-|---|---|---|
-| `um_custom_role_4` | SEA student member (with listing) | 39 |
-| `um_custom_role_3` | SEA student member (no listing) | 202 |
-| `um_custom_role_6` | SEA international member (with listing) | 32 |
-| `um_custom_role_5` | SEA international member (no listing) | 58 |
-| `um_custom_role_2` | SEA UK member (with listing) | 129 |
-| `um_custom_role_1` | SEA UK member (no listing) | 234 |
+**Manual/admin roles** — assigned by an admin for complimentary or lifetime members (e.g., board members, honorary members). WCS hooks won't fire for these. The bulk sync and daily reconciliation detect these roles directly via the `WPOJS_MANUAL_MEMBER_ROLES` setting.
 
-**Manual/admin roles** (for Exco/life members — set by admin, not via WCS checkout):
+Configure manual member roles on the WP plugin settings page (OJS Sync → Settings). The role slugs are visible in WP Admin → Users → edit any user → Role dropdown.
 
-| Role slug | Display name | Members |
-|---|---|---|
-| `um_custom_role_9` | Manually set student listing | 0 |
-| `um_custom_role_8` | Manually set international listing | 0 |
-| `um_custom_role_7` | Manually set UK listing | 1 |
+> **Site-specific role audit:** For an example of mapping live site roles, see [`private/sea-site-audit.md`](./private/sea-site-audit.md).
 
-These also grant journal access. Because they're assigned manually (not via WCS checkout), WCS hooks won't fire for them. The bulk sync and daily reconciliation must detect these roles directly, not rely solely on WCS subscription status.
+## WooCommerce subscription products
 
-**Total active members by role: 695.** Active WCS subscriptions: 698. The small discrepancy is expected (some subscriptions may be in transition or belong to users with non-standard role states).
+Each WCS subscription product represents a membership tier. The WP plugin settings page maps each WC Product ID to an OJS Subscription Type ID.
 
-**Standard WP/WooCommerce/other plugin roles** (not relevant to sync):
-- `subscriber` (181), `customer` (629), `editor`, `contributor`, `shop_manager`
-- `wpseo_manager`, `wpseo_editor`
-- `give_worker`, `give_manager`, `give_donor`, `give_accountant`
+If all tiers grant identical journal access, they can all map to a single OJS subscription type. Use separate types if you want tier breakdowns in OJS admin.
 
-The "with listing" / "no listing" distinction is a member directory feature (UM), not relevant to journal access. All nine SEA membership roles (six standard + three manual) grant OJS access.
+Find your WC Product IDs in WP Admin → Products → edit each subscription product (the ID is in the URL).
 
-## WooCommerce subscription products (live site)
-
-Confirmed 2026-02-19 via Playwright:
-
-| WC Product ID | Product name | Price |
-|---|---|---|
-| 1892 | UK Membership (no directory listing) | £50/yr |
-| 1924 | International Membership (no directory listing) | £60/yr |
-| 1927 | Student Membership (no directory listing) | £35/yr |
-| 23040 | Student Membership (with directory listing) | £35/yr |
-| 23041 | International Membership (with directory listing) | £60/yr |
-| 23042 | UK Membership (with directory listing) | £50/yr |
-
-698 active subscriptions at time of capture.
+> **Site-specific product audit:** For an example product mapping, see [`private/sea-site-audit.md`](./private/sea-site-audit.md).
 
 ## Mapping membership tiers to OJS subscription types
 
 **All membership tiers grant journal access.** Any active WCS subscription → OJS access regardless of tier. The WP plugin settings page includes a mapping table: WC Product ID → OJS Subscription Type ID. Even though all tiers grant access, the mapping keeps things explicit and supports future differentiation.
-
-Since all six products grant identical journal access, they can all map to a single OJS subscription type — or to separate types if SEA wants to track tier breakdowns in OJS admin. Decision deferred until OJS subscription types are created on staging.
 
 ```php
 // Check which product the subscription is for:
@@ -217,7 +188,7 @@ foreach ($items as $item) {
 
 ## Bulk sync
 
-WP-CLI command only (not admin button — avoids HTTP timeouts). See [`plan.md`](./plan.md#wp-cli-commands) for the full command spec.
+WP-CLI command only (not admin button — avoids HTTP timeouts). See [`plan.md`](./private/plan.md#wp-cli-commands) for the full command spec.
 
 ```php
 // Core query for bulk sync:

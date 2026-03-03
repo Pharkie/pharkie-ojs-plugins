@@ -36,7 +36,7 @@ class WPOJS_Logger {
             $this->table,
             array(
                 'wp_user_id'        => absint( $wp_user_id ),
-                'email'             => sanitize_email( $email ),
+                'email'             => sanitize_text_field( $email ),
                 'action'            => sanitize_text_field( $action ),
                 'status'            => sanitize_text_field( $status ),
                 'ojs_response_code' => $response_code ? absint( $response_code ) : null,

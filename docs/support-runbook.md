@@ -119,6 +119,49 @@ The digest email fires once per day if there were any sync failures in the last 
 
 OJS Admin → Website → Plugins → WP-OJS Subscription API → Status. Shows recent API requests, config health checks, and sync stats. Log entries older than 30 days are automatically cleaned up.
 
+### Email change retry falls back to full sync
+
+When retrying a failed `email_change` sync entry, the system falls back to a full `activate` sync (find-or-create user + subscription) because the log entry doesn't store the old/new email pair. This is correct behaviour — the retry will ensure the user has an active OJS account and subscription using their current WP email — but it won't rename an existing OJS account from old email to new email. If the member had an OJS account under their old email, that account will remain with the old email and a new account will be created with the current email.
+
+**What to tell the member:** Their access should work with their current email. If they had content/history under the old email in OJS, an admin may need to manually merge or clean up the old account in OJS.
+
+**If a duplicate OJS account was created:** In OJS Admin → Users & Roles, search for the member's old email. Disable or delete the old account (only delete if it has no submission history). The member's current account (under their new email) should already have an active subscription.
+
+### Delete user retry not available
+
+The retry button is intentionally hidden for `delete_user` failures. When a WP user is deleted, the plugin tries to anonymise their OJS account (GDPR). If this fails, the WP user is already gone — retrying would fail because there's no WP user to look up.
+
+**Resolution:** Log into OJS admin and manually anonymise or delete the user account. Check the sync log for the OJS user ID or email to find them.
+
+### WP Cron disabled — manual reconciliation
+
+If `DISABLE_WP_CRON` is set (common on managed hosting that uses server-side cron), the daily reconciliation still runs — it's scheduled via Action Scheduler, which piggybacks on WP Cron but can also be triggered by a server-side cron hitting `wp-cron.php`.
+
+**If reconciliation isn't running:**
+
+1. Check that the server-side cron job hits `wp-cron.php` at least once daily.
+2. Or run manually: `wp action-scheduler run --hooks=wpojs_daily_reconcile`
+3. Check Action Scheduler status: WP Admin → Tools → Scheduled Actions → search for "wpojs".
+
+### Action Scheduler queue stuck
+
+If sync jobs are queuing up but not processing:
+
+**Symptoms:** Log shows "queued" entries that never change to "completed" or "failed". Members report access delays.
+
+**Diagnosis:**
+
+1. WP Admin → Tools → Scheduled Actions.
+2. Look for failed or stuck actions with the `wpojs_` prefix.
+3. Check if Action Scheduler's runner is active (should have a "pending" action for `action_scheduler_run_queue`).
+
+**Resolution:**
+
+1. If the runner is missing: `wp action-scheduler run` to kick it.
+2. If actions are stuck in "in-progress" for over 5 minutes: they may have timed out. Edit and re-save them to reset to "pending".
+3. If persistent: check PHP error logs for fatal errors during sync, check OJS is reachable from WP server.
+4. Nuclear option: `wp action-scheduler clean` to clear completed/failed actions (doesn't affect pending ones).
+
 ---
 
 ## Monitoring endpoint

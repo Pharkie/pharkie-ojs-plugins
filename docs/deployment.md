@@ -105,14 +105,19 @@ CREATE TABLE wpojs_api_log (
 The integration creates OJS subscriptions for members. This requires at least one subscription type to exist in OJS.
 
 Go to OJS Admin → Subscriptions → Subscription Types → Create New Subscription Type:
-- **Name:** e.g. "SEA Membership" (descriptive, for admin reference)
+- **Name:** e.g. "Individual Membership" (descriptive, for admin reference)
 - **Type:** Individual
 - **Duration/format:** doesn't matter for sync — the WP plugin sets explicit `dateStart`/`dateEnd`
 
-Note the `type_id` — you'll need it for the WP plugin mapping. You can find it in the URL when editing the type, or query the database:
+**Finding Subscription Type IDs:** In OJS Admin, go to Subscriptions → Subscription Types. Click Edit on each type — the `typeId` is in the URL. Alternatively, run this query on the OJS database:
 
 ```sql
-SELECT type_id, type_name FROM subscription_types WHERE journal_id = 1;
+SELECT st.type_id, sts.setting_value AS type_name
+FROM subscription_types st
+JOIN subscription_type_settings sts ON st.type_id = sts.type_id
+  AND sts.setting_name = 'name'
+  AND sts.locale = 'en'
+WHERE st.journal_id = 1;
 ```
 
 ### 6. Apache configuration

@@ -18,6 +18,12 @@ VARS='$OJS_APP_KEY $OJS_BASE_URL $OJS_TIMEZONE $OJS_DB_HOST $OJS_DB_USER $OJS_DB
 VARS="$VARS "'$WPOJS_API_KEY_SECRET $OJS_MAIL_FROM $OJS_SMTP_ENABLED $OJS_SMTP_HOST'
 VARS="$VARS "'$OJS_SMTP_PORT $OJS_SMTP_AUTH $OJS_SMTP_USER $OJS_SMTP_PASSWORD $WPOJS_ALLOWED_IPS'
 VARS="$VARS "'$WPOJS_WP_MEMBER_URL $WPOJS_SUPPORT_EMAIL'
+VARS="$VARS "'$WPOJS_DEFAULT_LOGIN_HINT $WPOJS_DEFAULT_PAYWALL_HINT $WPOJS_DEFAULT_FOOTER_MESSAGE'
+
+# Default UI messages (used if not set in .env)
+export WPOJS_DEFAULT_LOGIN_HINT="${WPOJS_DEFAULT_LOGIN_HINT:-Member? First time here? <a href=\"{lostPasswordUrl}\">Set your password</a> to access journal content.}"
+export WPOJS_DEFAULT_PAYWALL_HINT="${WPOJS_DEFAULT_PAYWALL_HINT:-If you believe you should have access through your membership, please contact <a href=\"mailto:{supportEmail}\">{supportEmail}</a>.}"
+export WPOJS_DEFAULT_FOOTER_MESSAGE="${WPOJS_DEFAULT_FOOTER_MESSAGE:-Your journal access is provided by your membership. <a href=\"{wpUrl}\">Manage your membership</a>.}"
 
 NEEDS_INSTALL=false
 

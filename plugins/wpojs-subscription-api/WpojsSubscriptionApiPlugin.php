@@ -399,12 +399,23 @@ document.addEventListener("DOMContentLoaded", function() {
                 ->count();
 
             // Subscription types in use.
+            // Type names live in subscription_type_settings (not a column on subscription_types).
+            $locale = Application::get()->getRequest()->getContext()?->getPrimaryLocale() ?? 'en';
             $subTypeCounts = DB::table('subscriptions')
                 ->join('subscription_types', 'subscriptions.type_id', '=', 'subscription_types.type_id')
+                ->leftJoin('subscription_type_settings', function ($join) use ($locale) {
+                    $join->on('subscription_types.type_id', '=', 'subscription_type_settings.type_id')
+                         ->where('subscription_type_settings.setting_name', '=', 'name')
+                         ->where('subscription_type_settings.locale', '=', $locale);
+                })
                 ->where('subscription_types.journal_id', $journalId)
                 ->where('subscriptions.status', self::SUB_STATUS_ACTIVE)
-                ->select('subscription_types.type_name', DB::raw('COUNT(*) as count'))
-                ->groupBy('subscription_types.type_id', 'subscription_types.type_name')
+                ->select(
+                    'subscription_types.type_id',
+                    DB::raw("COALESCE(subscription_type_settings.setting_value, CONCAT('Type #', subscription_types.type_id)) as type_name"),
+                    DB::raw('COUNT(*) as count')
+                )
+                ->groupBy('subscription_types.type_id', 'subscription_type_settings.setting_value')
                 ->get()
                 ->toArray();
         } catch (\Exception $e) {

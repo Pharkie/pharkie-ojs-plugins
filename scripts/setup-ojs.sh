@@ -71,37 +71,51 @@ JWT_PAYLOAD=$(echo -n "[\"$API_KEY\"]" | base64 | tr -d '=' | tr '/+' '_-' | tr 
 JWT_SIGNATURE=$(echo -n "${JWT_HEADER}.${JWT_PAYLOAD}" | openssl dgst -sha256 -hmac "$API_SECRET" -binary | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 JWT_TOKEN="${JWT_HEADER}.${JWT_PAYLOAD}.${JWT_SIGNATURE}"
 
+# --- Wait for OJS API to be fully ready ---
+# After install, OJS needs time to bootstrap its Laravel service container.
+# Rather than blind retries on each API call, we gate on a single readiness
+# check: GET /index/api/v1/contexts must return HTTP 200. This proves the
+# full stack (Apache + PHP + OJS app + service container) is operational.
+echo "[OJS] Waiting for API readiness..."
+for i in $(seq 1 60); do
+  API_HTTP=$(curl -s -o /dev/null -w '%{http_code}' \
+    http://localhost:80/index/api/v1/contexts \
+    -H "Authorization: Bearer $JWT_TOKEN" 2>/dev/null)
+  if [ "$API_HTTP" = "200" ]; then
+    echo "[OJS] API ready."
+    break
+  fi
+  if [ "$i" = "60" ]; then
+    echo "[OJS] ERROR: API not ready after 120s (last HTTP $API_HTTP)."
+    exit 1
+  fi
+  sleep 2
+done
+
 # Helper function for authenticated API calls.
-# Returns the response body. Aborts on HTTP errors (retries 5xx up to 5 times
-# to handle the post-install race where OJS isn't fully initialized yet).
+# Returns the response body. Aborts immediately on HTTP errors — the
+# readiness gate above ensures OJS is fully bootstrapped before we get here.
 ojs_api() {
   local METHOD=$1 URL=$2 DATA=$3
-  local HTTP_CODE BODY TMPFILE ATTEMPT MAX_RETRIES=5
+  local HTTP_CODE BODY TMPFILE
 
-  for ATTEMPT in $(seq 1 $MAX_RETRIES); do
-    TMPFILE=$(mktemp)
-    HTTP_CODE=$(curl -s -o "$TMPFILE" -w '%{http_code}' -X "$METHOD" "http://localhost:80${URL}" \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer $JWT_TOKEN" \
-      ${DATA:+-d "$DATA"})
-    BODY=$(cat "$TMPFILE")
-    rm -f "$TMPFILE"
+  TMPFILE=$(mktemp)
+  HTTP_CODE=$(curl -s -o "$TMPFILE" -w '%{http_code}' -X "$METHOD" "http://localhost:80${URL}" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $JWT_TOKEN" \
+    ${DATA:+-d "$DATA"})
+  BODY=$(cat "$TMPFILE")
+  rm -f "$TMPFILE"
 
-    if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-      echo "$BODY"
-      return 0
-    fi
+  if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+    echo "$BODY"
+    return 0
+  fi
 
-    if [ "$HTTP_CODE" -ge 500 ] && [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
-      echo "[OJS] API $METHOD $URL returned HTTP $HTTP_CODE, retrying in 5s (attempt $ATTEMPT/$MAX_RETRIES)..." >&2
-      sleep 5
-      continue
-    fi
-
-    echo "[OJS] ERROR: API $METHOD $URL returned HTTP $HTTP_CODE" >&2
-    echo "$BODY" | head -10 >&2
-    exit 1
-  done
+  echo "[OJS] ERROR at $(date '+%H:%M:%S'): $METHOD $URL → HTTP $HTTP_CODE" >&2
+  echo "[OJS] Request data: ${DATA:-(none)}" >&2
+  echo "[OJS] Response: $(echo "$BODY" | head -c 500)" >&2
+  exit 1
 }
 
 # --- Journal settings (all from env — no hardcoded defaults) ---
@@ -208,8 +222,8 @@ if [ "$SUB_TYPE_COUNT" = "0" ] && [ -n "$OJS_SUB_TYPES" ]; then
       echo "[OJS] ERROR: Invalid cost '$TYPE_COST' for subscription type '$TYPE_NAME'" >&2
       exit 1
     fi
-    # Escape single quotes in name for SQL
-    TYPE_NAME_SQL="${TYPE_NAME//\'/\'\'}"
+    # Escape backslashes and single quotes for SQL
+    TYPE_NAME_SQL=$(printf '%s' "$TYPE_NAME" | sed "s/\\\\/\\\\\\\\/g; s/'/''/g")
     echo "[OJS]   $TYPE_NAME (£$TYPE_COST)"
     $MARIADB -e "INSERT INTO subscription_types (journal_id, cost, currency_code_alpha, duration, format, institutional, membership, disable_public_display, seq) VALUES ($JOURNAL_ID_SUB, $TYPE_COST, 'GBP', NULL, 1, 0, 0, 0, $SEQ)"
     TYPE_ID=$($MARIADB -N -e "SELECT type_id FROM subscription_types WHERE journal_id=$JOURNAL_ID_SUB AND seq=$SEQ")

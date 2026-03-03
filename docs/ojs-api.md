@@ -14,7 +14,7 @@ The OJS REST API (documented in [swagger-source.json](https://github.com/pkp/ojs
 | `GET` | `/api/v1/users/{userId}` | Get single user |
 | `PUT` | `/api/v1/users/{userId}/endRole/{userGroupId}` | End a role assignment |
 
-**No confirmed POST or PUT for user creation/update** in the current swagger spec (main branch). Some older docs suggest POST /users exists — must verify against actual version.
+**No confirmed POST or PUT for user creation/update** in the current swagger spec (main branch). Resolved: the custom plugin (`wpojs-subscription-api`) implements user/subscription CRUD via OJS's internal facades (`Repo::user()`, DAO classes). See the [implementation plan](./private/plan.md#ojs-endpoint-spec) for the full endpoint spec.
 
 Minimum role: Journal Manager, Editor, or Subeditor.
 
@@ -160,8 +160,8 @@ OJS has no native anonymise method. Options:
 use PKP\security\Validation;
 
 $hash = Validation::generatePasswordResetHash($userId); // HMAC-SHA256, expiry from config
-// Default expiry: 7200 seconds (2 hours). Controlled by `security.reset_seconds` in config.inc.php.
-// For bulk welcome emails: increase to 604800 (7 days).
+// Default expiry: 7 days. Controlled by `password_reset_timeout` in the `[security]` section of config.inc.php (value in days).
+// For bulk welcome emails: increase to 14 or more days to give members time to set their password.
 ```
 
 Token auto-invalidates if user logs in (hash includes `dateLastLogin`).

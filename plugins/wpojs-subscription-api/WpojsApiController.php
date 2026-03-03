@@ -86,7 +86,7 @@ class WpojsApiController extends PKPBaseController
 
         if (empty($allowedIps)) {
             return response()->json(
-                ['error' => 'No allowed IPs configured in config.inc.php [wpojs] section'],
+                ['error' => 'IP allowlist not configured'],
                 Response::HTTP_FORBIDDEN
             );
         }
@@ -94,24 +94,33 @@ class WpojsApiController extends PKPBaseController
         $allowed = array_map('trim', explode(',', $allowedIps));
         $clientIp = $request->server('REMOTE_ADDR');
 
+        // Pre-compute IPv4 long for CIDR matching. Returns false for IPv6.
+        $clientLong = ip2long($clientIp);
+        if ($clientLong === false) {
+            error_log('[wpojs-api] IPv6 address detected (' . $clientIp . '). IP allowlist CIDR matching only supports IPv4. Configure your server for IPv4 or add the exact IPv6 address to allowed_ips.');
+        }
+
         $matched = false;
         foreach ($allowed as $entry) {
             if (str_contains($entry, '/')) {
-                // CIDR notation (e.g. 172.16.0.0/12)
+                // CIDR notation (e.g. 172.16.0.0/12) — IPv4 only
+                if ($clientLong === false) {
+                    continue; // skip CIDR check for IPv6 clients
+                }
                 [$subnet, $bits] = explode('/', $entry, 2);
                 $bits = (int) $bits;
                 if ($bits < 0 || $bits > 32) {
                     continue; // invalid CIDR prefix length
                 }
                 $subnetLong = ip2long($subnet);
-                $clientLong = ip2long($clientIp);
                 $mask = -1 << (32 - $bits);
-                if ($subnetLong !== false && $clientLong !== false
+                if ($subnetLong !== false
                     && ($clientLong & $mask) === ($subnetLong & $mask)) {
                     $matched = true;
                     break;
                 }
             } elseif ($entry === $clientIp) {
+                // Exact string match — works for both IPv4 and IPv6
                 $matched = true;
                 break;
             }
@@ -119,7 +128,7 @@ class WpojsApiController extends PKPBaseController
 
         if (!$matched) {
             return response()->json(
-                ['error' => 'IP not allowed'],
+                ['error' => 'IP not allowed (IPv4 CIDR and exact IPv4/IPv6 matching supported)'],
                 Response::HTTP_FORBIDDEN
             );
         }
@@ -164,7 +173,8 @@ class WpojsApiController extends PKPBaseController
     /**
      * Combined authorization: IP allowlist + API key + rate limit.
      * Call at the start of every protected endpoint.
-     * Logs the request on both success and auth failure.
+     * Logs auth failures (401/403/429). Success logging is deferred to
+     * jsonResponse() so the actual endpoint status code is recorded.
      * Also triggers periodic log cleanup (at most once per hour).
      */
     private function checkAuth(Request $request): ?JsonResponse
@@ -189,7 +199,6 @@ class WpojsApiController extends PKPBaseController
             return $rateLimitError;
         }
 
-        $this->logRequest($request, 200);
         return null;
     }
 
@@ -278,6 +287,17 @@ class WpojsApiController extends PKPBaseController
     }
 
     /**
+     * Build a JSON response and log the actual HTTP status code.
+     * Use this instead of response()->json() in endpoint methods
+     * so the API log reflects the real outcome (not a premature 200).
+     */
+    private function jsonResponse(Request $request, array $data, int $status = 200): JsonResponse
+    {
+        $this->logRequest($request, $status);
+        return response()->json($data, $status);
+    }
+
+    /**
      * Get the journal ID from the request context.
      * Returns a JsonResponse error if no journal context is available.
      */
@@ -286,7 +306,7 @@ class WpojsApiController extends PKPBaseController
         $context = Application::get()->getRequest()->getContext();
         if (!$context) {
             return response()->json(
-                ['error' => 'No journal context — request must target a journal-scoped URL'],
+                ['error' => 'Invalid request context'],
                 Response::HTTP_BAD_REQUEST
             );
         }
@@ -306,7 +326,7 @@ class WpojsApiController extends PKPBaseController
 
     public function ping(Request $request): JsonResponse
     {
-        return response()->json(['status' => 'ok'], Response::HTTP_OK);
+        return $this->jsonResponse($request, ['status' => 'ok']);
     }
 
     // ---------------------------------------------------------------
@@ -452,10 +472,10 @@ class WpojsApiController extends PKPBaseController
             }
         }
 
-        return response()->json([
+        return $this->jsonResponse($request, [
             'compatible' => $compatible,
             'checks' => $checks,
-        ], Response::HTTP_OK);
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -473,24 +493,21 @@ class WpojsApiController extends PKPBaseController
         $email = trim($request->query('email', ''));
 
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return response()->json(
-                ['error' => 'Provide valid email query parameter'],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->jsonResponse($request, ['error' => 'Provide valid email query parameter'], Response::HTTP_BAD_REQUEST);
         }
 
         $user = Repo::user()->getByEmail($email, true);
         if (!$user) {
-            return response()->json(['found' => false], Response::HTTP_OK);
+            return $this->jsonResponse($request, ['found' => false]);
         }
 
-        return response()->json([
+        return $this->jsonResponse($request, [
             'found' => true,
             'userId' => $user->getId(),
             'email' => $user->getEmail(),
             'username' => $user->getUsername(),
             'disabled' => (bool) $user->getDisabled(),
-        ], Response::HTTP_OK);
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -510,22 +527,22 @@ class WpojsApiController extends PKPBaseController
         $sendWelcomeEmail = (bool) $request->input('sendWelcomeEmail', false);
 
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 255) {
-            return response()->json(['error' => 'Invalid or missing email'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing email'], Response::HTTP_BAD_REQUEST);
         }
         if (empty($firstName) || strlen($firstName) > 255) {
-            return response()->json(['error' => 'Invalid or missing firstName'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing firstName'], Response::HTTP_BAD_REQUEST);
         }
         if (empty($lastName) || strlen($lastName) > 255) {
-            return response()->json(['error' => 'Invalid or missing lastName'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing lastName'], Response::HTTP_BAD_REQUEST);
         }
 
         // Check for existing user (include disabled accounts)
         $existingUser = Repo::user()->getByEmail($email, true);
         if ($existingUser) {
-            return response()->json([
+            return $this->jsonResponse($request, [
                 'userId' => $existingUser->getId(),
                 'created' => false,
-            ], Response::HTTP_OK);
+            ]);
         }
 
         try {
@@ -542,8 +559,9 @@ class WpojsApiController extends PKPBaseController
             }
             $user->setUsername($username);
             $user->setEmail($email);
-            $user->setGivenName($firstName, 'en');
-            $user->setFamilyName($lastName, 'en');
+            $locale = Application::get()->getRequest()->getContext()?->getPrimaryLocale() ?? 'en';
+            $user->setGivenName($firstName, $locale);
+            $user->setFamilyName($lastName, $locale);
             $user->setPassword(Validation::encryptCredentials($username, bin2hex(random_bytes(16))));
             $user->setDateRegistered(Core::getCurrentDate());
             $user->setDateValidated(Core::getCurrentDate()); // marks email as verified
@@ -573,7 +591,7 @@ class WpojsApiController extends PKPBaseController
                 'setting_value' => Core::getCurrentDate(),
             ]);
         } catch (\Illuminate\Database\QueryException $e) {
-            // Duplicate key = race condition: another request created this user
+            // Race condition: another request may have created user with same email
             $raceUser = Repo::user()->getByEmail($email, true);
             if ($raceUser) {
                 // Ensure Reader role is assigned (idempotent — safe if already assigned)
@@ -589,20 +607,43 @@ class WpojsApiController extends PKPBaseController
                     );
                 }
 
-                return response()->json([
+                return $this->jsonResponse($request, [
                     'userId' => $raceUser->getId(),
                     'created' => false,
-                ], Response::HTTP_OK);
+                ]);
             }
-            return response()->json(
-                ['error' => 'Failed to create user'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+
+            // No email collision found — likely a username collision. Retry once
+            // with a random suffix to break the tie.
+            try {
+                $user->setUsername($base . '_' . bin2hex(random_bytes(3)));
+                $userId = Repo::user()->add($user);
+
+                // Replicate the success path: assign Reader role and mark sync-created
+                $contextId = $this->getJournalIdOrFail();
+                if ($contextId instanceof JsonResponse) return $contextId;
+                $readerGroup = Repo::userGroup()
+                    ->getByRoleIds([Role::ROLE_ID_READER], $contextId)
+                    ->first();
+                if ($readerGroup) {
+                    Repo::userGroup()->assignUserToGroup(
+                        userId: $userId,
+                        userGroupId: $readerGroup->getKey()
+                    );
+                }
+                DB::table('user_settings')->insertOrIgnore([
+                    'user_id' => $userId,
+                    'locale' => '',
+                    'setting_name' => 'wpojs_created_by_sync',
+                    'setting_value' => Core::getCurrentDate(),
+                ]);
+            } catch (\Exception $retryException) {
+                error_log('[wpojs-api] createUser retry failed for ' . ($email ?? 'unknown') . ': ' . $retryException->getMessage());
+                return $this->jsonResponse($request, ['error' => 'Failed to create user'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
         } catch (\Exception $e) {
-            return response()->json(
-                ['error' => 'Failed to create user'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+            error_log('[wpojs-api] createUser failed for ' . ($email ?? 'unknown') . ': ' . $e->getMessage());
+            return $this->jsonResponse($request, ['error' => 'Failed to create user'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         if ($sendWelcomeEmail) {
@@ -610,10 +651,10 @@ class WpojsApiController extends PKPBaseController
             $this->doSendWelcomeEmail($userId);
         }
 
-        return response()->json([
+        return $this->jsonResponse($request, [
             'userId' => $userId,
             'created' => true,
-        ], Response::HTTP_OK);
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -631,29 +672,26 @@ class WpojsApiController extends PKPBaseController
         $newEmail = trim($request->input('newEmail', ''));
 
         if ($userId <= 0) {
-            return response()->json(['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
         }
         if (empty($newEmail) || !filter_var($newEmail, FILTER_VALIDATE_EMAIL) || strlen($newEmail) > 255) {
-            return response()->json(['error' => 'Invalid or missing newEmail'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing newEmail'], Response::HTTP_BAD_REQUEST);
         }
 
         $user = Repo::user()->get($userId);
         if (!$user) {
-            return response()->json(['error' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return $this->jsonResponse($request, ['error' => 'User not found'], Response::HTTP_NOT_FOUND);
         }
 
         // OJS doesn't enforce uniqueness in edit() — we must check
         $existing = Repo::user()->getByEmail($newEmail, true);
         if ($existing && $existing->getId() !== $userId) {
-            return response()->json(
-                ['error' => 'Email already in use by another account'],
-                Response::HTTP_CONFLICT
-            );
+            return $this->jsonResponse($request, ['error' => 'Email already in use by another account'], Response::HTTP_CONFLICT);
         }
 
         Repo::user()->edit($user, ['email' => $newEmail]);
 
-        return response()->json(['userId' => $userId], Response::HTTP_OK);
+        return $this->jsonResponse($request, ['userId' => $userId]);
     }
 
     // ---------------------------------------------------------------
@@ -671,23 +709,24 @@ class WpojsApiController extends PKPBaseController
         $userId = (int) $request->route('userId');
 
         if ($userId <= 0) {
-            return response()->json(['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
         }
 
         $user = Repo::user()->get($userId);
         if (!$user) {
-            return response()->json(['error' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return $this->jsonResponse($request, ['error' => 'User not found'], Response::HTTP_NOT_FOUND);
         }
 
         // Anonymise all PII and disable account
+        $locale = Application::get()->getRequest()->getContext()?->getPrimaryLocale() ?? 'en';
         $anonymisedEmail = 'deleted_' . $userId . '@anonymised.invalid';
         Repo::user()->edit($user, [
             'email' => $anonymisedEmail,
             'username' => 'deleted_' . $userId,
-            'givenName' => ['en' => 'Deleted'],
-            'familyName' => ['en' => 'User'],
-            'affiliation' => ['en' => ''],
-            'biography' => ['en' => ''],
+            'givenName' => [$locale => 'Deleted'],
+            'familyName' => [$locale => 'User'],
+            'affiliation' => [$locale => ''],
+            'biography' => [$locale => ''],
             'orcid' => '',
             'url' => '',
             'phone' => '',
@@ -706,13 +745,27 @@ class WpojsApiController extends PKPBaseController
             $dao->updateObject($sub);
         }
 
-        // Remove all user_settings (may contain PII like preferredPublicName)
-        DB::table('user_settings')->where('user_id', $userId)->delete();
+        // Remove PII-related settings (name, affiliation, biography already anonymised by edit() above)
+        DB::table('user_settings')
+            ->where('user_id', $userId)
+            ->whereIn('setting_name', [
+                'wpojs_created_by_sync',
+                'wpojs_welcome_email_sent',
+                'preferredPublicName',
+                'signature',
+                'mailingAddress',
+                'phone',
+                'orcid',
+            ])
+            ->delete();
 
-        return response()->json([
+        // Remove access_keys (password reset tokens tied to this user)
+        DB::table('access_keys')->where('user_id', $userId)->delete();
+
+        return $this->jsonResponse($request, [
             'deleted' => true,
             'userId' => $userId,
-        ], Response::HTTP_OK);
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -733,25 +786,25 @@ class WpojsApiController extends PKPBaseController
         $dateEnd = $request->input('dateEnd'); // null for non-expiring
 
         if ($userId <= 0) {
-            return response()->json(['error' => 'Invalid or missing userId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing userId'], Response::HTTP_BAD_REQUEST);
         }
         if ($typeId <= 0) {
-            return response()->json(['error' => 'Invalid or missing typeId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing typeId'], Response::HTTP_BAD_REQUEST);
         }
         if (empty($dateStart) || !$this->isValidDate($dateStart)) {
-            return response()->json(['error' => 'Invalid or missing dateStart (expected Y-m-d)'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing dateStart (expected Y-m-d)'], Response::HTTP_BAD_REQUEST);
         }
         if ($dateEnd !== null && !$this->isValidDate($dateEnd)) {
-            return response()->json(['error' => 'Invalid dateEnd (expected Y-m-d or null)'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid dateEnd (expected Y-m-d or null)'], Response::HTTP_BAD_REQUEST);
         }
         if ($dateEnd !== null && $dateEnd < $dateStart) {
-            return response()->json(['error' => 'dateEnd must not be before dateStart'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'dateEnd must not be before dateStart'], Response::HTTP_BAD_REQUEST);
         }
 
         // Verify user exists
         $user = Repo::user()->get($userId);
         if (!$user) {
-            return response()->json(['error' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return $this->jsonResponse($request, ['error' => 'User not found'], Response::HTTP_NOT_FOUND);
         }
 
         $journalId = $this->getJournalIdOrFail();
@@ -761,10 +814,7 @@ class WpojsApiController extends PKPBaseController
         $typeDao = DAORegistry::getDAO('SubscriptionTypeDAO');
         $type = $typeDao->getById($typeId);
         if (!$type || (int) $type->getJournalId() !== $journalId) {
-            return response()->json(
-                ['error' => 'Invalid subscription type for this journal'],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->jsonResponse($request, ['error' => 'Invalid subscription type for this journal'], Response::HTTP_BAD_REQUEST);
         }
 
         $dao = DAORegistry::getDAO('IndividualSubscriptionDAO');
@@ -808,9 +858,9 @@ class WpojsApiController extends PKPBaseController
                 $dao->updateObject($existingSub);
             }
 
-            return response()->json([
+            return $this->jsonResponse($request, [
                 'subscriptionId' => $existingSub->getId(),
-            ], Response::HTTP_OK);
+            ]);
         }
 
         // Create new subscription
@@ -829,9 +879,9 @@ class WpojsApiController extends PKPBaseController
 
             $dao->insertObject($sub);
 
-            return response()->json([
+            return $this->jsonResponse($request, [
                 'subscriptionId' => $sub->getId(),
-            ], Response::HTTP_OK);
+            ]);
         } catch (\Illuminate\Database\QueryException $e) {
             // Race condition: another request inserted a subscription concurrently.
             // Re-read and update the existing subscription instead.
@@ -843,15 +893,13 @@ class WpojsApiController extends PKPBaseController
                 $raceSub->setDateEnd($dateEnd);
                 $dao->updateObject($raceSub);
 
-                return response()->json([
+                return $this->jsonResponse($request, [
                     'subscriptionId' => $raceSub->getId(),
-                ], Response::HTTP_OK);
+                ]);
             }
 
-            return response()->json(
-                ['error' => 'Failed to create subscription'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+            error_log('[wpojs-api] createSubscription failed for userId=' . $userId . ': ' . $e->getMessage());
+            return $this->jsonResponse($request, ['error' => 'Failed to create subscription'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -869,7 +917,7 @@ class WpojsApiController extends PKPBaseController
         $subscriptionId = (int) $request->route('subscriptionId');
 
         if ($subscriptionId <= 0) {
-            return response()->json(['error' => 'Invalid subscriptionId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid subscriptionId'], Response::HTTP_BAD_REQUEST);
         }
 
         $journalId = $this->getJournalIdOrFail();
@@ -878,14 +926,14 @@ class WpojsApiController extends PKPBaseController
         $sub = $dao->getById($subscriptionId);
 
         if (!$sub || (int) $sub->getJournalId() !== $journalId) {
-            return response()->json(['error' => 'Subscription not found'], Response::HTTP_NOT_FOUND);
+            return $this->jsonResponse($request, ['error' => 'Subscription not found'], Response::HTTP_NOT_FOUND);
         }
 
         // Idempotent: setting to OTHER even if already OTHER is fine
         $sub->setStatus(self::STATUS_OTHER);
         $dao->updateObject($sub);
 
-        return response()->json(['subscriptionId' => $sub->getId()], Response::HTTP_OK);
+        return $this->jsonResponse($request, ['subscriptionId' => $sub->getId()]);
     }
 
     // ---------------------------------------------------------------
@@ -903,7 +951,7 @@ class WpojsApiController extends PKPBaseController
         $userId = (int) $request->route('userId');
 
         if ($userId <= 0) {
-            return response()->json(['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
         }
 
         $journalId = $this->getJournalIdOrFail();
@@ -912,16 +960,13 @@ class WpojsApiController extends PKPBaseController
         $sub = $dao->getByUserIdForJournal($userId, $journalId);
 
         if (!$sub) {
-            return response()->json(
-                ['error' => 'No subscription found for this user in this journal'],
-                Response::HTTP_NOT_FOUND
-            );
+            return $this->jsonResponse($request, ['error' => 'No subscription found for this user in this journal'], Response::HTTP_NOT_FOUND);
         }
 
         $sub->setStatus(self::STATUS_OTHER);
         $dao->updateObject($sub);
 
-        return response()->json(['subscriptionId' => $sub->getId()], Response::HTTP_OK);
+        return $this->jsonResponse($request, ['subscriptionId' => $sub->getId()]);
     }
 
     // ---------------------------------------------------------------
@@ -939,17 +984,11 @@ class WpojsApiController extends PKPBaseController
         $emails = $request->input('emails', []);
 
         if (!is_array($emails) || empty($emails)) {
-            return response()->json(
-                ['error' => 'Provide a non-empty emails array'],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->jsonResponse($request, ['error' => 'Provide a non-empty emails array'], Response::HTTP_BAD_REQUEST);
         }
 
         if (count($emails) > 500) {
-            return response()->json(
-                ['error' => 'Maximum 500 emails per batch'],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->jsonResponse($request, ['error' => 'Maximum 500 emails per batch'], Response::HTTP_BAD_REQUEST);
         }
 
         $journalId = $this->getJournalIdOrFail();
@@ -959,6 +998,10 @@ class WpojsApiController extends PKPBaseController
         // Batch-lookup users by email
         $emailToUserId = [];
         foreach ($emails as $email) {
+            if (!is_string($email)) {
+                $results[] = ['email' => (string) $email, 'status' => 'error', 'error' => 'Invalid email format'];
+                continue;
+            }
             $email = trim($email);
             if (empty($email)) {
                 continue;
@@ -996,7 +1039,7 @@ class WpojsApiController extends PKPBaseController
             }
         }
 
-        return response()->json(['results' => $results], Response::HTTP_OK);
+        return $this->jsonResponse($request, ['results' => $results]);
     }
 
     // ---------------------------------------------------------------
@@ -1014,18 +1057,15 @@ class WpojsApiController extends PKPBaseController
         $queryUserId = $request->query('userId');
 
         if (empty($email) && empty($queryUserId)) {
-            return response()->json(
-                ['error' => 'Provide email or userId query parameter'],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->jsonResponse($request, ['error' => 'Provide email or userId query parameter'], Response::HTTP_BAD_REQUEST);
         }
 
         if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return response()->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
         }
 
         if (!empty($queryUserId) && (int) $queryUserId <= 0) {
-            return response()->json(['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
         }
 
         $journalId = $this->getJournalIdOrFail();
@@ -1035,7 +1075,7 @@ class WpojsApiController extends PKPBaseController
         if (!empty($email)) {
             $user = Repo::user()->getByEmail($email, true);
             if (!$user) {
-                return response()->json([], Response::HTTP_OK);
+                return $this->jsonResponse($request, []);
             }
             $resolvedUserId = $user->getId();
         } else {
@@ -1046,10 +1086,10 @@ class WpojsApiController extends PKPBaseController
         $sub = $dao->getByUserIdForJournal($resolvedUserId, $journalId);
 
         if (!$sub) {
-            return response()->json([], Response::HTTP_OK);
+            return $this->jsonResponse($request, []);
         }
 
-        return response()->json([
+        return $this->jsonResponse($request, [
             [
                 'subscriptionId' => $sub->getId(),
                 'userId' => $sub->getUserId(),
@@ -1059,7 +1099,7 @@ class WpojsApiController extends PKPBaseController
                 'dateStart' => $sub->getDateStart(),
                 'dateEnd' => $sub->getDateEnd(),
             ],
-        ], Response::HTTP_OK);
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -1076,12 +1116,12 @@ class WpojsApiController extends PKPBaseController
         $userId = (int) $request->input('userId', 0);
 
         if ($userId <= 0) {
-            return response()->json(['error' => 'Invalid or missing userId'], Response::HTTP_BAD_REQUEST);
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing userId'], Response::HTTP_BAD_REQUEST);
         }
 
         $user = Repo::user()->get($userId);
         if (!$user) {
-            return response()->json(['error' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return $this->jsonResponse($request, ['error' => 'User not found'], Response::HTTP_NOT_FOUND);
         }
 
         // Dedup: skip if already sent
@@ -1091,22 +1131,19 @@ class WpojsApiController extends PKPBaseController
             ->exists();
 
         if ($alreadySent) {
-            return response()->json([
+            return $this->jsonResponse($request, [
                 'sent' => false,
                 'reason' => 'Welcome email already sent',
-            ], Response::HTTP_OK);
+            ]);
         }
 
         $sent = $this->doSendWelcomeEmail($userId);
 
         if (!$sent) {
-            return response()->json(
-                ['error' => 'Failed to send welcome email'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+            return $this->jsonResponse($request, ['error' => 'Failed to send welcome email'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        return response()->json(['sent' => true], Response::HTTP_OK);
+        return $this->jsonResponse($request, ['sent' => true]);
     }
 
     // ---------------------------------------------------------------
@@ -1185,6 +1222,7 @@ class WpojsApiController extends PKPBaseController
 
             return true;
         } catch (\Exception $e) {
+            error_log('[wpojs-api] Welcome email failed for userId=' . $userId . ': ' . $e->getMessage());
             // Email failed — remove dedup flag so it can be retried
             DB::table('user_settings')
                 ->where('user_id', $userId)

@@ -1,7 +1,7 @@
 {
   "name": "sea/wp-ojs",
   "type": "project",
-  "description": "SEA WordPress + OJS integration (Bedrock-based)",
+  "description": "WordPress + OJS integration (Bedrock-based)",
   "require": {
     "php": ">=8.2",
     "roots/bedrock-autoloader": "^1.0",

@@ -238,7 +238,7 @@ class WPOJS_Settings {
         $value = get_option( 'wpojs_journal_name', '' );
         printf(
             '<input type="text" name="wpojs_journal_name" value="%s" class="regular-text" placeholder="Journal" />' .
-            '<p class="description">Shown in the My Account dashboard widget (e.g. \'Existential Analysis\').</p>',
+            '<p class="description">Shown in the My Account dashboard widget (e.g. \'Journal of Example Studies\').</p>',
             esc_attr( $value )
         );
     }
@@ -281,6 +281,7 @@ class WPOJS_Settings {
                         echo esc_html( $ip );
                         ?>
                         <p class="description">Add this IP to the OJS plugin's allowed IP list.</p>
+                        <p class="description">This is the server's local IP. Behind a load balancer or NAT, the outbound IP may differ. Verify with your hosting provider or use <code>curl -s https://api.ipify.org</code> from the server.</p>
                     </td>
                 </tr>
                 <tr>
@@ -320,13 +321,13 @@ class WPOJS_Settings {
                     }, function(response) {
                         $btn.prop('disabled', false);
                         if (response.success) {
-                            $result.html('<span style="color:green;">&#10003; ' + response.data.message + '</span>');
+                            $result.empty().append($('<span>').css('color','green').text('\u2713 ' + response.data.message));
                         } else {
-                            $result.html('<span style="color:red;">&#10007; ' + response.data.message + '</span>');
+                            $result.empty().append($('<span>').css('color','red').text('\u2717 ' + response.data.message));
                         }
                     }).fail(function() {
                         $btn.prop('disabled', false);
-                        $result.html('<span style="color:red;">AJAX request failed.</span>');
+                        $result.empty().append($('<span>').css('color','red').text('\u2717 AJAX request failed.'));
                     });
                 });
             });

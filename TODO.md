@@ -11,7 +11,7 @@
 
 ## Staging test results (2026-03-02)
 
-External tester deployed to staging (WP: testj.existentialanalysis.org.uk, OJS: testojs.existentialanalysis.org.uk).
+External tester deployed to staging (WP and OJS staging instances — URLs in `docs/private/hosting-requirements.md`).
 
 - [x] Connection test passes (WP can reach OJS, authenticated, compatible)
 - [x] Bulk backfill — existing members synced to OJS (user accounts created, subscriptions activated)
@@ -27,7 +27,7 @@ Bugs found and fixed: `hash_equals()` TypeError on numeric secrets (cast to stri
 
 ## Before deploying to production
 
-- [ ] Set up OJS 3.5 production server — new DigitalOcean droplet running OJS 3.5 in Docker (staging already on 3.5.0.3). This replaces the current 3.4 server, not an in-place upgrade. See `docs/hosting-requirements.md` for full specs.
+- [ ] Set up OJS 3.5 production server — new DigitalOcean droplet running OJS 3.5 in Docker (staging already on 3.5.0.3). This replaces the current 3.4 server, not an in-place upgrade. See `docs/private/hosting-requirements.md` for full specs.
 - [ ] Set up transactional email relay on OJS server (SPF/DKIM/DMARC) — verify welcome email delivery end-to-end
 - [ ] Configure WP settings: type mapping for **all 6 WC products**, manual roles, OJS URL
 - [ ] Configure OJS `config.inc.php` `[wpojs]` section: allowed IPs, WP member URL, support email. See `docs/deployment.md` for config reference.
@@ -76,7 +76,7 @@ Bugs found and fixed: `hash_equals()` TypeError on numeric secrets (cast to stri
 - [x] Dashboard "last synced" timestamp — shows last successful sync date on the journal access card.
 - [x] OJS settings length validation — `mb_substr(..., 0, 500)` on message settings, `maxlength="500"` on textareas.
 - [x] Type mapping validation on test-connection — warns if WC product IDs don't exist or no mapping configured.
-- [x] Rollback runbook — added to `docs/plan.md` covering OJS upgrade, plugin rollback, bulk sync, welcome emails.
+- [x] Rollback runbook — added to `docs/private/plan.md` covering OJS upgrade, plugin rollback, bulk sync, welcome emails.
 - [x] Support runbook additions — password reset, welcome email customization, monitoring endpoint, email security note.
 - [x] waitForSync E2E buffer — 500ms sleep after Action Scheduler run.
 - [x] Concurrent change E2E test — activate + email change before queue processes.

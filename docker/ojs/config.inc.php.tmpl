@@ -115,6 +115,6 @@ rate_limit_window = 60
 ; Instance-specific default UI messages (override generic plugin defaults).
 ; These pre-populate the Settings form. Admins can further edit via the UI.
 ; Available placeholders: {lostPasswordUrl}, {supportEmail}, {wpUrl}
-default_login_hint = "SEA member? First time here? <a href=\"{lostPasswordUrl}\">Set your password</a> to access journal content."
-default_paywall_hint = "If you believe you should have access through your SEA membership, please contact <a href=\"mailto:{supportEmail}\">{supportEmail}</a>."
-default_footer_message = "Your journal access is provided by your SEA membership. <a href=\"{wpUrl}\">Manage your membership</a>."
+default_login_hint = "${WPOJS_DEFAULT_LOGIN_HINT}"
+default_paywall_hint = "${WPOJS_DEFAULT_PAYWALL_HINT}"
+default_footer_message = "${WPOJS_DEFAULT_FOOTER_MESSAGE}"

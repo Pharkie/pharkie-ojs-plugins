@@ -160,16 +160,22 @@ class WPOJS_Resolver {
     public function get_all_active_members() {
         $user_ids = array();
 
-        // WCS subscribers.
+        // WCS subscribers — paginated to avoid memory issues with large member counts.
         if ( function_exists( 'wcs_get_subscriptions' ) ) {
-            $subscriptions = wcs_get_subscriptions( array(
-                'subscription_status' => 'active',
-                'subscriptions_per_page' => -1,
-            ) );
+            $page = 1;
+            do {
+                $subscriptions = wcs_get_subscriptions( array(
+                    'subscription_status'    => 'active',
+                    'subscriptions_per_page' => 500,
+                    'paged'                  => $page,
+                ) );
 
-            foreach ( $subscriptions as $sub ) {
-                $user_ids[] = $sub->get_user_id();
-            }
+                foreach ( $subscriptions as $sub ) {
+                    $user_ids[] = $sub->get_user_id();
+                }
+
+                $page++;
+            } while ( count( $subscriptions ) === 500 );
         }
 
         // Manual role members.

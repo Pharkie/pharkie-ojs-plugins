@@ -48,6 +48,24 @@ register_activation_hook( __FILE__, array( 'WPOJS_Activator', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'WPOJS_Activator', 'deactivate' ) );
 
 /**
+ * Register a 'weekly' cron schedule as fallback.
+ *
+ * WordPress core doesn't include 'weekly' — it comes from WooCommerce.
+ * If WooCommerce is deactivated before this plugin, wp_schedule_event()
+ * with 'weekly' silently fails. This ensures the schedule always exists.
+ */
+add_filter( 'cron_schedules', 'wpojs_add_weekly_schedule' );
+function wpojs_add_weekly_schedule( $schedules ) {
+	if ( ! isset( $schedules['weekly'] ) ) {
+		$schedules['weekly'] = array(
+			'interval' => WEEK_IN_SECONDS,
+			'display'  => 'Once Weekly',
+		);
+	}
+	return $schedules;
+}
+
+/**
  * Bootstrap the plugin after all plugins are loaded.
  */
 function wpojs_init() {

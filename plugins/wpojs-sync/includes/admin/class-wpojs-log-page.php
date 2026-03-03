@@ -224,8 +224,10 @@ class WPOJS_Log_List_Table extends WP_List_Table {
                 return esc_html( $item->created_at );
             case 'email':
                 $output = esc_html( $item->email );
-                if ( $item->status === 'fail' ) {
+                if ( $item->status === 'fail' && $item->action !== 'delete_user' ) {
                     $output .= '<div class="row-actions"><span class="retry"><a href="#" class="wpojs-retry-link" data-log-id="' . esc_attr( $item->id ) . '" data-nonce="' . esc_attr( wp_create_nonce( 'wpojs_retry_' . $item->id ) ) . '">Retry</a></span></div>';
+                } elseif ( $item->status === 'fail' && $item->action === 'delete_user' ) {
+                    $output .= '<div class="row-actions"><span style="color:#999;">Resolve manually in OJS</span></div>';
                 }
                 return $output;
             case 'action':
