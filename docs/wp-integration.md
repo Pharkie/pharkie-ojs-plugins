@@ -234,7 +234,7 @@ Ultimate Member role change hooks (`um_after_member_role_upgrade`, `um_after_use
 1. **Double-firing**: WCS status changes trigger UM role changes, so both hooks fire for the same event — duplicate OJS API calls
 2. **False positives**: UM hooks fire for role changes unrelated to membership (admin actions, other plugins)
 3. **Complexity**: would need dedup logic (timestamp checks, action comparison) to avoid noise
-4. **Unnecessary**: daily reconciliation catches anything WCS hooks miss. For immediate manual grants, use `wp ojs-sync sync --user=<email>`.
+4. **Unnecessary**: daily reconciliation catches anything WCS hooks miss. For immediate manual grants, use `wp ojs-sync sync --member=<email>`.
 
 The UM hooks are documented here for reference in case the decision is revisited. The raw hook signatures:
 

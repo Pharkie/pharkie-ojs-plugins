@@ -66,14 +66,17 @@ Add a `[wpojs]` section to your OJS `config.inc.php`:
 
 ```ini
 [wpojs]
+api_key_secret = "your-shared-secret-key"
 allowed_ips = "203.0.113.10"
 wp_member_url = "https://your-wp-site.example.com/membership/"
 support_email = "support@example.com"
 ```
 
+The `api_key_secret` must match the `WPOJS_API_KEY` constant in `wp-config.php`. See the [Deployment guide](docs/deployment.md) for the full config reference.
+
 ### Configure WP settings
 
-Navigate to **Settings -> OJS Sync** in WP Admin and configure:
+Navigate to **OJS Sync** in the WP Admin sidebar and configure:
 
 - OJS Base URL
 - Subscription Type Mapping (WooCommerce Product -> OJS Subscription Type ID)
@@ -112,9 +115,9 @@ Navigate to **Settings -> OJS Sync** in WP Admin and configure:
 All commands are available under the `wp ojs-sync` namespace.
 
 ```
-wp ojs-sync sync [--dry-run] [--user=<id-or-email>] [--batch-size=<n>] [--delay=<ms>]
+wp ojs-sync sync [--dry-run] [--member=<id-or-email>] [--batch-size=<n>] [--delay=<ms>] [--yes]
 ```
-Bulk sync all active members to OJS, or sync a single user. Use `--dry-run` to preview without making changes. `--delay` controls the pause between API calls (default 500ms); increase on slow environments.
+Bulk sync all active members to OJS, or sync a single member. Use `--dry-run` to preview without making changes. `--yes` skips the confirmation prompt. `--delay` controls the pause between API calls (default 500ms).
 
 ```
 wp ojs-sync send-welcome-emails [--dry-run]

@@ -19,14 +19,14 @@ Bulk sync (~700 existing members at launch)
 
 Member signs up / renews on WordPress (ongoing, after launch)
   → WP plugin fires on WooCommerce Subscription status change
-  → Logs sync intent to queue table (not inline HTTP)
-  → WP Cron picks up queue item, calls OJS: find-or-create user + create/renew subscription
+  → Schedules sync action via Action Scheduler (not inline HTTP)
+  → Action Scheduler calls OJS: find-or-create user + create/renew subscription
   → If OJS is down: retries 3 times (5min / 15min / 1hr), then alerts admin
   → Member visits OJS, logs in, hits paywalled content → access granted
 
 Member lapses / cancels
-  → WP plugin fires on status change → queues expire action
-  → WP Cron calls OJS: expire subscription
+  → WP plugin fires on status change → schedules expire action
+  → Action Scheduler calls OJS: expire subscription
   → OJS paywall denies access → shows purchase options + "SEA member? Contact support"
 
 Non-member visits paywalled content
@@ -64,8 +64,8 @@ Installed like any WP plugin:
 - Settings page: OJS URL (HTTPS enforced), subscription type ID mapping (WooCommerce Product → OJS Subscription Type), journal ID(s), "Test connection" button
 - API key stored as `wp-config.php` constant (`WPOJS_API_KEY`), not in the database
 - Hooks into **WooCommerce Subscriptions** lifecycle events (`status_active`, `status_expired`, `status_cancelled`, `status_on-hold`) as primary triggers
-- **Async dispatch**: hooks log sync intent to a local queue table; WP Cron processes the queue (not inline HTTP calls)
-- **Retry logic**: 3 attempts at 5min / 15min / 1hr intervals via WP Cron; after 3 failures, mark as permanently failed and email admin
+- **Async dispatch**: hooks schedule sync actions via Action Scheduler (not inline HTTP calls)
+- **Retry logic**: 3 attempts at 5min / 15min / 1hr intervals via Action Scheduler; after 3 failures, mark as permanently failed and email admin
 - **Email change hook**: detects WP email changes, calls OJS to update the corresponding account
 - Bulk sync command (**WP-CLI only**) for initial population and drift correction, with batching and resume
 - **Structured sync log**: custom DB table with per-user success/fail records, searchable in WP admin
@@ -114,20 +114,7 @@ Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not 
 
 ### Database tables
 
-**`wpojs_sync_queue`** — async dispatch queue
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | BIGINT PK | Auto-increment |
-| `wp_user_id` | BIGINT | FK to WP users |
-| `email` | VARCHAR(255) | Member email at time of event |
-| `action` | VARCHAR(30) | `activate`, `expire`, `email_change`, `delete_user` |
-| `payload` | TEXT (JSON) | Full data needed for the OJS call |
-| `status` | VARCHAR(20) | `pending`, `processing`, `failed`, `permanent_fail`, `completed` |
-| `attempts` | TINYINT | Current retry count (max 3) |
-| `next_retry_at` | DATETIME | When to retry next (null if completed/permanent_fail) |
-| `created_at` | DATETIME | When the event was queued |
-| `completed_at` | DATETIME | When it succeeded or permanently failed |
+**Async queue: Action Scheduler** — sync actions are scheduled via `as_schedule_single_action()` (bundled with WooCommerce). No custom queue table — Action Scheduler manages state, retries, and execution. View queue status in WP Admin → Tools → Scheduled Actions, filter by group `wpojs-sync`.
 
 **WP usermeta: `_wpojs_user_id`** — cached OJS userId per WP user, set on first successful `find-or-create`. Used by expire/email_change/delete actions to avoid an extra HTTP lookup. Removed on GDPR deletion.
 
@@ -194,7 +181,7 @@ Each queue action maps to a specific sequence of OJS API calls. The queue proces
 |---|---|
 | `wp ojs-sync sync --dry-run` | Report what bulk sync would do without making changes |
 | `wp ojs-sync sync` | Run bulk sync: creates users + subscriptions (no welcome emails). Batched (50 users), 500ms delay, resume from last run |
-| `wp ojs-sync sync --user=<id or email>` | Sync a single member (sends welcome email — it's a targeted action) |
+| `wp ojs-sync sync --member=<id or email>` | Sync a single member (sends welcome email — it's a targeted action) |
 | `wp ojs-sync send-welcome-emails --dry-run` | Report how many welcome emails would be sent |
 | `wp ojs-sync send-welcome-emails` | Send "set your password" emails to all synced users. OJS dedup prevents duplicates — safe to re-run |
 | `wp ojs-sync reconcile` | Run reconciliation now (compare WCS ↔ OJS, retry drift) |
@@ -205,15 +192,16 @@ Each queue action maps to a specific sequence of OJS API calls. The queue proces
 
 | Event | Frequency | What it does |
 |---|---|---|
-| `wpojs_process_queue` | Every 1 minute | Process pending/retry items from sync queue |
 | `wpojs_daily_reconcile` | Daily | Compare active WCS subscriptions vs OJS, queue any drift |
 | `wpojs_daily_digest` | Daily | Email admin: failure count in last 24 hours (skip if zero) |
+| `wpojs_log_cleanup` | Weekly | Prune old sync log entries |
+
+Individual sync actions (activate, expire, email_change, delete_user) are processed by **Action Scheduler**, not WP Cron. View queue in WP Admin → Tools → Scheduled Actions, filter by group `wpojs-sync`.
 
 ### Admin pages
 
 - **Settings**: OJS URL (includes journal path), subscription type mapping, test connection button, current WP server IP display
 - **Sync log**: filterable list table (by status, date range, email search). Shows last 500 entries by default.
-- **Sync queue**: current queue status — pending items, retrying items, permanently failed items with member email and error detail
 
 ---
 
@@ -449,18 +437,18 @@ The smoke test checklist in TODO.md covers the full integration path. Most are n
 
 | Spec file | What it tests |
 |---|---|
-| `sync-lifecycle.spec.ts` | WCS activate → OJS user + subscription created; WCS expire → OJS status 16 |
+| `expanded-resilience.spec.ts` | Out-of-order events, multiple subs, rapid changes, reconciliation drift, welcome email dedup, API validation (19 tests) |
+| `admin-monitoring.spec.ts` | Sync Log page stats, nonce, retry actions (single + bulk) |
 | `ojs-login.spec.ts` | Synced user sets OJS password and logs in |
 | `wp-dashboard.spec.ts` | My Account journal access widget (active member + non-member) |
 | `ojs-ui-messages.spec.ts` | Login hint, footer message, paywall hint for non-subscriber |
-| `admin-monitoring.spec.ts` | Sync Log page stats, nonce, retry actions (single + bulk) |
 | `ojs-api-log.spec.ts` | OJS API request logging and `wpojs_created_by_sync` flag |
 | `email-change.spec.ts` | WP email change → OJS user email updated |
 | `user-deletion.spec.ts` | WP user deletion → OJS user anonymised, disabled, subscription expired |
 | `test-connection.spec.ts` | Settings page "Test Connection" AJAX reports success |
 | `error-recovery.spec.ts` | Sync fails when OJS URL is bad, succeeds after restoring |
 
-38 tests across 11 spec files. Tests run against the Docker dev environment (`--with-sample-data`). Each test creates unique users, processes the Action Scheduler queue, and cleans up in `afterAll`. Serial execution (`workers: 1`) avoids data conflicts. Run with `npm test`.
+35 tests across 10 spec files. Tests run against the Docker dev environment (`--with-sample-data`). Each test creates unique users, processes the Action Scheduler queue, and cleans up in `afterAll`. Serial execution (`workers: 1`) avoids data conflicts. Run with `npm test`.
 
 ---
 

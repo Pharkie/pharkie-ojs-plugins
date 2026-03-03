@@ -25,7 +25,7 @@ The sync plugin detects WP email changes and updates OJS automatically. If it di
 ### "I never received the welcome email"
 
 1. Check OJS email configuration (SMTP relay, SPF/DKIM).
-2. Resend via CLI: `wp ojs-sync sync --user=<email>` — this will re-trigger find-or-create (idempotent) and won't duplicate the user.
+2. Resend via CLI: `wp ojs-sync sync --member=<email>` — this will re-trigger find-or-create (idempotent) and won't duplicate the user.
 3. The member can also use OJS's "Forgot Password" link directly.
 
 ---
@@ -40,7 +40,7 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 | `wp ojs-sync status` | Show sync stats: total synced, pending, failed, last reconciliation. |
 | `wp ojs-sync sync --dry-run` | Preview what bulk sync would do (no changes). |
 | `wp ojs-sync sync` | Run bulk sync for all active members. |
-| `wp ojs-sync sync --user=<id or email>` | Sync a single member (sends welcome email if new). |
+| `wp ojs-sync sync --member=<id or email>` | Sync a single member (sends welcome email if new). |
 | `wp ojs-sync send-welcome-emails --dry-run` | Preview how many welcome emails would be sent. |
 | `wp ojs-sync send-welcome-emails` | Send welcome emails to all synced users who haven't received one. |
 | `wp ojs-sync reconcile` | Run reconciliation now (compare WP ↔ OJS, fix drift). |
@@ -71,7 +71,7 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 ### Manual sync (bypasses queue)
 
 ```bash
-wp ojs-sync sync --user=<email>
+wp ojs-sync sync --member=<email>
 ```
 
 This calls OJS directly (not through Action Scheduler) and reports the result immediately.
