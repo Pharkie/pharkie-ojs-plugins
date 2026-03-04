@@ -1,4 +1,6 @@
-# Docker Quick Reference
+# Docker Setup
+
+For non-Docker deployment, see the [Deployment guide](../docs/deployment.md).
 
 ## Architecture
 

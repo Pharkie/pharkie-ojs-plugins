@@ -36,11 +36,8 @@ Non-member visits paywalled content
 
 ## Installation
 
-See the [Deployment guide](docs/deployment.md) for step-by-step installation, configuration, and troubleshooting for both plugins.
-
-## Development
-
-See [docker/README.md](./docker/README.md) for the Docker dev environment, E2E tests, and pre-commit hooks.
+- **[Docker](docker/README.md)** — Docker Compose setup, E2E tests, sample data, pre-commit hooks
+- **[Non-Docker](docs/deployment.md)** — manual deployment: plugin installation, config, folder naming, troubleshooting
 
 ## Documentation
 
@@ -58,8 +55,8 @@ See [docker/README.md](./docker/README.md) for the Docker dev environment, E2E t
 
 ### Deployment and operations
 
-- [Deployment guide](docs/deployment.md) — production/staging deployment: plugin installation, config, folder naming, troubleshooting
-- [Docker dev environment](docker/README.md) — local development with Docker Compose, E2E tests, sample data, pre-commit hooks
+- [Docker setup](docker/README.md) — Docker Compose setup, E2E tests, sample data, pre-commit hooks
+- [Non-Docker deployment](docs/deployment.md) — manual deployment: plugin installation, config, folder naming, troubleshooting
 - [Hosting requirements](docs/private/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
 - [Support runbook](docs/support-runbook.md) — quick reference for support staff handling member access issues
 - [TODO / roadmap](TODO.md) — what's done, what's left before production

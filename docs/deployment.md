@@ -1,8 +1,8 @@
 # Deployment Guide (Non-Docker)
 
-How to deploy the WP-OJS integration to staging or production servers where OJS and WordPress are running natively (not via Docker Compose).
+How to deploy the WP-OJS integration to servers where OJS and WordPress are running natively (not via Docker Compose).
 
-For local development with Docker, see `docker/README.md`.
+For Docker-based deployment, see [`docker/README.md`](../docker/README.md).
 
 ---
 
