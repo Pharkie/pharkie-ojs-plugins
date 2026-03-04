@@ -38,65 +38,9 @@ Non-member visits paywalled content
 
 See the [Deployment guide](docs/deployment.md) for step-by-step installation, configuration, and troubleshooting for both plugins.
 
-## CLI commands
+## Development
 
-All commands are available under the `wp ojs-sync` namespace.
-
-```
-wp ojs-sync sync [--dry-run] [--member=<id-or-email>] [--batch-size=<n>] [--delay=<ms>] [--yes]
-```
-Bulk sync all active members to OJS, or sync a single member. Use `--dry-run` to preview without making changes. `--yes` skips the confirmation prompt. `--delay` controls the pause between API calls (default 500ms). Unrecognised flags are rejected to prevent accidental bulk syncs (e.g. `--user=` instead of `--member=`).
-
-```
-wp ojs-sync send-welcome-emails [--dry-run]
-```
-Send "set your password" emails to synced members who haven't received one yet.
-
-```
-wp ojs-sync reconcile
-```
-Run reconciliation to detect and fix drift between WP and OJS subscription state.
-
-```
-wp ojs-sync status
-```
-Show sync status summary and Action Scheduler queue stats.
-
-```
-wp ojs-sync test-connection
-```
-Verify OJS connectivity, API key validity, and version compatibility.
-
-## Pre-commit hooks
-
-Run once after cloning (automatic in dev containers):
-
-```bash
-./setup-hooks.sh
-```
-
-This installs a pre-commit hook that checks for secrets, environment variable documentation, YAML syntax, and broken documentation links. To test manually: `./scripts/pre-commit`
-
-## Docker dev environment
-
-A `docker-compose.yml` is included that provides a local development setup with WordPress, OJS, and MariaDB. See [docker/README.md](./docker/README.md) for setup instructions and usage.
-
-## E2E tests
-
-Playwright browser tests in `e2e/` verify the full integration against the Docker dev environment (requires `--with-sample-data`). 10 spec files, 36 tests.
-
-```bash
-npm install && npx playwright install chromium
-npm test                    # all tests (headless, ~4 min)
-npm run test:headed         # watch in browser
-npx playwright test e2e/tests/wp-dashboard.spec.ts  # single file
-```
-
-The **expanded resilience suite** (`expanded-resilience.spec.ts`, 19 tests) covers edge cases: out-of-order events, multiple subscriptions, rapid status changes, user data edge cases, reconciliation drift detection, welcome email dedup, and OJS API validation. It runs as part of `npm test` but can also be run separately:
-
-```bash
-npx playwright test expanded-resilience     # just the resilience suite
-```
+See [docker/README.md](./docker/README.md) for the Docker dev environment, E2E tests, and pre-commit hooks.
 
 ## Documentation
 
