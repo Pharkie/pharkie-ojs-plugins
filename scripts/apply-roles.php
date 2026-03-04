@@ -19,6 +19,30 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 global $wpdb;
 
+// Register UM custom roles so they appear in wp_roles()->get_names().
+// Display names match production (Ultimate Member > User Roles).
+$um_roles = array(
+    'um_custom_role_1' => 'SEA UK member (no listing)',
+    'um_custom_role_2' => 'SEA UK member (with listing)',
+    'um_custom_role_3' => 'SEA student member (no listing)',
+    'um_custom_role_4' => 'SEA student member (with listing)',
+    'um_custom_role_5' => 'SEA international member (no listing)',
+    'um_custom_role_6' => 'SEA international member (with listing)',
+    'um_custom_role_7' => 'Manually set UK listing (for Exco/life members)',
+    'um_custom_role_8' => 'Manually set international listing (for Exco/life members)',
+    'um_custom_role_9' => 'Manually set student listing (for Exco/life members)',
+);
+$registered = 0;
+foreach ( $um_roles as $slug => $name ) {
+    if ( ! wp_roles()->is_role( $slug ) ) {
+        add_role( $slug, $name, array( 'read' => true ) );
+        $registered++;
+    }
+}
+if ( $registered ) {
+    WP_CLI::log( "Registered $registered UM roles." );
+}
+
 $csv_path = $args[0] ?? '';
 if ( ! $csv_path || ! file_exists( $csv_path ) ) {
     WP_CLI::error( "CSV file not found: $csv_path" );

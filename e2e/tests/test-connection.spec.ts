@@ -27,13 +27,13 @@ test.describe('Settings page UX', () => {
     await page.goto(SETTINGS_PAGE);
 
     // The type mapping section should show OJS type names fetched from the API.
-    // Dev environment has "SEA UK Membership" as type 1.
+    // Dev environment has "SEA Membership (all tiers)" as type 1.
     const mappingSection = page.locator('#wpojs-type-mapping');
-    await expect(mappingSection).toContainText('SEA UK Membership');
+    await expect(mappingSection).toContainText('SEA Membership (all tiers)');
 
-    // The "Available OJS types" reference line should list type names.
-    const availableTypes = page.locator('.description', { hasText: 'Available OJS types' });
+    // The "Available OJS types" reference line should list type names (shown in both section intros).
+    const availableTypes = page.locator('.description', { hasText: 'Available OJS types' }).first();
     await expect(availableTypes).toBeVisible();
-    await expect(availableTypes).toContainText('SEA UK Membership');
+    await expect(availableTypes).toContainText('SEA Membership (all tiers)');
   });
 });

@@ -120,9 +120,9 @@ The `--with-sample-data` flag on `setup-wp.sh` runs a three-step pipeline that p
 |------|--------|-------------|-------|
 | 1. Import users | `wp user import-csv` | Imports ~1,400 anonymised users from `docker/test-users.csv` as `subscriber` | ~2 min |
 | 2. Apply roles | `scripts/apply-roles.php` | Reads `original_role` column from CSV, updates `wp_usermeta` directly (UM roles can't be assigned via `wp user import-csv`) | ~2s |
-| 3. Seed subscriptions | `scripts/seed-subscriptions.php` | Creates 6 WC subscription products + batch-inserts WCS subscription records for ~683 members with `um_custom_role_1–6` | ~1.5s |
+| 3. Seed sample data | `scripts/setup-and-sample-data.php` | Creates 6 WC subscription products, batch-inserts WCS subscription records for ~683 members with `um_custom_role_1–6`, and configures wpojs_* plugin options (type mapping, member roles, journal name) | ~1.5s |
 
-Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find active subscriptions: `wp_posts` (subscription post), `wp_postmeta` (dates + customer), `wp_woocommerce_order_items` (line item), and `wp_woocommerce_order_itemmeta` (product ID). It also configures the `wpojs_*` options the sync plugin needs (type mapping, member roles, manual roles).
+Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find active subscriptions: `wp_posts` (subscription post), `wp_postmeta` (dates + customer), `wp_woocommerce_order_items` (line item), and `wp_woocommerce_order_itemmeta` (product ID). It also configures the `wpojs_*` plugin options (type mapping, member roles, manual roles, journal name).
 
 **Result:** `wp ojs-sync status` shows ~684 active members (683 WCS + 1 manual role). The environment is ready for `wp ojs-sync sync`.
 
