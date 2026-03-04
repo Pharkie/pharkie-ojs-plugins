@@ -303,3 +303,17 @@ export function runReconciliation(): void {
 export function getUserMeta(userId: number, key: string): string {
   return wpEval(`echo get_user_meta(${userId}, '${key}', true);`);
 }
+
+/**
+ * Add a role to a WordPress user.
+ */
+export function addUserRole(userId: number, role: string): void {
+  wpCli(`user add-role ${userId} ${role}`);
+}
+
+/**
+ * Remove a role from a WordPress user.
+ */
+export function removeUserRole(userId: number, role: string): void {
+  wpCli(`user remove-role ${userId} ${role}`);
+}

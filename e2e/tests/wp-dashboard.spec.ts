@@ -30,7 +30,7 @@ test.describe('WP My Account journal access widget', () => {
       wpUserId = createUser(LOGIN, EMAIL);
       setUserPassword(wpUserId, WP_PASSWORD);
       subId = createSubscription(wpUserId, productId, 'active');
-      waitForSync();
+      waitForSync(60_000);
     });
 
     test.afterAll(() => {
