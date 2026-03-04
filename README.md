@@ -36,79 +36,7 @@ Non-member visits paywalled content
 
 ## Installation
 
-For full step-by-step instructions including troubleshooting, see the [Deployment guide](docs/deployment.md). Quick overview below.
-
-### WP plugin
-
-1. Copy `plugins/wpojs-sync/` to `wp-content/plugins/wpojs-sync/`
-2. Activate the plugin in WP Admin -> Plugins
-
-### OJS plugin
-
-1. Copy `plugins/wpojs-subscription-api/` to your OJS installation at `plugins/generic/wpojsSubscriptionApi/` — **folder name must be `wpojsSubscriptionApi`** (camelCase, no hyphens or underscores)
-2. Symlink or copy the API route entry point: `ln -s /path/to/ojs/plugins/generic/wpojsSubscriptionApi/api/v1/wpojs /path/to/ojs/api/v1/wpojs`
-3. Enable the plugin in OJS Admin -> Website -> Plugins -> Generic
-4. Create at least one subscription type in OJS Admin -> Subscriptions -> Subscription Types
-
-### Configure the API key
-
-Add the following to your `wp-config.php`:
-
-```php
-define('WPOJS_API_KEY', 'your-shared-secret-key');
-```
-
-This key is sent as a Bearer token in all requests from WP to OJS.
-
-### Configure OJS
-
-Add a `[wpojs]` section to your OJS `config.inc.php`:
-
-```ini
-[wpojs]
-api_key_secret = "your-shared-secret-key"
-allowed_ips = "203.0.113.10"
-wp_member_url = "https://your-wp-site.example.com/membership/"
-support_email = "support@example.com"
-```
-
-The `api_key_secret` must match the `WPOJS_API_KEY` constant in `wp-config.php`. See the [Deployment guide](docs/deployment.md) for the full config reference.
-
-### Configure WP settings
-
-Navigate to **OJS Sync** in the WP Admin sidebar and configure:
-
-- OJS Base URL
-- Subscription Type Mapping (WooCommerce Product -> OJS Subscription Type ID)
-- Default Subscription Type ID
-- Manual Member Roles
-- Journal Display Name
-
-## Configuration reference
-
-### WP settings page (OJS Sync in admin sidebar)
-
-| Setting | Description |
-|---|---|
-| OJS Base URL | Root URL of your OJS installation (e.g. `https://journal.example.com`) |
-| Subscription Type Mapping | Maps WooCommerce Subscription product IDs to OJS subscription type IDs |
-| Default Type ID | Fallback OJS subscription type ID when no mapping matches |
-| Manual Member Roles | WP roles that should be synced even without a WCS subscription |
-| Journal Display Name | Journal name used in welcome emails and admin UI |
-
-### OJS config.inc.php `[wpojs]` section
-
-| Key | Description |
-|---|---|
-| `allowed_ips` | Comma-separated IP addresses allowed to call the plugin endpoints |
-| `wp_member_url` | URL to link OJS users back to the WP membership page |
-| `support_email` | Support contact shown in error responses and emails |
-
-### WP constant
-
-| Constant | Location | Description |
-|---|---|---|
-| `WPOJS_API_KEY` | `wp-config.php` | Shared secret used as Bearer token for WP -> OJS API calls |
+See the [Deployment guide](docs/deployment.md) for step-by-step installation, configuration, and troubleshooting for both plugins.
 
 ## CLI commands
 
@@ -155,7 +83,7 @@ A `docker-compose.yml` is included that provides a local development setup with 
 
 ## E2E tests
 
-Playwright browser tests in `e2e/` verify the full integration against the Docker dev environment (requires `--with-sample-data`). 10 spec files, 35 tests total.
+Playwright browser tests in `e2e/` verify the full integration against the Docker dev environment (requires `--with-sample-data`). 10 spec files, 36 tests.
 
 ```bash
 npm install && npx playwright install chromium
