@@ -87,6 +87,7 @@ All prices excl. VAT (20% applies to all — WildApricot and Outseta as reverse-
 | **sheepCRM** (~£399/mo) | UK-native but too expensive for 500 members. |
 | **Tendenci** (~$249/mo hosted) | Open-source AMS but immature API, small community, expensive hosting. |
 | **Baserow** (free) | Database, not a membership platform. See "Custom-build option" below. |
+| **Corteza** (free, self-hosted) | Open-source (Apache 2.0) low-code platform (Go backend, Vue.js frontend, Docker). Provides auth/RBAC, a data modelling layer with auto-generated REST API, workflow automation, and an admin UI — so it's a starting point for a custom build, not a from-scratch effort. But the hard parts of a membership platform (Stripe billing, subscription lifecycle, OJS sync, member directory, events) all still need building. What Corteza provides for free — auth, schema, API, admin panel — are the *easy* parts of a custom build; a developer comfortable with Stripe and OJS can stand those up in a day on mainstream tools. In exchange you'd take on: learning Corteza's module/namespace/workflow system, depending on a niche platform (16-person company, 2k GitHub stars, ~500 forum topics), heavier hosting (Corteza server + DB + Corredor automation runner vs. one app + one DB), and a narrower hiring pool if the maintainer moves on. Would add value for a complex internal CRM with many entities and workflows; for a 500-member society with 3 tiers and simple data, the scaffolding isn't worth the trade-off. |
 
 ### Custom-build option
 
