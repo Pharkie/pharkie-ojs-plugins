@@ -31,8 +31,8 @@ test.describe('Settings page UX', () => {
     const mappingSection = page.locator('#wpojs-type-mapping');
     await expect(mappingSection).toContainText('SEA Membership (all tiers)');
 
-    // The "Available OJS types" reference line should list type names (shown in both section intros).
-    const availableTypes = page.locator('.description', { hasText: 'Available OJS types' }).first();
+    // The "Available OJS types" reference line in the page intro should list type names.
+    const availableTypes = page.locator('.description', { hasText: 'Available OJS subscription types' });
     await expect(availableTypes).toBeVisible();
     await expect(availableTypes).toContainText('SEA Membership (all tiers)');
   });
