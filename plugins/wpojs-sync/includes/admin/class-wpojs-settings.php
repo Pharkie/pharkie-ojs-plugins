@@ -148,17 +148,6 @@ class WPOJS_Settings {
 
     public function render_product_access_intro() {
         echo '<p>Members who purchase a WooCommerce Subscription product get an OJS journal subscription automatically. Map each product to an OJS subscription type below.</p>';
-
-        $ojs_types = $this->get_ojs_type_names();
-        if ( ! empty( $ojs_types ) ) {
-            $parts = array();
-            foreach ( $ojs_types as $id => $name ) {
-                $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
-            }
-            echo '<div style="background:#f0f6fc;border-left:4px solid #2271b1;padding:8px 12px;margin:8px 0 4px;">';
-            echo 'Available OJS subscription types: ' . implode( ', ', $parts );
-            echo '</div>';
-        }
     }
 
     public function render_role_access_intro() {
@@ -203,6 +192,35 @@ class WPOJS_Settings {
     // Render fields
     // -------------------------------------------------------------------------
 
+    private function render_ojs_type_select( $name, $selected_value, $ojs_types ) {
+        if ( empty( $ojs_types ) ) {
+            printf(
+                '<select name="%s" disabled><option>Could not load types from OJS</option></select>',
+                esc_attr( $name )
+            );
+            return;
+        }
+
+        printf( '<select name="%s">', esc_attr( $name ) );
+        echo '<option value="">— Select —</option>';
+        foreach ( $ojs_types as $id => $type_name ) {
+            printf(
+                '<option value="%d" %s>%s</option>',
+                $id,
+                selected( (int) $selected_value, $id, false ),
+                esc_html( $type_name )
+            );
+        }
+        if ( $selected_value && ! isset( $ojs_types[ (int) $selected_value ] ) ) {
+            printf(
+                '<option value="%d" selected>ID %d (not found in OJS)</option>',
+                (int) $selected_value,
+                (int) $selected_value
+            );
+        }
+        echo '</select>';
+    }
+
     public function render_url_field() {
         $value = get_option( 'wpojs_url', '' );
         printf(
@@ -234,8 +252,8 @@ class WPOJS_Settings {
     }
 
     public function render_type_mapping_field() {
-        $mapping    = get_option( 'wpojs_type_mapping', array() );
-        $ojs_types  = $this->get_ojs_type_names();
+        $mapping   = get_option( 'wpojs_type_mapping', array() );
+        $ojs_types = $this->get_ojs_type_names();
 
         echo '<div id="wpojs-type-mapping">';
         if ( ! empty( $mapping ) ) {
@@ -260,49 +278,39 @@ class WPOJS_Settings {
                     $product_label = sprintf( 'Product #%d', (int) $product_id );
                 }
 
-                // OJS type label.
-                $type_label = '';
-                if ( $type_id && isset( $ojs_types[ (int) $type_id ] ) ) {
-                    $type_label = sprintf(
-                        '<span class="description">&ldquo;%s&rdquo;</span>',
-                        esc_html( $ojs_types[ (int) $type_id ] )
-                    );
-                } elseif ( $type_id && ! empty( $ojs_types ) ) {
-                    $type_label = '<span style="color:#d63638;">not found in OJS &#9888;</span>';
-                }
-
-                printf(
-                    '<div class="wpojs-mapping-row" style="margin-bottom:5px;">' .
-                    '<span class="description">WC Product: %s &rarr; OJS Type:</span> ' .
-                    '<input type="number" name="wpojs_type_mapping[%s]" value="%s" placeholder="Type ID" style="width:80px;" />' .
-                    ' %s' .
-                    ' <button type="button" class="button wpojs-remove-mapping" style="margin-left:5px;">Remove</button>' .
-                    '</div>',
-                    $product_label,
-                    esc_attr( $product_id ),
-                    esc_attr( $type_id ),
-                    $type_label
+                echo '<div class="wpojs-mapping-row" style="margin-bottom:5px;">';
+                printf( '<span class="description">WC Product: %s &rarr; OJS Type:</span> ', $product_label );
+                $this->render_ojs_type_select(
+                    'wpojs_type_mapping[' . esc_attr( $product_id ) . ']',
+                    $type_id,
+                    $ojs_types
                 );
+                echo ' <button type="button" class="button wpojs-remove-mapping" style="margin-left:5px;">Remove</button>';
+                echo '</div>';
             }
         }
         echo '</div>';
         echo '<button type="button" class="button" id="wpojs-add-mapping">+ Add Mapping</button>';
-        // Inline JS for add/remove mapping rows.
+
+        // Build the OJS type <option> tags once for JS to reuse.
+        $options_html = '<option value="">— Select —</option>';
+        foreach ( $ojs_types as $id => $name ) {
+            $options_html .= sprintf( '<option value="%d">%s</option>', $id, esc_html( $name ) );
+        }
         ?>
         <script>
         jQuery(function($) {
+            var ojsTypeOptions = <?php echo wp_json_encode( $options_html ); ?>;
             $('#wpojs-add-mapping').on('click', function() {
                 var html = '<div class="wpojs-mapping-row" style="margin-bottom:5px;">' +
                     'WC Product ID: <input type="number" class="wpojs-mapping-pid" value="" placeholder="e.g. 17" style="width:80px;" />' +
-                    ' &rarr; OJS Type ID: <input type="number" class="wpojs-mapping-tid" value="" placeholder="e.g. 1" style="width:80px;" />' +
+                    ' &rarr; OJS Type: <select class="wpojs-mapping-tid">' + ojsTypeOptions + '</select>' +
                     ' <button type="button" class="button wpojs-remove-mapping" style="margin-left:5px;">Remove</button></div>';
                 $('#wpojs-type-mapping').append(html);
             });
             $(document).on('click', '.wpojs-remove-mapping', function() {
                 $(this).closest('.wpojs-mapping-row').remove();
             });
-            // On submit, rewrite new-row inputs to name="wpojs_type_mapping[{pid}]"
-            // so they match the format the sanitize callback expects.
             $('form').on('submit', function() {
                 $('#wpojs-type-mapping .wpojs-mapping-row').each(function() {
                     var $pid = $(this).find('.wpojs-mapping-pid');
@@ -325,19 +333,8 @@ class WPOJS_Settings {
         $value     = get_option( 'wpojs_default_type_id', '' );
         $ojs_types = $this->get_ojs_type_names();
 
-        $type_label = '';
-        if ( $value && isset( $ojs_types[ (int) $value ] ) ) {
-            $type_label = sprintf( ' <span class="description">&ldquo;%s&rdquo;</span>', esc_html( $ojs_types[ (int) $value ] ) );
-        } elseif ( $value && ! empty( $ojs_types ) ) {
-            $type_label = ' <span style="color:#d63638;">not found in OJS &#9888;</span>';
-        }
-
-        printf(
-            '<input type="number" name="wpojs_default_type_id" value="%s" class="small-text" />%s' .
-            '<p class="description">The OJS subscription type assigned to all members with the roles ticked above.</p>',
-            esc_attr( $value ),
-            $type_label
-        );
+        $this->render_ojs_type_select( 'wpojs_default_type_id', $value, $ojs_types );
+        echo '<p class="description">The OJS subscription type assigned to all members with the roles ticked above.</p>';
     }
 
     public function render_manual_roles_field() {
