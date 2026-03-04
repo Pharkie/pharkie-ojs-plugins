@@ -148,6 +148,17 @@ class WPOJS_Settings {
 
     public function render_product_access_intro() {
         echo '<p>Members who purchase a WooCommerce Subscription product get an OJS journal subscription automatically. Map each product to an OJS subscription type below.</p>';
+
+        $ojs_types = $this->get_ojs_type_names();
+        if ( ! empty( $ojs_types ) ) {
+            $parts = array();
+            foreach ( $ojs_types as $id => $name ) {
+                $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
+            }
+            echo '<div style="background:#f0f6fc;border-left:4px solid #2271b1;padding:8px 12px;margin:8px 0 4px;">';
+            echo 'Available OJS subscription types: ' . implode( ', ', $parts );
+            echo '</div>';
+        }
     }
 
     public function render_role_access_intro() {
@@ -407,17 +418,6 @@ class WPOJS_Settings {
         <div class="wrap">
             <h1>OJS Sync Settings</h1>
             <p>Synchronises WooCommerce Subscriptions membership data to OJS (Open Journal Systems). When members purchase or renew a subscription in WooCommerce, their OJS journal access is updated automatically.</p>
-
-            <?php
-            $ojs_types = $this->get_ojs_type_names();
-            if ( ! empty( $ojs_types ) ) {
-                $parts = array();
-                foreach ( $ojs_types as $id => $name ) {
-                    $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
-                }
-                echo '<p class="description">Available OJS subscription types: ' . implode( ', ', $parts ) . '</p>';
-            }
-            ?>
 
             <form method="post" action="options.php">
                 <?php

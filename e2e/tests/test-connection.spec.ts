@@ -6,7 +6,7 @@ const SETTINGS_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync';
 test.describe('Test Connection button', () => {
   test('shows success when OJS is reachable and configured', async ({ page }) => {
     await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
-    await page.goto(SETTINGS_PAGE);
+    await page.goto(SETTINGS_PAGE, { waitUntil: 'networkidle' });
 
     const btn = page.locator('#wpojs-test-connection');
     await expect(btn).toBeVisible();
@@ -24,15 +24,15 @@ test.describe('Test Connection button', () => {
 test.describe('Settings page UX', () => {
   test('shows OJS subscription type names in mapping UI', async ({ page }) => {
     await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
-    await page.goto(SETTINGS_PAGE);
+    await page.goto(SETTINGS_PAGE, { waitUntil: 'networkidle' });
 
     // The type mapping section should show OJS type names fetched from the API.
     // Dev environment has "SEA Membership (all tiers)" as type 1.
     const mappingSection = page.locator('#wpojs-type-mapping');
     await expect(mappingSection).toContainText('SEA Membership (all tiers)');
 
-    // The "Available OJS types" reference line in the page intro should list type names.
-    const availableTypes = page.locator('.description', { hasText: 'Available OJS subscription types' });
+    // The "Available OJS types" callout in the Product-Based Access section should list type names.
+    const availableTypes = page.locator('div', { hasText: 'Available OJS subscription types' }).first();
     await expect(availableTypes).toBeVisible();
     await expect(availableTypes).toContainText('SEA Membership (all tiers)');
   });
