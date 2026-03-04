@@ -51,7 +51,7 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 
 ### WordPress
 
-- **Settings**: WP Admin → OJS Sync → Settings. OJS URL, type mapping, role-based access, test connection.
+- **Settings**: WP Admin → OJS Sync → Settings. OJS URL, type mapping, role-based access. Connection status shown automatically.
 - **Sync Log**: WP Admin → OJS Sync → Sync Log. Filterable by status, searchable by email.
 - **Queue**: WP Admin → Tools → Scheduled Actions. Filter by group `wpojs-sync`.
 

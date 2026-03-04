@@ -23,7 +23,7 @@ class WPOJS_Settings {
     public function register() {
         add_action( 'admin_menu', array( $this, 'add_menu' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
-        add_action( 'wp_ajax_wpojs_test_connection', array( $this, 'ajax_test_connection' ) );
+
         add_action( 'admin_notices', array( $this, 'render_failure_notice' ) );
     }
 
@@ -85,7 +85,7 @@ class WPOJS_Settings {
         add_settings_section(
             'wpojs_connection',
             'OJS Connection',
-            null,
+            array( $this, 'render_connection_status' ),
             'wpojs-sync'
         );
 
@@ -93,14 +93,6 @@ class WPOJS_Settings {
             'wpojs_url',
             'OJS Base URL',
             array( $this, 'render_url_field' ),
-            'wpojs-sync',
-            'wpojs_connection'
-        );
-
-        add_settings_field(
-            'wpojs_test_connection',
-            'Test Connection',
-            array( $this, 'render_test_connection_field' ),
             'wpojs-sync',
             'wpojs_connection'
         );
@@ -148,6 +140,19 @@ class WPOJS_Settings {
 
     public function render_product_access_intro() {
         echo '<p>Members who purchase a WooCommerce Subscription product get an OJS journal subscription automatically. Map each product to an OJS subscription type below.</p>';
+    }
+
+    public function render_connection_status() {
+        $ojs_types = $this->get_ojs_type_names();
+        if ( ! empty( $ojs_types ) ) {
+            printf(
+                '<p style="color:green;">&#10003; Connected to OJS — %d subscription type(s) loaded at %s</p>',
+                count( $ojs_types ),
+                esc_html( current_time( 'H:i' ) )
+            );
+        } else {
+            echo '<p style="color:#d63638;">&#10007; Could not connect to OJS. Check the URL below and ensure the OJS plugin is enabled.</p>';
+        }
     }
 
     public function render_role_access_intro() {
@@ -388,12 +393,6 @@ class WPOJS_Settings {
         echo '</fieldset>';
     }
 
-    public function render_test_connection_field() {
-        echo '<button type="button" class="button button-secondary" id="wpojs-test-connection">Test Connection WP to OJS</button>';
-        echo '<span id="wpojs-test-result" style="margin-left:10px;"></span>';
-        echo '<p class="description">Tests connectivity to OJS and validates the API key and subscription type IDs.</p>';
-    }
-
     public function render_journal_name_field() {
         $value = get_option( 'wpojs_journal_name', '' );
         printf(
@@ -461,31 +460,6 @@ class WPOJS_Settings {
                 </tr>
             </table>
 
-            <script>
-            jQuery(function($) {
-                $('#wpojs-test-connection').on('click', function() {
-                    var $btn = $(this);
-                    var $result = $('#wpojs-test-result');
-                    $btn.prop('disabled', true);
-                    $result.text('Testing...');
-
-                    $.post(ajaxurl, {
-                        action: 'wpojs_test_connection',
-                        _wpnonce: '<?php echo wp_create_nonce( 'wpojs_test_connection' ); ?>'
-                    }, function(response) {
-                        $btn.prop('disabled', false);
-                        if (response.success) {
-                            $result.empty().append($('<span>').css('color','green').text('\u2713 ' + response.data.message));
-                        } else {
-                            $result.empty().append($('<span>').css('color','red').text('\u2717 ' + response.data.message));
-                        }
-                    }).fail(function() {
-                        $btn.prop('disabled', false);
-                        $result.empty().append($('<span>').css('color','red').text('\u2717 AJAX request failed.'));
-                    });
-                });
-            });
-            </script>
         </div>
         <?php
     }
@@ -528,68 +502,4 @@ class WPOJS_Settings {
         );
     }
 
-    /**
-     * AJAX handler for test connection.
-     */
-    public function ajax_test_connection() {
-        check_ajax_referer( 'wpojs_test_connection' );
-
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => 'Insufficient permissions.' ) );
-        }
-
-        // Create a fresh client to pick up any just-saved settings.
-        $client = new WPOJS_API_Client();
-        $result = $client->test_connection();
-
-        // Validate type mapping configuration.
-        $warnings = array();
-        $mapping     = get_option( 'wpojs_type_mapping', array() );
-        $default_tid = get_option( 'wpojs_default_type_id', 0 );
-
-        if ( empty( $mapping ) && empty( $default_tid ) ) {
-            $warnings[] = 'No subscription type mapping configured and no default type set. Sync will fail for all members.';
-        }
-
-        if ( ! empty( $mapping ) && function_exists( 'wc_get_product' ) ) {
-            foreach ( $mapping as $product_id => $type_id ) {
-                $product = wc_get_product( (int) $product_id );
-                if ( ! $product ) {
-                    $warnings[] = sprintf( 'WC Product #%d in type mapping does not exist.', $product_id );
-                }
-            }
-        }
-
-        // Validate OJS type IDs against what OJS actually has.
-        if ( $result['ok'] ) {
-            $types_result = $client->get_subscription_types();
-            if ( $types_result['success'] && ! empty( $types_result['body']['types'] ) ) {
-                $valid_ids = array_map( function ( $t ) {
-                    return (int) $t['id'];
-                }, $types_result['body']['types'] );
-
-                foreach ( $mapping as $product_id => $type_id ) {
-                    if ( ! in_array( (int) $type_id, $valid_ids, true ) ) {
-                        $warnings[] = sprintf( 'OJS Type ID %d (mapped from Product #%d) does not exist in OJS — please fix and resave.', $type_id, $product_id );
-                    }
-                }
-                if ( $default_tid && ! in_array( (int) $default_tid, $valid_ids, true ) ) {
-                    $warnings[] = sprintf( 'Default OJS Type ID %d does not exist in OJS — please fix and resave.', $default_tid );
-                }
-            }
-        }
-
-        if ( ! empty( $warnings ) ) {
-            $result['warnings'] = $warnings;
-        }
-
-        if ( $result['ok'] ) {
-            if ( ! empty( $warnings ) ) {
-                $result['message'] .= ' Warnings: ' . implode( ' ', $warnings );
-            }
-            wp_send_json_success( $result );
-        } else {
-            wp_send_json_error( $result );
-        }
-    }
 }
