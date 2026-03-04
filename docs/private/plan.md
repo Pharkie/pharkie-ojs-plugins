@@ -251,7 +251,7 @@ Individual sync actions (activate, expire, email_change, delete_user) are proces
 
 1. **Upgrade OJS 3.4 → 3.5** — the biggest risk. Significant breaking changes (Slim→Laravel, Vue 2→3). Staging upgraded to 3.5.0.3 (2026-02-19). Still need: verify acceptance criteria on staging, write rollback runbook, agree go/no-go threshold with SEA, then upgrade production.
 2. **Verify OJS API prerequisites** — test Bearer token auth from WP server IP (`CGIPassAuth on`), test user creation API, confirm email config (SPF/DKIM/DMARC), document OJS server specs.
-3. **Build and deploy OJS plugin** (`wpojs-subscription-api`) — code review + PHPStan before production. See [`deployment.md`](../deployment.md) for non-Docker deployment steps (folder naming, API route mount, config).
+3. **Build and deploy OJS plugin** (`wpojs-subscription-api`) — code review + PHPStan before production. See [`deployment.md`](../deployment.md) for non-Docker setup steps (folder naming, API route mount, config).
 4. **Build and deploy WP plugin** (`wpojs-sync`) — code review before production.
 5. **Create OJS subscription type(s)** — at least one Individual subscription type must exist in OJS before sync can work. Go to OJS Admin → Subscriptions → Subscription Types → Create. Note the `type_id` for use in WP mapping. The preflight check will warn if none exist.
 6. **Configure WP plugin mapping** — set OJS Base URL (with journal path), Default OJS Subscription Type ID, and product mappings (each WooCommerce Subscription Product ID → OJS Type ID). All six WC products (IDs 1892, 1924, 1927, 23040, 23041, 23042) should be mapped.

@@ -37,7 +37,7 @@ Non-member visits paywalled content
 ## Installation
 
 - **[Docker](docker/README.md)** — Docker Compose setup, E2E tests, sample data, pre-commit hooks
-- **[Non-Docker](docs/deployment.md)** — manual deployment: plugin installation, config, folder naming, troubleshooting
+- **[Non-Docker](docs/deployment.md)** — native server setup: plugin installation, config, folder naming, troubleshooting
 
 ## Documentation
 
@@ -56,7 +56,7 @@ Non-member visits paywalled content
 ### Deployment and operations
 
 - [Docker setup](docker/README.md) — Docker Compose setup, E2E tests, sample data, pre-commit hooks
-- [Non-Docker deployment](docs/deployment.md) — manual deployment: plugin installation, config, folder naming, troubleshooting
+- [Non-Docker setup](docs/deployment.md) — native server setup: plugin installation, config, folder naming, troubleshooting
 - [Hosting requirements](docs/private/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
 - [Support runbook](docs/support-runbook.md) — quick reference for support staff handling member access issues
 - [TODO / roadmap](TODO.md) — what's done, what's left before production
