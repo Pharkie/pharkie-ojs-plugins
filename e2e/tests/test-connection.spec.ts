@@ -22,18 +22,17 @@ test.describe('Test Connection button', () => {
 });
 
 test.describe('Settings page UX', () => {
-  test('shows OJS subscription type names in mapping UI', async ({ page }) => {
+  test('shows OJS subscription type names in dropdowns', async ({ page }) => {
     await wpLogin(page, WP_ADMIN_USER, getAdminPassword());
     await page.goto(SETTINGS_PAGE, { waitUntil: 'networkidle' });
 
-    // The type mapping section should show OJS type names fetched from the API.
+    // Product mapping dropdowns should show OJS type names fetched from the API.
     // Dev environment has "SEA Membership (all tiers)" as type 1.
     const mappingSection = page.locator('#wpojs-type-mapping');
-    await expect(mappingSection).toContainText('SEA Membership (all tiers)');
+    await expect(mappingSection.locator('select').first()).toContainText('SEA Membership (all tiers)');
 
-    // The "Available OJS types" callout in the Product-Based Access section should list type names.
-    const availableTypes = page.locator('div', { hasText: 'Available OJS subscription types' }).first();
-    await expect(availableTypes).toBeVisible();
-    await expect(availableTypes).toContainText('SEA Membership (all tiers)');
+    // Role-based access OJS Type dropdown should also have the type.
+    const defaultTypeSelect = page.locator('select[name="wpojs_default_type_id"]');
+    await expect(defaultTypeSelect).toContainText('SEA Membership (all tiers)');
   });
 });
