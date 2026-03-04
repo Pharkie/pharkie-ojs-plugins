@@ -58,7 +58,8 @@ See [docker/README.md](./docker/README.md) for the Docker dev environment, E2E t
 
 ### Deployment and operations
 
-- [Deployment guide](docs/deployment.md) — non-Docker deployment: plugin installation, config, folder naming, troubleshooting
+- [Deployment guide](docs/deployment.md) — production/staging deployment: plugin installation, config, folder naming, troubleshooting
+- [Docker dev environment](docker/README.md) — local development with Docker Compose, E2E tests, sample data, pre-commit hooks
 - [Hosting requirements](docs/private/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
 - [Support runbook](docs/support-runbook.md) — quick reference for support staff handling member access issues
 - [TODO / roadmap](TODO.md) — what's done, what's left before production
