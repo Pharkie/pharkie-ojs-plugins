@@ -42,7 +42,7 @@ cp -r /path/to/ojs/plugins/generic/wpojsSubscriptionApi/api/v1/wpojs \
       /path/to/ojs/api/v1/wpojs
 ```
 
-**If this step is skipped**, all `/api/v1/wpojs/...` requests will return `404 endpointNotFound`. The WP "Test Connection WP to OJS" button will report "OJS not reachable" or "endpoint not found".
+**If this step is skipped**, all `/api/v1/wpojs/...` requests will return `404 endpointNotFound`. The WP settings page will show "Could not connect to OJS" and the type dropdowns will be disabled.
 
 ### 3. Configure `config.inc.php`
 
@@ -166,7 +166,7 @@ This must match the `api_key_secret` value in OJS's `config.inc.php`.
 3. Set **OJS Base URL** — must include the journal path, e.g.: `https://your-ojs-site.example.org/index.php/journalpath`
 4. Add **Product Mappings** (WC Product → OJS Type): for each WooCommerce Subscription product that grants journal access, map its Product ID to the OJS Subscription Type ID.
 5. If using **WordPress Role-Based Access**, select the roles and set the OJS Type.
-6. Click **Test Connection WP to OJS** — should report success on all checks.
+6. Verify the **OJS Connection** status shows "Connected to OJS" with the correct number of subscription types.
 
 ### 4. Run initial sync
 
