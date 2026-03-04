@@ -26,4 +26,4 @@ If it fails, check:
 After success:
 - WP:  http://localhost:8080  (admin / admin123)
 - OJS: http://localhost:8081  (admin / admin123)
-- All 35 e2e tests should pass
+- All 36 e2e tests should pass

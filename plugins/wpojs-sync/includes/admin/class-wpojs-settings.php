@@ -65,9 +65,25 @@ class WPOJS_Settings {
             'sanitize_callback' => 'sanitize_text_field',
         ) );
 
-        // Settings section.
+        // --- Section: Display ---
         add_settings_section(
-            'wpojs_main',
+            'wpojs_display',
+            'Display',
+            null,
+            'wpojs-sync'
+        );
+
+        add_settings_field(
+            'wpojs_journal_name',
+            'Journal Name',
+            array( $this, 'render_journal_name_field' ),
+            'wpojs-sync',
+            'wpojs_display'
+        );
+
+        // --- Section: OJS Connection ---
+        add_settings_section(
+            'wpojs_connection',
             'OJS Connection',
             null,
             'wpojs-sync'
@@ -78,40 +94,80 @@ class WPOJS_Settings {
             'OJS Base URL',
             array( $this, 'render_url_field' ),
             'wpojs-sync',
-            'wpojs_main'
+            'wpojs_connection'
+        );
+
+        add_settings_field(
+            'wpojs_test_connection',
+            'Test Connection',
+            array( $this, 'render_test_connection_field' ),
+            'wpojs-sync',
+            'wpojs_connection'
+        );
+
+        // --- Section: Product-Based Access ---
+        add_settings_section(
+            'wpojs_product_access',
+            'Product-Based Access',
+            array( $this, 'render_product_access_intro' ),
+            'wpojs-sync'
         );
 
         add_settings_field(
             'wpojs_type_mapping',
-            'Subscription Type Mapping',
+            'WC Product &rarr; OJS Type',
             array( $this, 'render_type_mapping_field' ),
             'wpojs-sync',
-            'wpojs_main'
+            'wpojs_product_access'
         );
 
-        add_settings_field(
-            'wpojs_default_type_id',
-            'Default OJS Subscription Type ID',
-            array( $this, 'render_default_type_field' ),
-            'wpojs-sync',
-            'wpojs_main'
+        // --- Section: Role-Based Access ---
+        add_settings_section(
+            'wpojs_role_access',
+            'WordPress Role-Based Access',
+            array( $this, 'render_role_access_intro' ),
+            'wpojs-sync'
         );
 
         add_settings_field(
             'wpojs_manual_roles',
-            'Manual Member Roles',
+            'WordPress Roles',
             array( $this, 'render_manual_roles_field' ),
             'wpojs-sync',
-            'wpojs_main'
+            'wpojs_role_access'
         );
 
         add_settings_field(
-            'wpojs_journal_name',
-            'Journal Display Name',
-            array( $this, 'render_journal_name_field' ),
+            'wpojs_default_type_id',
+            'OJS Type',
+            array( $this, 'render_default_type_field' ),
             'wpojs-sync',
-            'wpojs_main'
+            'wpojs_role_access'
         );
+    }
+
+    public function render_product_access_intro() {
+        $ojs_types = $this->get_ojs_type_names();
+        echo '<p>Members who purchase a WooCommerce Subscription product get an OJS journal subscription automatically. Map each product to an OJS subscription type below.</p>';
+        if ( ! empty( $ojs_types ) ) {
+            $parts = array();
+            foreach ( $ojs_types as $id => $name ) {
+                $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
+            }
+            echo '<p class="description">Available OJS types: ' . implode( ', ', $parts ) . '</p>';
+        }
+    }
+
+    public function render_role_access_intro() {
+        $ojs_types = $this->get_ojs_type_names();
+        echo '<p>Members with certain WordPress roles can get OJS access without purchasing a product. Useful for committee members, life members, or other honorary access. All ticked roles receive the same OJS type. Changes take effect at the next daily reconciliation or individual sync event.</p>';
+        if ( ! empty( $ojs_types ) ) {
+            $parts = array();
+            foreach ( $ojs_types as $id => $name ) {
+                $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
+            }
+            echo '<p class="description">Available OJS types: ' . implode( ', ', $parts ) . '</p>';
+        }
     }
 
     public function sanitize_ojs_url( $value ) {
@@ -236,19 +292,6 @@ class WPOJS_Settings {
         }
         echo '</div>';
         echo '<button type="button" class="button" id="wpojs-add-mapping">+ Add Mapping</button>';
-        echo '<p class="description">Each WooCommerce subscription product maps to an OJS subscription type. When a member purchases a product, they get the corresponding OJS subscription.</p>';
-
-        // Show available OJS types for reference.
-        if ( ! empty( $ojs_types ) ) {
-            echo '<p class="description" style="margin-top:4px;">Available OJS types: ';
-            $parts = array();
-            foreach ( $ojs_types as $id => $name ) {
-                $parts[] = sprintf( '<strong>%d</strong> = %s', $id, esc_html( $name ) );
-            }
-            echo implode( ', ', $parts );
-            echo '</p>';
-        }
-
         // Inline JS for add/remove mapping rows.
         ?>
         <script>
@@ -296,18 +339,51 @@ class WPOJS_Settings {
 
         printf(
             '<input type="number" name="wpojs_default_type_id" value="%s" class="small-text" />%s' .
-            '<p class="description">Used for members granted access by role (see Manual Member Roles below), not by purchasing a product.</p>',
+            '<p class="description">The OJS subscription type assigned to all members with the roles ticked above.</p>',
             esc_attr( $value ),
             $type_label
         );
     }
 
     public function render_manual_roles_field() {
-        $selected = get_option( 'wpojs_manual_roles', array() );
+        $selected  = get_option( 'wpojs_manual_roles', array() );
         $all_roles = wp_roles()->get_names();
 
-        echo '<fieldset>';
+        // Standard WP/WooCommerce roles — shown separately so the list isn't overwhelming.
+        $standard_roles = array(
+            'administrator', 'editor', 'author', 'contributor',
+            'subscriber', 'customer', 'shop_manager',
+        );
+
+        $custom_roles  = array();
+        $builtin_roles = array();
         foreach ( $all_roles as $slug => $name ) {
+            if ( in_array( $slug, $standard_roles, true ) ) {
+                $builtin_roles[ $slug ] = $name;
+            } else {
+                $custom_roles[ $slug ] = $name;
+            }
+        }
+
+        echo '<fieldset style="display:flex;gap:40px;flex-wrap:wrap;">';
+
+        if ( ! empty( $custom_roles ) ) {
+            echo '<div>';
+            echo '<strong style="display:block;margin-bottom:6px;">Custom / Membership Roles</strong>';
+            foreach ( $custom_roles as $slug => $name ) {
+                printf(
+                    '<label style="display:block;margin-bottom:3px;"><input type="checkbox" name="wpojs_manual_roles[]" value="%s" %s /> %s</label>',
+                    esc_attr( $slug ),
+                    checked( in_array( $slug, $selected, true ), true, false ),
+                    esc_html( $name )
+                );
+            }
+            echo '</div>';
+        }
+
+        echo '<div>';
+        echo '<strong style="display:block;margin-bottom:6px;">Standard WordPress Roles</strong>';
+        foreach ( $builtin_roles as $slug => $name ) {
             printf(
                 '<label style="display:block;margin-bottom:3px;"><input type="checkbox" name="wpojs_manual_roles[]" value="%s" %s /> %s</label>',
                 esc_attr( $slug ),
@@ -315,8 +391,15 @@ class WPOJS_Settings {
                 esc_html( $name )
             );
         }
+        echo '</div>';
+
         echo '</fieldset>';
-        echo '<p class="description">WordPress roles that should automatically get an OJS journal subscription, even without purchasing a WooCommerce product. Useful for committee members, life members, or other honorary access.</p>';
+    }
+
+    public function render_test_connection_field() {
+        echo '<button type="button" class="button button-secondary" id="wpojs-test-connection">Test Connection WP to OJS</button>';
+        echo '<span id="wpojs-test-result" style="margin-left:10px;"></span>';
+        echo '<p class="description">Tests connectivity to OJS and validates the API key and subscription type IDs.</p>';
     }
 
     public function render_journal_name_field() {
@@ -351,24 +434,8 @@ class WPOJS_Settings {
 
             <hr />
 
-            <h2>Diagnostics</h2>
-            <p>
-                <button type="button" class="button button-secondary" id="wpojs-test-connection">Test Connection</button>
-                <span id="wpojs-test-result" style="margin-left:10px;"></span>
-            </p>
-
-            <h2>Server Info</h2>
+            <h2>Status</h2>
             <table class="form-table">
-                <tr>
-                    <th>WP Server IP</th>
-                    <td>
-                        <?php
-                        $ip = isset( $_SERVER['SERVER_ADDR'] ) ? sanitize_text_field( $_SERVER['SERVER_ADDR'] ) : 'Unknown';
-                        echo esc_html( $ip );
-                        ?>
-                        <p class="description">Add this IP to the OJS plugin's allowed IP list. May differ from the outbound IP behind a load balancer.</p>
-                    </td>
-                </tr>
                 <tr>
                     <th>API Key</th>
                     <td>
@@ -379,6 +446,16 @@ class WPOJS_Settings {
                             echo '<span style="color:red;">&#10007; Not defined. Add <code>define(\'WPOJS_API_KEY\', \'your-key\');</code> to wp-config.php</span>';
                         }
                         ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th>WP Server IP</th>
+                    <td>
+                        <?php
+                        $ip = isset( $_SERVER['SERVER_ADDR'] ) ? sanitize_text_field( $_SERVER['SERVER_ADDR'] ) : 'Unknown';
+                        echo esc_html( $ip );
+                        ?>
+                        <p class="description">Ensure this IP is in the OJS plugin's allowed IP list. If connection tests fail with an IP error, check the OJS request log for the actual IP seen by OJS.</p>
                     </td>
                 </tr>
                 <tr>

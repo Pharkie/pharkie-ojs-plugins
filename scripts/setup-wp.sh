@@ -216,8 +216,8 @@ if [ "$SAMPLE_DATA" = true ]; then
     echo "Applying original roles (UM/WCS)..."
     wp_quiet eval-file /var/www/html/scripts/apply-roles.php "$CSV"
 
-    echo "Seeding WooCommerce subscriptions..."
-    wp_quiet eval-file /var/www/html/scripts/seed-subscriptions.php "$CSV"
+    echo "Seeding sample data and plugin config..."
+    wp_quiet eval-file /var/www/html/scripts/setup-and-sample-data.php "$CSV"
 
     # Validate: check subscription count (use wp eval for reliable cross-version DB access)
     SUB_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type=\"shop_subscription\"");' --allow-root 2>&1 | grep -v '_load_textdomain' | tr -d '[:space:]') || true
@@ -228,7 +228,7 @@ if [ "$SAMPLE_DATA" = true ]; then
     echo "[ok] $SUB_COUNT subscriptions seeded."
 
     # Sync seeded subscriptions to HPOS (High-Performance Order Storage).
-    # seed-subscriptions.php uses direct SQL into wp_posts (legacy storage) for speed.
+    # setup-and-sample-data.php uses direct SQL into wp_posts (legacy storage) for speed.
     # WooCommerce 8+ defaults to HPOS and tries to auto-enable it on first admin visit.
     # Without syncing, WC throws a fatal: "orders out of sync". This backfills the
     # wp_wc_orders table so HPOS can be enabled cleanly.

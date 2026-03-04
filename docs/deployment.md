@@ -79,7 +79,7 @@ support_email = "support@example.org"
 
 ### 4. Enable the plugin in OJS
 
-Go to OJS Admin → Website → Plugins → Generic Plugins → find "WP-OJS Subscription API" → Enable.
+Go to OJS Admin Dashboard → Settings → Website → Plugins tab → Installed Plugins → Generic Plugins → find "WP-OJS Subscription API" → Enable.
 
 On first enable, OJS runs the plugin's migration (`WpojsApiLogMigration`) and creates the `wpojs_api_log` table automatically.
 

@@ -1,9 +1,12 @@
 <?php
 /**
- * Seed WooCommerce Subscription test data.
+ * Seed sample data and plugin configuration for the dev environment.
  *
- * Creates subscription products and active subscription records for test users
- * with um_custom_role_1–6, so the resolver finds them as active members.
+ * Part A: Creates WC subscription products.
+ * Part B: Batch-inserts WCS subscription records for test users with
+ *         um_custom_role_1–6, so the resolver finds them as active members.
+ * Part C: Configures wpojs_* plugin options (type mapping, member roles,
+ *         manual roles, journal name).
  *
  * Uses direct SQL batch inserts (~1.5s for ~683 subscriptions) rather than
  * the WCS API (~10min — every save() fires hooks, recalculates totals, and
@@ -12,10 +15,10 @@
  * wp_woocommerce_order_items, wp_woocommerce_order_itemmeta). If WCS changes
  * its storage model (e.g. HPOS migration), this script will need updating.
  *
- * This is test data seeding only — production has real WCS subscriptions.
+ * This is dev environment seeding only — production has real data.
  *
  * Usage:
- *   wp eval-file seed-subscriptions.php /data/test-users.csv --allow-root
+ *   wp eval-file setup-and-sample-data.php /data/test-users.csv --allow-root
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -261,5 +264,7 @@ update_option( 'wpojs_member_roles', array(
 update_option( 'wpojs_manual_roles', array(
 	'um_custom_role_7', 'um_custom_role_8', 'um_custom_role_9',
 ) );
+
+update_option( 'wpojs_journal_name', 'Existential Analysis' );
 
 WP_CLI::success( 'Subscription seeding complete.' );

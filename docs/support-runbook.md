@@ -47,11 +47,21 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 
 ---
 
-## WP Admin pages
+## Admin pages
 
-- **Settings**: WP Admin → OJS Sync → Settings. OJS URL, type mapping, test connection button.
+### WordPress
+
+- **Settings**: WP Admin → OJS Sync → Settings. OJS URL, type mapping, role-based access, test connection.
 - **Sync Log**: WP Admin → OJS Sync → Sync Log. Filterable by status, searchable by email.
 - **Queue**: WP Admin → Tools → Scheduled Actions. Filter by group `wpojs-sync`.
+
+### OJS
+
+- **Plugin Settings**: OJS Admin Dashboard → Settings → Website → Plugins tab → Installed Plugins → Generic Plugins → WP–OJS Subscription API → **Settings**. Editable text for login hint, paywall hint, and footer message.
+- **Plugin Status**: Same location → **Status**. Shows API request log, config health checks, and sync stats.
+- **Subscriptions**: OJS Admin Dashboard → Payments → Subscriptions. View/manage individual subscriptions.
+- **Subscription Types**: OJS Admin Dashboard → Payments → Subscriptions → Subscription Types. The type IDs referenced in WP settings.
+- **Users**: OJS Admin Dashboard → Users & Roles. Search by email to check if a synced user exists.
 
 ---
 
@@ -117,7 +127,7 @@ The digest email fires once per day if there were any sync failures in the last 
 
 ### OJS API log
 
-OJS Admin → Website → Plugins → WP-OJS Subscription API → Status. Shows recent API requests, config health checks, and sync stats. Log entries older than 30 days are automatically cleaned up.
+OJS Admin Dashboard → Settings → Website → Plugins tab → Installed Plugins → Generic Plugins → WP–OJS Subscription API → Status. Shows recent API requests, config health checks, and sync stats. Log entries older than 30 days are automatically cleaned up.
 
 ### Email change retry falls back to full sync
 
