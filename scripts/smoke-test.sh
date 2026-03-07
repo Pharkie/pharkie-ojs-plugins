@@ -1,0 +1,214 @@
+#!/bin/bash
+# Lightweight smoke tests for staging/production environments.
+# Runs FROM the devcontainer (or any machine with SSH access).
+# No Node, no Playwright — just curl + WP-CLI via SSH.
+#
+# Usage:
+#   scripts/smoke-test.sh                      # Test sea-staging
+#   scripts/smoke-test.sh --host=prod-server   # Test any SSH host
+set -o pipefail
+
+# --- Parse arguments ---
+SSH_HOST="sea-staging"
+for arg in "$@"; do
+  case "$arg" in
+    --host=*) SSH_HOST="${arg#--host=}" ;;
+  esac
+done
+
+REMOTE_DIR="/opt/wp-ojs-sync"
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+SSH_CMD="ssh -o ConnectTimeout=10 $SSH_HOST"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Read env values from remote .env
+WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
+OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
+
+PASSED=0
+FAILED=0
+TOTAL=0
+
+pass() {
+  PASSED=$((PASSED + 1))
+  TOTAL=$((TOTAL + 1))
+  echo "  [PASS] $1"
+}
+
+fail() {
+  FAILED=$((FAILED + 1))
+  TOTAL=$((TOTAL + 1))
+  echo "  [FAIL] $1"
+  [ -n "$2" ] && echo "         $2"
+}
+
+remote() {
+  $SSH_CMD "cd $REMOTE_DIR && $*" 2>&1
+}
+
+wp_cli() {
+  remote "$COMPOSE exec -T wp wp --allow-root $*"
+}
+
+echo "=== Smoke tests: $SSH_HOST ==="
+echo "    WP:  $WP_HOME"
+echo "    OJS: $OJS_BASE_URL"
+echo ""
+
+# --- 1. WP HTTP ---
+echo "1. WordPress HTTP"
+WP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME" 2>/dev/null) || WP_STATUS="000"
+if [ "$WP_STATUS" = "200" ] || [ "$WP_STATUS" = "301" ] || [ "$WP_STATUS" = "302" ]; then
+  pass "WP responds (HTTP $WP_STATUS)"
+else
+  fail "WP not responding (HTTP $WP_STATUS)"
+fi
+
+# --- 2. OJS HTTP ---
+echo "2. OJS HTTP"
+OJS_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$OJS_BASE_URL" 2>/dev/null) || OJS_STATUS="000"
+if [ "$OJS_STATUS" = "200" ] || [ "$OJS_STATUS" = "301" ] || [ "$OJS_STATUS" = "302" ]; then
+  pass "OJS responds (HTTP $OJS_STATUS)"
+else
+  fail "OJS not responding (HTTP $OJS_STATUS)"
+fi
+
+# --- 3. WP REST API ---
+echo "3. WordPress REST API"
+WP_API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME/wp-json/" 2>/dev/null) || WP_API_STATUS="000"
+if [ "$WP_API_STATUS" = "200" ]; then
+  pass "WP REST API responds"
+else
+  fail "WP REST API not responding (HTTP $WP_API_STATUS)"
+fi
+
+# --- 4. OJS ping ---
+echo "4. OJS plugin ping"
+PING=$(remote "$COMPOSE exec -T ojs curl -sf http://localhost:80/index.php/journal/api/v1/wpojs/ping") || PING=""
+if echo "$PING" | grep -q '"status":"ok"'; then
+  pass "OJS plugin responds to ping"
+else
+  fail "OJS plugin ping failed" "$PING"
+fi
+
+# --- 5. OJS preflight (auth + IP + compatibility) ---
+echo "5. OJS preflight"
+API_KEY=$($SSH_CMD "grep '^WPOJS_API_KEY_SECRET=' $REMOTE_DIR/.env | cut -d= -f2")
+PREFLIGHT=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/journal/api/v1/wpojs/preflight") || PREFLIGHT=""
+if echo "$PREFLIGHT" | grep -q '"compatible":true'; then
+  CHECKS=$(echo "$PREFLIGHT" | grep -o '"ok":true' | wc -l)
+  pass "Preflight passes ($CHECKS checks OK)"
+else
+  fail "Preflight failed" "$PREFLIGHT"
+fi
+
+# --- 6. WP test-connection ---
+echo "6. WP-CLI test-connection"
+TC_OUTPUT=$(wp_cli "ojs-sync test-connection") || TC_OUTPUT=""
+if echo "$TC_OUTPUT" | grep -q "Connection test passed"; then
+  pass "test-connection passes"
+else
+  fail "test-connection failed" "$(echo "$TC_OUTPUT" | tail -3)"
+fi
+
+# --- 7. Required plugins active ---
+echo "7. Required plugins"
+PLUGINS=$(wp_cli "plugin list --status=active --format=csv --fields=name") || PLUGINS=""
+ALL_ACTIVE=true
+for PLUGIN in woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync; do
+  if echo "$PLUGINS" | grep -q "^$PLUGIN$"; then
+    pass "$PLUGIN active"
+  else
+    fail "$PLUGIN not active"
+    ALL_ACTIVE=false
+  fi
+done
+
+# --- 8. OJS subscription types ---
+echo "8. OJS subscription types"
+SUB_TYPES=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/journal/api/v1/wpojs/subscription-types") || SUB_TYPES=""
+TYPE_COUNT=$(echo "$SUB_TYPES" | grep -o '"id"' | wc -l)
+if [ "$TYPE_COUNT" -gt "0" ]; then
+  pass "$TYPE_COUNT subscription type(s) configured"
+else
+  fail "No subscription types found" "$SUB_TYPES"
+fi
+
+# --- 9. Single user sync round-trip ---
+echo "9. Sync round-trip"
+TEST_EMAIL="smoke-test-$(date +%s)@test.invalid"
+TEST_LOGIN="smoke_$(date +%s)"
+SYNC_OK=true
+
+# Create temp WP user + active WCS subscription
+WP_USER_ID=$(wp_cli "user create $TEST_LOGIN $TEST_EMAIL --role=subscriber --first_name=Smoke --last_name=Test --porcelain") || WP_USER_ID=""
+if [ -z "$WP_USER_ID" ] || ! [[ "$WP_USER_ID" =~ ^[0-9]+$ ]]; then
+  fail "Could not create test user" "$WP_USER_ID"
+  SYNC_OK=false
+fi
+
+if [ "$SYNC_OK" = true ]; then
+  # Create active WCS subscription (required for sync to recognise user as a member)
+  PRODUCT_ID=$(wp_cli "post list --post_type=product --posts_per_page=1 --format=ids") || PRODUCT_ID=""
+  SUB_ID=""
+  if [ -n "$PRODUCT_ID" ]; then
+    SUB_ID=$(wp_cli "eval '
+      \$sub = wcs_create_subscription([\"customer_id\" => $WP_USER_ID, \"billing_period\" => \"year\", \"billing_interval\" => 1]);
+      if (is_wp_error(\$sub)) { echo 0; return; }
+      \$sub->add_product(wc_get_product($PRODUCT_ID));
+      \$sub->update_status(\"active\");
+      echo \$sub->get_id();
+    '") || SUB_ID=""
+  fi
+
+  if [ -z "$SUB_ID" ] || [ "$SUB_ID" = "0" ]; then
+    fail "Could not create test subscription"
+    SYNC_OK=false
+  fi
+fi
+
+if [ "$SYNC_OK" = true ]; then
+  # Sync the user
+  SYNC_OUTPUT=$(wp_cli "ojs-sync sync --member=$TEST_EMAIL --yes" 2>&1) || true
+  # Run Action Scheduler to process the queued job
+  wp_cli "action-scheduler run" > /dev/null 2>&1 || true
+
+  # Verify OJS user exists
+  OJS_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/users?email=$TEST_EMAIL'") || OJS_USER=""
+  if echo "$OJS_USER" | grep -q "$TEST_EMAIL"; then
+    pass "User synced to OJS"
+
+    # Verify subscription exists
+    OJS_USER_ID=$(echo "$OJS_USER" | grep -o '"userId":[0-9]*' | head -1 | cut -d: -f2)
+    if [ -n "$OJS_USER_ID" ]; then
+      OJS_SUBS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUBS=""
+      if echo "$OJS_SUBS" | grep -q '"status"'; then
+        pass "OJS subscription created"
+      else
+        fail "OJS subscription not found" "$OJS_SUBS"
+      fi
+    fi
+  else
+    fail "User not found in OJS after sync" "$OJS_USER"
+  fi
+
+  # Cleanup: delete WP user (triggers OJS anonymise via hook)
+  wp_cli "user delete $WP_USER_ID --yes" > /dev/null 2>&1 || true
+  wp_cli "action-scheduler run" > /dev/null 2>&1 || true
+fi
+
+# --- 10. Reconciliation ---
+echo "10. Reconciliation"
+RECON_OUTPUT=$(wp_cli "ojs-sync reconcile") || RECON_OUTPUT=""
+if echo "$RECON_OUTPUT" | grep -q "Reconciliation complete"; then
+  pass "Reconciliation completes successfully"
+else
+  fail "Reconciliation failed" "$(echo "$RECON_OUTPUT" | tail -3)"
+fi
+
+# --- Summary ---
+echo ""
+echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
+if [ "$FAILED" -gt "0" ]; then
+  exit 1
+fi
