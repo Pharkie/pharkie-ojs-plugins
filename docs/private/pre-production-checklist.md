@@ -146,11 +146,95 @@ From the plugin audit (`data export/live-wp-plugin-audit.md`):
 
 ### 3. Migrate WP data from Krystal
 
-- [ ] Export WP database from Krystal (full dump: users, posts, products, orders, subscriptions)
-- [ ] Import into Hetzner WP database
-- [ ] Export `wp-content/uploads/` from Krystal → Hetzner
-- [ ] Search-replace old domain → new domain in database (`wp search-replace`)
-- [ ] Verify: pages load, products exist, subscriptions intact, user accounts work
+Requires SSH access to Krystal. Add an SSH config entry:
+
+```
+Host krystal
+  HostName <krystal-ip-or-hostname>
+  User <your-krystal-user>
+  IdentityFile ~/.ssh/<key>
+```
+
+#### What to pull
+
+| Data | Where on Krystal | Size estimate | How |
+|---|---|---|---|
+| **Database** | MySQL/MariaDB | ~100-500 MB | `wp db export` via WP-CLI |
+| **Uploads** (media library) | `wp-content/uploads/` | Could be 1-10 GB+ | `rsync` |
+| **SEAcomm theme** | `wp-content/themes/seacomm/` | Small | `rsync` |
+| **Helium parent theme** | `wp-content/themes/helium/` | Small | `rsync` |
+| **wp-config.php** | WP root | Reference only — note custom constants | `scp` |
+| **Paid plugin configs** | DB (options table) | Included in DB dump | — |
+| **.htaccess** | WP root | Reference for redirect rules | `scp` |
+
+#### Export commands (run via SSH to Krystal)
+
+```bash
+KRYSTAL="krystal"
+KRYSTAL_WP_PATH="/path/to/wordpress"  # Find via: ssh krystal "find /home -name wp-config.php 2>/dev/null"
+
+# 1. Database dump (via WP-CLI if available, otherwise mysqldump)
+ssh $KRYSTAL "cd $KRYSTAL_WP_PATH && wp db export /tmp/wp-export.sql --allow-root"
+scp $KRYSTAL:/tmp/wp-export.sql "data export/krystal-wp-export.sql"
+
+# Or if WP-CLI not available — get credentials from wp-config.php first:
+# ssh $KRYSTAL "mysqldump -u <user> -p <dbname> > /tmp/wp-export.sql"
+
+# 2. Uploads (media library) — can be large, rsync handles resume
+rsync -az --progress -e ssh \
+  $KRYSTAL:$KRYSTAL_WP_PATH/wp-content/uploads/ \
+  "data export/krystal-uploads/"
+
+# 3. Themes
+rsync -az -e ssh $KRYSTAL:$KRYSTAL_WP_PATH/wp-content/themes/seacomm/ \
+  wordpress/web/app/themes/seacomm/
+rsync -az -e ssh $KRYSTAL:$KRYSTAL_WP_PATH/wp-content/themes/helium/ \
+  wordpress/web/app/themes/helium/
+
+# 4. Reference files
+scp $KRYSTAL:$KRYSTAL_WP_PATH/wp-config.php "data export/krystal-wp-config.php"
+scp $KRYSTAL:$KRYSTAL_WP_PATH/.htaccess "data export/krystal-htaccess" 2>/dev/null || true
+```
+
+#### Import into Hetzner WP
+
+```bash
+PROD="sea-prod"
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+
+# 1. Copy DB dump to VPS
+scp "data export/krystal-wp-export.sql" $PROD:/tmp/
+
+# 2. Import database
+ssh $PROD "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp wp db import /tmp/krystal-wp-export.sql --allow-root"
+
+# 3. Search-replace old domain → new domain
+ssh $PROD "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp wp search-replace \
+  'https://old-domain.org' 'https://new-domain.org' --all-tables --allow-root"
+
+# 4. Sync uploads into the WP uploads volume
+rsync -az --progress -e ssh \
+  "data export/krystal-uploads/" \
+  $PROD:/opt/wp-ojs-sync/wordpress/web/app/uploads/
+
+# 5. Fix permissions
+ssh $PROD "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp chown -R www-data:www-data /var/www/html/web/app/uploads"
+
+# 6. Flush caches and permalinks
+ssh $PROD "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp wp cache flush --allow-root"
+ssh $PROD "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp wp rewrite flush --allow-root"
+```
+
+#### Verify after import
+
+- [ ] Pages load (homepage, My Account, shop)
+- [ ] Products exist with correct prices
+- [ ] User accounts work (login as a real member)
+- [ ] WooCommerce Subscriptions intact (check subscription list in WP admin)
+- [ ] Media library images display correctly
+- [ ] Yoast SEO data preserved (check a few posts)
+- [ ] 301 redirects still work
+- [ ] Events Calendar events present
 
 ### 4. Configure payments
 
@@ -182,6 +266,22 @@ Cut over from Krystal to Hetzner. This is the point of no return.
 - [ ] Maintenance mode on Krystal WP (prevent data changes during cutover)
 
 ### Switchover
+
+```bash
+# 1. Final data sync (while Krystal is in maintenance mode)
+ssh krystal "cd $KRYSTAL_WP_PATH && wp db export /tmp/wp-final.sql --allow-root"
+scp krystal:/tmp/wp-final.sql /tmp/wp-final.sql
+scp /tmp/wp-final.sql sea-prod:/tmp/
+
+# 2. Import + search-replace
+ssh sea-prod "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp wp db import /tmp/wp-final.sql --allow-root"
+ssh sea-prod "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp wp search-replace \
+  'https://old-domain.org' 'https://new-domain.org' --all-tables --allow-root"
+
+# 3. Final uploads sync (delta only — fast if you've synced before)
+rsync -az --progress -e ssh krystal:$KRYSTAL_WP_PATH/wp-content/uploads/ sea-prod:/opt/wp-ojs-sync/wordpress/web/app/uploads/
+ssh sea-prod "cd /opt/wp-ojs-sync && $COMPOSE exec -T wp chown -R www-data:www-data /var/www/html/web/app/uploads"
+```
 
 - [ ] Final database export from Krystal → import to Hetzner
 - [ ] Final `wp-content/uploads/` sync
