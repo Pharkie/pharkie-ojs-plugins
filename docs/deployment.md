@@ -266,6 +266,62 @@ Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
 
 ---
 
+## Email setup
+
+Both OJS and WP need to send transactional emails (welcome emails, password resets). Docker containers can't send email directly — you need an external SMTP relay.
+
+Hetzner blocks port 25 (outbound SMTP) by default, but port 587 (submission with TLS) works fine, which is what all transactional email services use.
+
+### Recommended services
+
+| Service | Free tier | Notes |
+|---|---|---|
+| **Postmark** | 100 emails/month | Best deliverability, simplest setup |
+| **Mailgun** | 1,000 emails/month (first 3 months) | Flexible, good logs |
+| **Brevo** (ex-Sendinblue) | 300 emails/day | Generous free tier |
+| **Amazon SES** | ~$0.10 per 1,000 | Cheapest at scale, more setup |
+
+For ~700 members getting one-time welcome emails plus occasional password resets, any of these work.
+
+### OJS email configuration
+
+OJS SMTP is configured via `.env` — the plumbing is already in docker-compose.yml:
+
+```
+OJS_SMTP_ENABLED=On
+OJS_SMTP_HOST=smtp.postmarkapp.com
+OJS_SMTP_PORT=587
+OJS_SMTP_AUTH=tls
+OJS_SMTP_USER=your-api-token
+OJS_SMTP_PASSWORD=your-api-token
+OJS_MAIL_FROM=journal@yourdomain.org
+```
+
+### WP email configuration
+
+WP email is typically handled by an SMTP plugin (WP Mail SMTP, FluentSMTP, etc.) pointed at the same service. If the live WP already sends email via a relay, reuse those credentials.
+
+### DNS records (required for deliverability)
+
+Add these DNS records for your sending domain:
+
+- **SPF** — `TXT` record authorizing the service to send on your behalf
+- **DKIM** — `TXT` record for cryptographic email signing
+- **DMARC** — `TXT` record with your policy (start with `p=none`)
+
+Each service provides the exact records to add. Without these, emails land in spam.
+
+### Testing before bulk send
+
+The welcome email goes to all ~700 members at once. Test carefully:
+
+1. Send to yourself first — check it arrives, check spam score
+2. Verify DKIM passes (Gmail: "Show original" → look for `dkim=pass`)
+3. Send to a small batch (5-10 members)
+4. Then send the full batch: `wp ojs-sync send-welcome-emails`
+
+---
+
 ## Useful commands
 
 All commands assume SSH access to the VPS. Replace `your-server` with your SSH host alias.
