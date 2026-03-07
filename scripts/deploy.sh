@@ -9,6 +9,7 @@
 #   scripts/deploy.sh --skip-setup             # Sync + restart only, no setup
 #   scripts/deploy.sh --skip-build             # Don't rebuild images
 #   scripts/deploy.sh --ref=some-branch        # Deploy a specific git ref
+#   scripts/deploy.sh --clean                  # Tear down volumes first (fresh DB)
 #
 # Prerequisites:
 #   - SSH access configured (Host entry in ~/.ssh/config)
@@ -21,6 +22,7 @@ SSH_HOST="sea-staging"
 PROVISION=""
 SKIP_SETUP=""
 SKIP_BUILD=""
+CLEAN=""
 GIT_REF="main"
 for arg in "$@"; do
   case "$arg" in
@@ -28,6 +30,7 @@ for arg in "$@"; do
     --provision) PROVISION=1 ;;
     --skip-setup) SKIP_SETUP=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
+    --clean) CLEAN=1 ;;
     --ref=*) GIT_REF="${arg#--ref=}" ;;
   esac
 done
@@ -37,6 +40,7 @@ REPO_URL="git@github.com:Pharkie/wp-ojs-sync.git"
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 SSH_CMD="ssh -o ConnectTimeout=10 $SSH_HOST"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=== Deploying to $SSH_HOST (ref: $GIT_REF) ==="
 
@@ -78,6 +82,36 @@ if ! $SSH_CMD "test -f $REMOTE_DIR/.env"; then
 fi
 # Ensure .env is readable by container processes (scp creates 600 by default)
 $SSH_CMD "chmod 644 $REMOTE_DIR/.env"
+
+# --- Sync non-git files (paid plugins, import data) ---
+# These must exist BEFORE docker compose up, or Docker creates empty directories
+# for bind mounts that reference missing files.
+echo "--- Syncing non-git files ---"
+PAID_PLUGINS="$PROJECT_DIR/wordpress/paid-plugins"
+if [ -d "$PAID_PLUGINS" ] && [ "$(ls -A "$PAID_PLUGINS" 2>/dev/null | grep -v README)" ]; then
+  rsync -az --exclude='README.md' -e "ssh -o ConnectTimeout=10" \
+    "$PAID_PLUGINS/" "$SSH_HOST:$REMOTE_DIR/wordpress/paid-plugins/"
+  echo "[ok] Paid plugins synced."
+else
+  echo "[skip] No paid plugins found locally."
+fi
+
+IMPORT_XML="$PROJECT_DIR/data export/ojs-import-clean.xml"
+if [ -f "$IMPORT_XML" ]; then
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/data export'"
+  rsync -az -e "ssh -o ConnectTimeout=10" \
+    "$IMPORT_XML" "$SSH_HOST:$REMOTE_DIR/data export/ojs-import-clean.xml"
+  echo "[ok] OJS import XML synced."
+else
+  echo "[skip] No OJS import XML found locally."
+fi
+
+# --- Clean (optional: tear down volumes for fresh DB) ---
+if [ -n "$CLEAN" ]; then
+  echo "--- Cleaning: removing containers + volumes ---"
+  $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD down -v 2>/dev/null || true"
+  echo "[ok] Clean slate."
+fi
 
 # --- Build images ---
 if [ -z "$SKIP_BUILD" ]; then
