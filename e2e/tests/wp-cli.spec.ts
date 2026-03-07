@@ -128,7 +128,7 @@ test.describe('WP-CLI commands', () => {
     const subId = createSubscription(wpUserId, getSubscriptionProductId());
     try {
       wpCli(`ojs-sync sync --member=${email} --yes`);
-      waitForSync(email);
+      waitForSync();
 
       const output = wpCli('ojs-sync send-welcome-emails --dry-run');
 
