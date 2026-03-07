@@ -147,18 +147,42 @@ scripts/deploy.sh --host=your-server --clean
 scripts/smoke-test.sh --host=your-server
 ```
 
-### Code updates
+### Day-to-day code updates
+
+Both plugins are bind-mounted from the repo directory on disk, so `git pull` is all you need — PHP reads files directly, no rebuild required.
 
 ```bash
-# Deploy latest main branch
+# Push code to the VPS (the normal workflow)
+ssh your-server "cd /opt/wp-ojs-sync && git pull"
+```
+
+If PHP opcache is serving stale code (rare), restart the containers:
+
+```bash
+ssh your-server "cd /opt/wp-ojs-sync && git pull && \
+  docker compose -f docker-compose.yml -f docker-compose.staging.yml restart wp ojs"
+```
+
+### When to use deploy.sh
+
+Reserve `deploy.sh` for infrastructure changes — not routine code updates.
+
+```bash
+# Dockerfile or compose changes (need image rebuild)
 scripts/deploy.sh --host=your-server
 
 # Deploy a specific branch
 scripts/deploy.sh --host=your-server --ref=feature-branch
 
-# Quick restart (no rebuild, no setup)
-scripts/deploy.sh --host=your-server --skip-build --skip-setup
+# Full teardown + fresh databases
+scripts/deploy.sh --host=your-server --clean
 ```
+
+Use `deploy.sh` when:
+- Dockerfiles change (new PHP extensions, base image updates)
+- Docker Compose changes (new services, volumes, ports)
+- Setup scripts change and need to re-run
+- You want a clean slate (`--clean`)
 
 ---
 
