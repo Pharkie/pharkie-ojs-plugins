@@ -48,7 +48,17 @@ VPS
 └── caddy     — Reverse proxy + SSL (optional)    → ports 80/443
 ```
 
-All services run as Docker containers via Docker Compose. Three compose files:
+All services run as Docker containers via Docker Compose.
+
+### Why Docker?
+
+The plugin source code lives in the git repo and is **bind-mounted** directly into the running containers. This means:
+
+- **Updating code is just `git pull`.** Both plugins (WP and OJS) are read from disk by the containers in real time. No rebuild, no restart, no deployment pipeline — PHP picks up the new files immediately.
+- **Dev and production run the same stack.** Same Dockerfiles, same compose config, same bind mounts. What works locally works on the VPS.
+- **The entire environment is reproducible.** `docker compose down -v && docker compose up -d` gives you a clean slate. No debugging stale state on a snowflake server.
+
+Three compose files:
 
 | File | Purpose |
 |---|---|
