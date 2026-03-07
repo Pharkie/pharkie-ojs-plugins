@@ -88,6 +88,10 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 - **`scripts/setup.sh`** — unified setup for all environments. Assumes containers are already running. Flags: `--env=dev|staging|prod`, `--with-sample-data`. Staging defaults to `--with-sample-data`.
 - **`scripts/setup-dev.sh`** — thin shim, runs `setup.sh --env=dev`. Kept for backwards compatibility.
 - **Why two scripts?** Docker-in-Docker in the devcontainer requires a hardcoded host path for `--project-directory`. `rebuild-dev.sh` bakes this in. `setup.sh --env=dev` is the portable inner script. Staging/prod use plain `docker compose` on the VPS.
+- **`scripts/init-vps.sh`** — one-time VPS setup (Hetzner): creates server, firewall, SSH config, GitHub deploy key. Run once per server.
+- **`scripts/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`.
+- **`scripts/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). No Node/Playwright needed on VPS.
+- **`scripts/load-test.sh`** — performance tests using `hey` with server resource monitoring.
 - **Post-rebuild prompt:** `docs/private/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
 
 ## Pre-commit hooks

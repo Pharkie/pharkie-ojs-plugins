@@ -60,15 +60,18 @@ All services run as Docker containers via Docker Compose. Three compose files:
 
 ## Scripts
 
-All deployment scripts run **from your local machine** (or devcontainer) via SSH to the VPS. Nothing needs to be installed on the VPS beyond Docker and Git.
+All scripts run **from your local machine** (or devcontainer) via SSH to the VPS. Nothing needs to be installed on the VPS beyond Docker and Git.
 
-| Script | What it does | Where it runs |
+There are two phases: **init** (run once per server) and **deploy** (run every time you ship code).
+
+| Script | Phase | What it does |
 |---|---|---|
-| `scripts/provision-vps.sh` | Installs Docker on a fresh Ubuntu VPS | On VPS (via deploy.sh) |
-| `scripts/deploy.sh` | Pulls code, builds images, starts stack, runs setup | From local → VPS via SSH |
-| `scripts/setup.sh` | Configures WP + OJS inside running containers | Inside containers (via deploy.sh) |
-| `scripts/smoke-test.sh` | Lightweight health checks (curl + WP-CLI via SSH) | From local → VPS via SSH |
-| `scripts/load-test.sh` | Performance tests with server monitoring | From local → VPS via SSH |
+| `scripts/init-vps.sh` | Init | Creates server, firewall, SSH config, deploy key (Hetzner) |
+| `scripts/provision-vps.sh` | Init | Installs Docker on VPS (called by deploy.sh `--provision`) |
+| `scripts/deploy.sh` | Deploy | Pulls code, builds images, starts stack, runs setup |
+| `scripts/setup.sh` | Deploy | Configures WP + OJS inside running containers |
+| `scripts/smoke-test.sh` | Test | Lightweight health checks (curl + WP-CLI via SSH) |
+| `scripts/load-test.sh` | Test | Performance tests with server monitoring |
 
 ### deploy.sh flags
 
@@ -117,24 +120,31 @@ The `.env` file on the VPS controls all configuration. It is **not in git** — 
 ### First deploy (fresh server)
 
 ```bash
-# 1. Prepare .env from template
+# 1. Create server + infrastructure (Hetzner)
+scripts/init-vps.sh --name=your-server
+# For production with SSL: scripts/init-vps.sh --name=your-server --ssl
+
+# 2. Create .env from template
 cp .env.example .env.staging
 # Edit: set URLs, passwords, salts, API keys
 
-# 2. Copy .env to server
+# 3. Copy .env to server
 scp .env.staging your-server:/opt/wp-ojs-sync/.env
 
-# 3. Provision + deploy
+# 4. Provision + deploy (installs Docker, clones repo, builds, starts, runs setup)
 scripts/deploy.sh --host=your-server --provision
 
-# 4. Copy non-git files (if applicable)
+# 5. Copy non-git files (if applicable)
 #    Paid WP plugins (licensed, can't be in git):
 rsync -az -e ssh wordpress/paid-plugins/ your-server:/opt/wp-ojs-sync/wordpress/paid-plugins/
 #    OJS import XML (too large for git):
 scp "data export/ojs-import-clean.xml" "your-server:/opt/wp-ojs-sync/data export/"
 
-# 5. Re-deploy with data files present
+# 6. Re-deploy with data files present
 scripts/deploy.sh --host=your-server --clean
+
+# 7. Verify
+scripts/smoke-test.sh --host=your-server
 ```
 
 ### Code updates
@@ -268,33 +278,32 @@ We use [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging and productio
 
 **CPX22** — 3 vCPU (AMD), 4 GB RAM, 80 GB SSD. Runs the full stack comfortably with headroom for sync operations and traffic spikes. ~7 EUR/month.
 
-### Useful hcloud CLI commands
+### Quick start with init-vps.sh
 
-The [`hcloud` CLI](https://github.com/hetznercloud/cli) manages servers from your terminal. Set `HCLOUD_TOKEN` as an environment variable.
+`scripts/init-vps.sh` automates the full Hetzner setup: SSH key, server creation, firewall, SSH config, and GitHub deploy key.
 
 ```bash
-# Create server with SSH key
-hcloud server create \
-  --name my-server \
-  --type cpx22 \
-  --image ubuntu-24.04 \
-  --location nbg1 \
-  --ssh-key my-key-name
+# Requires hcloud CLI and HCLOUD_TOKEN env var
+scripts/init-vps.sh --name=my-server
 
-# Create firewall (SSH + WP + OJS)
-hcloud firewall create --name my-fw
-hcloud firewall add-rule my-fw --direction in --protocol tcp --port 22 \
-  --source-ips 0.0.0.0/0 --source-ips ::/0 --description SSH
-hcloud firewall add-rule my-fw --direction in --protocol tcp --port 8080 \
-  --source-ips 0.0.0.0/0 --source-ips ::/0 --description WP
-hcloud firewall add-rule my-fw --direction in --protocol tcp --port 8081 \
-  --source-ips 0.0.0.0/0 --source-ips ::/0 --description OJS
-hcloud firewall apply-to-resource my-fw --type server --server my-server
+# With SSL ports (production)
+scripts/init-vps.sh --name=my-server --ssl
 
-# For production, also open 80 + 443 for Caddy SSL
+# Custom server type or location
+scripts/init-vps.sh --name=my-server --type=cpx32 --location=fsn1
+```
 
-# Upload SSH key to Hetzner
+### Manual hcloud commands (reference)
+
+If you prefer to set up manually or need to manage existing servers:
+
+```bash
+# Upload SSH key
 hcloud ssh-key create --name my-key --public-key-from-file ~/.ssh/my-key.pub
+
+# Create server
+hcloud server create --name my-server --type cpx22 --image ubuntu-24.04 \
+  --location nbg1 --ssh-key my-key
 
 # Rebuild server (wipes everything, fresh OS)
 hcloud server rebuild --image ubuntu-24.04 my-server
