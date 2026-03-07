@@ -57,7 +57,11 @@ $SSH_CMD "
     git reset --hard origin/$GIT_REF 2>/dev/null || git reset --hard $GIT_REF
     echo '[ok] Repo updated.'
   else
-    git clone $REPO_URL $REMOTE_DIR
+    git clone $REPO_URL ${REMOTE_DIR}.tmp
+    # Preserve .env if it exists, then swap
+    [ -f $REMOTE_DIR/.env ] && cp $REMOTE_DIR/.env ${REMOTE_DIR}.tmp/.env
+    rm -rf $REMOTE_DIR
+    mv ${REMOTE_DIR}.tmp $REMOTE_DIR
     cd $REMOTE_DIR
     git checkout $GIT_REF
     echo '[ok] Repo cloned.'

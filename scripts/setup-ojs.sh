@@ -332,9 +332,9 @@ echo "[OJS] OJS base setup complete."
 if [ "$SAMPLE_DATA" = true ]; then
   IMPORT_XML="/data/ojs-import-clean.xml"
   if [ ! -f "$IMPORT_XML" ]; then
-    echo "[OJS] ERROR: Import XML not found at $IMPORT_XML"
-    exit 1
-  fi
+    echo "[OJS] WARNING: Import XML not found at $IMPORT_XML — skipping content import."
+    echo "[OJS] To import: scp the file to the VPS 'data export/' directory and re-run setup."
+  else
 
   # Idempotent check: see if articles already exist
   ARTICLE_COUNT=$($MARIADB -N -e "SELECT COUNT(*) FROM publications WHERE submission_id > 0")
@@ -367,6 +367,7 @@ if [ "$SAMPLE_DATA" = true ]; then
     echo "[OJS] Setting $OPEN_ISSUES issue(s) to require subscription..."
     $MARIADB -e "UPDATE issues SET access_status = 2 WHERE journal_id=$JOURNAL_ID"
     echo "[OJS] Issue access updated."
+  fi
   fi
 fi
 
