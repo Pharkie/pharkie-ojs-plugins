@@ -6,7 +6,7 @@ const REPO_ROOT = resolve(__dirname, '..', '..');
 export interface DockerExecOptions {
   /** Working directory inside the container */
   workdir?: string;
-  /** Timeout in milliseconds (default: 30_000) */
+  /** Timeout in milliseconds (default: 60_000) */
   timeout?: number;
   /** Suppress errors and return empty string on failure */
   ignoreError?: boolean;
@@ -22,7 +22,7 @@ export function dockerExec(
   command: string,
   opts: DockerExecOptions = {},
 ): string {
-  const { workdir, timeout = 30_000, ignoreError = false, stdin } = opts;
+  const { workdir, timeout = 60_000, ignoreError = false, stdin } = opts;
   const args = ['compose', 'exec', '-T'];
   if (workdir) {
     args.push('-w', workdir);
