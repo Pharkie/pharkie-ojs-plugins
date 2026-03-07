@@ -76,6 +76,8 @@ if ! $SSH_CMD "test -f $REMOTE_DIR/.env"; then
   echo "  scp .env.staging $SSH_HOST:$REMOTE_DIR/.env"
   exit 1
 fi
+# Ensure .env is readable by container processes (scp creates 600 by default)
+$SSH_CMD "chmod 644 $REMOTE_DIR/.env"
 
 # --- Build images ---
 if [ -z "$SKIP_BUILD" ]; then
