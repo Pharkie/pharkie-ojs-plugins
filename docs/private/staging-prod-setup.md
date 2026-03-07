@@ -205,6 +205,63 @@ Caddy handles Let's Encrypt automatically.
 
 ---
 
+## Testing a deployment
+
+### Smoke tests
+
+Lightweight checks (curl + WP-CLI via SSH). No Node or Playwright on the VPS — runs from the devcontainer.
+
+```bash
+# Test staging (default)
+scripts/smoke-test.sh
+
+# Test a different host
+scripts/smoke-test.sh --host=sea-prod
+```
+
+Tests (15 checks):
+1. WP HTTP responds
+2. OJS HTTP responds
+3. WP REST API responds
+4. OJS plugin ping
+5. OJS preflight (auth + compatibility)
+6. WP-CLI `test-connection`
+7. Required plugins active (5 plugins)
+8. OJS subscription types configured
+9. Full sync round-trip (create WP user → sync to OJS → verify → cleanup)
+10. Reconciliation completes
+
+### Load tests
+
+Performance testing with [`hey`](https://github.com/rakyll/hey). Runs from the devcontainer, monitors server resources (CPU, memory, Docker stats) during the test.
+
+```bash
+# Install hey (one-time)
+curl -sfL https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64 -o /usr/local/bin/hey && chmod +x /usr/local/bin/hey
+
+# Standard load (50 concurrent, 500 requests per endpoint)
+scripts/load-test.sh
+
+# Lighter load (10 concurrent, 100 requests)
+scripts/load-test.sh --light
+
+# Test a different host
+scripts/load-test.sh --host=sea-prod
+```
+
+Scenarios tested (5 endpoints):
+1. OJS journal homepage
+2. OJS article page
+3. OJS API preflight
+4. WP homepage
+5. WP REST API
+
+Pass criteria: p95 latency ≤ 2000ms, zero server errors. Reports peak CPU load and memory usage during the test.
+
+**Note:** `hey` generates harder-than-real load (no think time, no browser rendering, no connection reuse). If the server passes these tests, it will handle real traffic comfortably.
+
+---
+
 ## Useful commands
 
 ```bash
