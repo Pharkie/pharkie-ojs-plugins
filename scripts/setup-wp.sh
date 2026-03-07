@@ -55,6 +55,13 @@ wp_retry() {
   return 1
 }
 
+# --- Composer install (Bedrock: download WP core + plugins) ---
+if [ -f /var/www/html/composer.json ] && [ ! -d /var/www/html/web/wp/wp-includes ]; then
+  echo "Running composer install (first run — downloading WordPress core + plugins)..."
+  composer install --no-dev --no-interaction --working-dir=/var/www/html 2>&1
+  echo "[ok] Composer install complete."
+fi
+
 # --- Core install ---
 if ! wp core is-installed --allow-root 2>/dev/null; then
   wp core install \
