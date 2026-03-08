@@ -126,7 +126,7 @@ The `--with-sample-data` flag on `setup-wp.sh` runs a three-step pipeline that p
 
 Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find active subscriptions: `wp_posts` (subscription post), `wp_postmeta` (dates + customer), `wp_woocommerce_order_items` (line item), and `wp_woocommerce_order_itemmeta` (product ID). It also configures the `wpojs_*` plugin options (type mapping, member roles, manual roles, journal name).
 
-**Result:** `wp ojs-sync status` shows ~684 active members (683 WCS + 1 manual role). The environment is ready for `wp ojs-sync sync`.
+**Result:** `wp ojs-sync status` shows ~684 active members (683 WCS + 1 manual role). The environment is ready for `wp ojs-sync sync --bulk`.
 
 All three steps are idempotent — running `setup-wp.sh --with-sample-data` again skips already-imported data.
 
@@ -136,10 +136,10 @@ The OJS image is amd64-only and runs under Rosetta emulation, which is ~3–5x s
 
 ```bash
 # First run (creates OJS users — slower under emulation)
-docker compose exec wp wp ojs-sync sync --allow-root
+docker compose exec wp wp ojs-sync sync --bulk --yes --allow-root
 
 # If interrupted, resume from checkpoint
-docker compose exec wp wp ojs-sync sync --resume --allow-root
+docker compose exec wp wp ojs-sync sync --bulk --resume --allow-root
 ```
 
 ## Resetting OJS

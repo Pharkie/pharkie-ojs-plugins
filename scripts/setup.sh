@@ -124,6 +124,6 @@ echo "    Login: admin / $OJS_PASS"
 if [ -n "$SAMPLE_DATA" ]; then
   echo ""
   echo "  Next: run bulk sync to push WP members to OJS (~5-10 min):"
-  echo "    wp ojs-sync sync --dry-run    # preview"
-  echo "    wp ojs-sync sync --yes        # do it"
+  echo "    wp ojs-sync sync --bulk --dry-run    # preview"
+  echo "    wp ojs-sync sync --bulk --yes        # do it"
 fi

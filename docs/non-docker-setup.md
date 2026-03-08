@@ -170,10 +170,10 @@ This must match the `api_key_secret` value in OJS's `config.inc.php`.
 
 ```bash
 # Dry run first — see what would happen
-wp ojs-sync sync --dry-run
+wp ojs-sync sync --bulk --dry-run
 
 # Full sync — creates OJS users + subscriptions
-wp ojs-sync sync
+wp ojs-sync sync --bulk --yes
 
 # Check results
 wp ojs-sync status

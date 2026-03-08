@@ -14,7 +14,7 @@ npm test                                # 58 e2e tests
 
 WP: http://localhost:8080 | OJS: http://localhost:8081
 
-> **Production sync:** Always dry-run first (`wp ojs-sync sync --dry-run`), verify the output, then run the real sync with `--yes`. See [WP plugin reference — CLI commands](docs/wp-plugin-reference.md#wp-cli-commands) for all flags and safety options.
+> **Production sync:** Always dry-run first (`wp ojs-sync sync --bulk --dry-run`), verify the output, then run the real sync with `--bulk --yes`. The `--bulk` flag is required to prevent accidental full sync. See [WP plugin reference — CLI commands](docs/wp-plugin-reference.md#wp-cli-commands) for all flags and safety options.
 
 ## How it works
 

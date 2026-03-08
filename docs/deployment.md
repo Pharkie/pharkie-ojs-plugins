@@ -421,7 +421,7 @@ ssh your-server "cd /opt/wp-ojs-sync && \
 - **Paid plugins must be copied separately** — licensed code can't be in a public git repo. Use `rsync` to sync `wordpress/paid-plugins/` to the VPS before running setup.
 - **`scp` creates files with 600 permissions.** Apache/www-data can't read them. The deploy script runs `chmod 644` on `.env` automatically. Do not change this to 600 — WP-CLI (root) will work but the web server won't, and you'll only catch it via the smoke test's admin page check.
 - **No default passwords.** `WP_ADMIN_PASSWORD` and `OJS_ADMIN_PASSWORD` must be set in `.env`. Both `docker-compose.yml` and the setup scripts fail loudly if they're missing or empty. The deploy script validates all required env vars before starting containers.
-- **Bulk sync is a manual step.** After setup, existing WP members are not automatically synced to OJS. Run `wp ojs-sync sync --dry-run` to preview, then `wp ojs-sync sync --yes` to execute (~5-10 min for ~700 members). This is deliberate — it's a one-time operation that should be reviewed before running.
+- **Bulk sync is a manual step.** After setup, existing WP members are not automatically synced to OJS. Run `wp ojs-sync sync --bulk --dry-run` to preview, then `wp ojs-sync sync --bulk --yes` to execute (~5-10 min for ~700 members). The `--bulk` flag is required to prevent accidental full sync. This is deliberate — it's a one-time operation that should be reviewed before running.
 - **HPOS and sample data.** When loading sample data (`--with-sample-data`), the setup script temporarily disables HPOS (High-Performance Order Storage), seeds subscriptions via raw SQL into `wp_posts`, then syncs to HPOS and re-enables it. Without this, WooCommerce can't see the seeded subscriptions.
 
 ---

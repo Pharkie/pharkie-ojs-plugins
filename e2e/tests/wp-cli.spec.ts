@@ -81,9 +81,9 @@ test.describe('WP-CLI commands', () => {
     }
   });
 
-  test('sync --dry-run --yes — bulk dry run', () => {
-    // Bulk sync requires --yes to skip confirmation prompt in non-interactive mode.
-    const output = wpCli('ojs-sync sync --dry-run --yes');
+  test('sync --bulk --dry-run — bulk dry run', () => {
+    // Bulk sync requires --bulk flag to prevent accidental full sync.
+    const output = wpCli('ojs-sync sync --bulk --dry-run');
 
     // Should mention the member count and indicate dry run mode.
     expect(output).toContain('active members');

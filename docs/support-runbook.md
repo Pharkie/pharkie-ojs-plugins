@@ -39,8 +39,8 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 |---|---|
 | `wp ojs-sync test-connection` | Test connectivity to OJS (ping + preflight). Run this first. |
 | `wp ojs-sync status` | Show sync stats: total synced, pending, failed, last reconciliation. |
-| `wp ojs-sync sync --dry-run` | Preview what bulk sync would do (no changes). |
-| `wp ojs-sync sync` | Run bulk sync for all active members. |
+| `wp ojs-sync sync --bulk --dry-run` | Preview what bulk sync would do (no changes). |
+| `wp ojs-sync sync --bulk --yes` | Run bulk sync for all active members. |
 | `wp ojs-sync sync --member=<id or email>` | Sync a single member (sends WP password hash). |
 | `wp ojs-sync reconcile` | Run reconciliation now (compare WP ↔ OJS, fix drift). |
 

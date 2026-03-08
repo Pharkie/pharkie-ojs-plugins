@@ -51,23 +51,25 @@ class WPOJS_CLI {
 	 * [--member=<id-or-email>]
 	 * : Sync a single member by WP user ID or email.
 	 *
+	 * [--bulk]
+	 * : Sync all active members. Required for bulk sync (prevents accidental full sync).
+	 *
 	 * [--batch-size=<number>]
 	 * : Number of users per batch before logging progress. Default 50.
 	 *
 	 * [--yes]
-	 * : Skip confirmation prompt (for scripting).
+	 * : Skip confirmation prompt (for scripting). Only applies with --bulk.
 	 *
 	 * [--resume]
 	 * : Resume a previously interrupted bulk sync from the last checkpoint.
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp ojs-sync sync --dry-run
-	 *     wp ojs-sync sync
 	 *     wp ojs-sync sync --member=42
 	 *     wp ojs-sync sync --member=member@example.com
-	 *     wp ojs-sync sync --yes
-	 *     wp ojs-sync sync --resume
+	 *     wp ojs-sync sync --bulk --dry-run
+	 *     wp ojs-sync sync --bulk --yes
+	 *     wp ojs-sync sync --bulk --resume
 	 *
 	 * @param array $args
 	 * @param array $assoc_args
@@ -76,7 +78,7 @@ class WPOJS_CLI {
 		// Reject unknown flags to prevent silent fallthrough to bulk sync.
 		// e.g. --user= (wrong flag) would otherwise ignore the flag and run
 		// a full bulk sync instead of targeting one member.
-		$known_flags = array( 'dry-run', 'member', 'batch-size', 'yes', 'resume' );
+		$known_flags = array( 'dry-run', 'member', 'bulk', 'batch-size', 'yes', 'resume' );
 		$unknown     = array_diff( array_keys( $assoc_args ), $known_flags );
 		if ( ! empty( $unknown ) ) {
 			WP_CLI::error( 'Unknown flag(s): --' . implode( ', --', $unknown ) . '. Did you mean --member=<id-or-email>?' );
@@ -88,6 +90,16 @@ class WPOJS_CLI {
 		if ( isset( $assoc_args['member'] ) ) {
 			$this->sync_single_user( $assoc_args['member'], $dry_run );
 			return;
+		}
+
+		// Require --bulk for bulk sync (prevents accidental full sync).
+		if ( ! isset( $assoc_args['bulk'] ) ) {
+			WP_CLI::error(
+				"No target specified. Use one of:\n" .
+				"  Single member:  wp ojs-sync sync --member=<id-or-email>\n" .
+				"  All members:    wp ojs-sync sync --bulk\n" .
+				"  Preview first:  wp ojs-sync sync --bulk --dry-run"
+			);
 		}
 
 		// Bulk sync.
@@ -180,9 +192,14 @@ class WPOJS_CLI {
 			WP_CLI::log( 'Dry run -- no changes will be made.' );
 		}
 
-		// Confirm before bulk sync (skip in dry-run mode or with --yes).
 		if ( ! $dry_run && ! $skip_confirm ) {
-			WP_CLI::confirm( sprintf( 'Proceed with syncing %d members to OJS?', $total ) );
+			WP_CLI::confirm( sprintf( 'Bulk sync will push %d members to OJS. Continue?', $total ) );
+		}
+
+		// Warn if this looks like a production environment.
+		if ( ! $dry_run && defined( 'WP_ENVIRONMENT_TYPE' ) && WP_ENVIRONMENT_TYPE === 'production' ) {
+			WP_CLI::warning( 'Running bulk sync on PRODUCTION environment.' );
+			sleep( 3 );
 		}
 
 		$success       = 0;
