@@ -57,6 +57,9 @@ class WPOJS_CLI {
 	 * [--yes]
 	 * : Skip confirmation prompt (for scripting).
 	 *
+	 * [--resume]
+	 * : Resume a previously interrupted bulk sync from the last checkpoint.
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp ojs-sync sync --dry-run
@@ -64,6 +67,7 @@ class WPOJS_CLI {
 	 *     wp ojs-sync sync --member=42
 	 *     wp ojs-sync sync --member=member@example.com
 	 *     wp ojs-sync sync --yes
+	 *     wp ojs-sync sync --resume
 	 *
 	 * @param array $args
 	 * @param array $assoc_args
@@ -72,7 +76,7 @@ class WPOJS_CLI {
 		// Reject unknown flags to prevent silent fallthrough to bulk sync.
 		// e.g. --user= (wrong flag) would otherwise ignore the flag and run
 		// a full bulk sync instead of targeting one member.
-		$known_flags = array( 'dry-run', 'member', 'batch-size', 'yes' );
+		$known_flags = array( 'dry-run', 'member', 'batch-size', 'yes', 'resume' );
 		$unknown     = array_diff( array_keys( $assoc_args ), $known_flags );
 		if ( ! empty( $unknown ) ) {
 			WP_CLI::error( 'Unknown flag(s): --' . implode( ', --', $unknown ) . '. Did you mean --member=<id-or-email>?' );
@@ -89,7 +93,8 @@ class WPOJS_CLI {
 		// Bulk sync.
 		$batch_size   = isset( $assoc_args['batch-size'] ) ? absint( $assoc_args['batch-size'] ) : 50;
 		$skip_confirm = isset( $assoc_args['yes'] );
-		$this->sync_bulk( $dry_run, $batch_size, $skip_confirm );
+		$resume       = isset( $assoc_args['resume'] );
+		$this->sync_bulk( $dry_run, $batch_size, $skip_confirm, $resume );
 	}
 
 	private function sync_single_user( $user_ref, $dry_run ) {
@@ -134,8 +139,9 @@ class WPOJS_CLI {
 	 * @param bool $dry_run
 	 * @param int  $batch_size
 	 * @param bool $skip_confirm
+	 * @param bool $resume
 	 */
-	private function sync_bulk( $dry_run, $batch_size = 50, $skip_confirm = false ) {
+	private function sync_bulk( $dry_run, $batch_size = 50, $skip_confirm = false, $resume = false ) {
 		WP_CLI::log( 'Resolving active members (this may take a few minutes)...' );
 		$members = $this->resolver->get_all_active_members();
 		$total   = count( $members );
@@ -146,6 +152,25 @@ class WPOJS_CLI {
 		}
 
 		WP_CLI::log( sprintf( 'Found %d active members.', $total ) );
+
+		// Resume from checkpoint if requested.
+		$resume_offset = 0;
+		if ( $resume ) {
+			$saved_offset = get_transient( 'wpojs_bulk_sync_offset' );
+			if ( $saved_offset !== false && (int) $saved_offset > 0 ) {
+				$resume_offset = (int) $saved_offset;
+				if ( $resume_offset >= $total ) {
+					WP_CLI::warning( sprintf( 'Resume offset (%d) is >= total members (%d). Starting from the beginning.', $resume_offset, $total ) );
+					$resume_offset = 0;
+				} else {
+					WP_CLI::log( sprintf( 'Resuming from checkpoint: skipping first %d already-processed members.', $resume_offset ) );
+					$members = array_slice( $members, $resume_offset );
+					$total   = count( $members );
+				}
+			} else {
+				WP_CLI::log( 'No checkpoint found. Starting from the beginning.' );
+			}
+		}
 
 		if ( ! $dry_run ) {
 			WP_CLI::log( 'Throttling: adaptive (response-time based, OJS load protection).' );
@@ -193,6 +218,11 @@ class WPOJS_CLI {
 				}
 			}
 
+			// Save checkpoint after each member (absolute offset including resume).
+			if ( ! $dry_run ) {
+				set_transient( 'wpojs_bulk_sync_offset', $resume_offset + $index + 1, DAY_IN_SECONDS );
+			}
+
 			$progress->tick();
 
 			// Batch progress logging.
@@ -216,8 +246,16 @@ class WPOJS_CLI {
 
 		$progress->finish();
 
+		// Clear checkpoint on successful completion.
+		if ( ! $dry_run ) {
+			delete_transient( 'wpojs_bulk_sync_offset' );
+		}
+
 		$elapsed = microtime( true ) - $start_time;
 		WP_CLI::log( '' );
+		if ( $resume_offset > 0 ) {
+			WP_CLI::log( sprintf( 'Resumed from offset %d.', $resume_offset ) );
+		}
 		WP_CLI::log( sprintf(
 			'Results: %d synced, %d skipped, %d failed out of %d total. (%.0fs elapsed, %.0fs in throttle delays)',
 			$success, $skipped, $failed, $total, $elapsed, $total_delay / 1000

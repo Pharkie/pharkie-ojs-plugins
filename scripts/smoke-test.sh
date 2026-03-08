@@ -160,6 +160,53 @@ else
   fail "No subscription types found" "$SUB_TYPES"
 fi
 
+# --- 8b. Product-to-type mapping validation ---
+echo "8b. Product-to-type mapping"
+MAPPING_JSON=$(wp_cli "eval '
+  \$mapping = get_option(\"wpojs_type_mapping\", []);
+  echo json_encode(\$mapping);
+'") || MAPPING_JSON="{}"
+MAPPING_OK=true
+if [ "$MAPPING_JSON" = "{}" ] || [ "$MAPPING_JSON" = "[]" ] || [ -z "$MAPPING_JSON" ]; then
+  fail "No product-to-type mappings configured"
+  MAPPING_OK=false
+else
+  # Check each mapped product exists in WP and each OJS type exists
+  BROKEN=$(wp_cli "eval '
+    \$mapping = get_option(\"wpojs_type_mapping\", []);
+    \$broken = [];
+    foreach (\$mapping as \$product_id => \$type_id) {
+      if (!wc_get_product(\$product_id)) {
+        \$broken[] = \"product_\" . \$product_id;
+      }
+    }
+    echo implode(\",\", \$broken);
+  '") || BROKEN=""
+  if [ -n "$BROKEN" ]; then
+    fail "Broken product mapping(s): $BROKEN"
+    MAPPING_OK=false
+  fi
+  # Check OJS type IDs exist in subscription types response
+  BROKEN_TYPES=$(wp_cli "eval '
+    \$mapping = get_option(\"wpojs_type_mapping\", []);
+    \$type_ids = array_unique(array_values(\$mapping));
+    echo implode(\",\", \$type_ids);
+  '") || BROKEN_TYPES=""
+  if [ -n "$BROKEN_TYPES" ]; then
+    IFS=',' read -ra TYPE_IDS <<< "$BROKEN_TYPES"
+    for TID in "${TYPE_IDS[@]}"; do
+      if ! echo "$SUB_TYPES" | grep -q "\"id\":$TID"; then
+        fail "OJS subscription type $TID not found"
+        MAPPING_OK=false
+      fi
+    done
+  fi
+  if [ "$MAPPING_OK" = true ]; then
+    MAPPING_COUNT=$(echo "$MAPPING_JSON" | grep -o '"[0-9]*"' | wc -l)
+    pass "All $MAPPING_COUNT product-to-type mappings valid"
+  fi
+fi
+
 # --- 9. Single user sync round-trip ---
 echo "9. Sync round-trip"
 TEST_EMAIL="smoke-test-$(date +%s)@test.invalid"
@@ -210,6 +257,29 @@ if [ "$SYNC_OK" = true ]; then
       OJS_SUBS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUBS=""
       if echo "$OJS_SUBS" | grep -q '"status"'; then
         pass "OJS subscription created"
+
+        # --- I3: Password login verification ---
+        # Set a known password, sync it to OJS, then verify login works
+        wp_cli "user update $WP_USER_ID --user_pass=SmokeTest123!" > /dev/null 2>&1 || true
+        wp_cli "action-scheduler run" > /dev/null 2>&1 || true
+        LOGIN_RESPONSE=$(remote "$COMPOSE exec -T wp curl -s -L -c /tmp/smoke-cookies -X POST \
+          'http://ojs:80/index.php/journal/login/signIn' \
+          -d 'username=${TEST_LOGIN}&password=SmokeTest123!'") || LOGIN_RESPONSE=""
+        if echo "$LOGIN_RESPONSE" | grep -q 'pkp_navigation_user\|logOut'; then
+          pass "OJS password login works"
+        else
+          fail "OJS password login failed" "Login page did not show user navigation"
+        fi
+
+        # --- I8: Status change verification ---
+        wp_cli "eval '\$sub = wcs_get_subscription($SUB_ID); \$sub->update_status(\"expired\");'" > /dev/null 2>&1 || true
+        wp_cli "action-scheduler run" > /dev/null 2>&1 || true
+        OJS_SUB_STATUS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUB_STATUS=""
+        if echo "$OJS_SUB_STATUS" | grep -q '"status":16'; then
+          pass "OJS subscription expired after status change"
+        else
+          fail "OJS subscription status not updated to expired" "$OJS_SUB_STATUS"
+        fi
       else
         fail "OJS subscription not found" "$OJS_SUBS"
       fi
@@ -218,9 +288,18 @@ if [ "$SYNC_OK" = true ]; then
     fail "User not found in OJS after sync" "$OJS_USER"
   fi
 
-  # Cleanup: delete WP user (triggers OJS anonymise via hook)
+  # --- I8: GDPR-verified cleanup ---
   wp_cli "user delete $WP_USER_ID --yes" > /dev/null 2>&1 || true
   wp_cli "action-scheduler run" > /dev/null 2>&1 || true
+  # Verify OJS user is disabled or anonymised
+  if [ -n "$OJS_USER_ID" ]; then
+    OJS_DELETED_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/users?userId=$OJS_USER_ID'") || OJS_DELETED_USER=""
+    if echo "$OJS_DELETED_USER" | grep -q '"disabled":true\|anonymised\.invalid'; then
+      pass "OJS user disabled/anonymised after WP deletion"
+    else
+      fail "OJS user not properly cleaned up after WP deletion" "$OJS_DELETED_USER"
+    fi
+  fi
 fi
 
 # --- 10. Reconciliation ---

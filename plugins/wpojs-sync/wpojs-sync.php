@@ -101,6 +101,20 @@ function wpojs_init() {
 
 		$log_actions = new WPOJS_Log_Actions( $logger );
 		$log_actions->register();
+
+		// Startup config validation — warn admins about missing required config.
+		$missing_config = [];
+		if ( ! defined( 'WPOJS_API_KEY' ) ) {
+			$missing_config[] = 'WPOJS_API_KEY constant (wp-config.php)';
+		}
+		if ( ! get_option( 'wpojs_url' ) ) {
+			$missing_config[] = 'OJS URL (Settings → OJS Sync)';
+		}
+		if ( $missing_config && ! wp_doing_ajax() ) {
+			add_action( 'admin_notices', function () use ( $missing_config ) {
+				echo '<div class="notice notice-error"><p><strong>OJS Sync:</strong> Missing configuration: ' . esc_html( implode( ', ', $missing_config ) ) . '</p></div>';
+			} );
+		}
 	}
 
 	// WP-CLI commands.

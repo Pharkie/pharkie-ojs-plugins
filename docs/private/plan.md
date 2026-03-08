@@ -95,6 +95,7 @@ All endpoints except `/ping` require Bearer token auth + Journal Manager or Site
 | `PUT` | `/subscriptions/expire-by-user/{userId}` | — | `200 {subscriptionId}` | Convenience: expires subscription by userId (saves WP plugin a lookup call). Returns `404` if no subscription found. |
 | `GET` | `/subscriptions?email=&userId=` | — | `200 [{subscriptionId, userId, journalId, typeId, status, dateStart, dateEnd}]` | Returns array with at most one item per user per journal (OJS enforces one-subscription-per-user-per-journal). Returns `[]` if user or subscription not found. |
 | `POST` | `/subscriptions/status-batch` | `{emails: ["a@b.com", ...]}` | `200 {results: {email: {active: bool, ...}}}` | Check subscription status for multiple users by email. Used by reconciliation to batch-query OJS. |
+| `POST` | `/password` | `{email, passwordHash}` | `200 {userId, updated: true}` | Update user password hash. Used by ongoing password sync when a member changes their WP password. Looks up user by email, stores the new WP hash directly. Returns `404` if user not found on OJS. |
 
 Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not allowed or insufficient role), `404` (not found), `409` (conflict), `500` (server error). All errors return `{error: "message"}`. Error messages never include internal details (exception messages, stack traces, IP addresses).
 
@@ -124,7 +125,7 @@ Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not 
 | `id` | BIGINT PK | Auto-increment |
 | `wp_user_id` | BIGINT | |
 | `email` | VARCHAR(255) | |
-| `action` | VARCHAR(30) | `activate`, `expire`, `create_user`, `email_change`, `delete_user` |
+| `action` | VARCHAR(30) | `activate`, `expire`, `create_user`, `email_change`, `password_change`, `delete_user` |
 | `status` | VARCHAR(10) | `success`, `fail` |
 | `ojs_response_code` | SMALLINT | HTTP status from OJS |
 | `ojs_response_body` | TEXT | Truncated response for debugging |
@@ -140,6 +141,8 @@ Error responses: `400` (invalid input), `401` (bad/missing auth), `403` (IP not 
 | `woocommerce_subscription_status_cancelled` | — | Queue: expire subscription |
 | `woocommerce_subscription_status_on-hold` | — | Queue: expire subscription (immediate, no grace period) |
 | `profile_update` | Email changed | Queue: update OJS user email (old email → new email) |
+| `after_password_reset` | — | Queue: push updated WP password hash to OJS |
+| `profile_update` | Password changed | Queue: push updated WP password hash to OJS |
 | `delete_user` / `deleted_user` | — | Queue: call OJS delete-user endpoint (GDPR) |
 
 When a member has **multiple active WCS subscriptions**, the plugin resolves to one OJS action: active if any subscription is active, `date_end` = latest end date across all active subscriptions.
@@ -159,6 +162,10 @@ Each queue action maps to a specific sequence of OJS API calls. The queue proces
 **`email_change`**:
 1. Resolve OJS userId: usermeta or `GET /users?email={oldEmail}`. If not found, log and skip.
 2. `PUT /users/{userId}/email` — `{newEmail}`. Returns `409` if new email already in use on OJS (alert admin — manual resolution needed).
+
+**`password_change`** (WP password update):
+1. Triggered by `after_password_reset` or `profile_update` (when password changes).
+2. `POST /password` — `{email, passwordHash}`. Sends the new WP password hash to OJS. Returns `404` if user not found (log and skip — never synced).
 
 **`delete_user`** (GDPR):
 1. Resolve OJS userId: usermeta or `GET /users?email=`. If not found, log and skip (nothing to delete).
@@ -444,7 +451,7 @@ The smoke test checklist in TODO.md covers the full integration path. Most are n
 | `test-connection.spec.ts` | Settings page "Test Connection" AJAX reports success |
 | `error-recovery.spec.ts` | Sync fails when OJS URL is bad, succeeds after restoring |
 
-56 tests across 15 spec files. Tests run against the Docker dev environment (`--with-sample-data`). Each test creates unique users, processes the Action Scheduler queue, and cleans up in `afterAll`. Serial execution (`workers: 1`) avoids data conflicts. Run with `npm test`.
+58 tests across 15 spec files. Tests run against the Docker dev environment (`--with-sample-data`). Each test creates unique users, processes the Action Scheduler queue, and cleans up in `afterAll`. Serial execution (`workers: 1`) avoids data conflicts. Run with `npm test`.
 
 ---
 
