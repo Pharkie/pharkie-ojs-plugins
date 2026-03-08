@@ -8,15 +8,22 @@ WP OJS Sync uses a **push-sync** architecture. WordPress is the source of truth 
 
 Two modes of operation:
 
-1. **Initial bulk sync:** A WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts and subscription records for each member, then sends "set your password" welcome emails. This is how existing members get access at launch.
+1. **Initial bulk sync:** A WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts (with WP password hashes) and subscription records for each member. Members can immediately log into OJS with their existing WP password — no separate "set your password" step needed. Supports `--resume` for interrupted syncs.
 
-2. **Ongoing sync:** The WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and pushes changes to OJS automatically via an Action Scheduler queue with retries and daily reconciliation.
+2. **Ongoing sync:** The WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and password changes, pushing updates to OJS automatically via an Action Scheduler queue with retries and daily reconciliation.
 
 ```
 Member signs up / renews on WordPress
   -> WCS status changes to active -> WP plugin queues sync
-  -> Action Scheduler calls OJS: find-or-create user + create subscription
+  -> Action Scheduler calls OJS: find-or-create user (with password hash)
+     + create subscription
   -> OJS paywall sees subscription -> access granted
+  -> Member logs into OJS with their WP password
+
+Member changes WP password
+  -> WP plugin queues password sync
+  -> Action Scheduler calls OJS: update password hash
+  -> Member logs into OJS with new password
 
 Member lapses / cancels / payment fails
   -> WCS status changes -> WP plugin queues expire
