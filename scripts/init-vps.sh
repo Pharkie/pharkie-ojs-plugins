@@ -10,8 +10,8 @@
 #   scripts/init-vps.sh --name=sea-staging --skip-server        # Skip server creation (already exists)
 #
 # After this script completes, run:
-#   1. Create .env from .env.example, edit it, then: scp .env.staging <name>:/opt/wp-ojs-sync/.env
-#   2. scripts/deploy.sh --host=<name> --provision
+#   1. Create .env from .env.example and edit it
+#   2. scripts/deploy.sh --host=<name> --provision --env-file=.env.staging
 set -eo pipefail
 
 # --- Defaults ---
@@ -248,11 +248,8 @@ echo "  1. Create .env:"
 echo "     cp .env.example .env.staging"
 echo "     # Edit .env.staging: set URLs, passwords, API keys"
 echo ""
-echo "  2. Copy .env to server:"
-echo "     scp .env.staging $SERVER_NAME:/opt/wp-ojs-sync/.env"
+echo "  2. Deploy:"
+echo "     scripts/deploy.sh --host=$SERVER_NAME --provision --env-file=.env.staging"
 echo ""
-echo "  3. Deploy:"
-echo "     scripts/deploy.sh --host=$SERVER_NAME --provision"
-echo ""
-echo "  4. Verify:"
+echo "  3. Verify:"
 echo "     scripts/smoke-test.sh --host=$SERVER_NAME"

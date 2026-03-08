@@ -10,11 +10,12 @@
 #   scripts/deploy.sh --skip-build             # Don't rebuild images
 #   scripts/deploy.sh --ref=some-branch        # Deploy a specific git ref
 #   scripts/deploy.sh --clean                  # Tear down volumes first (fresh DB)
+#   scripts/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
 #
 # Prerequisites:
 #   - SSH access configured (Host entry in ~/.ssh/config)
 #   - Deploy key on VPS with access to the GitHub repo
-#   - .env file on VPS at /opt/wp-ojs-sync/.env
+#   - .env file on VPS (use --env-file on first deploy to copy it)
 set -eo pipefail
 
 # --- Parse arguments ---
@@ -24,6 +25,7 @@ SKIP_SETUP=""
 SKIP_BUILD=""
 CLEAN=""
 GIT_REF="main"
+ENV_FILE=""
 for arg in "$@"; do
   case "$arg" in
     --host=*) SSH_HOST="${arg#--host=}" ;;
@@ -32,6 +34,7 @@ for arg in "$@"; do
     --skip-build) SKIP_BUILD=1 ;;
     --clean) CLEAN=1 ;;
     --ref=*) GIT_REF="${arg#--ref=}" ;;
+    --env-file=*) ENV_FILE="${arg#--env-file=}" ;;
   esac
 done
 
@@ -72,12 +75,22 @@ $SSH_CMD "
   fi
 "
 
+# --- Copy .env file if provided ---
+if [ -n "$ENV_FILE" ]; then
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "ERROR: Local env file not found: $ENV_FILE"
+    exit 1
+  fi
+  scp -o ConnectTimeout=10 "$ENV_FILE" "$SSH_HOST:$REMOTE_DIR/.env"
+  echo "[ok] Env file copied to $SSH_HOST:$REMOTE_DIR/.env"
+fi
+
 # --- Check .env exists on remote ---
 if ! $SSH_CMD "test -f $REMOTE_DIR/.env"; then
   echo ""
   echo "ERROR: No .env file on $SSH_HOST:$REMOTE_DIR/.env"
-  echo "Copy the staging env file first:"
-  echo "  scp .env.staging $SSH_HOST:$REMOTE_DIR/.env"
+  echo "Re-run with --env-file to copy it:"
+  echo "  scripts/deploy.sh --host=$SSH_HOST --env-file=.env.staging"
   exit 1
 fi
 # Ensure .env is readable by container processes (scp creates 600 by default, Apache needs to read it)
@@ -131,7 +144,11 @@ if [ -z "$SKIP_BUILD" ]; then
   echo "[ok] Images built."
 fi
 
-# --- Start/restart stack ---
+# --- Stop existing containers (prevents "name already in use" conflicts) ---
+echo "--- Stopping existing containers ---"
+$SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD down 2>/dev/null || true"
+
+# --- Start stack ---
 echo "--- Starting stack ---"
 $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD up -d"
 echo "[ok] Stack is up."
