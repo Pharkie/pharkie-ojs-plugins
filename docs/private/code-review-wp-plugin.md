@@ -24,7 +24,7 @@ Files reviewed (all files in the plugin):
 - `includes/admin/class-wpojs-log-page.php`
 - `includes/admin/class-wpojs-queue-page.php`
 
-Reviewed against: `docs/plan.md` (endpoint spec, queue state machine, hook mapping), `docs/wp-integration.md` (WCS hooks, resolver logic), `docs/ojs-api.md` (OJS internals), `CLAUDE.md` (constraints).
+Reviewed against: `docs/plan.md` (endpoint spec, queue state machine, hook mapping), `docs/wp-integration.md` (WCS hooks, resolver logic), `docs/ojs-sync-plugin-api.md` (OJS internals), `CLAUDE.md` (constraints).
 
 ---
 
@@ -671,7 +671,7 @@ load_plugin_textdomain( 'wpojs-sync', false, dirname( plugin_basename( __FILE__ 
 
 **Files:** `includes/class-wpojs-cron.php` line 92, `includes/cli/class-wpojs-cli.php` line 288
 
-Both the cron reconciliation and CLI reconcile use `(int) $sub['status'] === 1` to check for active subscriptions. According to `docs/ojs-api.md`, `1 = SUBSCRIPTION_STATUS_ACTIVE` is correct. Verify this matches the actual OJS response format from the `GET /wpojs/subscriptions` endpoint.
+Both the cron reconciliation and CLI reconcile use `(int) $sub['status'] === 1` to check for active subscriptions. According to `docs/ojs-sync-plugin-api.md`, `1 = SUBSCRIPTION_STATUS_ACTIVE` is correct. Verify this matches the actual OJS response format from the `GET /wpojs/subscriptions` endpoint.
 
 ---
 

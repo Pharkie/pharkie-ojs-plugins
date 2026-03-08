@@ -43,7 +43,7 @@ The exporter writes `source_submission_file_id` references to IDs that don't exi
 
 ### 5. No subscription REST API
 
-OJS has no REST endpoints for subscription CRUD. This is why we had to build a custom plugin (`wpojs-subscription-api`). See `docs/ojs-api.md`.
+OJS has no REST endpoints for subscription CRUD. This is why we had to build a custom plugin (`wpojs-subscription-api`). See `docs/ojs-sync-plugin-api.md`.
 
 - **Not reported upstream** — known long-standing gap, not a bug.
 

@@ -9,7 +9,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - `docs/private/plan.md` — implementation plan: what we're building, how it works, endpoint specs, launch sequence, testing approach
 - `docs/discovery.md` — decision trail: what was tried, what was eliminated, and why
 - `docs/private/review-findings.md` — multi-perspective plan review and how findings were resolved
-- `docs/ojs-api.md` — OJS plugin REST API reference (endpoints, auth, errors)
+- `docs/ojs-sync-plugin-api.md` — OJS sync plugin REST API reference (endpoints, auth, errors)
 - `docs/ojs-internals.md` — OJS native API, DB schema, PHP internals (research notes)
 - `docs/wp-integration.md` — WP membership stack (Ultimate Member + WooCommerce Subscriptions), hooks, code patterns
 - `docs/private/janeway-paywall-investigation.md` — concrete technical plan for Janeway backup path
@@ -59,7 +59,7 @@ See `docs/private/plan.md` for full details, `docs/discovery.md` for how we got 
 
 ## Gotchas
 
-- **OJS has NO subscription REST API.** The endpoints don't exist. That's why we need a custom OJS plugin. See `docs/ojs-api.md`.
+- **OJS has NO subscription REST API.** The endpoints don't exist. That's why we need a custom OJS plugin. See `docs/ojs-sync-plugin-api.md`.
 - **OJS plugin uses `getInstallMigration()`**, not `getInstallSchemaFile()` (which is `final` in OJS 3.5). See `WpojsApiLogMigration.php`.
 - **OJS plugin folder must be `wpojsSubscriptionApi`** (camelCase). Hyphens/underscores break autoloading and the Plugins admin page. See `docs/non-docker-setup.md`.
 - **Apache + PHP-FPM strips Authorization headers.** Need `CGIPassAuth on` in `.htaccess`. Do not use `?apiToken=` query param in production (leaks key into access logs).
@@ -105,5 +105,5 @@ Installed via `./setup-hooks.sh` (runs automatically in dev container). Symlinks
 - Sync plaintext passwords between systems (password hashes are synced during bulk sync — this is safe)
 - Build message queues, webhook servers, or microservices
 - Add features beyond the core sync requirement
-- Assume any OJS API endpoint exists without checking `docs/ojs-api.md`
+- Assume any OJS API endpoint exists without checking `docs/ojs-sync-plugin-api.md`
 - Revisit OIDC SSO or Pull-verify — both eliminated with documented reasons

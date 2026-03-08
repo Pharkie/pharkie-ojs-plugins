@@ -1,4 +1,4 @@
-# OJS API Reference
+# OJS Sync Plugin API Reference
 
 This is the REST API exposed by the custom OJS plugin (`wpojs-subscription-api`). The WP plugin calls these endpoints to sync membership data — you don't need to call them manually unless you're debugging or building custom integrations.
 

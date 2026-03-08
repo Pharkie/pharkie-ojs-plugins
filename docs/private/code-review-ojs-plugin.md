@@ -13,7 +13,7 @@ Files reviewed:
 
 Cross-referenced against:
 - `docs/plan.md` (endpoint spec, WP plugin expectations)
-- `docs/ojs-api.md` (OJS internals reference)
+- `docs/ojs-sync-plugin-api.md` (OJS internals reference)
 - `plugins/wpojs-sync/includes/class-wpojs-api-client.php` (WP consumer)
 - `plugins/wpojs-sync/includes/cli/class-wpojs-cli.php` (WP CLI consumer)
 
@@ -261,7 +261,7 @@ $accessKey = $accessKeyManager->createKey(
 );
 ```
 
-The `AccessKeyManager::createKey()` fourth parameter is documented inconsistently across OJS versions. In some versions it's days, in others it might be interpreted differently. The `docs/ojs-api.md` reference mentions `reset_seconds` (seconds) for `generatePasswordResetHash`, which is a different mechanism entirely.
+The `AccessKeyManager::createKey()` fourth parameter is documented inconsistently across OJS versions. In some versions it's days, in others it might be interpreted differently. The `docs/ojs-sync-plugin-api.md` reference mentions `reset_seconds` (seconds) for `generatePasswordResetHash`, which is a different mechanism entirely.
 
 The config value `password_reset_timeout = 7` is read and passed directly. If `createKey()` expects days, this is correct (7 days). If it expects hours or some other unit, the token will expire at the wrong time.
 
@@ -478,7 +478,7 @@ The code reads:
 $expiryDays = Config::getVar('security', 'password_reset_timeout');
 ```
 
-The `docs/ojs-api.md` mentions `security.reset_seconds` as the config key for password reset expiry. The Docker config template uses `password_reset_timeout = 7`. Verify which key OJS 3.5 actually reads for `AccessKeyManager` expiry. If it's `reset_seconds`, the value `7` would mean 7 seconds, not 7 days.
+The `docs/ojs-sync-plugin-api.md` mentions `security.reset_seconds` as the config key for password reset expiry. The Docker config template uses `password_reset_timeout = 7`. Verify which key OJS 3.5 actually reads for `AccessKeyManager` expiry. If it's `reset_seconds`, the value `7` would mean 7 seconds, not 7 days.
 
 ---
 
@@ -490,7 +490,7 @@ The `docs/ojs-api.md` mentions `security.reset_seconds` as the config key for pa
 $mailable->viewData['passwordResetUrl'] = $resetUrl;
 ```
 
-The `docs/ojs-api.md` says `PasswordResetRequested` "injects `{$passwordResetUrl}` automatically" when using `recipients()`. The code sets `viewData['passwordResetUrl']` manually. Verify on staging:
+The `docs/ojs-sync-plugin-api.md` says `PasswordResetRequested` "injects `{$passwordResetUrl}` automatically" when using `recipients()`. The code sets `viewData['passwordResetUrl']` manually. Verify on staging:
 
 1. Does `PasswordResetRequested` auto-generate its own reset URL via `recipients()`?
 2. If so, does the manually set `viewData` override it, or does it get overwritten?

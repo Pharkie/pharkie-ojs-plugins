@@ -16,7 +16,7 @@ For the plan itself, see [`plan.md`](./plan.md). For the task checklist, see [`T
 
 The entire integration depends on creating OJS user accounts. The swagger spec shows read-only user endpoints. No one has tested `POST /api/v1/users` against a real OJS instance. If it doesn't exist, the OJS plugin must implement full user creation via internal PHP classes — a significantly larger scope.
 
-**Action:** Test `POST /api/v1/users` on the real OJS 3.5 staging instance as the very first task. Record the result in `ojs-api.md`. Gate all plugin design on the answer.
+**Action:** Test `POST /api/v1/users` on the real OJS 3.5 staging instance as the very first task. Record the result in `ojs-sync-plugin-api.md`. Gate all plugin design on the answer.
 
 *Flagged by: senior dev, QA*
 
@@ -299,6 +299,6 @@ No documented information about OJS server specs, PHP limits, or concurrent conn
 
 The plan calls for generating reset tokens via OJS internals. These are application-layer functions that may not be stable across versions.
 
-**Action:** Locate the specific OJS 3.5 class for password reset tokens. Verify it's accessible from plugin context. Document in `ojs-api.md`.
+**Action:** Locate the specific OJS 3.5 class for password reset tokens. Verify it's accessible from plugin context. Document in `ojs-sync-plugin-api.md`.
 
 *Flagged by: senior dev*
