@@ -175,7 +175,7 @@ class WPOJS_CLI {
 
 			// Bulk sync sends WP password hash (members can log in with existing WP password).
 			// No welcome emails -- members already know their password.
-			$result = $this->sync->sync_user( $wp_user_id, $dry_run, false, true );
+			$result = $this->sync->sync_user( $wp_user_id, $dry_run, true );
 
 			$call_ms = ( microtime( true ) - $call_start ) * 1000;
 
