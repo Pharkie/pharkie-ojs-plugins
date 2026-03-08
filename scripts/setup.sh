@@ -120,3 +120,10 @@ echo "  OJS:"
 echo "    URL:   $OJS_URL"
 echo "    Admin: $OJS_URL/index.php/$JOURNAL_PATH/management/settings/access"
 echo "    Login: admin / $OJS_PASS"
+
+if [ -n "$SAMPLE_DATA" ]; then
+  echo ""
+  echo "  Next: run bulk sync to push WP members to OJS (~5-10 min):"
+  echo "    wp ojs-sync sync --dry-run    # preview"
+  echo "    wp ojs-sync sync --yes        # do it"
+fi

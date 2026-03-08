@@ -220,6 +220,13 @@ if [ "$SAMPLE_DATA" = true ]; then
       echo "[ok] User import complete: $ACTUAL_USERS users."
     fi
 
+    # Disable HPOS before seeding — the seeder writes raw SQL to wp_posts.
+    # If HPOS is active, WC ignores wp_posts and the subscriptions are invisible.
+    # We disable it, seed, then sync and re-enable below.
+    echo "Disabling HPOS for seeding..."
+    wp_quiet option update woocommerce_custom_orders_table_enabled no
+    wp_quiet option update woocommerce_custom_orders_table_data_sync_enabled no
+
     # Apply original roles via direct DB update (fast — ~2s vs ~10min with wp user set-role).
     # This is test data seeding only — production members already exist in WP.
     # wp user import-csv can't assign UM/WCS roles (validates before UM registers them),
@@ -239,11 +246,10 @@ if [ "$SAMPLE_DATA" = true ]; then
     echo "[ok] $SUB_COUNT subscriptions seeded."
 
     # Sync seeded subscriptions to HPOS (High-Performance Order Storage).
-    # setup-and-sample-data.php uses direct SQL into wp_posts (legacy storage) for speed.
-    # WooCommerce 8+ defaults to HPOS and tries to auto-enable it on first admin visit.
-    # Without syncing, WC throws a fatal: "orders out of sync". This backfills the
-    # wp_wc_orders table so HPOS can be enabled cleanly.
+    # We disabled HPOS before seeding (raw SQL into wp_posts). Now re-enable
+    # sync tracking so WC detects the un-synced posts, then sync them across.
     echo "Syncing orders to HPOS..."
+    wp_quiet option update woocommerce_custom_orders_table_data_sync_enabled yes
     wp_retry wc hpos sync
     wp_retry wc hpos enable
 
