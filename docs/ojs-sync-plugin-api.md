@@ -8,38 +8,6 @@ All endpoints are under `/api/v1/wpojs/`.
 
 Base URL: `{OJS_BASE_URL}/index.php/{journal_path}/api/v1/wpojs`
 
-## Authentication
-
-All protected endpoints enforce dual-layer auth:
-
-1. **IP allowlist** — Client IP must be in `allowed_ips` (OJS `config.inc.php` `[wpojs]` section). Supports exact match (IPv4/IPv6) and CIDR notation (IPv4 only).
-2. **Bearer token** — `Authorization: Bearer {secret}` header. Compared via `hash_equals()` against `api_key_secret` in `[wpojs]` config section (falls back to `[security]`).
-
-## Load protection
-
-OJS self-monitors response times and returns `429 Too Many Requests` with `Retry-After` header when under pressure:
-
-| Avg response time | Action |
-|---|---|
-| < 500ms | Healthy, request proceeds |
-| 500–2000ms | `429`, `Retry-After: 2` |
-| > 2000ms | `429`, `Retry-After: 5` |
-| < 5 recent samples | Cold start, request proceeds |
-
-## Error responses
-
-All errors return JSON: `{"error": "description"}` with appropriate HTTP status:
-
-| Status | Meaning |
-|---|---|
-| `400` | Invalid/missing parameters |
-| `401` | Invalid or missing API key |
-| `403` | IP not in allowlist |
-| `404` | User/subscription not found |
-| `409` | Email conflict (update email) |
-| `429` | Server under load (retry after delay) |
-| `500` | Internal error |
-
 > **Trying to connect?** Run `wp ojs-sync test-connection` from the WP server to verify connectivity. See the [support runbook](support-runbook.md) if something fails.
 
 ## Endpoints
@@ -71,6 +39,38 @@ All errors return JSON: `{"error": "description"}` with appropriate HTTP status:
 | `PUT` | `/subscriptions/{subscriptionId}/expire` | Yes | Expire by subscription ID. Sets status to 16 (Other). |
 | `PUT` | `/subscriptions/expire-by-user/{userId}` | Yes | Expire by user ID. Sets status to 16 (Other). |
 | `POST` | `/subscriptions/status-batch` | Yes | Batch status lookup. Body: `{emails:["a@b.com",...]}`. Returns status for multiple users in one call. |
+
+## Authentication
+
+All protected endpoints (marked "Auth: Yes" above) enforce dual-layer auth:
+
+1. **IP allowlist** — Client IP must be in `allowed_ips` (OJS `config.inc.php` `[wpojs]` section). Supports exact match (IPv4/IPv6) and CIDR notation (IPv4 only).
+2. **Bearer token** — `Authorization: Bearer {secret}` header. Compared via `hash_equals()` against `api_key_secret` in `[wpojs]` config section (falls back to `[security]`).
+
+## Load protection
+
+The OJS plugin self-monitors response times and returns `429 Too Many Requests` with a `Retry-After` header when under pressure. The WP plugin respects this automatically.
+
+| Avg response time | Action |
+|---|---|
+| < 500ms | Healthy, request proceeds |
+| 500–2000ms | `429`, `Retry-After: 2` |
+| > 2000ms | `429`, `Retry-After: 5` |
+| < 5 recent samples | Cold start, request proceeds |
+
+## Error responses
+
+All errors return JSON: `{"error": "description"}` with appropriate HTTP status:
+
+| Status | Meaning |
+|---|---|
+| `400` | Invalid/missing parameters |
+| `401` | Invalid or missing API key |
+| `403` | IP not in allowlist |
+| `404` | User/subscription not found |
+| `409` | Email conflict (update email) |
+| `429` | Server under load (retry after delay) |
+| `500` | Internal error |
 
 ## Request logging
 
