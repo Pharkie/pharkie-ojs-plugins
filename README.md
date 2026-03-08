@@ -2,37 +2,50 @@
 
 A pair of plugins (WordPress + OJS) that sync membership data from WordPress (via WooCommerce Subscriptions) to Open Journal Systems. Members get journal access automatically; non-members can still buy content via OJS's built-in paywall.
 
+## Quick start
+
+```bash
+git clone https://github.com/Pharkie/wp-ojs-sync.git && cd wp-ojs-sync
+cp .env.example .env                    # edit passwords before production use
+docker compose up -d --build
+scripts/setup.sh --env=dev --with-sample-data
+npm test                                # 58 e2e tests
+```
+
+WP: http://localhost:8080 | OJS: http://localhost:8081
+
+> **Production sync:** Always dry-run first (`wp ojs-sync sync --dry-run`), verify the output, then run the real sync with `--yes`. See [WP plugin reference — CLI commands](docs/wp-plugin-reference.md#wp-cli-commands) for all flags and safety options.
+
 ## How it works
 
-WP OJS Sync uses a **push-sync** architecture. WordPress is the source of truth for membership. A custom OJS plugin exposes REST endpoints for user and subscription CRUD (OJS has no native subscription API). The WP plugin calls those endpoints whenever membership status changes.
+WordPress is the source of truth for membership. The WP plugin hooks into WooCommerce Subscription lifecycle events and pushes changes to OJS via a custom REST API. All sync is async (Action Scheduler), with daily reconciliation to catch drift.
 
-Two modes of operation:
+```mermaid
+flowchart LR
+    A[Member signs up / renews] -->|WCS status → active| B[WP queues sync]
+    B --> C[Action Scheduler]
+    C -->|find-or-create user + subscription| D[OJS grants access]
 
-1. **Initial bulk sync:** A WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts (with WP password hashes) and subscription records for each member. Members can immediately log into OJS with their existing WP password — no separate "set your password" step needed. Supports `--resume` for interrupted syncs.
+    E[Member cancels / expires] -->|WCS status change| F[WP queues expire]
+    F --> C
+    C -->|expire subscription| G[OJS revokes access]
 
-2. **Ongoing sync:** The WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and password changes, pushing updates to OJS automatically via an Action Scheduler queue with retries and daily reconciliation.
-
+    H[Member changes password] --> I[WP queues password sync]
+    I --> C
+    C -->|update password hash| J[OJS accepts new password]
 ```
-Member signs up / renews on WordPress
-  -> WCS status changes to active -> WP plugin queues sync
-  -> Action Scheduler calls OJS: find-or-create user (with password hash)
-     + create subscription
-  -> OJS paywall sees subscription -> access granted
-  -> Member logs into OJS with their WP password
 
-Member changes WP password
-  -> WP plugin queues password sync
-  -> Action Scheduler calls OJS: update password hash
-  -> Member logs into OJS with new password
+Bulk sync creates OJS accounts with WP password hashes — members log in to OJS with their existing WP password, no "set your password" step. Supports `--resume` for interrupted syncs.
 
-Member lapses / cancels / payment fails
-  -> WCS status changes -> WP plugin queues expire
-  -> Action Scheduler calls OJS: expire subscription
-  -> OJS paywall denies access -> shows purchase options
+## Documentation
 
-Non-member visits paywalled content
-  -> No subscription -> normal OJS purchase flow
-```
+**Start here:** [WP plugin reference](docs/wp-plugin-reference.md) and [OJS plugin reference](docs/ojs-plugin-reference.md) explain what each plugin does — hooks, sync actions, CLI commands, settings, auth, GDPR erasure, subscription logic.
+
+**API** — [OJS API reference](docs/ojs-api.md) — all 13 custom endpoints with params, responses, error codes
+
+**Deployment** — [Docker setup](docker/README.md) · [Non-Docker setup](docs/non-docker-setup.md) · [Hosting requirements](docs/private/hosting-requirements.md) · [Support runbook](docs/support-runbook.md) · [TODO / roadmap](TODO.md)
+
+**Design** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [WP integration notes](docs/wp-integration.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
 
 ## Prerequisites
 
@@ -40,38 +53,6 @@ Non-member visits paywalled content
 - WooCommerce + WooCommerce Subscriptions
 - Action Scheduler (bundled with WooCommerce)
 - OJS 3.5+ (the OJS plugin requires the 3.5 plugin API)
-
-## Installation
-
-- **[Docker](docker/README.md)** — Docker Compose setup, E2E tests, sample data, pre-commit hooks
-- **[Non-Docker](docs/non-docker-setup.md)** — native server setup: plugin installation, config, folder naming, troubleshooting
-
-## Documentation
-
-### Plugin reference
-
-- [WP plugin reference](docs/wp-plugin-reference.md) — hooks, sync actions, CLI commands, settings, reconciliation, Action Scheduler
-- [OJS plugin reference](docs/ojs-plugin-reference.md) — auth, load protection, password hasher, GDPR erasure, subscription logic
-- [OJS API reference](docs/ojs-api.md) — all 13 custom endpoints, auth model, error codes, plus native OJS API reference
-
-### Deployment and operations
-
-- [Docker setup](docker/README.md) — Docker Compose setup, E2E tests, sample data, pre-commit hooks
-- [Non-Docker setup](docs/non-docker-setup.md) — native server setup: plugin installation, config, folder naming, troubleshooting
-- [Hosting requirements](docs/private/hosting-requirements.md) — OJS + WP hosting specs, access needed for staging and production
-- [Support runbook](docs/support-runbook.md) — quick reference for support staff handling member access issues
-- [TODO / roadmap](TODO.md) — what's done, what's left before production
-
-### Design and architecture
-
-- [Implementation plan](docs/private/plan.md) — what we're building, how it works, endpoint specs, launch sequence, testing approach
-- [Decision trail](docs/discovery.md) — what was tried, what was eliminated, and why
-- [WP integration](docs/wp-integration.md) — WP membership stack (Ultimate Member + WooCommerce Subscriptions), hooks, code patterns
-- [Plan review findings](docs/private/review-findings.md) — multi-perspective review and how findings were resolved
-
-### Future planning
-
-- [Janeway backup path](docs/private/janeway-paywall-investigation.md) — concrete technical plan if OJS 3.5 upgrade fails
 
 ## AI disclosure
 
