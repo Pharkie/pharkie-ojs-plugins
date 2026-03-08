@@ -5,10 +5,11 @@ namespace APP\plugins\generic\wpojsSubscriptionApi;
 use Illuminate\Contracts\Hashing\Hasher;
 
 /**
- * Custom hasher that understands WordPress 6.9 password hashes.
+ * Custom hasher that understands WordPress password hashes.
  *
- * WP 6.9 stores passwords as `$wp$2y$10$...` — SHA-384 pre-hashed bcrypt.
- * OJS uses standard bcrypt `$2y$12$...` via `password_hash()`.
+ * Stock WP 6.8+ uses `$wp$2y$10$...` (SHA-384 pre-hashed bcrypt).
+ * Bedrock/roots uses `$2y$10$...` (standard bcrypt, no prehash).
+ * OJS uses `$2y$12$...` via `password_hash()`.
  *
  * This hasher verifies both formats at login time. When a WP hash is
  * verified successfully, `needsRehash()` returns true so Laravel
@@ -52,7 +53,7 @@ class WpCompatibleHasher implements Hasher
         }
 
         if (str_starts_with($hashedValue, self::WP_PREFIX)) {
-            // WP 6.9 format: $wp$2y$10$...
+            // WP 6.8+ format: $wp$2y$10$...
             // Strip the $wp prefix to get the inner bcrypt hash.
             $innerHash = substr($hashedValue, strlen(self::WP_PREFIX));
 

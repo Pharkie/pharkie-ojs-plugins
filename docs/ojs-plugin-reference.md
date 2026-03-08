@@ -61,9 +61,12 @@ The WP plugin respects `Retry-After` and backs off automatically via Action Sche
 
 `WpCompatibleHasher` implements Laravel's `Hasher` interface and is registered as a replacement for OJS's default hasher when the plugin is enabled.
 
-**WordPress 6.9 hash format:** `$wp$2y$10$<bcrypt_payload>`
+**Two WP hash formats are supported:**
 
-This is SHA-384-prehashed bcrypt: WordPress computes `base64(SHA-384(plaintext))`, then bcrypt-hashes that. The `$wp$` prefix distinguishes it from standard bcrypt.
+| Format | Source | Description |
+|---|---|---|
+| `$wp$2y$10$...` | Stock WordPress 6.8+ | SHA-384-prehashed bcrypt. WP computes `base64(SHA-384(plaintext))`, then bcrypt-hashes that. The `$wp$` prefix distinguishes it from standard bcrypt. |
+| `$2y$10$...` | Bedrock / `roots/wp-password-bcrypt` | Standard bcrypt (no prehash). Bedrock overrides `wp_hash_password()` with plain `password_hash()`. |
 
 **Verification flow at OJS login:**
 
