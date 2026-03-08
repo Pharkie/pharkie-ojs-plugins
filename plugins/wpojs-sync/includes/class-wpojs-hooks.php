@@ -32,8 +32,11 @@ class WPOJS_Hooks {
 		add_action( 'woocommerce_subscription_status_cancelled', array( $this, 'on_subscription_inactive' ) );
 		add_action( 'woocommerce_subscription_status_on-hold', array( $this, 'on_subscription_inactive' ) );
 
-		// WP profile update (email change detection).
+		// WP profile update (email + password change detection).
 		add_action( 'profile_update', array( $this, 'on_profile_update' ), 10, 3 );
+
+		// Password reset via "Lost your password?" flow.
+		add_action( 'after_password_reset', array( $this, 'on_password_reset' ), 10, 2 );
 
 		// WP user deletion (GDPR).
 		// pre-delete: capture data while it still exists.
@@ -98,33 +101,74 @@ class WPOJS_Hooks {
 	}
 
 	/**
-	 * WP profile updated. Detect email changes.
+	 * WP profile updated. Detect email and password changes.
 	 *
 	 * @param int     $user_id
 	 * @param WP_User $old_userdata
 	 * @param array   $userdata
 	 */
 	public function on_profile_update( $user_id, $old_userdata, $userdata = array() ) {
-		$old_email = $old_userdata->user_email;
-		$new_user  = get_userdata( $user_id );
-
+		$new_user = get_userdata( $user_id );
 		if ( ! $new_user ) {
 			return;
 		}
 
+		// Detect email change.
+		$old_email = $old_userdata->user_email;
 		$new_email = $new_user->user_email;
 
-		// Only act on actual email changes.
-		if ( $old_email === $new_email ) {
-			return;
+		if ( $old_email !== $new_email ) {
+			// Cancel any pending email change actions for this user — a newer change
+			// supersedes them. Without this, rapid changes A→B→C would queue two
+			// actions with different args (dedup doesn't catch them because args differ).
+			$store = ActionScheduler::store();
+			$pending = $store->query_actions( array(
+				'hook'   => 'wpojs_sync_email_change',
+				'status' => \ActionScheduler_Store::STATUS_PENDING,
+				'group'  => 'wpojs-sync',
+			) );
+			foreach ( $pending as $action_id ) {
+				$action = $store->fetch_action( $action_id );
+				$action_args = $action->get_args();
+				if ( isset( $action_args[0]['wp_user_id'] ) && (int) $action_args[0]['wp_user_id'] === $user_id ) {
+					$store->cancel_action( $action_id );
+				}
+			}
+
+			$args = array( array(
+				'wp_user_id' => $user_id,
+				'old_email'  => $old_email,
+				'new_email'  => $new_email,
+			) );
+			as_schedule_single_action( time(), 'wpojs_sync_email_change', $args, 'wpojs-sync' );
 		}
 
-		// Cancel any pending email change actions for this user — a newer change
-		// supersedes them. Without this, rapid changes A→B→C would queue two
-		// actions with different args (dedup doesn't catch them because args differ).
+		// Detect password change.
+		if ( $old_userdata->user_pass !== $new_user->user_pass ) {
+			$this->schedule_password_sync( $user_id, $new_user->user_pass );
+		}
+	}
+
+	/**
+	 * Password reset via "Lost your password?" flow.
+	 * By the time this fires, $user->user_pass is already the new hash.
+	 *
+	 * @param WP_User $user
+	 * @param string  $new_pass The new plaintext password (unused — we send the hash).
+	 */
+	public function on_password_reset( $user, $new_pass ) {
+		$this->schedule_password_sync( $user->ID, $user->user_pass );
+	}
+
+	/**
+	 * Schedule a password hash sync to OJS.
+	 * Cancel-and-reschedule pattern handles rapid successive changes.
+	 */
+	private function schedule_password_sync( $user_id, $password_hash ) {
+		// Cancel any pending password change actions for this user.
 		$store = ActionScheduler::store();
 		$pending = $store->query_actions( array(
-			'hook'   => 'wpojs_sync_email_change',
+			'hook'   => 'wpojs_sync_password_change',
 			'status' => \ActionScheduler_Store::STATUS_PENDING,
 			'group'  => 'wpojs-sync',
 		) );
@@ -136,12 +180,10 @@ class WPOJS_Hooks {
 			}
 		}
 
-		$args = array( array(
-			'wp_user_id' => $user_id,
-			'old_email'  => $old_email,
-			'new_email'  => $new_email,
-		) );
-		as_schedule_single_action( time(), 'wpojs_sync_email_change', $args, 'wpojs-sync' );
+		as_schedule_single_action( time(), 'wpojs_sync_password_change', array( array(
+			'wp_user_id'    => $user_id,
+			'password_hash' => $password_hash,
+		) ), 'wpojs-sync' );
 	}
 
 	/**

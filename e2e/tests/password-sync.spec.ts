@@ -93,6 +93,56 @@ echo json_encode($result);
     }
   });
 
+  test('WP password change syncs new hash to OJS', async ({ page }) => {
+    const email = `${PREFIX}_pwchange@test.invalid`;
+    const login = `${PREFIX}_pwchange`;
+    const NEW_PASSWORD = 'ChangedPass456!';
+    let wpUserId: number;
+    let subId: number;
+
+    try {
+      const productId = getSubscriptionProductId();
+      wpUserId = createUser(login, email);
+      wpCli(`user update ${wpUserId} --user_pass=${WP_PASSWORD}`);
+      subId = createSubscription(wpUserId, productId, 'active');
+
+      // Sync to create OJS user with initial hash.
+      wpCli(`ojs-sync sync --member=${email}`);
+      const ojsUserId = findOjsUser(email);
+      expect(ojsUserId).not.toBeNull();
+
+      const hashBefore = getOjsPasswordHash(ojsUserId!);
+
+      // Change WP password (triggers profile_update hook → schedules password sync).
+      wpCli(`user update ${wpUserId} --user_pass=${NEW_PASSWORD}`);
+
+      // Process the Action Scheduler queue.
+      waitForSync();
+
+      // Verify OJS hash changed.
+      const hashAfter = getOjsPasswordHash(ojsUserId!);
+      expect(hashAfter).not.toBe(hashBefore);
+
+      // Verify new hash matches WP.
+      const newWpHash = getWpPasswordHash(wpUserId);
+      expect(hashAfter).toBe(newWpHash);
+
+      // Verify login works with the new password.
+      const username = getOjsUsername(ojsUserId!);
+      await page.goto('http://localhost:8081/index.php/journal/login');
+      await page.locator('#username').fill(username);
+      await page.locator('#password').fill(NEW_PASSWORD);
+      await page.locator('button[type="submit"], input[type="submit"]').first().click();
+
+      await expect(
+        page.locator('.pkp_navigation_user, .app__userNav, [class*="navigation_user"]').first(),
+      ).toBeVisible({ timeout: 15_000 });
+    } finally {
+      cleanupWpUser({ subIds: [subId!], wpUserId: wpUserId! });
+      deleteOjsUser(email);
+    }
+  });
+
   test('existing OJS user password not overwritten on re-sync', async () => {
     const email = `${PREFIX}_existing@test.invalid`;
     const login = `${PREFIX}_existing`;

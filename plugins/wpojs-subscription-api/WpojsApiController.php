@@ -61,6 +61,7 @@ class WpojsApiController extends PKPBaseController
         Route::get('users', $this->findUser(...))->name('wpojs.users.find');
         Route::post('users/find-or-create', $this->findOrCreateUser(...))->name('wpojs.users.findOrCreate');
         Route::put('users/{userId}/email', $this->updateUserEmail(...))->name('wpojs.users.updateEmail');
+        Route::put('users/{userId}/password', $this->updateUserPassword(...))->name('wpojs.users.updatePassword');
         Route::delete('users/{userId}', $this->deleteUser(...))->name('wpojs.users.delete');
         Route::post('subscriptions', $this->createSubscription(...))->name('wpojs.subscriptions.create');
         Route::put('subscriptions/expire-by-user/{userId}', $this->expireSubscriptionByUser(...))->name('wpojs.subscriptions.expireByUser');
@@ -730,6 +731,39 @@ class WpojsApiController extends PKPBaseController
         }
 
         Repo::user()->edit($user, ['email' => $newEmail]);
+
+        return $this->jsonResponse($request, ['userId' => $userId]);
+    }
+
+    // ---------------------------------------------------------------
+    // PUT /wpojs/users/{userId}/password
+    // ---------------------------------------------------------------
+
+    public function updateUserPassword(Request $request): JsonResponse
+    {
+        $authError = $this->checkAuth($request);
+        if ($authError) {
+            return $authError;
+        }
+
+        $userId = (int) $request->route('userId');
+        $passwordHash = $request->input('passwordHash', '');
+
+        if ($userId <= 0) {
+            return $this->jsonResponse($request, ['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
+        }
+        if (empty($passwordHash) || !is_string($passwordHash)) {
+            return $this->jsonResponse($request, ['error' => 'Invalid or missing passwordHash'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $user = Repo::user()->get($userId);
+        if (!$user) {
+            return $this->jsonResponse($request, ['error' => 'User not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $user->setPassword($passwordHash);
+        $user->setMustChangePassword(false);
+        Repo::user()->edit($user, []);
 
         return $this->jsonResponse($request, ['userId' => $userId]);
     }

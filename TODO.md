@@ -17,6 +17,7 @@
 - HPOS fix for sample data seeding (disable → seed → sync → re-enable)
 - Three-phase rollout plan — `docs/private/pre-production-checklist.md`
 - Live WP plugin audit — `data export/live-wp-plugin-audit.md` (35 plugins, theme identified)
+- Password hash sync (bulk, new members, ongoing password changes) — WP hashes sent to OJS, members log in with existing WP password, lazy rehash to cost 12 on first OJS login
 
 ## Blocked — waiting on access
 
@@ -37,8 +38,8 @@ Deploy sync plugin to existing Krystal WP. OJS runs on new SEA-owned Hetzner VPS
 - [ ] Deploy wpojs-sync plugin to Krystal WP (non-Docker install per `docs/non-docker-setup.md`)
 - [ ] Configure WP settings: type mapping for all 6 WC products, manual roles, OJS URL
 - [ ] Configure OJS: API key, allowed IPs (Krystal's outbound IP), subscription types
-- [ ] `wp ojs-sync test-connection` → `sync --dry-run` → `sync` → `send-welcome-emails`
-- [ ] Verify: new member flow, cancellation/expiry, on-hold/failed payment, welcome email delivery
+- [ ] `wp ojs-sync test-connection` → `sync --dry-run` → `sync`
+- [ ] Verify: new member flow, cancellation/expiry, on-hold/failed payment, OJS login with WP password
 
 ## Phase 2: Hetzner WP (parallel, no domain)
 
@@ -72,14 +73,14 @@ Second Hetzner VPS running WP + OJS. Runs quietly on IP while Krystal stays live
 - [ ] **Cancellation/expiry** — cancel subscription, verify OJS access removed
 - [ ] **On-hold / failed payment** — test payment failure scenarios
 - [ ] **All products mapped** — configure all 6 WC products
-- [ ] **Password flow** — verify welcome email delivery and password set process
+- [ ] **Password flow** — verify OJS login with WP password works after bulk sync
 
 ## Playwright E2E browser tests (`e2e/`)
 
 All passing (56/56):
 
 - [x] Sync lifecycle — WCS activate/expire → OJS subscription status
-- [x] OJS login — synced user sets password + logs in
+- [x] OJS login — synced user logs in with WP password (no password setup needed)
 - [x] WP dashboard — My Account journal access widget (active + inactive)
 - [x] OJS UI messages — login hint, footer, paywall hint
 - [x] Admin monitoring — Sync Log page stats, nonce, retry actions
@@ -93,8 +94,6 @@ All passing (56/56):
 ## Future improvements
 
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
-- [ ] Follow-up email for members who haven't set OJS password — requires new OJS endpoint or direct DB query. Post-launch.
-- [ ] Password sync — copy WP password hashes to OJS so members keep their existing password. Lazy rehash (phpass→bcrypt) on first OJS login for bulk-synced users; ongoing changes sent as bcrypt via hooks. Eliminates mandatory "set your password" email.
 
 Dropped (not worth the complexity):
 - ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Load-based backpressure + adaptive throttling makes sequential sync fast enough (~40s on Hetzner for 684 users).

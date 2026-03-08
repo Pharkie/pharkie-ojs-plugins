@@ -29,6 +29,7 @@ class WPOJS_Sync {
 		add_action( 'wpojs_sync_expire', array( $this, 'handle_expire' ) );
 		add_action( 'wpojs_sync_email_change', array( $this, 'handle_email_change' ) );
 		add_action( 'wpojs_sync_delete_user', array( $this, 'handle_delete_user' ) );
+		add_action( 'wpojs_sync_password_change', array( $this, 'handle_password_change' ) );
 	}
 
 	/**
@@ -274,6 +275,49 @@ class WPOJS_Sync {
 		$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
 		// Anonymize all sync log entries for this user (GDPR).
 		$this->logger->anonymize_user_logs( $wp_user_id, $email );
+	}
+
+	/**
+	 * Handle password_change: push new WP password hash to OJS.
+	 *
+	 * @param array $args { wp_user_id: int, password_hash: string }
+	 */
+	public function handle_password_change( $args ) {
+		$wp_user_id    = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
+		$password_hash = isset( $args['password_hash'] ) ? $args['password_hash'] : '';
+
+		$user = get_userdata( $wp_user_id );
+		if ( ! $user ) {
+			$this->logger->log( $wp_user_id, '', 'password_change', 'fail', 0, 'WP user not found' );
+			return;
+		}
+
+		$email = strtolower( $user->user_email );
+
+		// Staleness check: if the user's current hash differs from what was
+		// queued, a newer password change has superseded this one.
+		if ( $user->user_pass !== $password_hash ) {
+			$this->logger->log( $wp_user_id, $email, 'password_change', 'success', 0, 'Superseded by newer password change' );
+			return;
+		}
+
+		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $email );
+		if ( ! $ojs_user_id ) {
+			$this->logger->log( $wp_user_id, $email, 'password_change', 'success', 0, 'User not found on OJS -- nothing to update' );
+			return;
+		}
+
+		$result = $this->api->update_user_password( $ojs_user_id, $password_hash );
+
+		if ( ! $result['success'] ) {
+			$this->logger->log( $wp_user_id, $email, 'password_change', 'fail', $result['code'], $result['error'] );
+			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
+				return;
+			}
+			throw new Exception( 'update_user_password failed: ' . $result['error'] );
+		}
+
+		$this->logger->log( $wp_user_id, $email, 'password_change', 'success', $result['code'], wp_json_encode( $result['body'] ) );
 	}
 
 	/**

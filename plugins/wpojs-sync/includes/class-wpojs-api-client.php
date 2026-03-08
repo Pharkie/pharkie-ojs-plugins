@@ -74,6 +74,15 @@ class WPOJS_API_Client {
     }
 
     /**
+     * Update a user's password hash on OJS.
+     */
+    public function update_user_password( $user_id, $password_hash ) {
+        return $this->request( 'PUT', '/wpojs/users/' . absint( $user_id ) . '/password', array(
+            'passwordHash' => $password_hash,
+        ) );
+    }
+
+    /**
      * Delete (anonymise) a user. GDPR erasure.
      */
     public function delete_user( $user_id ) {
