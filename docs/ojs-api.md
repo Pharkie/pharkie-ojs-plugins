@@ -229,7 +229,7 @@ use PKP\security\Validation;
 
 $hash = Validation::generatePasswordResetHash($userId); // HMAC-SHA256, expiry from config
 // Default expiry: 7 days. Controlled by `password_reset_timeout` in the `[security]` section of config.inc.php (value in days).
-// For bulk welcome emails: increase to 14 or more days to give members time to set their password.
+// Note: not used by our plugin — WP password hashes are synced directly, so members don't need password reset.
 ```
 
 Token auto-invalidates if user logs in (hash includes `dateLastLogin`).
