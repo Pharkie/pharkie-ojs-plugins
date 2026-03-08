@@ -2,20 +2,6 @@
 
 A pair of plugins (WordPress + OJS) that sync membership data from WordPress (via WooCommerce Subscriptions) to Open Journal Systems. Members get journal access automatically; non-members can still buy content via OJS's built-in paywall.
 
-## Quick start
-
-```bash
-git clone https://github.com/Pharkie/wp-ojs-sync.git && cd wp-ojs-sync
-cp .env.example .env                    # edit passwords before production use
-docker compose up -d --build
-scripts/setup.sh --env=dev --with-sample-data
-npm test                                # 58 e2e tests
-```
-
-WP: http://localhost:8080 | OJS: http://localhost:8081
-
-> **Production sync:** Always dry-run first (`wp ojs-sync sync --bulk --dry-run`), verify the output, then run the real sync with `--bulk --yes`. The `--bulk` flag is required to prevent accidental full sync. See [WP plugin reference — CLI commands](docs/wp-plugin-reference.md#wp-cli-commands) for all flags and safety options.
-
 ## How it works
 
 WordPress is the source of truth for membership. The WP plugin hooks into WooCommerce Subscription lifecycle events and pushes changes to OJS via a custom REST API. All sync is async (Action Scheduler), with daily reconciliation to catch drift.
@@ -43,7 +29,7 @@ Bulk sync creates OJS accounts with WP password hashes — members log in to OJS
 
 **API** — [OJS API reference](docs/ojs-api.md) — all 13 custom endpoints with params, responses, error codes
 
-**Deployment** — [Docker setup](docker/README.md) · [Non-Docker setup](docs/non-docker-setup.md) · [Hosting requirements](docs/private/hosting-requirements.md) · [Support runbook](docs/support-runbook.md) · [TODO / roadmap](TODO.md)
+**Setup** — [Docker setup](docker/README.md) · [Non-Docker setup](docs/non-docker-setup.md) · [Hosting requirements](docs/private/hosting-requirements.md) · [Support runbook](docs/support-runbook.md) · [TODO / roadmap](TODO.md)
 
 **Design** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [WP integration notes](docs/wp-integration.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
 
