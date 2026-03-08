@@ -18,7 +18,7 @@ export default defineConfig({
   timeout: 60_000,
   maxFailures: isCI ? 0 : 3,
   retries: isCI ? 1 : 0,
-  reporter: 'html',
+  reporter: [['list'], ['html']],
   use: {
     baseURL: 'http://localhost:8080',
     screenshot: 'only-on-failure',

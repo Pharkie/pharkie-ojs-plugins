@@ -280,11 +280,13 @@ class WPOJS_Sync {
 	/**
 	 * Handle password_change: push new WP password hash to OJS.
 	 *
-	 * @param array $args { wp_user_id: int, password_hash: string }
+	 * Password hash is read fresh from the WP user at processing time,
+	 * not stored in the queue args (avoids sensitive data in the AS table).
+	 *
+	 * @param array $args { wp_user_id: int }
 	 */
 	public function handle_password_change( $args ) {
-		$wp_user_id    = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
-		$password_hash = isset( $args['password_hash'] ) ? $args['password_hash'] : '';
+		$wp_user_id = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
 
 		$user = get_userdata( $wp_user_id );
 		if ( ! $user ) {
@@ -292,14 +294,8 @@ class WPOJS_Sync {
 			return;
 		}
 
-		$email = strtolower( $user->user_email );
-
-		// Staleness check: if the user's current hash differs from what was
-		// queued, a newer password change has superseded this one.
-		if ( $user->user_pass !== $password_hash ) {
-			$this->logger->log( $wp_user_id, $email, 'password_change', 'success', 0, 'Superseded by newer password change' );
-			return;
-		}
+		$email         = strtolower( $user->user_email );
+		$password_hash = $user->user_pass;
 
 		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $email );
 		if ( ! $ojs_user_id ) {

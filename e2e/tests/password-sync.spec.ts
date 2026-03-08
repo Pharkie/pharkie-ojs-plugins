@@ -4,6 +4,7 @@ import {
   deleteUser,
   createSubscription,
   deleteSubscription,
+  updateSubscriptionStatus,
   getSubscriptionProductId,
   getWpPasswordHash,
   clearTestSyncData,
@@ -18,6 +19,7 @@ import {
   getOjsPasswordHash,
   getMustChangePassword,
   deleteOjsUser,
+  hasActiveSubscription,
   waitForSync,
 } from '../helpers/ojs';
 
@@ -87,6 +89,26 @@ echo json_encode($result);
       const rehashed = getOjsPasswordHash(ojsUserId2!);
       expect(rehashed).not.toBe(wpHash); // Hash changed
       expect(rehashed).toMatch(/^\$2y\$12\$/); // Now cost 12
+
+      // Verify subscriber can access paywalled content (no paywall hint).
+      // The find_or_create_user call above only creates the OJS user — run a
+      // full single-member sync to also create the OJS subscription record.
+      wpCli(`ojs-sync sync --member=${email}`);
+
+      await page.goto('http://localhost:8081/index.php/journal');
+      const articleLink = page.locator('a[href*="/article/view/"]').first();
+      if ((await articleLink.count()) > 0) {
+        await articleLink.click();
+        await page.waitForLoadState('domcontentloaded');
+
+        // Subscriber should NOT see the paywall hint (yellow #fff3cd box).
+        const paywallHint = page.locator('[style*="fff3cd"]');
+        await expect(paywallHint).not.toBeVisible({ timeout: 5_000 });
+
+        // Subscriber should see a galley link (PDF download).
+        const galleyLink = page.locator('a.obj_galley_link, a[href*="/galley/"]').first();
+        await expect(galleyLink).toBeVisible({ timeout: 5_000 });
+      }
     } finally {
       cleanupWpUser({ subIds: [subId!], wpUserId: wpUserId! });
       deleteOjsUser(email);
@@ -132,6 +154,45 @@ echo json_encode($result);
       await page.goto('http://localhost:8081/index.php/journal/login');
       await page.locator('#username').fill(username);
       await page.locator('#password').fill(NEW_PASSWORD);
+      await page.locator('button[type="submit"], input[type="submit"]').first().click();
+
+      await expect(
+        page.locator('.pkp_navigation_user, .app__userNav, [class*="navigation_user"]').first(),
+      ).toBeVisible({ timeout: 15_000 });
+    } finally {
+      cleanupWpUser({ subIds: [subId!], wpUserId: wpUserId! });
+      deleteOjsUser(email);
+    }
+  });
+
+  test('WP password login still works after subscription expires', async ({ page }) => {
+    const email = `${PREFIX}_access@test.invalid`;
+    const login = `${PREFIX}_access`;
+    let wpUserId: number;
+    let subId: number;
+
+    try {
+      const productId = getSubscriptionProductId();
+      wpUserId = createUser(login, email);
+      wpCli(`user update ${wpUserId} --user_pass=${WP_PASSWORD}`);
+      subId = createSubscription(wpUserId, productId, 'active');
+
+      // Sync to OJS with password hash.
+      wpCli(`ojs-sync sync --member=${email}`);
+      const ojsUserId = findOjsUser(email);
+      expect(ojsUserId).not.toBeNull();
+      expect(hasActiveSubscription(ojsUserId!)).toBe(true);
+
+      // Expire the subscription.
+      updateSubscriptionStatus(subId, 'expired');
+      waitForSync();
+      expect(hasActiveSubscription(ojsUserId!)).toBe(false);
+
+      // WP password should still work for OJS login even after expiry.
+      const username = getOjsUsername(ojsUserId!);
+      await page.goto('http://localhost:8081/index.php/journal/login');
+      await page.locator('#username').fill(username);
+      await page.locator('#password').fill(WP_PASSWORD);
       await page.locator('button[type="submit"], input[type="submit"]').first().click();
 
       await expect(

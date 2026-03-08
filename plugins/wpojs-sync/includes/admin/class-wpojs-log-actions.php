@@ -122,6 +122,7 @@ class WPOJS_Log_Actions {
 			'email_change'       => 'wpojs_sync_email_change',
 			'delete_user'        => 'wpojs_sync_delete_user',
 			'create_user'        => 'wpojs_sync_activate',
+			'password_change'    => 'wpojs_sync_password_change',
 			'reconcile_activate' => 'wpojs_sync_activate',
 			'reconcile_expire'   => 'wpojs_sync_expire',
 		);

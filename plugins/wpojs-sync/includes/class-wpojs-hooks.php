@@ -145,7 +145,7 @@ class WPOJS_Hooks {
 
 		// Detect password change.
 		if ( $old_userdata->user_pass !== $new_user->user_pass ) {
-			$this->schedule_password_sync( $user_id, $new_user->user_pass );
+			$this->schedule_password_sync( $user_id );
 		}
 	}
 
@@ -157,14 +157,14 @@ class WPOJS_Hooks {
 	 * @param string  $new_pass The new plaintext password (unused — we send the hash).
 	 */
 	public function on_password_reset( $user, $new_pass ) {
-		$this->schedule_password_sync( $user->ID, $user->user_pass );
+		$this->schedule_password_sync( $user->ID );
 	}
 
 	/**
 	 * Schedule a password hash sync to OJS.
 	 * Cancel-and-reschedule pattern handles rapid successive changes.
 	 */
-	private function schedule_password_sync( $user_id, $password_hash ) {
+	private function schedule_password_sync( $user_id ) {
 		// Cancel any pending password change actions for this user.
 		$store = ActionScheduler::store();
 		$pending = $store->query_actions( array(
@@ -181,8 +181,7 @@ class WPOJS_Hooks {
 		}
 
 		as_schedule_single_action( time(), 'wpojs_sync_password_change', array( array(
-			'wp_user_id'    => $user_id,
-			'password_hash' => $password_hash,
+			'wp_user_id' => $user_id,
 		) ), 'wpojs-sync' );
 	}
 

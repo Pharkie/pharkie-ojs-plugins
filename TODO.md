@@ -8,7 +8,7 @@
 - Member dashboard widget (WooCommerce My Account)
 - UI messages (OJS login hint, paywall hint, footer)
 - Non-Docker setup guide — `docs/non-docker-setup.md`
-- Dev environment clean rebuild verified — all 56 e2e tests passing
+- Dev environment clean rebuild verified — all 58 e2e tests passing
 - Staging VPS on Hetzner (personal account) — fully scripted, smoke tests (17/17) + load tests passing
 - Deployment automation — `init-vps.sh`, `deploy.sh`, `provision-vps.sh`, `smoke-test.sh`, `load-test.sh`
 - Deployment docs — `docs/deployment.md` (public), `docs/private/staging-prod-setup.md` (private)
@@ -77,7 +77,7 @@ Second Hetzner VPS running WP + OJS. Runs quietly on IP while Krystal stays live
 
 ## Playwright E2E browser tests (`e2e/`)
 
-All passing (56/56):
+All passing (58/58):
 
 - [x] Sync lifecycle — WCS activate/expire → OJS subscription status
 - [x] OJS login — synced user logs in with WP password (no password setup needed)
