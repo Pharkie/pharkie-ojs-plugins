@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP OJS Sync
  * Description: Syncs WooCommerce Subscription membership data to OJS journal access.
- * Version: 1.0.0
+ * Version: 1.3.0
  * Author: Adam Knowles
  * Author URI: https://github.com/adamknowles
  * Requires PHP: 7.4
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPOJS_VERSION', '1.0.0' );
+define( 'WPOJS_VERSION', '1.3.0' );
 define( 'WPOJS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPOJS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPOJS_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
