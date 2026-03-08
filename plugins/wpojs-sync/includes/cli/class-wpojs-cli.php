@@ -35,7 +35,6 @@ class WPOJS_CLI {
 	public static function register( WPOJS_Sync $sync, WPOJS_Resolver $resolver, WPOJS_API_Client $api, WPOJS_Logger $logger, WPOJS_Stats $stats ) {
 		$instance = new self( $sync, $resolver, $api, $logger, $stats );
 		WP_CLI::add_command( 'ojs-sync sync', array( $instance, 'sync' ) );
-		WP_CLI::add_command( 'ojs-sync send-welcome-emails', array( $instance, 'send_welcome_emails' ) );
 		WP_CLI::add_command( 'ojs-sync reconcile', array( $instance, 'reconcile' ) );
 		WP_CLI::add_command( 'ojs-sync status', array( $instance, 'status' ) );
 		WP_CLI::add_command( 'ojs-sync test-connection', array( $instance, 'test_connection' ) );
@@ -104,7 +103,7 @@ class WPOJS_CLI {
 			WP_CLI::error( 'User not found: ' . $user_ref );
 		}
 
-		// Single-user sync sends welcome email (it's a targeted action).
+		// Single-user sync sends password hash (member can log in with WP password).
 		$result = $this->sync->sync_user( $user->ID, $dry_run, true );
 
 		if ( $result['success'] ) {
@@ -174,8 +173,9 @@ class WPOJS_CLI {
 			// Measure call duration for adaptive throttling.
 			$call_start = microtime( true );
 
-			// Bulk sync does NOT send welcome emails -- use send-welcome-emails after verifying.
-			$result = $this->sync->sync_user( $wp_user_id, $dry_run, false );
+			// Bulk sync sends WP password hash (members can log in with existing WP password).
+			// No welcome emails -- members already know their password.
+			$result = $this->sync->sync_user( $wp_user_id, $dry_run, false, true );
 
 			$call_ms = ( microtime( true ) - $call_start ) * 1000;
 
@@ -226,7 +226,7 @@ class WPOJS_CLI {
 		if ( $failed > 0 ) {
 			WP_CLI::warning( sprintf( '%d members failed to sync. Check the sync log for details.', $failed ) );
 		} else {
-			WP_CLI::success( 'Bulk sync complete. Run "wp ojs-sync send-welcome-emails" to send invite emails.' );
+			WP_CLI::success( 'Bulk sync complete. Members can log into OJS with their WP password.' );
 		}
 	}
 
@@ -273,92 +273,6 @@ class WPOJS_CLI {
 
 		// Under load — mirror the response time as delay.
 		return (int) $response_ms;
-	}
-
-	/**
-	 * Send welcome ("set your password") emails to synced members.
-	 *
-	 * Sends to all users with a cached _wpojs_user_id (i.e. successfully synced).
-	 * OJS dedup prevents duplicate emails -- safe to run multiple times.
-	 *
-	 * ## OPTIONS
-	 *
-	 * [--dry-run]
-	 * : Report how many emails would be sent without sending.
-	 *
-	 * ## EXAMPLES
-	 *
-	 *     wp ojs-sync send-welcome-emails --dry-run
-	 *     wp ojs-sync send-welcome-emails
-	 *
-	 * @param array $args
-	 * @param array $assoc_args
-	 */
-	public function send_welcome_emails( $args, $assoc_args ) {
-		$dry_run = isset( $assoc_args['dry-run'] );
-
-		// Find all WP users who have been synced (have an OJS user ID cached).
-		global $wpdb;
-		$synced_users = $wpdb->get_results(
-			"SELECT user_id, meta_value AS ojs_user_id FROM {$wpdb->usermeta} WHERE meta_key = '_wpojs_user_id'"
-		);
-
-		$total = count( $synced_users );
-
-		if ( $total === 0 ) {
-			WP_CLI::warning( 'No synced users found. Run "wp ojs-sync sync" first.' );
-			return;
-		}
-
-		WP_CLI::log( sprintf( 'Found %d synced users.', $total ) );
-
-		if ( $dry_run ) {
-			WP_CLI::success( sprintf( 'Dry run: would send welcome emails to %d users.', $total ) );
-			return;
-		}
-
-		$sent    = 0;
-		$skipped = 0;
-		$failed  = 0;
-
-		$progress = \WP_CLI\Utils\make_progress_bar( 'Sending welcome emails', $total );
-
-		foreach ( $synced_users as $row ) {
-			$ojs_user_id = (int) $row->ojs_user_id;
-			$wp_user_id  = (int) $row->user_id;
-			$user        = get_userdata( $wp_user_id );
-			$email       = $user ? $user->user_email : 'unknown';
-
-			$result = $this->api->send_welcome_email( $ojs_user_id );
-
-			if ( $result['success'] ) {
-				$body = $result['body'];
-				if ( ! empty( $body['sent'] ) ) {
-					$sent++;
-				} else {
-					// Already sent (dedup) or other skip reason.
-					$skipped++;
-				}
-			} else {
-				$failed++;
-				WP_CLI::warning( sprintf( '  %s: %s', $email, $result['error'] ) );
-				$this->logger->log( $wp_user_id, $email, 'welcome_email', 'fail', $result['code'], $result['error'] );
-			}
-
-			$progress->tick();
-			usleep( 100000 ); // 100ms delay between emails.
-		}
-
-		$progress->finish();
-
-		WP_CLI::log( '' );
-		WP_CLI::log( sprintf( 'Results: %d sent, %d already sent (skipped), %d failed.', $sent, $skipped, $failed ) );
-
-		if ( $failed > 0 ) {
-			WP_CLI::warning( sprintf( '%d emails failed. Re-run to retry (OJS dedup prevents duplicates).', $failed ) );
-		} else {
-			WP_CLI::success( 'Welcome emails complete.' );
-		}
 	}
 
 	/**

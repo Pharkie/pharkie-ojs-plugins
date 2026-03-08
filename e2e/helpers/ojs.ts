@@ -187,6 +187,25 @@ export function getOjsUserUsername(userId: number): string | null {
 }
 
 /**
+ * Get the stored password hash for an OJS user.
+ */
+export function getOjsPasswordHash(userId: number): string {
+  return ojsQuery(
+    `SELECT password FROM users WHERE user_id = ${userId}`,
+  ).trim();
+}
+
+/**
+ * Get the must_change_password flag for an OJS user.
+ */
+export function getMustChangePassword(userId: number): boolean {
+  const out = ojsQuery(
+    `SELECT must_change_password FROM users WHERE user_id = ${userId}`,
+  );
+  return parseInt(out, 10) === 1;
+}
+
+/**
  * Delete an OJS subscription directly (bypass API — for creating test drift).
  */
 export function deleteOjsSubscription(userId: number): void {

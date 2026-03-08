@@ -45,6 +45,16 @@ export function createUser(
 }
 
 /**
+ * Get the WP password hash for a user.
+ */
+export function getWpPasswordHash(userId: number): string {
+  return wpEval(`
+$user = get_userdata(${userId});
+echo $user->user_pass;
+`).trim();
+}
+
+/**
  * Delete a WordPress user by ID.
  */
 export function deleteUser(userId: number): void {

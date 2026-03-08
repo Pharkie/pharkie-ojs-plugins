@@ -9,14 +9,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use PKP\config\Config;
 use PKP\core\Core;
 use PKP\core\PKPBaseController;
 use PKP\core\PKPRequest;
 use PKP\db\DAORegistry;
-use PKP\mail\mailables\PasswordResetRequested;
 use PKP\security\Role;
 use PKP\security\Validation;
 use APP\plugins\generic\wpojsSubscriptionApi\WpojsApiLog;
@@ -69,7 +67,6 @@ class WpojsApiController extends PKPBaseController
         Route::put('subscriptions/{subscriptionId}/expire', $this->expireSubscription(...))->name('wpojs.subscriptions.expire');
         Route::get('subscriptions', $this->getSubscriptions(...))->name('wpojs.subscriptions.list');
         Route::post('subscriptions/status-batch', $this->getSubscriptionStatusBatch(...))->name('wpojs.subscriptions.statusBatch');
-        Route::post('welcome-email', $this->sendWelcomeEmail(...))->name('wpojs.welcomeEmail');
     }
 
     // ---------------------------------------------------------------
@@ -418,20 +415,6 @@ class WpojsApiController extends PKPBaseController
             }
         }
 
-        // Validation::generatePasswordResetHash (for welcome email reset links)
-        $ok = method_exists(Validation::class, 'generatePasswordResetHash');
-        $checks[] = ['name' => 'Validation::generatePasswordResetHash()', 'ok' => $ok];
-        if (!$ok) {
-            $compatible = false;
-        }
-
-        // PasswordResetRequested mailable
-        $ok = class_exists(PasswordResetRequested::class);
-        $checks[] = ['name' => 'PasswordResetRequested class', 'ok' => $ok];
-        if (!$ok) {
-            $compatible = false;
-        }
-
         // Core::getCurrentDate()
         $ok = method_exists(Core::class, 'getCurrentDate');
         $checks[] = ['name' => 'Core::getCurrentDate()', 'ok' => $ok];
@@ -579,7 +562,7 @@ class WpojsApiController extends PKPBaseController
         $email = trim($request->input('email', ''));
         $firstName = trim($request->input('firstName', ''));
         $lastName = trim($request->input('lastName', ''));
-        $sendWelcomeEmail = (bool) $request->input('sendWelcomeEmail', false);
+        $passwordHash = $request->input('passwordHash', '');
 
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 255) {
             return $this->jsonResponse($request, ['error' => 'Invalid or missing email'], Response::HTTP_BAD_REQUEST);
@@ -617,10 +600,17 @@ class WpojsApiController extends PKPBaseController
             $locale = Application::get()->getRequest()->getContext()?->getPrimaryLocale() ?? 'en';
             $user->setGivenName($firstName, $locale);
             $user->setFamilyName($lastName, $locale);
-            $user->setPassword(Validation::encryptCredentials($username, bin2hex(random_bytes(16))));
+            if (!empty($passwordHash) && is_string($passwordHash)) {
+                // Store the WP password hash directly — the custom hasher
+                // (WpCompatibleHasher) will verify it at login and lazy-rehash.
+                $user->setPassword($passwordHash);
+                $user->setMustChangePassword(false);
+            } else {
+                $user->setPassword(Validation::encryptCredentials($username, bin2hex(random_bytes(16))));
+                $user->setMustChangePassword(true);
+            }
             $user->setDateRegistered(Core::getCurrentDate());
             $user->setDateValidated(Core::getCurrentDate()); // marks email as verified
-            $user->setMustChangePassword(true);
             $user->setDisabled(false);
 
             $userId = Repo::user()->add($user);
@@ -699,11 +689,6 @@ class WpojsApiController extends PKPBaseController
         } catch (\Exception $e) {
             error_log('[wpojs-api] createUser failed for ' . ($email ?? 'unknown') . ': ' . $e->getMessage());
             return $this->jsonResponse($request, ['error' => 'Failed to create user'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-
-        if ($sendWelcomeEmail) {
-            // Best effort — don't fail user creation if email fails
-            $this->doSendWelcomeEmail($userId);
         }
 
         return $this->jsonResponse($request, [
@@ -1157,134 +1142,4 @@ class WpojsApiController extends PKPBaseController
         ]);
     }
 
-    // ---------------------------------------------------------------
-    // POST /wpojs/welcome-email
-    // ---------------------------------------------------------------
-
-    public function sendWelcomeEmail(Request $request): JsonResponse
-    {
-        $authError = $this->checkAuth($request);
-        if ($authError) {
-            return $authError;
-        }
-
-        $userId = (int) $request->input('userId', 0);
-
-        if ($userId <= 0) {
-            return $this->jsonResponse($request, ['error' => 'Invalid or missing userId'], Response::HTTP_BAD_REQUEST);
-        }
-
-        $user = Repo::user()->get($userId);
-        if (!$user) {
-            return $this->jsonResponse($request, ['error' => 'User not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        // Dedup: skip if already sent
-        $alreadySent = DB::table('user_settings')
-            ->where('user_id', $userId)
-            ->where('setting_name', 'wpojs_welcome_email_sent')
-            ->exists();
-
-        if ($alreadySent) {
-            return $this->jsonResponse($request, [
-                'sent' => false,
-                'reason' => 'Welcome email already sent',
-            ]);
-        }
-
-        $sent = $this->doSendWelcomeEmail($userId);
-
-        if (!$sent) {
-            return $this->jsonResponse($request, ['error' => 'Failed to send welcome email'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-
-        return $this->jsonResponse($request, ['sent' => true]);
-    }
-
-    // ---------------------------------------------------------------
-    // Internal: send the welcome/password-reset email
-    // Returns true on success, false on failure.
-    // ---------------------------------------------------------------
-
-    private function doSendWelcomeEmail(int $userId): bool
-    {
-        $user = Repo::user()->get($userId);
-        if (!$user) {
-            return false;
-        }
-
-        // Set dedup flag first (prevents concurrent duplicate sends).
-        // insertOrIgnore returns 0 if the row already existed.
-        $inserted = DB::table('user_settings')->insertOrIgnore([
-            'user_id' => $userId,
-            'locale' => '',
-            'setting_name' => 'wpojs_welcome_email_sent',
-            'setting_value' => '1',
-        ]);
-
-        if (!$inserted) {
-            // Another request already claimed this send
-            return false;
-        }
-
-        try {
-            $ojsRequest = Application::get()->getRequest();
-            $context = $ojsRequest->getContext();
-            $site = $ojsRequest->getSite();
-
-            // Generate password reset hash (OJS 3.5 uses Validation, not AccessKeyManager)
-            $resetHash = Validation::generatePasswordResetHash($user->getId());
-
-            // Record that a password reset was requested (mirrors OJS login handler)
-            Repo::user()->edit($user, [
-                'datePasswordResetRequested' => Core::getCurrentDate(),
-            ]);
-
-            // Build the password reset URL
-            $dispatcher = $ojsRequest->getDispatcher();
-            $resetUrl = $dispatcher->url(
-                $ojsRequest,
-                Application::ROUTE_PAGE,
-                null, // current context
-                'login',
-                'resetPassword',
-                [$user->getUsername()],
-                ['confirm' => $resetHash]
-            );
-
-            // Build the mailable
-            $template = Repo::emailTemplate()->getByKey(
-                $context->getId(),
-                PasswordResetRequested::getEmailTemplateKey()
-            );
-
-            $mailable = new PasswordResetRequested($site);
-            $mailable->recipients($user);
-
-            // Set password reset URL as template variable
-            $mailable->viewData['passwordResetUrl'] = $resetUrl;
-
-            $mailable->body($template->getLocalizedData('body'));
-            $mailable->subject($template->getLocalizedData('subject'));
-
-            // Set from address with null safety
-            $contactEmail = $context->getData('contactEmail');
-            if ($contactEmail) {
-                $mailable->from($contactEmail, $context->getData('contactName') ?? '');
-            }
-
-            Mail::send($mailable);
-
-            return true;
-        } catch (\Exception $e) {
-            error_log('[wpojs-api] Welcome email failed for userId=' . $userId . ': ' . $e->getMessage());
-            // Email failed — remove dedup flag so it can be retried
-            DB::table('user_settings')
-                ->where('user_id', $userId)
-                ->where('setting_name', 'wpojs_welcome_email_sent')
-                ->delete();
-
-            return false;
-        }
-    }
 }

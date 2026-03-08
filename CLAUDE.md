@@ -22,7 +22,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 **Push-sync** (custom OJS plugin + WP plugin). A plugin on each side: the OJS plugin exposes REST endpoints for user and subscription CRUD (OJS has no native subscription API). The WP plugin calls those endpoints. Two modes of operation:
 
-1. **Initial bulk sync:** WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts and subscription records for each member via the OJS plugin endpoints, then sends "set your password" welcome emails. This is how existing members get access at launch.
+1. **Initial bulk sync:** WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts (with WP password hashes) and subscription records for each member via the OJS plugin endpoints. Members can immediately log into OJS with their existing WP password — no separate "set your password" step needed. OJS custom hasher verifies WP hashes at login and lazy-rehashes to native bcrypt.
 2. **Ongoing sync (after launch):** WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and pushes changes to OJS automatically via an async queue.
 
 See `docs/private/plan.md` for full details, `docs/discovery.md` for how we got here.
@@ -101,7 +101,7 @@ Installed via `./setup-hooks.sh` (runs automatically in dev container). Symlinks
 ## Don't
 
 - Modify OJS source code
-- Sync passwords between systems
+- Sync plaintext passwords between systems (password hashes are synced during bulk sync — this is safe)
 - Build message queues, webhook servers, or microservices
 - Add features beyond the core sync requirement
 - Assume any OJS API endpoint exists without checking `docs/ojs-api.md`

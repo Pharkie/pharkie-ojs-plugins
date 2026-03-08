@@ -7,7 +7,6 @@ import {
   getSubscriptionProductId,
   clearTestSyncData,
   wpCli,
-  wpEval,
 } from '../helpers/wp';
 import {
   findOjsUser,
@@ -120,25 +119,4 @@ test.describe('WP-CLI commands', () => {
     expect(output).toContain('Reconciliation complete');
   });
 
-  test('send-welcome-emails --dry-run — reports count', () => {
-    // Sync one user first so there's at least one with _wpojs_user_id meta.
-    const email = `${PREFIX}_welcome@test.invalid`;
-    const login = `${PREFIX}_welcome`;
-    const wpUserId = createUser(login, email);
-    const subId = createSubscription(wpUserId, getSubscriptionProductId());
-    try {
-      wpCli(`ojs-sync sync --member=${email} --yes`);
-      waitForSync();
-
-      const output = wpCli('ojs-sync send-welcome-emails --dry-run');
-
-      expect(output).toContain('synced users');
-      expect(output.toLowerCase()).toContain('dry run');
-    } finally {
-      deleteSubscription(subId);
-      deleteUser(wpUserId);
-      const ojsUser = findOjsUser(email);
-      if (ojsUser) deleteOjsUser(ojsUser.id);
-    }
-  });
 });

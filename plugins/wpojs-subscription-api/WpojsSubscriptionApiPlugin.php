@@ -37,12 +37,13 @@ use PKP\plugins\GenericPlugin;
 use PKP\plugins\Hook;
 use APP\plugins\generic\wpojsSubscriptionApi\WpojsApiLog;
 use APP\plugins\generic\wpojsSubscriptionApi\WpojsApiLogMigration;
+use APP\plugins\generic\wpojsSubscriptionApi\WpCompatibleHasher;
 
 class WpojsSubscriptionApiPlugin extends GenericPlugin
 {
     private const SUB_STATUS_ACTIVE = 1;
 
-    public const DEFAULT_LOGIN_HINT = 'Member visiting for the first time? <a href="{lostPasswordUrl}">Set your password</a> to access journal content.';
+    public const DEFAULT_LOGIN_HINT = 'Member? Log in with your membership email and password.';
     public const DEFAULT_PAYWALL_HINT = 'If you believe you should have access through your membership, please contact <a href="mailto:{supportEmail}">{supportEmail}</a>.';
     public const DEFAULT_FOOTER_MESSAGE = 'Your journal access is provided by your membership. <a href="{wpUrl}">Manage your membership</a>.';
 
@@ -52,6 +53,13 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
 
         if (!$success || !$this->getEnabled()) {
             return $success;
+        }
+
+        // Replace the default hasher so OJS can verify WP password hashes
+        // at login time and lazy-rehash them to native bcrypt.
+        $userProvider = app(\PKP\core\PKPUserProvider::class);
+        if ($userProvider && method_exists($userProvider, 'setHasher')) {
+            $userProvider->setHasher(new WpCompatibleHasher());
         }
 
         // UI messages

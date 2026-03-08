@@ -22,7 +22,6 @@ import {
   waitForSync,
   ojsQuery,
   getOjsUserEmail,
-  getOjsUserSetting,
   deleteOjsSubscription,
   ojsApiCall,
 } from '../helpers/ojs';
@@ -595,53 +594,6 @@ test.describe('Reconciliation catches drift', () => {
 
 // ---------------------------------------------------------------
 // Group 6: Welcome email dedup
-// ---------------------------------------------------------------
-
-test.describe('Welcome email dedup', () => {
-  const PREFIX = `e2e_welcome_${TS}`;
-
-  test('expire cycle does not clear welcome email dedup flag', () => {
-    const email = `${PREFIX}_dedup@test.invalid`;
-    const login = `${PREFIX}_dedup`;
-    let wpUserId: number;
-    let subId: number;
-    const productId = getSubscriptionProductId();
-
-    try {
-      wpUserId = createUser(login, email);
-      subId = createSubscription(wpUserId, productId, 'active');
-      waitForSync();
-
-      const ojsUserId = findOjsUser(email);
-      expect(ojsUserId).not.toBeNull();
-
-      // Manually set the dedup flag (email sending fails in Docker dev env,
-      // so the flag isn't set automatically — but in production it would be).
-      ojsQuery(
-        `INSERT IGNORE INTO user_settings (user_id, locale, setting_name, setting_value) VALUES (${ojsUserId}, '', 'wpojs_welcome_email_sent', '1')`,
-      );
-      expect(getOjsUserSetting(email, 'wpojs_welcome_email_sent')).toBe('1');
-
-      // Put on-hold and reactivate (WCS allows on-hold → active)
-      updateSubscriptionStatus(subId, 'on-hold');
-      waitForSync();
-
-      updateSubscriptionStatus(subId, 'active');
-      waitForSync();
-
-      // The expire endpoint does NOT clear user_settings (only the GDPR
-      // delete endpoint does). So the dedup flag should persist.
-      const flagAfter = getOjsUserSetting(email, 'wpojs_welcome_email_sent');
-      expect(flagAfter).toBe('1');
-    } finally {
-      try { deleteSubscription(subId!); } catch { /* ok */ }
-      try { deleteUser(wpUserId!); } catch { /* ok */ }
-      deleteOjsUser(email);
-      clearTestSyncData();
-    }
-  });
-});
-
 // ---------------------------------------------------------------
 // Group 7: OJS API validation
 // ---------------------------------------------------------------

@@ -46,14 +46,22 @@ class WPOJS_API_Client {
 
     /**
      * Find or create a user. Returns ['success' => true, 'body' => ['userId' => int, 'created' => bool]].
+     *
+     * @param string      $email
+     * @param string      $first_name
+     * @param string      $last_name
+     * @param string|null $password_hash Optional WP password hash to store on OJS.
      */
-    public function find_or_create_user( $email, $first_name, $last_name, $send_welcome_email = true ) {
-        return $this->post( '/wpojs/users/find-or-create', array(
-            'email'            => $email,
-            'firstName'        => $first_name,
-            'lastName'         => $last_name,
-            'sendWelcomeEmail' => $send_welcome_email,
-        ) );
+    public function find_or_create_user( $email, $first_name, $last_name, $password_hash = null ) {
+        $body = array(
+            'email'    => $email,
+            'firstName' => $first_name,
+            'lastName'  => $last_name,
+        );
+        if ( $password_hash !== null ) {
+            $body['passwordHash'] = $password_hash;
+        }
+        return $this->post( '/wpojs/users/find-or-create', $body );
     }
 
     /**
@@ -94,15 +102,6 @@ class WPOJS_API_Client {
      */
     public function expire_subscription_by_user( $user_id ) {
         return $this->request( 'PUT', '/wpojs/subscriptions/expire-by-user/' . absint( $user_id ) );
-    }
-
-    /**
-     * Send welcome email to an OJS user. Dedup: safe to call repeatedly.
-     */
-    public function send_welcome_email( $user_id ) {
-        return $this->post( '/wpojs/welcome-email', array(
-            'userId' => absint( $user_id ),
-        ) );
     }
 
     /**

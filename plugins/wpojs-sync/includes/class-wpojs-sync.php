@@ -39,10 +39,9 @@ class WPOJS_Sync {
 	 * reconciliation cron, which detects missing OJS subscriptions and
 	 * schedules fresh activate actions.
 	 *
-	 * We pass sendWelcomeEmail: true here. This is intentional -- the OJS
-	 * endpoint only honours it when the user is newly created (created: true).
-	 * For existing users (renewals), OJS ignores it. So it's safe to always
-	 * pass true for hook-triggered activations.
+	 * We send the WP password hash so the member can log into OJS with
+	 * their existing WP password. The hash is only applied when the OJS
+	 * user is newly created (existing users' passwords are not overwritten).
 	 *
 	 * @param array $args { wp_user_id: int }
 	 */
@@ -60,8 +59,9 @@ class WPOJS_Sync {
 		$first_name = $user->first_name ?: $user->display_name;
 		$last_name  = $user->last_name ?: '';
 
-		// Step 1: Find or create OJS user.
-		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, true );
+		// Step 1: Find or create OJS user (with WP password hash so they
+		// can log into OJS with their existing WP password).
+		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $user->user_pass );
 		if ( ! $result['success'] ) {
 			$result = $this->find_after_fail( $result, $email );
 		}
@@ -352,10 +352,10 @@ class WPOJS_Sync {
 	 *
 	 * @param int  $wp_user_id
 	 * @param bool $dry_run
-	 * @param bool $send_welcome_email Whether to send welcome email on user creation.
+	 * @param bool $send_password_hash Whether to send WP password hash.
 	 * @return array Result info.
 	 */
-	public function sync_user( $wp_user_id, $dry_run = false, $send_welcome_email = false ) {
+	public function sync_user( $wp_user_id, $dry_run = false, $send_password_hash = false ) {
 		$user = get_userdata( $wp_user_id );
 		if ( ! $user ) {
 			return array( 'success' => false, 'code' => 0, 'message' => 'WP user not found.' );
@@ -383,8 +383,12 @@ class WPOJS_Sync {
 		$first_name = $user->first_name ?: $user->display_name;
 		$last_name  = $user->last_name ?: '';
 
+		// Send WP password hash so member can log into OJS with their WP password.
+		// Only applied on user creation; existing users' passwords are not overwritten.
+		$password_hash = $send_password_hash ? $user->user_pass : null;
+
 		// Step 1: Find or create OJS user.
-		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $send_welcome_email );
+		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $password_hash );
 		if ( ! $result['success'] ) {
 			$result = $this->find_after_fail( $result, $email );
 		}
