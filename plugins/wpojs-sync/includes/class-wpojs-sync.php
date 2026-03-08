@@ -358,17 +358,18 @@ class WPOJS_Sync {
 	public function sync_user( $wp_user_id, $dry_run = false, $send_welcome_email = false ) {
 		$user = get_userdata( $wp_user_id );
 		if ( ! $user ) {
-			return array( 'success' => false, 'message' => 'WP user not found.' );
+			return array( 'success' => false, 'code' => 0, 'message' => 'WP user not found.' );
 		}
 
 		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
 		if ( ! $sub_data ) {
-			return array( 'success' => false, 'message' => 'User is not an active member.' );
+			return array( 'success' => false, 'code' => 0, 'message' => 'User is not an active member.' );
 		}
 
 		if ( $dry_run ) {
 			return array(
 				'success' => true,
+				'code'    => 0,
 				'message' => sprintf(
 					'Would sync: %s (type_id=%d, date_end=%s)',
 					$user->user_email,
@@ -389,13 +390,17 @@ class WPOJS_Sync {
 		}
 		if ( ! $result['success'] ) {
 			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'] );
-			return array( 'success' => false, 'message' => 'Find-or-create failed: ' . $result['error'] );
+			$ret = array( 'success' => false, 'code' => $result['code'], 'message' => 'Find-or-create failed: ' . $result['error'] );
+			if ( isset( $result['retry_after'] ) ) {
+				$ret['retry_after'] = $result['retry_after'];
+			}
+			return $ret;
 		}
 
 		$ojs_user_id = $result['body']['userId'] ?? null;
 		if ( ! $ojs_user_id ) {
 			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], 'Unexpected API response: missing userId' );
-			return array( 'success' => false, 'message' => 'Find-or-create returned success but no userId' );
+			return array( 'success' => false, 'code' => $result['code'], 'message' => 'Find-or-create returned success but no userId' );
 		}
 		update_user_meta( $wp_user_id, '_wpojs_user_id', $ojs_user_id );
 
@@ -413,13 +418,18 @@ class WPOJS_Sync {
 
 		if ( ! $sub_result['success'] ) {
 			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'] );
-			return array( 'success' => false, 'message' => 'Create subscription failed: ' . $sub_result['error'] );
+			$ret = array( 'success' => false, 'code' => $sub_result['code'], 'message' => 'Create subscription failed: ' . $sub_result['error'] );
+			if ( isset( $sub_result['retry_after'] ) ) {
+				$ret['retry_after'] = $sub_result['retry_after'];
+			}
+			return $ret;
 		}
 
 		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ) );
 
 		return array(
 			'success' => true,
+			'code'    => $sub_result['code'],
 			'message' => sprintf(
 				'Synced: %s -> OJS user %d, subscription %s',
 				$email,

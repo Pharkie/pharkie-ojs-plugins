@@ -10,7 +10,7 @@ class WpojsApiLog
     /**
      * Log an API request.
      */
-    public static function log(string $endpoint, string $method, string $sourceIp, int $httpStatus): void
+    public static function log(string $endpoint, string $method, string $sourceIp, int $httpStatus, ?int $durationMs = null): void
     {
         try {
             DB::table('wpojs_api_log')->insert([
@@ -18,11 +18,46 @@ class WpojsApiLog
                 'method'      => substr($method, 0, 10),
                 'source_ip'   => substr($sourceIp, 0, 45),
                 'http_status' => $httpStatus,
+                'duration_ms' => $durationMs,
                 'created_at'  => Core::getCurrentDate(),
             ]);
         } catch (\Exception $e) {
             // Logging should never break the API, but record the failure.
             error_log('[wpojs-api-log] Failed to log request: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get average response time of recent successful requests.
+     *
+     * @param int $sampleSize Max number of recent requests to average.
+     * @param int $windowSecs Only consider requests within this many seconds.
+     * @return array ['avg_ms' => float|null, 'sample_count' => int]
+     */
+    public static function getAverageResponseTime(int $sampleSize = 20, int $windowSecs = 60): array
+    {
+        try {
+            $cutoff = date('Y-m-d H:i:s', time() - $windowSecs);
+
+            $rows = DB::table('wpojs_api_log')
+                ->where('created_at', '>=', $cutoff)
+                ->whereNotNull('duration_ms')
+                ->where('http_status', '<', 400)
+                ->orderBy('created_at', 'desc')
+                ->limit($sampleSize)
+                ->pluck('duration_ms');
+
+            $count = $rows->count();
+            if ($count === 0) {
+                return ['avg_ms' => null, 'sample_count' => 0];
+            }
+
+            return [
+                'avg_ms' => round($rows->avg(), 1),
+                'sample_count' => $count,
+            ];
+        } catch (\Exception $e) {
+            return ['avg_ms' => null, 'sample_count' => 0];
         }
     }
 

@@ -344,19 +344,17 @@ document.addEventListener("DOMContentLoaded", function() {
         $allowedIps = Config::getVar('wpojs', 'allowed_ips', '');
         $wpMemberUrl = Config::getVar('wpojs', 'wp_member_url', '');
         $supportEmail = Config::getVar('wpojs', 'support_email', '');
-        $rateLimitRequests = (int) Config::getVar('wpojs', 'rate_limit_requests', 300);
-        $rateLimitWindow = (int) Config::getVar('wpojs', 'rate_limit_window', 60);
-        $rateLimitEnabled = $rateLimitRequests > 0;
-        $rateLimitDetail = $rateLimitEnabled
-            ? "{$rateLimitRequests} req / {$rateLimitWindow}s"
-            : 'disabled (rate_limit_requests = 0)';
+        $loadStats = WpojsApiLog::getAverageResponseTime(20, 60);
+        $loadDetail = $loadStats['avg_ms'] !== null
+            ? "load-based (avg response: {$loadStats['avg_ms']}ms, samples: {$loadStats['sample_count']})"
+            : 'load-based (no recent data)';
 
         $configChecks = [
             ['name' => 'API key defined', 'ok' => $apiKeyDefined],
             ['name' => 'Allowed IPs configured', 'ok' => !empty($allowedIps), 'detail' => $allowedIps ?: '(none)'],
             ['name' => 'WP member URL set', 'ok' => !empty($wpMemberUrl), 'detail' => $wpMemberUrl ?: '(not set)'],
             ['name' => 'Support email set', 'ok' => !empty($supportEmail), 'detail' => $supportEmail ?: '(not set)'],
-            ['name' => 'Rate limiting', 'ok' => $rateLimitEnabled, 'detail' => $rateLimitDetail],
+            ['name' => 'Load protection', 'ok' => true, 'detail' => $loadDetail],
         ];
 
         $allGreen = true;

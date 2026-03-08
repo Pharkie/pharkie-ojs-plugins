@@ -172,7 +172,7 @@ class WpojsApiController extends PKPBaseController
     }
 
     /**
-     * Combined authorization: IP allowlist + API key + rate limit.
+     * Combined authorization: IP allowlist + API key + load protection.
      * Call at the start of every protected endpoint.
      * Logs auth failures (401/403/429). Success logging is deferred to
      * jsonResponse() so the actual endpoint status code is recorded.
@@ -180,6 +180,10 @@ class WpojsApiController extends PKPBaseController
      */
     private function checkAuth(Request $request): ?JsonResponse
     {
+        if (!defined('WPOJS_REQUEST_START')) {
+            define('WPOJS_REQUEST_START', microtime(true));
+        }
+
         $this->maybeCleanupLogs();
 
         $ipError = $this->checkIp($request);
@@ -194,10 +198,10 @@ class WpojsApiController extends PKPBaseController
             return $keyError;
         }
 
-        $rateLimitError = $this->checkRateLimit($request);
-        if ($rateLimitError) {
+        $loadError = $this->checkLoad();
+        if ($loadError) {
             $this->logRequest($request, 429);
-            return $rateLimitError;
+            return $loadError;
         }
 
         return null;
@@ -237,64 +241,67 @@ class WpojsApiController extends PKPBaseController
     }
 
     /**
-     * Check per-IP rate limit using the existing API log table.
-     * Returns 429 response if limit exceeded, null if OK.
-     * Set rate_limit_requests = 0 in config to disable.
+     * Load-based backpressure: OJS measures its own response times and
+     * returns 429 when under pressure. No magic request counts.
+     *
+     * Thresholds:
+     *   avg < 500ms  → healthy, allow
+     *   avg 500-2000ms → stressed, Retry-After: 2
+     *   avg > 2000ms → overloaded, Retry-After: 5
+     *   < 5 recent samples → cold start, allow
      */
-    private function checkRateLimit(Request $request): ?JsonResponse
+    private function checkLoad(): ?JsonResponse
     {
-        $maxRequests = (int) Config::getVar('wpojs', 'rate_limit_requests', 300);
-        $windowSecs  = (int) Config::getVar('wpojs', 'rate_limit_window', 60);
-
-        if ($maxRequests <= 0) {
-            return null; // rate limiting disabled
-        }
-
-        $clientIp = $request->server('REMOTE_ADDR', 'unknown');
-        $cutoff   = date('Y-m-d H:i:s', time() - $windowSecs);
-
         try {
-            $count = DB::table('wpojs_api_log')
-                ->where('source_ip', $clientIp)
-                ->where('created_at', '>=', $cutoff)
-                ->count();
+            $stats = WpojsApiLog::getAverageResponseTime(20, 60);
         } catch (\Exception $e) {
-            // Table may not exist yet (plugin schema not installed).
-            // Skip rate limiting rather than blocking all API requests.
-            error_log('[wpojs] Rate limit check skipped — wpojs_api_log table may not exist: ' . $e->getMessage());
+            error_log('[wpojs] Load check skipped: ' . $e->getMessage());
             return null;
         }
 
-        if ($count >= $maxRequests) {
-            return response()->json(
-                ['error' => 'Rate limit exceeded. Please retry later.'],
-                Response::HTTP_TOO_MANY_REQUESTS
-            )->withHeaders(['Retry-After' => $windowSecs]);
+        // Cold start — not enough data to judge.
+        if ($stats['sample_count'] < 5) {
+            return null;
         }
 
-        return null;
+        $avgMs = $stats['avg_ms'];
+
+        if ($avgMs === null || $avgMs < 500) {
+            return null; // healthy
+        }
+
+        $retryAfter = $avgMs > 2000 ? 5 : 2;
+
+        return response()->json(
+            ['error' => 'Server under load. Please retry later.', 'avg_ms' => $avgMs],
+            Response::HTTP_TOO_MANY_REQUESTS
+        )->withHeaders(['Retry-After' => $retryAfter]);
     }
 
     /**
      * Write an entry to the API request log.
      */
-    private function logRequest(Request $request, int $httpStatus): void
+    private function logRequest(Request $request, int $httpStatus, ?int $durationMs = null): void
     {
         $endpoint = $request->path();
         $method = $request->method();
         $sourceIp = $request->server('REMOTE_ADDR', 'unknown');
 
-        WpojsApiLog::log($endpoint, $method, $sourceIp, $httpStatus);
+        WpojsApiLog::log($endpoint, $method, $sourceIp, $httpStatus, $durationMs);
     }
 
     /**
-     * Build a JSON response and log the actual HTTP status code.
+     * Build a JSON response and log the actual HTTP status code + duration.
      * Use this instead of response()->json() in endpoint methods
      * so the API log reflects the real outcome (not a premature 200).
      */
     private function jsonResponse(Request $request, array $data, int $status = 200): JsonResponse
     {
-        $this->logRequest($request, $status);
+        $durationMs = null;
+        if (defined('WPOJS_REQUEST_START')) {
+            $durationMs = (int) round((microtime(true) - WPOJS_REQUEST_START) * 1000);
+        }
+        $this->logRequest($request, $status, $durationMs);
         return response()->json($data, $status);
     }
 
@@ -327,6 +334,9 @@ class WpojsApiController extends PKPBaseController
 
     public function ping(Request $request): JsonResponse
     {
+        if (!defined('WPOJS_REQUEST_START')) {
+            define('WPOJS_REQUEST_START', microtime(true));
+        }
         return $this->jsonResponse($request, ['status' => 'ok']);
     }
 
@@ -472,6 +482,13 @@ class WpojsApiController extends PKPBaseController
                 $compatible = false;
             }
         }
+
+        // Load protection status
+        $loadStats = WpojsApiLog::getAverageResponseTime(20, 60);
+        $avgDetail = $loadStats['avg_ms'] !== null
+            ? "load-based (avg response: {$loadStats['avg_ms']}ms, samples: {$loadStats['sample_count']})"
+            : 'load-based (no recent data)';
+        $checks[] = ['name' => 'Load protection', 'ok' => true, 'detail' => $avgDetail];
 
         return $this->jsonResponse($request, [
             'compatible' => $compatible,

@@ -19,6 +19,7 @@
         <field name="http_status" type="I2">
             <NOTNULL />
         </field>
+        <field name="duration_ms" type="I4" />
         <field name="created_at" type="T">
             <NOTNULL />
         </field>
@@ -28,10 +29,6 @@
             <UNIQUE />
         </index>
         <index name="wpojs_api_log_created_at">
-            <col>created_at</col>
-        </index>
-        <index name="wpojs_api_log_ratelimit">
-            <col>source_ip</col>
             <col>created_at</col>
         </index>
     </table>

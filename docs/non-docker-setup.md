@@ -70,9 +70,6 @@ wp_member_url = "https://www.example.org"
 ; Support email (shown in OJS paywall hint for logged-in non-subscribers).
 support_email = "support@example.org"
 
-; Rate limiting (optional, defaults shown).
-; rate_limit_requests = 300
-; rate_limit_window = 60
 ```
 
 **Config value quoting:** Always quote string values in `config.inc.php`. PHP's INI parser silently coerces unquoted numeric values to integers, which causes `hash_equals()` to throw a TypeError. This applies to `api_key_secret`, `allowed_ips`, and any other string values.

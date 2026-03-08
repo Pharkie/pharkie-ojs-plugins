@@ -94,8 +94,10 @@ All passing (56/56):
 
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 - [ ] Follow-up email for members who haven't set OJS password — requires new OJS endpoint or direct DB query. Post-launch.
+- [ ] Password sync — copy WP password hashes to OJS so members keep their existing password. Lazy rehash (phpass→bcrypt) on first OJS login for bulk-synced users; ongoing changes sent as bcrypt via hooks. Eliminates mandatory "set your password" email.
 
 Dropped (not worth the complexity):
+- ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Adaptive throttling makes sequential sync fast enough (~3 min on Hetzner for 700 users).
 - ~~Differential reconciliation~~ — full scan batches (chunks of 100). Fast enough.
 - ~~API key rotation~~ — ops procedure, not a code feature.
 - ~~On-hold grace period~~ — WCS retries failed payments automatically. Revisit if it generates support tickets.

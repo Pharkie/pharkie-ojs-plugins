@@ -53,11 +53,7 @@ class WPOJS_CLI {
 	 * : Sync a single member by WP user ID or email.
 	 *
 	 * [--batch-size=<number>]
-	 * : Number of users per batch before pausing. Default 50.
-	 *
-	 * [--delay=<ms>]
-	 * : Delay in milliseconds between each API call. Default 500.
-	 * Increase on slow environments (e.g. OJS under Rosetta emulation).
+	 * : Number of users per batch before logging progress. Default 50.
 	 *
 	 * [--yes]
 	 * : Skip confirmation prompt (for scripting).
@@ -68,7 +64,6 @@ class WPOJS_CLI {
 	 *     wp ojs-sync sync
 	 *     wp ojs-sync sync --member=42
 	 *     wp ojs-sync sync --member=member@example.com
-	 *     wp ojs-sync sync --delay=2000 --batch-size=10
 	 *     wp ojs-sync sync --yes
 	 *
 	 * @param array $args
@@ -78,7 +73,7 @@ class WPOJS_CLI {
 		// Reject unknown flags to prevent silent fallthrough to bulk sync.
 		// e.g. --user= (wrong flag) would otherwise ignore the flag and run
 		// a full bulk sync instead of targeting one member.
-		$known_flags = array( 'dry-run', 'member', 'batch-size', 'delay', 'yes' );
+		$known_flags = array( 'dry-run', 'member', 'batch-size', 'yes' );
 		$unknown     = array_diff( array_keys( $assoc_args ), $known_flags );
 		if ( ! empty( $unknown ) ) {
 			WP_CLI::error( 'Unknown flag(s): --' . implode( ', --', $unknown ) . '. Did you mean --member=<id-or-email>?' );
@@ -94,9 +89,8 @@ class WPOJS_CLI {
 
 		// Bulk sync.
 		$batch_size   = isset( $assoc_args['batch-size'] ) ? absint( $assoc_args['batch-size'] ) : 50;
-		$delay_ms     = isset( $assoc_args['delay'] ) ? absint( $assoc_args['delay'] ) : 500;
 		$skip_confirm = isset( $assoc_args['yes'] );
-		$this->sync_bulk( $dry_run, $batch_size, $delay_ms, $skip_confirm );
+		$this->sync_bulk( $dry_run, $batch_size, $skip_confirm );
 	}
 
 	private function sync_single_user( $user_ref, $dry_run ) {
@@ -121,17 +115,28 @@ class WPOJS_CLI {
 	}
 
 	/**
-	 * Bulk sync: processes members sequentially with a configurable delay.
+	 * Bulk sync: processes members sequentially with adaptive throttling.
 	 *
 	 * Sequential processing is intentional at ~700 members. Each user requires
 	 * 2 API calls (find-or-create + subscription upsert) and the OJS plugin
-	 * uses individual DB transactions per call. At this scale, sequential with
-	 * 500ms delay completes in ~12 minutes and avoids overwhelming OJS.
+	 * uses individual DB transactions per call.
+	 *
+	 * Adaptive throttling uses two signals to pace requests:
+	 * 1. OJS response time — if OJS slows down, WP backs off proportionally.
+	 * 2. OJS load protection — if OJS returns 429 with Retry-After, WP
+	 *    sleeps the requested duration before continuing.
+	 *
+	 * OJS self-monitors its own response times and pushes back (429) when
+	 * under load. No magic request counts or fixed windows.
 	 *
 	 * If the member count grows past ~10k, consider a batch find-or-create
 	 * endpoint on OJS to reduce the number of HTTP round-trips.
+	 *
+	 * @param bool $dry_run
+	 * @param int  $batch_size
+	 * @param bool $skip_confirm
 	 */
-	private function sync_bulk( $dry_run, $batch_size = 50, $delay_ms = 500, $skip_confirm = false ) {
+	private function sync_bulk( $dry_run, $batch_size = 50, $skip_confirm = false ) {
 		WP_CLI::log( 'Resolving active members (this may take a few minutes)...' );
 		$members = $this->resolver->get_all_active_members();
 		$total   = count( $members );
@@ -144,11 +149,7 @@ class WPOJS_CLI {
 		WP_CLI::log( sprintf( 'Found %d active members.', $total ) );
 
 		if ( ! $dry_run ) {
-			// Each user requires ~2 API calls (find-or-create + subscription).
-			// Estimate includes the configured delay plus ~1s overhead per call.
-			$per_user_secs = ( $delay_ms / 1000 ) + 1;
-			$eta_mins      = ceil( ( $total * $per_user_secs ) / 60 );
-			WP_CLI::log( sprintf( 'Estimated time: ~%d minutes (%dms delay per call).', $eta_mins, $delay_ms ) );
+			WP_CLI::log( 'Throttling: adaptive (response-time based, OJS load protection).' );
 		}
 
 		if ( $dry_run ) {
@@ -160,17 +161,23 @@ class WPOJS_CLI {
 			WP_CLI::confirm( sprintf( 'Proceed with syncing %d members to OJS?', $total ) );
 		}
 
-		$delay_us = $delay_ms * 1000; // Convert ms to microseconds for usleep().
-		$success    = 0;
-		$skipped    = 0;
-		$failed     = 0;
-		$start_time = microtime( true );
+		$success       = 0;
+		$skipped       = 0;
+		$failed        = 0;
+		$start_time    = microtime( true );
+		$total_delay   = 0;
+		$last_delay_ms = 0;
 
 		$progress = \WP_CLI\Utils\make_progress_bar( 'Syncing members', $total );
 
 		foreach ( $members as $index => $wp_user_id ) {
+			// Measure call duration for adaptive throttling.
+			$call_start = microtime( true );
+
 			// Bulk sync does NOT send welcome emails -- use send-welcome-emails after verifying.
 			$result = $this->sync->sync_user( $wp_user_id, $dry_run, false );
+
+			$call_ms = ( microtime( true ) - $call_start ) * 1000;
 
 			if ( $result['success'] ) {
 				$success++;
@@ -188,12 +195,22 @@ class WPOJS_CLI {
 
 			$progress->tick();
 
-			// Delay between API calls (not on dry run).
+			// Batch progress logging.
 			if ( ! $dry_run && ( $index + 1 ) % $batch_size === 0 ) {
-				WP_CLI::log( sprintf( '  Batch %d complete. Pausing...', ceil( ( $index + 1 ) / $batch_size ) ) );
+				$batch_num = ceil( ( $index + 1 ) / $batch_size );
+				WP_CLI::log( sprintf( '  Batch %d complete. Last call: %dms, delay: %dms.', $batch_num, (int) $call_ms, $last_delay_ms ) );
 			}
+
+			// Adaptive delay (not on dry run).
 			if ( ! $dry_run ) {
-				usleep( $delay_us );
+				$http_code    = isset( $result['code'] ) ? (int) $result['code'] : 0;
+				$retry_after  = isset( $result['retry_after'] ) ? (int) $result['retry_after'] : null;
+				$delay_ms     = $this->calculate_adaptive_delay( $call_ms, $result['success'], $http_code, $retry_after );
+				if ( $delay_ms > 0 ) {
+					usleep( (int) ( $delay_ms * 1000 ) );
+					$total_delay += $delay_ms;
+				}
+				$last_delay_ms = (int) $delay_ms;
 			}
 		}
 
@@ -201,13 +218,61 @@ class WPOJS_CLI {
 
 		$elapsed = microtime( true ) - $start_time;
 		WP_CLI::log( '' );
-		WP_CLI::log( sprintf( 'Results: %d synced, %d skipped, %d failed out of %d total. (%.0fs elapsed)', $success, $skipped, $failed, $total, $elapsed ) );
+		WP_CLI::log( sprintf(
+			'Results: %d synced, %d skipped, %d failed out of %d total. (%.0fs elapsed, %.0fs in throttle delays)',
+			$success, $skipped, $failed, $total, $elapsed, $total_delay / 1000
+		) );
 
 		if ( $failed > 0 ) {
 			WP_CLI::warning( sprintf( '%d members failed to sync. Check the sync log for details.', $failed ) );
 		} else {
 			WP_CLI::success( 'Bulk sync complete. Run "wp ojs-sync send-welcome-emails" to send invite emails.' );
 		}
+	}
+
+	/**
+	 * Calculate adaptive delay based on OJS response time and result.
+	 *
+	 * Two signals:
+	 * 1. Response time — OJS's own load indicator. Fast = idle, slow = busy.
+	 * 2. HTTP status — 429 with Retry-After from OJS load protection, or 5xx.
+	 *
+	 * @param float    $response_ms  How long the last API call took.
+	 * @param bool     $success      Whether the call succeeded.
+	 * @param int      $http_code    HTTP status code (0 = network error).
+	 * @param int|null $retry_after  Retry-After value from 429 response (seconds).
+	 * @return int Delay in milliseconds.
+	 */
+	private function calculate_adaptive_delay( $response_ms, $success = true, $http_code = 200, $retry_after = null ) {
+		// 429 — OJS load protection is telling us to slow down.
+		// Use the Retry-After header value (seconds → ms).
+		if ( $http_code === 429 ) {
+			$retry_s = $retry_after ? (int) $retry_after : 5;
+			return $retry_s * 1000;
+		}
+
+		// Server error or network failure — back off.
+		if ( $http_code === 0 || $http_code >= 500 ) {
+			return 5000;
+		}
+
+		// Other failure (4xx) — don't delay, the issue isn't load.
+		if ( ! $success ) {
+			return 0;
+		}
+
+		// OJS is idle — full speed ahead.
+		if ( $response_ms < 200 ) {
+			return 0;
+		}
+
+		// Light load — small courtesy delay.
+		if ( $response_ms < 500 ) {
+			return 100;
+		}
+
+		// Under load — mirror the response time as delay.
+		return (int) $response_ms;
 	}
 
 	/**
