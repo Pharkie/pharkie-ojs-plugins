@@ -35,7 +35,7 @@ hcloud server create --name my-server --type cpx22 --image ubuntu-24.04 \
 hcloud server rebuild --image ubuntu-24.04 my-server
 ```
 
-## Gotcha: SSH keys on rebuild
+## Good to know: SSH keys on rebuild
 
 `hcloud server rebuild` does **not** re-inject SSH keys from your Hetzner account. Use `--user-data-from-file` with cloud-init to inject your key:
 
