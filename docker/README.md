@@ -130,18 +130,6 @@ Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find act
 
 All three steps are idempotent — running `setup-wp.sh --with-sample-data` again skips already-imported data.
 
-### Bulk sync on Apple Silicon
-
-The OJS image is amd64-only and runs under Rosetta emulation, which is ~3–5x slower than native. Adaptive throttling handles this automatically — the sync monitors OJS response times and backs off when the server is under pressure. If some users fail, re-run with `--resume`:
-
-```bash
-# First run (creates OJS users — slower under emulation)
-docker compose exec wp wp ojs-sync sync --bulk --yes --allow-root
-
-# If interrupted, resume from checkpoint
-docker compose exec wp wp ojs-sync sync --bulk --resume --allow-root
-```
-
 ## Resetting OJS
 
 If OJS gets into a broken state (failed install, version change, corrupt DB), run:

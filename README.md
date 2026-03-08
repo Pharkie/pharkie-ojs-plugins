@@ -25,7 +25,7 @@ Bulk sync creates OJS accounts with WP password hashes — members log in to OJS
 
 ## Documentation
 
-**Start here:** [WP plugin reference](docs/wp-plugin-reference.md) and [OJS plugin reference](docs/ojs-plugin-reference.md) explain what each plugin does — hooks, sync actions, CLI commands, settings, auth, GDPR erasure, subscription logic.
+**Start here:** [WP plugin reference](docs/wp-plugin-reference.md) and [OJS plugin reference](docs/ojs-plugin-reference.md) explain what each plugin does — hooks, sync actions, auth, GDPR erasure, subscription logic. See also [WP-CLI reference](docs/wp-cli-reference.md) and [WP admin reference](docs/wp-admin-reference.md).
 
 **API** — [OJS API reference](docs/ojs-api.md) — all 13 custom endpoints with params, responses, error codes
 
