@@ -1,6 +1,6 @@
 # VPS Deployment Guide
 
-> **Server provisioning and deployment.** This guide covers the hardware side: server specs, scripts to provision and deploy, `.env` configuration, SSL, email, and testing. For how the Docker stack itself works (containers, volumes, plugins, credentials), see the [Docker stack reference](../docker/README.md). For installing the plugins on existing non-Docker servers, see [non-Docker setup](non-docker-setup.md).
+> Provision a remote server and deploy the Docker stack. For how the stack works (containers, setup, credentials), see the [Docker setup guide](../docker/README.md). For installing plugins without Docker, see [non-Docker setup](non-docker-setup.md).
 
 ---
 
