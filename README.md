@@ -28,7 +28,7 @@ Bulk sync creates OJS accounts with WP password hashes — members log in to OJS
 ## Documentation
 
 **Getting started** — pick your path:
-- [Run locally](docker/README.md) — Docker stack on your machine
+- [Run locally](docs/docker-setup.md) — Docker stack on your machine
 - [Deploy to a server](docs/vps-deployment.md) — provision a VPS, deploy the Docker stack
 - [Existing servers](docs/non-docker-setup.md) — install plugins without Docker
 
@@ -40,7 +40,7 @@ Bulk sync creates OJS accounts with WP password hashes — members log in to OJS
 
 ## Prerequisites
 
-> If you're just exploring, the [Docker setup](docker/README.md) runs the full stack locally with no external dependencies.
+> If you're just exploring, the [Docker setup](docs/docker-setup.md) runs the full stack locally with no external dependencies.
 
 - WordPress 5.6+, PHP 7.4+
 - WooCommerce + WooCommerce Subscriptions

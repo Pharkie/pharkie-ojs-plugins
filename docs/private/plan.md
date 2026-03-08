@@ -245,7 +245,7 @@ Individual sync actions (activate, expire, email_change, delete_user) are proces
 | OJS journals | One journal. Sync targets one journal ID. |
 | OJS self-registration | Enabled. Non-members need it for paywall purchases. |
 | OJS email | Transactional relay (Mailgun/SES/Postmark) required on OJS for password resets and editorial notifications. SPF/DKIM/DMARC must be configured. No longer a hard prerequisite for bulk sync (password hashes are synced instead of welcome emails). |
-| Docker dev environment | Running. WP (localhost:8080) with 727 anonymized test users, WooCommerce, Ultimate Member. OJS (localhost:8081) with 2 issues, 43 articles from live export. See `docker/README.md`. |
+| Docker dev environment | Running. WP (localhost:8080) with 727 anonymized test users, WooCommerce, Ultimate Member. OJS (localhost:8081) with 2 issues, 43 articles from live export. See `docs/docker-setup.md`. |
 | WP email uniqueness | Enforced at DB level. UM email changes require confirmation. |
 | WP users total | 1,418 users. 695 in membership roles + 1 manual = ~696 active members. |
 

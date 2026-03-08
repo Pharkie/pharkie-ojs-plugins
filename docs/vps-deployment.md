@@ -1,6 +1,10 @@
 # VPS Deployment Guide
 
-> Provision a remote server and deploy the Docker stack. For how the stack works (containers, setup, credentials), see the [Docker setup guide](../docker/README.md). For installing plugins without Docker, see [non-Docker setup](non-docker-setup.md).
+Two scripts handle everything: `init-vps.sh` creates the server (Hetzner), firewall, SSH config, and deploy key. `deploy.sh` clones the repo, builds images, starts the Docker stack, and runs setup. After that, day-to-day code updates are just `git pull` on the VPS — plugins are bind-mounted so PHP picks up changes immediately.
+
+For how the Docker stack works (containers, credentials, commands), see the [Docker setup guide](docker-setup.md). For installing plugins without Docker, see [non-Docker setup](non-docker-setup.md).
+
+Related: [Hetzner setup](hetzner-setup.md) · [Email setup](email-setup.md) · [WP plugin management](wp-plugin-management.md)
 
 ---
 
@@ -37,7 +41,7 @@ There are two phases: **init** (run once per server) and **deploy** (run every t
 
 | Script | Phase | What it does |
 |---|---|---|
-| `scripts/init-vps.sh` | Init | Creates server, firewall, SSH config, deploy key (Hetzner) |
+| `scripts/init-vps.sh` | Init | Creates server, firewall, SSH config, deploy key ([Hetzner](hetzner-setup.md)) |
 | `scripts/provision-vps.sh` | Init | Installs Docker on VPS (called by deploy.sh `--provision`) |
 | `scripts/deploy.sh` | Deploy | Pulls code, builds images, starts stack, runs setup |
 | `scripts/setup.sh` | Deploy | Configures WP + OJS inside running containers |
@@ -163,6 +167,27 @@ Use `deploy.sh` when:
 
 ---
 
+## Adding SSL (production)
+
+> SSL is optional for staging but required for production. Without HTTPS, API keys are sent in cleartext.
+
+When you have domains pointing at the server:
+
+1. Add DNS A records pointing to the server IP
+2. Set `CADDY_WP_DOMAIN` and `CADDY_OJS_DOMAIN` in `.env`
+3. Open ports 80 and 443 in the server firewall
+4. Start with the Caddy overlay:
+   ```bash
+   ssh your-server "cd /opt/wp-ojs-sync && \
+     docker compose -f docker-compose.yml \
+       -f docker-compose.staging.yml \
+       -f docker-compose.caddy.yml up -d"
+   ```
+
+Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
+
+---
+
 ## Testing a deployment
 
 ### Smoke tests
@@ -216,144 +241,6 @@ Pass criteria: p95 latency <= 2000ms, zero server errors. Reports peak CPU load 
 
 ---
 
-## Managing WP plugins
-
-WordPress uses [Bedrock](https://roots.io/bedrock/), which manages plugins via Composer instead of the WP admin installer. Plugins not in `wordpress/composer.json` won't exist after a fresh deploy — `composer install` is what populates the plugins directory.
-
-### Adding a free plugin (from wordpress.org)
-
-Add to `wordpress/composer.json`:
-
-```json
-"require": {
-    "wpackagist-plugin/plugin-name": "^1.0",
-    ...
-}
-```
-
-Then run `composer update` inside the WP container:
-
-```bash
-ssh your-server "cd /opt/wp-ojs-sync && \
-  docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  exec wp composer update --no-dev --working-dir=/var/www/html"
-```
-
-Or commit the updated `composer.json` + `composer.lock` and `git pull` on the VPS.
-
-### Adding a paid plugin (not on wpackagist)
-
-Paid plugins can't be pulled from a public registry. Instead:
-
-1. Drop the plugin folder in `wordpress/paid-plugins/`
-2. Add a `path` repository in `wordpress/composer.json`:
-   ```json
-   "repositories": [
-       {
-           "type": "path",
-           "url": "paid-plugins/my-paid-plugin",
-           "options": { "symlink": false }
-       }
-   ]
-   ```
-3. Add the `require` entry:
-   ```json
-   "require": {
-       "vendor/my-paid-plugin": "1.0.0",
-       ...
-   }
-   ```
-4. `rsync` the paid plugins to the VPS (the deploy script does this automatically if they exist locally)
-
-See the existing entries for WooCommerce Subscriptions and WooCommerce Memberships as examples.
-
-### Important for production
-
-Any plugin active on the live WP site must be added to `composer.json` before production deployment. If it's missing, the plugin won't be installed and anything depending on it will break. Audit the live plugin list against `composer.json` before going live.
-
----
-
-> **SSL is optional for staging** but required for production. Without HTTPS, API keys are sent in cleartext.
-
-## Adding SSL (production)
-
-When you have domains pointing at the server:
-
-1. Add DNS A records pointing to the server IP
-2. Set `CADDY_WP_DOMAIN` and `CADDY_OJS_DOMAIN` in `.env`
-3. Open ports 80 and 443 in the server firewall
-4. Start with the Caddy overlay:
-   ```bash
-   ssh your-server "cd /opt/wp-ojs-sync && \
-     docker compose -f docker-compose.yml \
-       -f docker-compose.staging.yml \
-       -f docker-compose.caddy.yml up -d"
-   ```
-
-Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
-
----
-
-> **Email is not required for the sync to work.** Members log in with their WP password (synced via hash). Email is needed for OJS editorial workflows (password resets, reviewer notifications, etc.).
-
-## Email setup
-
-Both OJS and WP need to send transactional emails (password resets, editorial notifications). Docker containers can't send email directly — you need an external SMTP relay. Note: email is no longer a prerequisite for bulk sync (password hashes are synced instead of welcome emails).
-
-Hetzner blocks port 25 (outbound SMTP) by default, but port 587 (submission with TLS) works fine, which is what all transactional email services use.
-
-### Recommended: Resend
-
-[Resend](https://resend.com) — modern transactional email service, built on Amazon SES. 3,000 emails/month free (100/day). Clean API, good docs, supports standard SMTP so it works with OJS's built-in config without code changes.
-
-Other options:
-
-| Service | Free tier | Notes |
-|---|---|---|
-| **Postmark** | 100 emails/month | Best deliverability reputation |
-| **Mailgun** | 1,000 emails/month (first 3 months) | Flexible, good logs |
-| **Brevo** (ex-Sendinblue) | 300 emails/day | Generous free tier |
-| **Amazon SES** | ~$0.10 per 1,000 | Cheapest at scale, more setup |
-
-For ~700 members with occasional password resets and editorial notifications, any of these work.
-
-### OJS email configuration
-
-OJS SMTP is configured via `.env` — the plumbing is already in docker-compose.yml:
-
-```
-OJS_SMTP_ENABLED=On
-OJS_SMTP_HOST=smtp.resend.com
-OJS_SMTP_PORT=587
-OJS_SMTP_AUTH=tls
-OJS_SMTP_USER=resend
-OJS_SMTP_PASSWORD=re_your_api_key_here
-OJS_MAIL_FROM=journal@yourdomain.org
-```
-
-### WP email configuration
-
-WP email is typically handled by an SMTP plugin (WP Mail SMTP, FluentSMTP, etc.) pointed at the same service. If the live WP already sends email via a relay, reuse those credentials.
-
-### DNS records (required for deliverability)
-
-Add these DNS records for your sending domain:
-
-- **SPF** — `TXT` record authorizing the service to send on your behalf
-- **DKIM** — `TXT` record for cryptographic email signing
-- **DMARC** — `TXT` record with your policy (start with `p=none`)
-
-Each service provides the exact records to add. Without these, emails land in spam.
-
-### Testing email delivery
-
-Test before going live:
-
-1. Send a password reset to yourself — check it arrives, check spam score
-2. Verify DKIM passes (Gmail: "Show original" → look for `dkim=pass`)
-
----
-
 ## Useful commands
 
 All commands assume SSH access to the VPS. Replace `your-server` with your SSH host alias.
@@ -380,7 +267,7 @@ ssh your-server "cd /opt/wp-ojs-sync && \
 
 ---
 
-> **Read this section before your first deploy.** These are real issues we hit during staging -- they'll save you time.
+> **Read this section before your first deploy.** These are real issues we hit during staging — they'll save you time.
 
 ## Gotchas
 
@@ -389,73 +276,8 @@ ssh your-server "cd /opt/wp-ojs-sync && \
 - **First image build takes ~3 minutes** on a 3 vCPU VPS (compiling PHP extensions). Subsequent builds use Docker cache.
 - **OJS base image is amd64 only.** ARM servers won't work (`platform: linux/amd64` in compose).
 - **Composer install runs automatically** on first WP setup when WordPress core files are missing (Bedrock downloads WP core + plugins via Composer).
-- **Paid plugins must be copied separately** — licensed code can't be in a public git repo. Use `rsync` to sync `wordpress/paid-plugins/` to the VPS before running setup.
+- **Paid plugins must be copied separately** — licensed code can't be in a public git repo. Use `rsync` to sync `wordpress/paid-plugins/` to the VPS before running setup. See [WP plugin management](wp-plugin-management.md).
 - **`scp` creates files with 600 permissions.** Apache/www-data can't read them. The deploy script runs `chmod 644` on `.env` automatically. Do not change this to 600 — WP-CLI (root) will work but the web server won't, and you'll only catch it via the smoke test's admin page check.
 - **No default passwords.** `WP_ADMIN_PASSWORD` and `OJS_ADMIN_PASSWORD` must be set in `.env`. Both `docker-compose.yml` and the setup scripts fail loudly if they're missing or empty. The deploy script validates all required env vars before starting containers.
 - **Bulk sync is a manual step.** After setup, existing WP members are not automatically synced to OJS. Run `wp ojs-sync sync --bulk --dry-run` to preview, then `wp ojs-sync sync --bulk --yes` to execute (~5-10 min for ~700 members). The `--bulk` flag is required to prevent accidental full sync. This is deliberate — it's a one-time operation that should be reviewed before running.
 - **HPOS and sample data.** When loading sample data (`--with-sample-data`), the setup script temporarily disables HPOS (High-Performance Order Storage), seeds subscriptions via raw SQL into `wp_posts`, then syncs to HPOS and re-enables it. Without this, WooCommerce can't see the seeded subscriptions.
-
----
-
-## Provider notes: Hetzner Cloud (recommended)
-
-We use [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging and production. Good value, EU data centres, straightforward API.
-
-### Recommended plan
-
-**CPX22** — 3 vCPU (AMD), 4 GB RAM, 80 GB SSD. Runs the full stack comfortably with headroom for sync operations and traffic spikes. ~7 EUR/month.
-
-### Quick start with init-vps.sh
-
-`scripts/init-vps.sh` automates the full Hetzner setup: SSH key, server creation, firewall, SSH config, and GitHub deploy key.
-
-```bash
-# Requires hcloud CLI and HCLOUD_TOKEN env var
-scripts/init-vps.sh --name=my-server
-
-# With SSL ports (production)
-scripts/init-vps.sh --name=my-server --ssl
-
-# Custom server type or location
-scripts/init-vps.sh --name=my-server --type=cpx32 --location=fsn1
-```
-
-### Manual hcloud commands (reference)
-
-If you prefer to set up manually or need to manage existing servers:
-
-```bash
-# Upload SSH key
-hcloud ssh-key create --name my-key --public-key-from-file ~/.ssh/my-key.pub
-
-# Create server
-hcloud server create --name my-server --type cpx22 --image ubuntu-24.04 \
-  --location nbg1 --ssh-key my-key
-
-# Rebuild server (wipes everything, fresh OS)
-hcloud server rebuild --image ubuntu-24.04 my-server
-```
-
-### Hetzner gotcha
-
-`hcloud server rebuild` does **not** re-inject SSH keys from your Hetzner account. Use `--user-data-from-file` with cloud-init to inject your key:
-
-```bash
-hcloud server rebuild --image ubuntu-24.04 \
-  --user-data-from-file <(cat <<EOF
-#cloud-config
-ssh_authorized_keys:
-  - $(cat ~/.ssh/my-key.pub)
-EOF
-) my-server
-```
-
-### Locations
-
-| Code | Location |
-|---|---|
-| `nbg1` | Nuremberg, Germany |
-| `fsn1` | Falkenstein, Germany |
-| `hel1` | Helsinki, Finland |
-| `ash` | Ashburn, USA |
-| `hil` | Hillsboro, USA |

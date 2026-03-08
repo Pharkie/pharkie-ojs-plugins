@@ -2,9 +2,9 @@
 
 How to install and configure the WP-OJS integration on servers where OJS and WordPress are running natively.
 
-For Docker-based setup, see [`docker/README.md`](../docker/README.md).
+For Docker-based setup, see [Docker setup guide](docker-setup.md).
 
-> **This guide is for production/staging servers** where OJS and WordPress are already installed and running natively (not in Docker). If you're setting up a development environment, use the [Docker setup](../docker/README.md) instead — it's much simpler.
+> **This guide is for production/staging servers** where OJS and WordPress are already installed and running natively (not in Docker). If you're setting up a development environment, use the [Docker setup](docker-setup.md) instead — it's much simpler.
 
 ---
 
