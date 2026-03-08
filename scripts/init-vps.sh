@@ -73,12 +73,19 @@ else
   echo "[ok] SSH key created."
 fi
 
-# Upload to Hetzner (idempotent — fails gracefully if exists)
+# Upload to Hetzner (idempotent — skip if already exists)
 if hcloud ssh-key describe "$SSH_KEY_NAME" &>/dev/null; then
   echo "[ok] SSH key '$SSH_KEY_NAME' already in Hetzner."
 else
-  hcloud ssh-key create --name "$SSH_KEY_NAME" --public-key-from-file "${SSH_KEY_PATH}.pub"
-  echo "[ok] SSH key uploaded to Hetzner."
+  hcloud ssh-key create --name "$SSH_KEY_NAME" --public-key-from-file "${SSH_KEY_PATH}.pub" 2>&1 || {
+    # Key may exist under a different name (uniqueness_error) — that's fine
+    if hcloud ssh-key list -o noheader | grep -q "$(ssh-keygen -lf "${SSH_KEY_PATH}.pub" | awk '{print $2}')"; then
+      echo "[ok] SSH key already in Hetzner (different name)."
+    else
+      echo "ERROR: Failed to upload SSH key."
+      exit 1
+    fi
+  }
 fi
 echo ""
 
@@ -103,21 +110,25 @@ else
     --ssh-key "$SSH_KEY_NAME"
   SERVER_IP=$(hcloud server ip "$SERVER_NAME")
   echo "[ok] Server created."
-
-  # Clear any stale host key for this IP (common when IP is recycled)
-  ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_IP" 2>/dev/null || true
-
-  # Wait for SSH to become available
-  echo "Waiting for SSH..."
-  for i in $(seq 1 30); do
-    if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "root@$SERVER_IP" "true" 2>/dev/null; then
-      break
-    fi
-    sleep 2
-  done
-  echo "[ok] SSH is up."
 fi
 echo "  IP: $SERVER_IP"
+
+# Clear any stale host key for this IP (common when IP is recycled)
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_IP" 2>/dev/null || true
+
+# Wait for SSH to become available (always — server may have just been created)
+echo "Waiting for SSH..."
+for i in $(seq 1 30); do
+  if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "root@$SERVER_IP" "true" 2>/dev/null; then
+    echo "[ok] SSH is up."
+    break
+  fi
+  if [ "$i" = "30" ]; then
+    echo "ERROR: SSH not available after 60s."
+    exit 1
+  fi
+  sleep 2
+done
 echo ""
 
 # --- Step 3: Firewall ---
