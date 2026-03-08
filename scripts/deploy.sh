@@ -84,7 +84,7 @@ fi
 $SSH_CMD "chmod 600 $REMOTE_DIR/.env"
 
 # Validate required env vars are set (catch blank passwords before compose fails with a cryptic error)
-MISSING=$($SSH_CMD "cd $REMOTE_DIR && . .env && for VAR in WP_ADMIN_PASSWORD OJS_ADMIN_PASSWORD WP_DB_PASSWORD DB_PASSWORD OJS_DB_PASSWORD WPOJS_API_KEY WPOJS_API_KEY_SECRET; do eval VAL=\\\$\$VAR; [ -z \"\$VAL\" ] && echo \$VAR; done")
+MISSING=$($SSH_CMD "cd $REMOTE_DIR && for VAR in WP_ADMIN_PASSWORD OJS_ADMIN_PASSWORD WP_DB_PASSWORD DB_PASSWORD OJS_DB_PASSWORD WPOJS_API_KEY WPOJS_API_KEY_SECRET; do grep -qE \"^\${VAR}=.+\" .env || echo \$VAR; done")
 if [ -n "$MISSING" ]; then
   echo ""
   echo "ERROR: Required variables missing or empty in $SSH_HOST:$REMOTE_DIR/.env:"
