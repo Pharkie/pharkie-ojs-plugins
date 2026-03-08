@@ -2,7 +2,9 @@
 
 `docker-compose.yml` (in the project root) runs four containers — WordPress + MariaDB, OJS + MariaDB — on a shared network so WP can call OJS endpoints directly. Setup scripts (`setup-wp.sh`, `setup-ojs.sh`) run after containers start to create the journal, configure subscriptions, activate plugins, and optionally import sample data. Both plugins are bind-mounted from `plugins/` so edits are reflected immediately. All config comes from `.env`.
 
-The same stack works locally, on staging, and in production — only the `.env` and compose overrides differ. For deploying to a VPS, see [VPS deployment](vps-deployment.md). For installing plugins without Docker, see [non-Docker setup](non-docker-setup.md).
+The same stack works locally, on staging, and in production — only the `.env` and compose overrides differ.
+
+For deploying to a VPS, see [VPS deployment](vps-deployment.md). For installing plugins without Docker, see [non-Docker setup](non-docker-setup.md).
 
 ## Getting started
 

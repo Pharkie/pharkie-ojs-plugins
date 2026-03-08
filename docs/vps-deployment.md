@@ -241,32 +241,6 @@ Pass criteria: p95 latency <= 2000ms, zero server errors. Reports peak CPU load 
 
 ---
 
-## Useful commands
-
-All commands assume SSH access to the VPS. Replace `your-server` with your SSH host alias.
-
-```bash
-# View logs (all containers)
-ssh your-server "cd /opt/wp-ojs-sync && \
-  docker compose -f docker-compose.yml -f docker-compose.staging.yml logs -f --tail=50"
-
-# Check container status
-ssh your-server "cd /opt/wp-ojs-sync && \
-  docker compose -f docker-compose.yml -f docker-compose.staging.yml ps"
-
-# Run WP-CLI commands
-ssh your-server "cd /opt/wp-ojs-sync && \
-  docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  exec wp wp --allow-root ojs-sync status"
-
-# Access OJS database
-ssh your-server "cd /opt/wp-ojs-sync && \
-  docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  exec ojs-db mysql -u ojs -p ojs"
-```
-
----
-
 > **Read this section before your first deploy.** These are real issues we hit during staging — they'll save you time.
 
 ## Gotchas
