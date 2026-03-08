@@ -22,11 +22,12 @@ The sync plugin detects WP email changes and updates OJS automatically. If it di
 1. Check the sync log for `email_change` entries.
 2. If the new email already existed on OJS (409 conflict), the sync will have failed. Manually update the OJS user's email in OJS Admin → Users & Roles → Edit User.
 
-### "I never received the welcome email"
+### "I can't log in to the journal"
 
-1. Check OJS email configuration (SMTP relay, SPF/DKIM).
-2. Resend via CLI: `wp ojs-sync sync --member=<email>` — this will re-trigger find-or-create (idempotent) and won't duplicate the user.
-3. The member can also use OJS's "Forgot Password" link directly.
+1. Members log in with their WP (membership) email and password. No separate OJS password setup needed.
+2. Verify the member has an OJS account: `wp ojs-sync sync --member=<email>` (idempotent — safe to re-run, won't duplicate).
+3. If they've changed their WP password since the last sync, re-sync to push the new hash: `wp ojs-sync sync --member=<email>`.
+4. The member can also use OJS's "Forgot Password" link as a fallback.
 
 ---
 
@@ -40,9 +41,7 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 | `wp ojs-sync status` | Show sync stats: total synced, pending, failed, last reconciliation. |
 | `wp ojs-sync sync --dry-run` | Preview what bulk sync would do (no changes). |
 | `wp ojs-sync sync` | Run bulk sync for all active members. |
-| `wp ojs-sync sync --member=<id or email>` | Sync a single member (sends welcome email if new). |
-| `wp ojs-sync send-welcome-emails --dry-run` | Preview how many welcome emails would be sent. |
-| `wp ojs-sync send-welcome-emails` | Send welcome emails to all synced users who haven't received one. |
+| `wp ojs-sync sync --member=<id or email>` | Sync a single member (sends WP password hash). |
 | `wp ojs-sync reconcile` | Run reconciliation now (compare WP ↔ OJS, fix drift). |
 
 ---
@@ -107,15 +106,13 @@ OJS has its own password system, independent of WordPress. If a member can't log
 2. They'll receive a password reset email from OJS (not WP).
 3. If OJS email isn't working, an OJS admin can reset the password manually: OJS Admin → Users & Roles → Edit User → Password.
 
-### Welcome email customization
+### Login hint customization
 
-The welcome ("set your password") email uses OJS's built-in `PasswordResetRequested` mailable:
+The OJS login page shows a hint message ("Member? Log in with your membership email and password."). To customize:
 
-1. Go to OJS Admin → Workflow → Emails.
-2. Search for "PasswordResetRequested".
-3. Edit the subject and body as needed. Available variables: `{$recipientName}`, `{$passwordResetUrl}`.
-
-The password reset token expiry is configured via `password_reset_timeout` in OJS `config.inc.php` (set to 7 days for bulk welcome emails).
+1. Go to OJS → Settings → Website → Plugins → WP-OJS Subscription API → Settings.
+2. Edit the login hint, paywall hint, and footer message as needed.
+3. Or set `WPOJS_DEFAULT_LOGIN_HINT` in the `.env` file and re-run setup.
 
 ### Daily digest shows failures
 

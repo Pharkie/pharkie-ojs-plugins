@@ -68,7 +68,7 @@ Six plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with in
 
 ```php
 // Subscription activated (new signup or reactivation)
-// → Queue: find-or-create OJS user + create/renew subscription + welcome email (if new user)
+// → Queue: find-or-create OJS user (with WP password hash) + create/renew subscription
 add_action('woocommerce_subscription_status_active', 'wpojs_queue_activate');
 
 // Subscription expired

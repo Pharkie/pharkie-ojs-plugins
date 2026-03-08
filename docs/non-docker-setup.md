@@ -179,15 +179,7 @@ wp ojs-sync sync
 wp ojs-sync status
 ```
 
-### 5. Send welcome emails (when ready)
-
-```bash
-# Dry run — see how many emails would be sent
-wp ojs-sync send-welcome-emails --dry-run
-
-# Send emails — OJS dedup prevents duplicates, safe to re-run
-wp ojs-sync send-welcome-emails
-```
+Members can now log in to OJS with their WP email and password — no welcome emails or password setup needed.
 
 ---
 

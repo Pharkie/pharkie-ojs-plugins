@@ -329,7 +329,7 @@ Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
 
 ## Email setup
 
-Both OJS and WP need to send transactional emails (welcome emails, password resets). Docker containers can't send email directly — you need an external SMTP relay.
+Both OJS and WP need to send transactional emails (password resets, editorial notifications). Docker containers can't send email directly — you need an external SMTP relay. Note: email is no longer a prerequisite for bulk sync (password hashes are synced instead of welcome emails).
 
 Hetzner blocks port 25 (outbound SMTP) by default, but port 587 (submission with TLS) works fine, which is what all transactional email services use.
 
@@ -346,7 +346,7 @@ Other options:
 | **Brevo** (ex-Sendinblue) | 300 emails/day | Generous free tier |
 | **Amazon SES** | ~$0.10 per 1,000 | Cheapest at scale, more setup |
 
-For ~700 members getting one-time welcome emails plus occasional password resets, any of these work.
+For ~700 members with occasional password resets and editorial notifications, any of these work.
 
 ### OJS email configuration
 
@@ -376,14 +376,12 @@ Add these DNS records for your sending domain:
 
 Each service provides the exact records to add. Without these, emails land in spam.
 
-### Testing before bulk send
+### Testing email delivery
 
-The welcome email goes to all ~700 members at once. Test carefully:
+Test before going live:
 
-1. Send to yourself first — check it arrives, check spam score
+1. Send a password reset to yourself — check it arrives, check spam score
 2. Verify DKIM passes (Gmail: "Show original" → look for `dkim=pass`)
-3. Send to a small batch (5-10 members)
-4. Then send the full batch: `wp ojs-sync send-welcome-emails`
 
 ---
 
