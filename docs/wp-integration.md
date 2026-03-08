@@ -193,7 +193,7 @@ WP-CLI command only (not admin button — avoids HTTP timeouts). See [`plan.md`]
 ```php
 // Core query for bulk sync:
 $subscriptions = wcs_get_subscriptions(['subscription_status' => 'active']);
-// Then iterate in batches of 50 with 500ms delay between API calls
+// Then iterate in batches of 50 with adaptive throttling between API calls
 ```
 
 `wcs_get_subscriptions()` is the WooCommerce Subscriptions helper function for querying subscriptions.

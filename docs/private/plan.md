@@ -417,7 +417,7 @@ The WP plugin's critical logic is the queue state machine, multi-subscription re
 |---|---|
 | Bulk sync re-run → already-synced users skipped (via usermeta) | Resume capability |
 | Bulk sync dry-run → no HTTP calls, correct count reported | Dry-run safety |
-| Bulk sync batching → 50 users per batch, 500ms delay between calls | Pacing |
+| Bulk sync batching → 50 users per batch, adaptive throttling | Pacing |
 | Reconciliation: active WCS user with no OJS subscription → queues activate | Drift detection |
 | Reconciliation: expired WCS user with active OJS subscription → queues expire | Drift detection (reverse) |
 | Reconciliation: manual role member included | Non-WCS members detected |
