@@ -2,6 +2,8 @@
 
 Last updated: 2026-03-08
 
+> **What is this?** Before building anything, we evaluated several approaches to syncing membership data between WordPress and OJS. This document records what we tried, what we found, and why most options were eliminated. The winning approach — **push-sync** — is what this project implements.
+
 This document records the research phase: what approaches were evaluated, what was found, and why options were eliminated. For the forward-looking implementation plan, see [`plan.md`](./private/plan.md).
 
 ---
@@ -141,6 +143,9 @@ Consider switching if the OJS 3.5 upgrade takes more than 2 weeks or the custom 
 
 ---
 
+<details>
+<summary>Appendix: Test data seeding (dev environment only)</summary>
+
 ## Test data seeding: role assignment approach
 
 **Decision (2026-02-21):** Use direct SQL (`wp eval-file`) for assigning UM/WCS roles to test users.
@@ -176,3 +181,5 @@ The anonymise script (`docker/anonymize-users.py`) maps all non-builtin roles to
 - **Direct SQL is appropriate** because we're seeding known-good test data, not modifying live user state. The roles are read from the original export.
 - **UM roles don't have special capabilities** beyond what WP stores in `wp_capabilities`. The serialized format `a:1:{s:16:"um_custom_role_1";b:1;}` is all WP needs.
 - **No hooks needed.** Test users don't need UM profile metadata, WCS subscription records, or other side effects that `wp user set-role` would trigger. Those are irrelevant for testing the OJS sync.
+
+</details>

@@ -1,6 +1,10 @@
 # WP-CLI Reference: wpojs-sync
 
+> **What is WP-CLI?** [WP-CLI](https://wp-cli.org/) is the command-line tool for managing WordPress. These commands run on the server (or inside the Docker container) — not from your browser. In the Docker setup: `docker compose exec wp wp ojs-sync <command>`
+
 All commands are under the `wp ojs-sync` namespace.
+
+> **Most common commands:** `test-connection` (verify OJS is reachable), `status` (check sync health), `sync --member=email` (sync one person).
 
 ## sync
 

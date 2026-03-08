@@ -1,5 +1,7 @@
 # Docker Setup
 
+> **This is the recommended way to run the project** for development and staging. Everything runs in containers — no need to install PHP, MySQL, or OJS on your machine.
+
 For non-Docker setup, see [`docs/non-docker-setup.md`](../docs/non-docker-setup.md).
 
 ## Architecture
@@ -42,7 +44,7 @@ The main `docker-compose.yml` lives in the **project root** (not this directory)
 
 **WordPress** uses a Bedrock layout (see below). The `wpojs-sync` plugin is bind-mounted from `plugins/wpojs-sync/` into the WP plugins directory, so edits are reflected immediately.
 
-**OJS** starts from the official `pkpofficial/ojs:3_5_0-3` image. On first boot, the custom entrypoint generates `config.inc.php` from a template (substituting env vars), then OJS auto-installs (creates tables, admin user). The `wpojs-subscription-api` plugin is bind-mounted into OJS's generic plugins directory. A second bind mount maps the plugin's `api/v1/wpojs/` route handlers into OJS's top-level `api/` directory — this is required because OJS resolves API routes from that path, not from the plugin folder.
+**OJS** starts from an official OJS Docker image. The first time you start it, it automatically sets up its database and creates an admin account — no manual install wizard needed. The custom `wpojs-subscription-api` plugin is mounted into the container from your local `plugins/` folder, just like the WP plugin. OJS also needs the plugin's API route files copied into a specific location (`api/v1/wpojs/`) — Docker Compose handles this automatically via a bind mount.
 
 Setup scripts (`setup-wp.sh`, `setup-ojs.sh`) run after containers are up to create the journal, configure subscription types, activate plugins, and optionally import sample data. See [Getting started](#getting-started) below.
 
@@ -71,6 +73,8 @@ docker compose exec ojs bash /scripts/setup-ojs.sh --with-sample-data
 | OJS | http://localhost:8081 | http://ojs:80 |
 | OJS journal | http://localhost:8081/index.php/journal | http://ojs:80/index.php/journal |
 | OJS API (from WP) | — | http://ojs:80/index.php/journal/api/v1/wpojs/... |
+
+> **All passwords are randomly generated** — there are no default passwords. If you haven't run `scripts/generate-env.sh` yet, the setup scripts will do it automatically.
 
 ## Credentials (local dev)
 
@@ -146,6 +150,8 @@ Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find act
 
 All three steps are idempotent — running `setup-wp.sh --with-sample-data` again skips already-imported data.
 
+> **When in doubt, reset.** OJS stores state in three places (database, code volume, config file). If any one is stale, things break in confusing ways. This script handles all three.
+
 ## Resetting OJS
 
 If OJS gets into a broken state (failed install, version change, corrupt DB), run:
@@ -164,6 +170,8 @@ This handles everything in one shot:
 **Why all three steps matter:** OJS has state in three places — the database, the code volume (`ojs_data`), and `config.inc.php` (inside `ojs_data`). If any one of these is stale, the install will fail. The reset script handles all three.
 
 **Changing OJS image version:** Docker does not update named volumes when you change image tags. If you change the OJS image in `docker-compose.yml`, you **must** run `./docker/reset-ojs.sh` — otherwise the old code stays in the volume and you get a version mismatch.
+
+> **Live editing works out of the box.** Both plugins are mounted from your local filesystem — save a file and refresh the browser.
 
 ## Bind-mounted plugins
 

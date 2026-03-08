@@ -1,5 +1,7 @@
 # WP Plugin Reference: wpojs-sync
 
+> **Who is this for?** Developers maintaining the WP plugin or debugging sync issues. For day-to-day admin tasks, see the [admin reference](wp-admin-reference.md). For CLI commands, see the [CLI reference](wp-cli-reference.md).
+
 ## Overview
 
 The `wpojs-sync` plugin pushes WooCommerce Subscription membership data from WordPress to OJS (Open Journal Systems). When a member purchases, renews, cancels, or expires a subscription in WooCommerce, the plugin automatically creates/updates their OJS user account and journal subscription via the OJS plugin's REST API. All sync operations are processed asynchronously through Action Scheduler.
@@ -7,6 +9,8 @@ The `wpojs-sync` plugin pushes WooCommerce Subscription membership data from Wor
 Members are determined by two paths: active WooCommerce Subscriptions (product-based) and WordPress roles (manually assigned, e.g. committee members). Both paths result in the same OJS subscription creation.
 
 See also: [CLI reference](wp-cli-reference.md) · [Admin reference](wp-admin-reference.md)
+
+> **How sync works in a nutshell:** When a WooCommerce subscription changes status (new, renewed, cancelled, expired), the plugin queues an async job via Action Scheduler. The job calls the OJS API to create/update/expire the member's journal access. Nothing happens inline during checkout — the queue handles everything in the background.
 
 ## WP hooks
 
@@ -73,6 +77,8 @@ The password hash is sent so members can log into OJS with their existing WP pas
 4. Anonymizes all sync log entries for the user (GDPR compliance)
 
 **OJS API call:** `DELETE /wpojs/users/{userId}`
+
+> **Key principle:** Permanent failures (bad email, missing user) are logged and stop. Transient failures (OJS down, network timeout) are retried automatically by Action Scheduler.
 
 ### Error handling
 

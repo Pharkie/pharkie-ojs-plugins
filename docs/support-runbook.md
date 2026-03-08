@@ -2,6 +2,8 @@
 
 Quick reference for support staff handling member access issues.
 
+> **No technical background needed** for the first three sections (common scenarios, admin pages, retry). The troubleshooting section at the bottom is more technical — skip it unless the simple steps didn't help.
+
 ---
 
 ## Common scenarios
@@ -21,6 +23,8 @@ The sync plugin detects WP email changes and updates OJS automatically. If it di
 
 1. Check the sync log for `email_change` entries.
 2. If the new email already existed on OJS (409 conflict), the sync will have failed. Manually update the OJS user's email in OJS Admin → Users & Roles → Edit User.
+
+> **Most common issue.** Members don't realize they use their WordPress (membership site) password for the journal — not a separate OJS password.
 
 ### "I can't log in to the journal"
 
@@ -63,6 +67,8 @@ All commands must be run on the WP server (or via SSH). Prefix with `--allow-roo
 - **Users**: OJS Admin Dashboard → Users & Roles. Search by email to check if a synced user exists.
 
 ---
+
+> **Safe to retry.** All sync operations are idempotent — retrying won't create duplicates or break anything.
 
 ## Retry a failed sync
 
@@ -126,6 +132,8 @@ The digest email fires once per day if there were any sync failures in the last 
 
 OJS Admin Dashboard → Settings → Website → Plugins tab → Installed Plugins → Generic Plugins → WP–OJS Subscription API → Status. Shows recent API requests, config health checks, and sync stats. Log entries older than 30 days are automatically cleaned up.
 
+> **Edge case — rare.** This only matters if an email change sync failed AND the member had an existing OJS account under their old email.
+
 ### Email change retry falls back to full sync
 
 When retrying a failed `email_change` sync entry, the system falls back to a full `activate` sync (find-or-create user + subscription) because the log entry doesn't store the old/new email pair. This is correct behaviour — the retry will ensure the user has an active OJS account and subscription using their current WP email — but it won't rename an existing OJS account from old email to new email. If the member had an OJS account under their old email, that account will remain with the old email and a new account will be created with the current email.
@@ -133,6 +141,8 @@ When retrying a failed `email_change` sync entry, the system falls back to a ful
 **What to tell the member:** Their access should work with their current email. If they had content/history under the old email in OJS, an admin may need to manually merge or clean up the old account in OJS.
 
 **If a duplicate OJS account was created:** In OJS Admin → Users & Roles, search for the member's old email. Disable or delete the old account (only delete if it has no submission history). The member's current account (under their new email) should already have an active subscription.
+
+> **Manual intervention required.** This is the one failure type that can't be automatically retried.
 
 ### Delete user retry not available
 
@@ -184,6 +194,8 @@ GET {ojs-base-url}/api/v1/wpojs/ping
 - If this returns 200 but `wp ojs-sync test-connection` fails on preflight, the issue is authentication or IP allowlisting (not reachability).
 
 ---
+
+> **For IT / server admins only.** Support staff can skip this section.
 
 ## Email security note
 

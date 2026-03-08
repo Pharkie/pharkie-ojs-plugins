@@ -1,6 +1,10 @@
 # OJS API Reference
 
-REST API exposed by the `wpojs-subscription-api` OJS plugin. All endpoints are under `/api/v1/wpojs/`.
+This is the REST API exposed by the custom OJS plugin (`wpojs-subscription-api`). The WP plugin calls these endpoints to sync membership data — you don't need to call them manually unless you're debugging or building custom integrations.
+
+> **Not the native OJS API.** OJS has its own REST API for submissions, issues, and users — but it has no subscription endpoints. This custom plugin fills that gap. See [OJS internals](ojs-internals.md) for the native API.
+
+All endpoints are under `/api/v1/wpojs/`.
 
 Base URL: `{OJS_BASE_URL}/index.php/{journal_path}/api/v1/wpojs`
 
@@ -35,6 +39,8 @@ All errors return JSON: `{"error": "description"}` with appropriate HTTP status:
 | `409` | Email conflict (update email) |
 | `429` | Server under load (retry after delay) |
 | `500` | Internal error |
+
+> **Trying to connect?** Run `wp ojs-sync test-connection` from the WP server to verify connectivity. See the [support runbook](support-runbook.md) if something fails.
 
 ## Endpoints
 

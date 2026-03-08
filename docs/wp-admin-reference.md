@@ -1,5 +1,7 @@
 # WP Admin Reference: wpojs-sync
 
+> **This is the admin UI guide** -- what you see in WordPress admin. For CLI commands, see [WP-CLI reference](wp-cli-reference.md). For how the plugin works internally, see [WP plugin reference](wp-plugin-reference.md).
+
 ## Settings page
 
 Located at **OJS Sync > Settings** in WP admin. Requires `manage_options` capability.
@@ -38,6 +40,8 @@ The settings page also displays:
 - **WP Server IP** -- the IP that OJS sees (for allowlist configuration)
 - **Sync Queue link** -- direct link to Action Scheduler filtered to `wpojs` actions
 
+> **This is your main monitoring tool.** Check the sync log regularly -- if things are working, you'll see a stream of green "success" entries. Red entries need attention.
+
 ## Sync log
 
 Located at **OJS Sync > Sync Log** in WP admin.
@@ -73,6 +77,8 @@ Paginated at 20 entries per page.
 ### Failure notice
 
 When 5+ failures occur in 24 hours, a warning banner appears on the WP dashboard and OJS Sync admin pages with a link to the filtered log. Cached for 15 minutes.
+
+> **Members see this automatically** -- no setup needed beyond configuring the journal name in Settings.
 
 ## My Account widget
 

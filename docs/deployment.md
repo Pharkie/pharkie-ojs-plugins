@@ -1,5 +1,7 @@
 # Deployment Guide
 
+> **This guide covers Docker-based deployment to a VPS.** It assumes you're deploying the full WordPress + OJS stack to a fresh server. For installing the plugins on existing servers, see [non-Docker setup](non-docker-setup.md).
+
 How to deploy the WP-OJS stack to a VPS using Docker. Covers requirements, scripts, configuration, testing, and SSL.
 
 For non-Docker setup (native OJS + WP servers), see [`non-docker-setup.md`](non-docker-setup.md).
@@ -100,9 +102,13 @@ scripts/deploy.sh [flags]
 
 ---
 
+> **The `.env` file is the single source of truth** for all configuration. Get this right and everything else follows. Get it wrong and things fail in confusing ways.
+
 ## Environment configuration
 
 The `.env` file on the VPS controls all configuration. It is **not in git** — you create it from `.env.example` and copy it to the server.
+
+> **Watch the matching pairs.** Two pairs of variables must have identical values or the system breaks silently: `WPOJS_API_KEY` = `WPOJS_API_KEY_SECRET`, and `DB_PASSWORD` = `WP_DB_PASSWORD`. This is an artifact of Bedrock and Docker Compose reading the same value under different names.
 
 ### Critical variables
 
@@ -308,6 +314,8 @@ Any plugin active on the live WP site must be added to `composer.json` before pr
 
 ---
 
+> **SSL is optional for staging** but required for production. Without HTTPS, API keys are sent in cleartext.
+
 ## Adding SSL (production)
 
 When you have domains pointing at the server:
@@ -326,6 +334,8 @@ When you have domains pointing at the server:
 Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
 
 ---
+
+> **Email is not required for the sync to work.** Members log in with their WP password (synced via hash). Email is needed for OJS editorial workflows (password resets, reviewer notifications, etc.).
 
 ## Email setup
 
@@ -410,6 +420,8 @@ ssh your-server "cd /opt/wp-ojs-sync && \
 ```
 
 ---
+
+> **Read this section before your first deploy.** These are real issues we hit during staging -- they'll save you time.
 
 ## Gotchas
 

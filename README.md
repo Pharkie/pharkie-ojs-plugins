@@ -1,5 +1,7 @@
 # WP OJS Sync
 
+> **OJS** ([Open Journal Systems](https://pkp.sfu.ca/software/ojs/)) is an open-source platform for managing and publishing academic journals.
+
 A pair of plugins (WordPress + OJS) that sync membership data from WordPress (via WooCommerce Subscriptions) to Open Journal Systems. Members get journal access automatically; non-members can still buy content via OJS's built-in paywall.
 
 ## How it works
@@ -32,6 +34,8 @@ Bulk sync creates OJS accounts with WP password hashes — members log in to OJS
 **Design & internals** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [OJS plugin internals](docs/ojs-plugin-internals.md) · [OJS native internals](docs/ojs-internals.md) · [WP integration notes](docs/wp-integration.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
 
 ## Prerequisites
+
+> If you're just exploring this project, start with the [Docker setup](docker/README.md) — it runs the full stack locally with no external dependencies.
 
 - WordPress 5.6+, PHP 7.4+
 - WooCommerce + WooCommerce Subscriptions

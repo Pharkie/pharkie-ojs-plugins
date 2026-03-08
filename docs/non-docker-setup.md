@@ -4,6 +4,8 @@ How to install and configure the WP-OJS integration on servers where OJS and Wor
 
 For Docker-based setup, see [`docker/README.md`](../docker/README.md).
 
+> **This guide is for production/staging servers** where OJS and WordPress are already installed and running natively (not in Docker). If you're setting up a development environment, use the [Docker setup](../docker/README.md) instead — it's much simpler.
+
 ---
 
 ## Prerequisites
@@ -26,6 +28,8 @@ cp -r plugins/wpojs-subscription-api/ /path/to/ojs/plugins/generic/wpojsSubscrip
 chown -R www-data:www-data /path/to/ojs/plugins/generic/wpojsSubscriptionApi/
 ```
 
+> **This is the step most people miss.** If your API returns 404, this is almost certainly why.
+
 ### 2. Mount the API route entry point
 
 OJS 3.5 discovers API endpoints by looking for files at `api/v1/{handler}/index.php` in the OJS root directory. Plugins cannot register API routes programmatically — the physical file must exist at this location.
@@ -43,6 +47,8 @@ cp -r /path/to/ojs/plugins/generic/wpojsSubscriptionApi/api/v1/wpojs \
 ```
 
 **If this step is skipped**, all `/api/v1/wpojs/...` requests will return `404 endpointNotFound`. The WP settings page will show "Could not connect to OJS" and the type dropdowns will be disabled.
+
+> **Important: always quote string values** in `config.inc.php`. PHP's INI parser silently converts unquoted numbers to integers, which causes cryptic type errors.
 
 ### 3. Configure `config.inc.php`
 
@@ -98,6 +104,8 @@ CREATE TABLE wpojs_api_log (
 );
 ```
 
+> **The WP plugin can't sync without this.** Subscription types define what kind of access members get. You need at least one before bulk sync will work.
+
 ### 5. Create at least one subscription type
 
 The integration creates OJS subscriptions for members. This requires at least one subscription type to exist in OJS.
@@ -117,6 +125,8 @@ JOIN subscription_type_settings sts ON st.type_id = sts.type_id
   AND sts.locale = 'en'
 WHERE st.journal_id = 1;
 ```
+
+> **Apache + PHP-FPM only.** If you're running mod_php or nginx, skip this step.
 
 ### 6. Apache configuration
 
@@ -199,7 +209,9 @@ Members can now log in to OJS with their WP email and password — no welcome em
 
 ---
 
-## What NOT to do
+> **Read this before troubleshooting.** These are the mistakes we've seen (and made) most often.
+
+## Common mistakes
 
 **Don't try to register API routes from the plugin.** OJS 3.5's `APIRouter` discovers routes by scanning for `api/v1/{path}/index.php` files. There is no hook or service provider to register routes programmatically. The symlink/copy approach in step 2 is the correct pattern.
 
