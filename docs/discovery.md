@@ -1,6 +1,6 @@
 # Discovery: What We Investigated and Why
 
-Last updated: 2026-02-20
+Last updated: 2026-03-08
 
 This document records the research phase: what approaches were evaluated, what was found, and why options were eliminated. For the forward-looking implementation plan, see [`plan.md`](./private/plan.md).
 
@@ -10,7 +10,8 @@ This document records the research phase: what approaches were evaluated, what w
 
 | Name | What it is | Status |
 |---|---|---|
-| **OIDC SSO** | OpenID Connect single sign-on | Eliminated |
+| **OIDC SSO** | OpenID Connect single sign-on (existing OJS plugin) | Eliminated |
+| **Custom OAuth** | Custom signed-redirect flow, WP as OAuth provider | Comparable alternative (not pursued) |
 | **Pull-verify** | OJS asks WP "is this person a member?" at access time (Subscription SSO plugin) | Eliminated |
 | **Push-sync** | WP pushes subscription changes to OJS via plugins on each side | **Chosen** |
 | **Push-sync (direct DB)** | Same as Push-sync but writes to OJS database directly instead of via plugin | Fallback |
@@ -25,7 +26,17 @@ The OJS OIDC client plugin has multiple unresolved bugs (mid-teens), reports of 
 
 Additionally, OIDC only solves authentication (who is this person?), not authorization (do they have a subscription?). You'd still need a separate mechanism to sync subscriptions.
 
-**Result: Eliminated.**
+**Result: Eliminated.** The existing plugin is broken. But see "Custom OAuth" below for a reassessment of the underlying architecture.
+
+## Step 1b: Custom OAuth (reassessed, not pursued)
+
+**Reassessed 2026-03-08** after push-sync was built and working. The original OIDC elimination was based on the broken OJS plugin, but the concept of "members authenticate via WP, OJS provisions access on login" was never properly evaluated as a custom build.
+
+A custom OAuth flow — WP signs a JWT with membership claims, OJS validates and provisions a subscription on login — has better member UX (no second password). But it's not simpler overall: it trades push-sync's explicit sync machinery for auth-flow complexity (JWT handling, browser redirects, session management, subscription expiry windows), and an OAuth consumer plugin hooks into OJS's authentication flow — equally vulnerable to OJS upgrade breakage as push-sync's REST endpoints.
+
+The two approaches are roughly equivalent in complexity and effort. Push-sync's failure modes are visible and well-understood. OAuth introduces browser-based edge cases that push-sync avoids by being server-to-server.
+
+See [`oauth-revisited.md`](./oauth-revisited.md) for the full reassessment.
 
 ## Step 2: Pull-verify (eliminated)
 
@@ -88,7 +99,7 @@ The correct mechanism for member access is the `subscriptions` table. A working 
 
 | Approach | Why eliminated |
 |---|---|
-| **OIDC SSO** | Only solves login, not access. OJS plugin has unresolved bugs, no 3.5 release, breaks multi-journal. |
+| **OIDC SSO** (existing plugin) | OJS plugin has unresolved bugs, no 3.5 release, breaks multi-journal. A custom OAuth build avoids these plugin issues but introduces its own complexity — see [`oauth-revisited.md`](./oauth-revisited.md). |
 | **Pull-verify** (Subscription SSO plugin) | Source code audit confirmed it hijacks OJS purchase flow. Non-members can't buy articles/issues. See `phase0-sso-plugin-audit.md`. |
 | **Native REST API sync** | OJS has no subscription API endpoints in any version. Push-sync works around this with a custom OJS plugin. |
 | **XML user import** | Creates user accounts only, not subscriptions. Roles that bypass paywall are editorial/admin — inappropriate for members. No expiry control. See [`xml-import-evaluation.md`](./xml-import-evaluation.md). |
