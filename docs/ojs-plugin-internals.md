@@ -6,7 +6,7 @@ Version 1.3.0 | Requires OJS 3.5+
 
 The `wpojs-subscription-api` plugin is a generic OJS plugin that exposes REST endpoints for managing user accounts and subscriptions, called by the WP plugin (`wpojs-sync`). It also replaces the OJS password hasher so members can log in with their WordPress credentials, and injects UI messages (login hint, paywall hint, site footer) into OJS templates.
 
-For the full endpoint table, see [ojs-api.md](ojs-api.md). This document covers the internals and behaviour that the endpoint table does not.
+For the full endpoint table, see [ojs-sync-plugin-api.md](ojs-sync-plugin-api.md). This document covers the internals and behaviour that the endpoint table does not.
 
 ## Authentication
 

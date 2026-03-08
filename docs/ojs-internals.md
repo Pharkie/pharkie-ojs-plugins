@@ -1,6 +1,6 @@
 # OJS Internals Reference
 
-Research notes on OJS's native API, database schema, and PHP internals. These informed the design of the `wpojs-subscription-api` plugin but are not needed to use it — see [ojs-api.md](ojs-api.md) for the plugin's API reference.
+Research notes on OJS's native API, database schema, and PHP internals. These informed the design of the `wpojs-subscription-api` plugin but are not needed to use it — see [ojs-sync-plugin-api.md](ojs-sync-plugin-api.md) for the plugin's API reference.
 
 ## Native OJS REST API (stock, pre-plugin)
 
