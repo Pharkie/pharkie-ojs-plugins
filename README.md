@@ -31,7 +31,7 @@ Bulk sync creates OJS accounts with WP password hashes — members log in to OJS
 
 **Setup** — [Docker setup](docker/README.md) · [Non-Docker setup](docs/non-docker-setup.md) · [Hosting requirements](docs/private/hosting-requirements.md) · [Support runbook](docs/support-runbook.md) · [TODO / roadmap](TODO.md)
 
-**Design** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [WP integration notes](docs/wp-integration.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
+**Design** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [WP integration notes](docs/wp-integration.md) · [OJS internals](docs/ojs-internals.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
 
 ## Prerequisites
 

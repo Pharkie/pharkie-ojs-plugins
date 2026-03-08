@@ -99,4 +99,4 @@ The correct way to grant member access is via subscription records in the `subsc
 - [IndividualSubscriptionDAO.php — subscription access check](https://github.com/pkp/ojs/blob/stable-3_4_0/classes/subscription/IndividualSubscriptionDAO.php)
 - [PKP Forum: OJS3 Bulk import subscriptions (confirmed: doesn't exist)](https://forum.pkp.sfu.ca/t/ojs3-bulk-import-subscriptions/62294)
 - [PKP Forum: Subscription management API options (confirmed: none)](https://forum.pkp.sfu.ca/t/are-there-api-or-other-options-for-subscription-management-available-in-ojs-3-3/86106)
-- [OJS subscription DB schema and DAO classes](./ojs-api.md)
+- [OJS subscription DB schema and DAO classes](./ojs-internals.md)
