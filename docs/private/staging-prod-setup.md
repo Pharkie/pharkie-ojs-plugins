@@ -315,7 +315,7 @@ hcloud server rebuild --image ubuntu-24.04 --user-data-from-file <(echo -e "#clo
 
 ---
 
-## Gotchas
+## Good to know
 
 - **`hcloud server rebuild` does NOT inject SSH keys** from your Hetzner account. Use `--user-data-from-file` with cloud-init to inject the key, or use `hcloud server create` (which does inject keys).
 - **First image build takes ~3 minutes** on CPX22 (compiling PHP extensions). Subsequent builds use cache.

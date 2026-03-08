@@ -243,7 +243,7 @@ Pass criteria: p95 latency <= 2000ms, zero server errors. Reports peak CPU load 
 
 > **Read this section before your first deploy.** These are real issues we hit during staging — they'll save you time.
 
-## Gotchas
+## Good to know
 
 - **`.env` is not in git.** You must copy it to the VPS separately. The deploy script checks for it and fails with instructions if missing.
 - **Docker creates directories for missing file mounts.** If a compose bind mount references a file that doesn't exist (e.g. OJS import XML), Docker creates it as an empty directory. You must `down -v` and `up` again after adding the missing file. The deploy script handles this by syncing non-git files before starting containers.
