@@ -104,6 +104,9 @@ else
   SERVER_IP=$(hcloud server ip "$SERVER_NAME")
   echo "[ok] Server created."
 
+  # Clear any stale host key for this IP (common when IP is recycled)
+  ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_IP" 2>/dev/null || true
+
   # Wait for SSH to become available
   echo "Waiting for SSH..."
   for i in $(seq 1 30); do
@@ -168,8 +171,12 @@ EOF
   echo "[ok] Added '$SERVER_NAME' to SSH config."
 fi
 
-# Verify SSH works
-if ssh -o ConnectTimeout=10 "$SERVER_NAME" "true" 2>/dev/null; then
+# Clear stale known_hosts entry for this hostname (IP may have changed)
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_NAME" 2>/dev/null || true
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_IP" 2>/dev/null || true
+
+# Verify SSH works (accept new host key)
+if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "$SERVER_NAME" "true" 2>/dev/null; then
   echo "[ok] SSH connection verified."
 else
   echo "[warn] SSH connection failed — check config manually."
@@ -189,15 +196,17 @@ else
   echo "[ok] Deploy key generated on VPS."
 fi
 
-# Register with GitHub
+# Register with GitHub (replace if exists — server may have been recreated with new key)
 DEPLOY_PUB=$($SSH_CMD "cat /root/.ssh/deploy_key.pub")
-EXISTING_KEYS=$(gh repo deploy-key list --repo "$GITHUB_REPO" 2>/dev/null || echo "")
-if echo "$EXISTING_KEYS" | grep -q "${SERVER_NAME}"; then
-  echo "[ok] Deploy key '${SERVER_NAME}' already registered on GitHub."
-else
-  echo "$DEPLOY_PUB" | gh repo deploy-key add - --repo "$GITHUB_REPO" --title "$SERVER_NAME"
-  echo "[ok] Deploy key registered on GitHub."
+EXISTING_KEY_ID=$(gh repo deploy-key list --repo "$GITHUB_REPO" 2>/dev/null | grep "${SERVER_NAME}" | awk '{print $1}')
+if [ -n "$EXISTING_KEY_ID" ]; then
+  echo "$EXISTING_KEY_ID" | while read KEY_ID; do
+    echo "y" | gh repo deploy-key delete "$KEY_ID" --repo "$GITHUB_REPO" 2>/dev/null || true
+  done
+  echo "[ok] Removed old deploy key from GitHub."
 fi
+echo "$DEPLOY_PUB" | gh repo deploy-key add - --repo "$GITHUB_REPO" --title "$SERVER_NAME"
+echo "[ok] Deploy key registered on GitHub."
 
 # Configure SSH on VPS to use deploy key for GitHub
 $SSH_CMD "cat > /root/.ssh/config << SSHEOF
