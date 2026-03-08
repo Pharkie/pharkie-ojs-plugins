@@ -1,10 +1,6 @@
 # Deployment Guide
 
-> **This guide covers Docker-based deployment to a VPS.** It assumes you're deploying the full WordPress + OJS stack to a fresh server. For installing the plugins on existing servers, see [non-Docker setup](non-docker-setup.md).
-
-How to deploy the WP-OJS stack to a VPS using Docker. Covers requirements, scripts, configuration, testing, and SSL.
-
-For non-Docker setup (native OJS + WP servers), see [`non-docker-setup.md`](non-docker-setup.md).
+> **This guide covers deploying to a VPS using Docker.** For local dev setup, see [Docker setup](../docker/README.md). For installing the plugins on existing non-Docker servers, see [non-Docker setup](non-docker-setup.md).
 
 ---
 

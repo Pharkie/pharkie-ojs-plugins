@@ -74,11 +74,9 @@ docker compose exec ojs bash /scripts/setup-ojs.sh --with-sample-data
 | OJS journal | http://localhost:8081/index.php/journal | http://ojs:80/index.php/journal |
 | OJS API (from WP) | — | http://ojs:80/index.php/journal/api/v1/wpojs/... |
 
-> **All passwords are randomly generated** — there are no default passwords. If you haven't run `scripts/generate-env.sh` yet, the setup scripts will do it automatically.
-
 ## Credentials (local dev)
 
-All passwords are randomly generated. Run `scripts/generate-env.sh` to create your `.env` (or let `rebuild-dev.sh` / `setup.sh --env=dev` do it automatically). Check your `.env` file for the actual values.
+> **All passwords are randomly generated** — there are no default passwords. Run `scripts/generate-env.sh` to create your `.env`, or let `rebuild-dev.sh` / `setup.sh --env=dev` do it automatically. Check your `.env` file for the actual values.
 
 | | WordPress | OJS |
 |--|-----------|-----|
