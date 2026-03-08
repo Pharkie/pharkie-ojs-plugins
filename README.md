@@ -21,17 +21,15 @@ flowchart LR
     C -->|update password hash| J[OJS accepts new password]
 ```
 
-Bulk sync creates OJS accounts with WP password hashes — members log in to OJS with their existing WP password, no "set your password" step. Supports `--resume` for interrupted syncs.
+Bulk sync creates OJS accounts with WP password hashes — members log in to OJS with their existing WP password, no "set your password" step.
 
 ## Documentation
 
-**Start here:** [WP plugin reference](docs/wp-plugin-reference.md) and [OJS plugin reference](docs/ojs-plugin-reference.md) explain what each plugin does — hooks, sync actions, auth, GDPR erasure, subscription logic. See also [WP-CLI reference](docs/wp-cli-reference.md) and [WP admin reference](docs/wp-admin-reference.md).
-
-**API** — [OJS API reference](docs/ojs-api.md) — all 13 custom endpoints with params, responses, error codes
+**Start here:** [WP plugin reference](docs/wp-plugin-reference.md) and [OJS API reference](docs/ojs-api.md) explain what each plugin does — hooks, sync actions, endpoints, auth. See also [WP-CLI reference](docs/wp-cli-reference.md) and [WP admin reference](docs/wp-admin-reference.md).
 
 **Setup** — [Docker setup](docker/README.md) · [Non-Docker setup](docs/non-docker-setup.md) · [Hosting requirements](docs/private/hosting-requirements.md) · [Support runbook](docs/support-runbook.md) · [TODO / roadmap](TODO.md)
 
-**Design** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [WP integration notes](docs/wp-integration.md) · [OJS internals](docs/ojs-internals.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
+**Design & internals** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [OJS plugin internals](docs/ojs-plugin-internals.md) · [OJS native internals](docs/ojs-internals.md) · [WP integration notes](docs/wp-integration.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md)
 
 ## Prerequisites
 

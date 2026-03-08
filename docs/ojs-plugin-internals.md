@@ -1,6 +1,6 @@
-# OJS Plugin Reference: `wpojs-subscription-api`
+# OJS Plugin Internals: `wpojs-subscription-api`
 
-Version 1.1.1.0 | Requires OJS 3.5+
+Version 1.3.0 | Requires OJS 3.5+
 
 ## Overview
 
