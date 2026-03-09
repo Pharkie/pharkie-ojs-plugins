@@ -4,11 +4,15 @@
 
 **What this repo does:** A pair of plugins — the **WP plugin** and the **OJS plugin** — that keep the two systems in sync. At launch, a bulk sync creates OJS accounts for all existing members (with their WordPress password hashes, so they can log in immediately). After that, the WP plugin automatically pushes changes to OJS whenever a member signs up, renews, cancels, or expires. Non-members can still buy individual articles through OJS's built-in paywall.
 
-<img align="right" width="45%" src="docs/images/wp-settings-page.png" alt="WP OJS Sync settings page showing connection status, product mappings, and role-based access">
-
 ## How it works
 
+<img align="right" width="45%" src="docs/images/wp-test-connection.png" alt="WP OJS Sync settings page showing connection status and product mappings">
+
 WordPress is the source of truth for membership. The WP plugin hooks into WooCommerce Subscription lifecycle events and pushes changes to OJS via a custom REST API. All sync is async (Action Scheduler), with daily reconciliation to catch drift.
+
+Bulk sync creates OJS accounts with WP password hashes — members log in to OJS with their existing WP password, no "set your password" step.
+
+<br clear="right">
 
 ```mermaid
 flowchart LR
@@ -25,13 +29,9 @@ flowchart LR
     C -->|update password hash| J[OJS accepts new password]
 ```
 
-Bulk sync creates OJS accounts with WP password hashes — members log in to OJS with their existing WP password, no "set your password" step.
-
-<br clear="right">
-
-<img align="right" width="45%" src="docs/images/ojs-login-page.png" alt="OJS login page with membership hint message">
-
 ## Documentation
+
+<img align="right" width="35%" src="docs/images/ojs-login-page.png" alt="OJS login page with membership hint message">
 
 **Getting started** — pick your path:
 - [Run locally](docs/docker-setup.md) — Docker stack on your machine
