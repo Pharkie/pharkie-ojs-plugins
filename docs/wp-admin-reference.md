@@ -2,85 +2,57 @@
 
 > **This is the admin UI guide** -- what you see in WordPress admin. For CLI commands, see [WP-CLI reference](wp-cli-reference.md). For how the plugin works internally, see [WP plugin reference](wp-plugin-reference.md).
 
-<img align="right" width="45%" src="images/wp-settings-page.png" alt="OJS Sync settings page in WordPress admin">
+<table><tr><td>
 
 ## Settings page
 
 Located at **OJS Sync > Settings** in WP admin. Requires `manage_options` capability.
 
-### OJS Connection
+**OJS Connection** — live status indicator (green check or red X). Set the OJS Base URL including journal path.
+
+**Product-Based Access** — maps WooCommerce subscription product IDs to OJS subscription type IDs. OJS types loaded dynamically from the API.
+
+**Role-Based Access** — WP roles that grant OJS access without a purchase (e.g. committee members, life members).
+
+**Display** — journal name shown in the My Account widget.
+
+**Status** — API key status, WP server IP (for OJS allowlist), sync queue link.
+
+</td><td width="45%">
+
+<img src="images/wp-settings-page.png" alt="OJS Sync settings page in WordPress admin">
+
+</td></tr></table>
+
+### Settings reference
 
 | Setting | Option key | Description |
 |---|---|---|
 | OJS Base URL | `wpojs_url` | Full URL including journal path, e.g. `https://journal.example.org/index.php/t1`. Must be HTTPS. |
-
-The page shows a live connection status indicator (green check or red X) based on whether OJS subscription types can be loaded.
-
-### Product-Based Access
-
-| Setting | Option key | Description |
-|---|---|---|
 | WC Product to OJS Type mapping | `wpojs_type_mapping` | Maps WooCommerce subscription product IDs to OJS subscription type IDs. Multiple mappings supported. OJS types are loaded dynamically from the OJS API. |
-
-### Role-Based Access
-
-| Setting | Option key | Description |
-|---|---|---|
 | WordPress Roles | `wpojs_manual_roles` | WP roles that grant OJS access without a WooCommerce purchase (e.g. committee members, life members). Roles are listed in two groups: custom/membership roles and standard WordPress roles. |
 | OJS Type | `wpojs_default_type_id` | The OJS subscription type assigned to all role-based members. Also used as fallback when no product-specific type mapping is found. |
-
-### Display
-
-| Setting | Option key | Description |
-|---|---|---|
 | Journal Name | `wpojs_journal_name` | Shown in the My Account dashboard widget (e.g. "Journal of Example Studies"). |
-
-### Status section
-
-The settings page also displays:
-- **API Key status** -- whether `WPOJS_API_KEY` is defined in `wp-config.php`
-- **WP Server IP** -- the IP that OJS sees (for allowlist configuration)
-- **Sync Queue link** -- direct link to Action Scheduler filtered to `wpojs` actions
 
 > **This is your main monitoring tool.** Check the sync log regularly -- if things are working, you'll see a stream of green "success" entries. Red entries need attention.
 
-<br clear="right">
-
-<img align="right" width="45%" src="images/wp-sync-log.png" alt="OJS Sync Log page showing summary cards and log entries">
+<table><tr><td>
 
 ## Sync log
 
 Located at **OJS Sync > Sync Log** in WP admin.
 
-### Summary cards
+**Summary cards** — Members Synced, Failures (24h), Failures (7d), Success Rate (7d), Queue status. Color-coded: green/yellow/red.
 
-Five cards across the top of the page:
-- **Members Synced** -- X of Y (color-coded: green if all synced, yellow if partial, red if zero)
-- **Failures (24h)** -- red if >0
-- **Failures (7d)** -- red if >5, yellow if 1-5
-- **Success Rate (7d)** -- percentage, red if <80%, yellow if <95%
-- **Queue** -- pending and failed Action Scheduler counts
+**Log table** — Date, Email, Action, Status, HTTP Code, Response, Attempts. Filterable by status, email, date range. Sortable. 20 per page.
 
-### Log table
+**Retry** — single retry via row action (AJAX), or bulk retry via checkbox. `delete_user` failures can't be retried (WP user already gone).
 
-Columns: Date, Email, Action, Status, HTTP Code, Response, Attempts.
+</td><td width="45%">
 
-Filters:
-- Status (All / Success / Fail)
-- Email (text search)
-- Date range (from/to)
+<img src="images/wp-sync-log.png" alt="OJS Sync Log page showing summary cards and log entries">
 
-Sortable by: Date, Email, Status, Action.
-
-Paginated at 20 entries per page.
-
-### Retry functionality
-
-- **Single retry:** Each failed entry has a "Retry" link in the row actions (via AJAX). Schedules a new Action Scheduler action for that user.
-- **Bulk retry:** Checkbox selection + "Retry Selected" bulk action. Failed entries only.
-- **Limitations:** `delete_user` failures cannot be retried (the WP user is already gone -- must be resolved manually in OJS admin). `email_change` retries are converted to full `activate` actions since the original old/new email data isn't preserved in the log.
-
-<br clear="right">
+</td></tr></table>
 
 ### Failure notice
 

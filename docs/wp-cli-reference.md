@@ -37,7 +37,7 @@ wp ojs-sync sync --bulk --batch-size=100
 
 Bulk sync uses adaptive throttling based on OJS response times. If OJS responds in <200ms, no delay. If OJS slows down, delays mirror the response time. If OJS returns 429, the `Retry-After` header value is respected. Sends WP password hashes so members can log in to OJS with their existing credentials.
 
-<img align="right" width="45%" src="images/cli-test-connection.png" alt="Terminal output of wp ojs-sync test-connection showing all checks passing">
+<table><tr><td>
 
 ## test-connection
 
@@ -50,9 +50,13 @@ wp ojs-sync test-connection
 1. **Ping** -- checks OJS reachability (no auth)
 2. **Preflight** -- validates API key authentication, IP allowlisting, and plugin compatibility
 
-<br clear="right">
+</td><td width="45%">
 
-<img align="right" width="45%" src="images/cli-status.png" alt="Terminal output of wp ojs-sync status showing queue counts and sync health">
+<img src="images/cli-test-connection.png" alt="Terminal output of wp ojs-sync test-connection showing all checks passing">
+
+</td></tr></table>
+
+<table><tr><td>
 
 ## status
 
@@ -69,7 +73,11 @@ Displays:
 - Failures in last 24 hours
 - Cron schedule (next reconciliation, daily digest, log cleanup)
 
-<br clear="right">
+</td><td width="45%">
+
+<img src="images/cli-status.png" alt="Terminal output of wp ojs-sync status showing queue counts and sync health">
+
+</td></tr></table>
 
 ## reconcile
 

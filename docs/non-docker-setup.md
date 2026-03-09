@@ -80,7 +80,7 @@ support_email = "support@example.org"
 
 **Config value quoting:** Always quote string values in `config.inc.php`. PHP's INI parser silently coerces unquoted numeric values to integers, which causes `hash_equals()` to throw a TypeError. This applies to `api_key_secret`, `allowed_ips`, and any other string values.
 
-<img align="right" width="45%" src="images/ojs-plugin-enable.png" alt="OJS Plugins page showing WP-OJS Subscription API plugin enabled">
+<table><tr><td>
 
 ### 4. Enable the plugin in OJS
 
@@ -88,9 +88,15 @@ Go to OJS Admin Dashboard → Settings → Website → Plugins tab → Installed
 
 On first enable, OJS runs the plugin's migration (`WpojsApiLogMigration`) and creates the `wpojs_api_log` table automatically.
 
-**If the table is not created** (e.g. OJS skipped the migration), you can:
-- Disable and re-enable the plugin (OJS re-runs migrations on enable)
-- Or create it manually:
+**If the table is not created** (e.g. OJS skipped the migration), you can disable and re-enable the plugin (OJS re-runs migrations on enable), or create it manually — see SQL below.
+
+</td><td width="45%">
+
+<img src="images/ojs-plugin-enable.png" alt="OJS Plugins page showing WP-OJS Subscription API plugin enabled">
+
+</td></tr></table>
+
+<details><summary>Manual table creation SQL</summary>
 
 ```sql
 CREATE TABLE wpojs_api_log (
@@ -106,7 +112,7 @@ CREATE TABLE wpojs_api_log (
 );
 ```
 
-<br clear="right">
+</details>
 
 > **The WP plugin can't sync without this.** Subscription types define what kind of access members get. You need at least one before bulk sync will work.
 
@@ -171,16 +177,22 @@ define('WPOJS_API_KEY', 'your-shared-secret-here');
 
 This must match the `api_key_secret` value in OJS's `config.inc.php`.
 
-<img align="right" width="45%" src="images/wp-test-connection.png" alt="WP OJS Sync settings page showing successful connection to OJS">
+<table><tr><td>
 
 ### 3. Activate and configure
 
 1. Activate the plugin in WP Admin → Plugins.
 2. Go to WP Admin → OJS Sync → Settings.
 3. Set **OJS Base URL** — must include the journal path, e.g.: `https://your-ojs-site.example.org/index.php/journalpath`
-4. Add **Product Mappings** (WC Product → OJS Type): for each WooCommerce Subscription product that grants journal access, map its Product ID to the OJS Subscription Type ID.
-5. If using **WordPress Role-Based Access**, select the roles and set the OJS Type.
-6. Verify the **OJS Connection** status shows "Connected to OJS" with the correct number of subscription types.
+4. Add **Product Mappings** (WC Product → OJS Type) for each subscription product.
+5. If using **Role-Based Access**, select the roles and set the OJS Type.
+6. Verify **OJS Connection** shows "Connected to OJS".
+
+</td><td width="45%">
+
+<img src="images/wp-test-connection.png" alt="WP OJS Sync settings page showing successful connection to OJS">
+
+</td></tr></table>
 
 ### 4. Run initial sync
 
@@ -196,8 +208,6 @@ wp ojs-sync status
 ```
 
 Members can now log in to OJS with their WP email and password — no welcome emails or password setup needed.
-
-<br clear="right">
 
 ---
 
