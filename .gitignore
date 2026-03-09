@@ -4,6 +4,9 @@
 # Test lockfile
 .playwright-lock
 
+# Private docs (internal planning, not for public repo)
+docs/private/
+
 # Environment
 .env
 .env.staging
