@@ -60,6 +60,8 @@ When 5+ failures occur in 24 hours, a warning banner appears on the WP dashboard
 
 > **Members see this automatically** -- no setup needed beyond configuring the journal name in Settings.
 
+<table><tr><td>
+
 ## My Account widget
 
 A "Journal Access" card appears on the WooCommerce **My Account > Dashboard** page (via the `woocommerce_account_dashboard` hook).
@@ -73,6 +75,12 @@ A "Journal Access" card appears on the WooCommerce **My Account > Dashboard** pa
 **For non-members:**
 - Red "No active access" badge
 - Message to contact support if they believe they should have access
+
+</td><td width="45%">
+
+<img src="images/my-account-widget.png" alt="Journal Access widget on My Account page showing Active badge and Read button">
+
+</td></tr></table>
 
 ## Cron jobs
 

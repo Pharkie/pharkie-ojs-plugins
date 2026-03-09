@@ -6,6 +6,8 @@ All commands are under the `wp ojs-sync` namespace.
 
 > **Most common commands:** `test-connection` (verify OJS is reachable), `status` (check sync health), `sync --member=email` (sync one person).
 
+<table><tr><td>
+
 ## sync
 
 Bulk sync all active members to OJS, or sync a single member.
@@ -25,6 +27,12 @@ wp ojs-sync sync --bulk --resume
 # Control batch progress logging interval
 wp ojs-sync sync --bulk --batch-size=100
 ```
+
+</td><td width="45%">
+
+<img src="images/cli-sync.png" alt="Terminal output of wp ojs-sync sync showing single member sync and bulk dry run">
+
+</td></tr></table>
 
 | Flag | Description |
 |---|---|
@@ -79,6 +87,8 @@ Displays:
 
 </td></tr></table>
 
+<table><tr><td>
+
 ## reconcile
 
 Run reconciliation on demand (same logic as the daily cron).
@@ -88,3 +98,9 @@ wp ojs-sync reconcile
 ```
 
 Batch-queries OJS for subscription status of all active WP members, queues activate/expire actions for any drift found.
+
+</td><td width="45%">
+
+<img src="images/cli-reconcile.png" alt="Terminal output of wp ojs-sync reconcile showing drift detection and queued actions">
+
+</td></tr></table>
