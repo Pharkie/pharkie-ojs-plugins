@@ -56,9 +56,15 @@ wp_retry() {
 }
 
 # --- Composer install (Bedrock: download WP core + plugins) ---
-if [ -f /var/www/html/composer.json ] && [ ! -d /var/www/html/web/wp/wp-includes ]; then
-  echo "Running composer install (first run — downloading WordPress core + plugins)..."
-  composer install --no-dev --no-interaction --working-dir=/var/www/html 2>&1
+# Run on first install OR when lock file has changed (new packages added).
+COMPOSER_DIR="/var/www/html"
+LOCK_HASH_FILE="$COMPOSER_DIR/vendor/.composer-lock-hash"
+CURRENT_HASH=$(md5sum "$COMPOSER_DIR/composer.lock" 2>/dev/null | cut -d' ' -f1)
+STORED_HASH=$(cat "$LOCK_HASH_FILE" 2>/dev/null)
+if [ -f "$COMPOSER_DIR/composer.json" ] && { [ ! -d "$COMPOSER_DIR/web/wp/wp-includes" ] || [ "$CURRENT_HASH" != "$STORED_HASH" ]; }; then
+  echo "Running composer install..."
+  composer install --no-dev --no-interaction --working-dir="$COMPOSER_DIR" 2>&1
+  echo "$CURRENT_HASH" > "$LOCK_HASH_FILE"
   echo "[ok] Composer install complete."
 fi
 
