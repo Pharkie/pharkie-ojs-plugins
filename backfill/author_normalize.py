@@ -27,6 +27,7 @@ import os
 import re
 import json
 import argparse
+import fcntl
 import unicodedata
 from difflib import SequenceMatcher
 
@@ -94,12 +95,16 @@ class AuthorRegistry:
     def load(self):
         if os.path.exists(self.path):
             with open(self.path) as f:
+                fcntl.flock(f, fcntl.LOCK_SH)
                 self.entries = json.load(f)
+                fcntl.flock(f, fcntl.LOCK_UN)
             self._rebuild_index()
 
     def save(self):
         with open(self.path, 'w') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             json.dump(self.entries, f, indent=2, ensure_ascii=False, sort_keys=True)
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     def _rebuild_index(self):
         self._key_index = {}

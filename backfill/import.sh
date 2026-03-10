@@ -23,13 +23,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # --- Parse arguments ---
 DIRS=()
 CONTAINER=""
-JOURNAL_PATH="journal"
+JOURNAL_PATH="ea"
 ADMIN_USER="admin"
+FORCE=0
 for arg in "$@"; do
   case "$arg" in
     --container=*) CONTAINER="${arg#--container=}" ;;
     --journal=*) JOURNAL_PATH="${arg#--journal=}" ;;
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
+    --force) FORCE=1 ;;
     --help|-h)
       sed -n '2,/^set -eo/p' "$0" | head -n -1 | sed 's/^# \?//'
       exit 0
@@ -38,8 +40,24 @@ for arg in "$@"; do
   esac
 done
 
+# Validate JOURNAL_PATH and ADMIN_USER against allowed characters
+if ! [[ "$JOURNAL_PATH" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: Invalid --journal value '$JOURNAL_PATH' (only letters, digits, hyphens, underscores allowed)"
+  exit 1
+fi
+if ! [[ "$ADMIN_USER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: Invalid --admin value '$ADMIN_USER' (only letters, digits, hyphens, underscores allowed)"
+  exit 1
+fi
+
 if [ ${#DIRS[@]} -eq 0 ]; then
-  echo "Usage: backfill/import.sh <issue-dir> [<issue-dir>...] [--container=<name>]"
+  echo "Usage: backfill/import.sh <issue-dir> [<issue-dir>...] [--container=<name>] [--force]"
+  echo
+  echo "Options:"
+  echo "  --container=<name>  OJS Docker container (auto-detected if omitted)"
+  echo "  --journal=<path>    Journal URL path (default: ea)"
+  echo "  --admin=<user>      Admin username (default: admin)"
+  echo "  --force             Reimport issues that already exist in OJS"
   echo
   echo "Example: backfill/import.sh backfill/output/EA-vol37-iss1"
   echo "         backfill/import.sh backfill/output/EA-vol*"
@@ -59,6 +77,7 @@ echo
 
 FAILED=0
 SUCCEEDED=0
+SKIPPED=0
 
 for DIR in "${DIRS[@]}"; do
   DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "ERROR: $DIR not found"; FAILED=$((FAILED + 1)); continue; }
@@ -71,13 +90,53 @@ for DIR in "${DIRS[@]}"; do
 
   if [ ! -f "$XML_FILE" ]; then
     echo "  ERROR: No import.xml in $DIR"
-    echo "  Run backfill/prepare.sh first."
+    echo "  Run backfill/split-issue.sh first."
     FAILED=$((FAILED + 1))
     continue
   fi
 
   XML_SIZE=$(du -h "$XML_FILE" | cut -f1)
   echo "  XML: $XML_FILE ($XML_SIZE)"
+
+  # Extract volume and number from import.xml for idempotency check
+  ISSUE_VOL=$(grep -oP '<volume>\K[^<]+' "$XML_FILE" | head -1)
+  ISSUE_NUM=$(grep -oP '<number>\K[^<]+' "$XML_FILE" | head -1)
+
+  # Validate vol/num are numeric (prevents shell injection into PHP)
+  if [ -n "$ISSUE_VOL" ] && ! [[ "$ISSUE_VOL" =~ ^[0-9]+$ ]]; then
+    echo "  WARNING: Non-numeric volume '$ISSUE_VOL' in XML, skipping idempotency check"
+    ISSUE_VOL=""
+  fi
+  if [ -n "$ISSUE_NUM" ] && ! [[ "$ISSUE_NUM" =~ ^[0-9]+$ ]]; then
+    echo "  WARNING: Non-numeric issue number '$ISSUE_NUM' in XML, skipping idempotency check"
+    ISSUE_NUM=""
+  fi
+
+  if [ -n "$ISSUE_VOL" ] && [ -n "$ISSUE_NUM" ]; then
+    # Query OJS database to check if this issue already exists
+    EXISTING=$(docker exec "$CONTAINER" php -r "
+      require('tools/bootstrap.php');
+      \$conn = \Illuminate\Database\Capsule\Manager::connection();
+      \$count = \$conn->table('issues')
+        ->join('journals', 'issues.journal_id', '=', 'journals.journal_id')
+        ->where('journals.path', '${JOURNAL_PATH}')
+        ->where('issues.volume', ${ISSUE_VOL})
+        ->where('issues.number', '${ISSUE_NUM}')
+        ->count();
+      echo \$count;
+    " 2>/dev/null || echo "0")
+
+    if [ "$EXISTING" -gt 0 ] 2>/dev/null; then
+      if [ "$FORCE" -eq 0 ]; then
+        echo "  SKIP: Vol ${ISSUE_VOL}.${ISSUE_NUM} already exists in OJS (use --force to reimport)"
+        SKIPPED=$((SKIPPED + 1))
+        echo
+        continue
+      else
+        echo "  WARNING: Vol ${ISSUE_VOL}.${ISSUE_NUM} already exists, reimporting (--force)"
+      fi
+    fi
+  fi
 
   # Copy XML into container
   docker cp "$XML_FILE" "$CONTAINER:/tmp/import.xml"
@@ -100,7 +159,7 @@ for DIR in "${DIRS[@]}"; do
 done
 
 echo "=========================================="
-echo "Complete: $SUCCEEDED imported, $FAILED failed out of ${#DIRS[@]}"
+echo "Complete: $SUCCEEDED imported, $SKIPPED skipped, $FAILED failed out of ${#DIRS[@]}"
 echo "=========================================="
 
 [ $FAILED -eq 0 ] || exit 1

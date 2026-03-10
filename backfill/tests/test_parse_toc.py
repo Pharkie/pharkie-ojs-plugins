@@ -12,9 +12,12 @@ from backfill.parse_toc import (
     classify_entry,
     find_toc_page,
     find_page_offset,
+    parse_book_reviews,
+    extract_reviewer_name,
     SECTION_EDITORIAL,
     SECTION_ARTICLES,
     SECTION_BOOK_REVIEW_EDITORIAL,
+    SECTION_BOOK_REVIEWS,
 )
 
 
@@ -142,23 +145,42 @@ class TestClassifyEntry:
     """Test classify_entry() section assignment."""
 
     def test_editorial(self):
-        assert classify_entry('Editorial') == SECTION_EDITORIAL
+        assert classify_entry('Editorial') == (SECTION_EDITORIAL, False)
 
     def test_editorial_case_insensitive(self):
-        assert classify_entry('editorial') == SECTION_EDITORIAL
-        assert classify_entry('EDITORIAL') == SECTION_EDITORIAL
+        assert classify_entry('editorial') == (SECTION_EDITORIAL, False)
+        assert classify_entry('EDITORIAL') == (SECTION_EDITORIAL, False)
 
     def test_book_reviews(self):
-        assert classify_entry('Book Reviews') == SECTION_BOOK_REVIEW_EDITORIAL
+        assert classify_entry('Book Reviews') == (SECTION_BOOK_REVIEW_EDITORIAL, False)
 
     def test_articles(self):
         """Anything not 'editorial' or 'book reviews' is classified as Articles."""
-        assert classify_entry('Therapy for the Revolution') == SECTION_ARTICLES
-        assert classify_entry('Some Research Paper') == SECTION_ARTICLES
+        assert classify_entry('Therapy for the Revolution') == (SECTION_ARTICLES, False)
+        assert classify_entry('Some Research Paper') == (SECTION_ARTICLES, False)
 
     def test_book_reviews_case(self):
-        assert classify_entry('book reviews') == SECTION_BOOK_REVIEW_EDITORIAL
-        assert classify_entry('BOOK REVIEWS') == SECTION_BOOK_REVIEW_EDITORIAL
+        assert classify_entry('book reviews') == (SECTION_BOOK_REVIEW_EDITORIAL, False)
+        assert classify_entry('BOOK REVIEWS') == (SECTION_BOOK_REVIEW_EDITORIAL, False)
+
+    def test_obituary(self):
+        assert classify_entry('Obituary') == (SECTION_EDITORIAL, False)
+        assert classify_entry('obituary') == (SECTION_EDITORIAL, False)
+
+    def test_obituary_with_name(self):
+        assert classify_entry('Obituary: John Smith') == (SECTION_EDITORIAL, False)
+
+    def test_erratum(self):
+        assert classify_entry('Erratum') == (SECTION_EDITORIAL, False)
+        assert classify_entry('ERRATA') == (SECTION_EDITORIAL, False)
+
+    def test_correspondence(self):
+        assert classify_entry('Correspondence') == (SECTION_ARTICLES, False)
+        assert classify_entry('Letters') == (SECTION_ARTICLES, False)
+
+    def test_contributors(self):
+        assert classify_entry('Contributors') == (SECTION_EDITORIAL, True)
+        assert classify_entry('Notes on Contributors') == (SECTION_EDITORIAL, True)
 
 
 class TestFindTocPage:
@@ -242,8 +264,8 @@ class TestFindPageOffset:
         # pdf_index 3 - printed_page 5 = -2
         assert offset == -2
 
-    def test_fallback_default(self):
-        """When nothing found, default to toc_page_idx - 1."""
+    def test_fallback_returns_none(self):
+        """When nothing found, returns None so caller can handle it."""
         pages = [
             "Cover",
             "CONTENTS\n...",
@@ -252,4 +274,200 @@ class TestFindPageOffset:
         ]
         doc = self._make_mock_doc(pages)
         offset = find_page_offset(doc, toc_page_idx=1)
-        assert offset == 0  # toc_page_idx(1) - 1 = 0
+        assert offset is None
+
+
+class TestParseBookReviews:
+    """Test parse_book_reviews() with mock fitz docs."""
+
+    def _make_mock_doc(self, pages_text):
+        """Create a mock PyMuPDF doc with given page texts."""
+        doc = MagicMock()
+        doc.__len__ = MagicMock(return_value=len(pages_text))
+        mock_pages = []
+        for text in pages_text:
+            page = MagicMock()
+            page.get_text.return_value = text
+            mock_pages.append(page)
+        doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
+        return doc
+
+    def test_two_book_reviews(self):
+        """Parse two book reviews across two pages."""
+        pages = [
+            # Page 0: first book review
+            (
+                "Book Reviews\n"
+                "\n"
+                "The Art of Existence\n"
+                "John Author. (2023). London: Academic Press.\n"
+                "\n"
+                "This is the review text for the first book.\n"
+                "It continues with discussion of themes.\n"
+                "\n"
+                "Sarah Reviewer\n"
+            ),
+            # Page 1: second book review
+            (
+                "\n"
+                "Living Authentically\n"
+                "Jane Writer. (2024). New York: Big Publisher.\n"
+                "\n"
+                "This is the review text for the second book.\n"
+                "More discussion follows here.\n"
+                "\n"
+                "Tom Critic\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=1)
+        assert len(reviews) == 2
+        assert reviews[0]['book_title'] == 'The Art of Existence'
+        assert reviews[0]['book_author'] == 'John Author'
+        assert reviews[0]['book_year'] == 2023
+        assert reviews[0]['section'] == SECTION_BOOK_REVIEWS
+        assert reviews[0]['title'] == 'Book Review: The Art of Existence'
+        assert reviews[0]['pdf_page_start'] == 0
+        assert reviews[1]['book_title'] == 'Living Authentically'
+        assert reviews[1]['book_author'] == 'Jane Writer'
+        assert reviews[1]['book_year'] == 2024
+        assert reviews[1]['pdf_page_start'] == 1
+
+    def test_three_book_reviews(self):
+        """Parse three book reviews across three pages."""
+        pages = [
+            (
+                "Meaning and Method\n"
+                "Alice Scholar. (2020). Cambridge: University Press.\n"
+                "\n"
+                "Review text here.\n"
+                "\n"
+                "Bob Reviewer\n"
+            ),
+            (
+                "Being and Time Revisited\n"
+                "Carol Thinker. (2021). Oxford: Clarendon.\n"
+                "\n"
+                "Review text here.\n"
+                "\n"
+                "Dan Critic\n"
+            ),
+            (
+                "Existential Perspectives\n"
+                "Eve Author. (2022). Berlin: Springer.\n"
+                "\n"
+                "Review text here.\n"
+                "\n"
+                "Fay Reader\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=2)
+        assert len(reviews) == 3
+        assert reviews[0]['book_title'] == 'Meaning and Method'
+        assert reviews[1]['book_title'] == 'Being and Time Revisited'
+        assert reviews[2]['book_title'] == 'Existential Perspectives'
+
+    def test_backmatter_boundary_stops_parsing(self):
+        """Stops parsing at 'Information for Contributors'."""
+        pages = [
+            (
+                "The Art of Existence\n"
+                "John Author. (2023). London: Academic Press.\n"
+                "\n"
+                "This is the review text.\n"
+                "\n"
+                "Sarah Reviewer\n"
+            ),
+            (
+                "Information for Contributors\n"
+                "\n"
+                "Please submit manuscripts to...\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=1)
+        assert len(reviews) == 1
+        assert reviews[0]['book_title'] == 'The Art of Existence'
+        # End page should be set before the backmatter page
+        assert reviews[0]['pdf_page_end'] == 0
+
+    def test_subscription_rates_stops_parsing(self):
+        """Stops parsing at 'Subscription Rates'."""
+        pages = [
+            (
+                "The Art of Existence\n"
+                "John Author. (2023). London: Academic Press.\n"
+                "\n"
+                "Review text.\n"
+                "\n"
+                "Sarah Reviewer\n"
+            ),
+            (
+                "Advertising Rates and other info\n"
+                "\n"
+                "Contact us for details.\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=1)
+        assert len(reviews) == 1
+        assert reviews[0]['pdf_page_end'] == 0
+
+
+class TestExtractReviewerName:
+    """Test extract_reviewer_name() finding a name at end of review pages."""
+
+    def _make_mock_doc(self, pages_text):
+        doc = MagicMock()
+        doc.__len__ = MagicMock(return_value=len(pages_text))
+        mock_pages = []
+        for text in pages_text:
+            page = MagicMock()
+            page.get_text.return_value = text
+            mock_pages.append(page)
+        doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
+        return doc
+
+    def test_finds_reviewer_at_end_of_page(self):
+        """Reviewer name as the last meaningful line."""
+        pages = [
+            (
+                "This is some review text discussing the book.\n"
+                "More analysis of themes and arguments.\n"
+                "\n"
+                "Sarah Thompson\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Sarah Thompson'
+
+    def test_skips_references(self):
+        """Should skip lines containing (year) references."""
+        pages = [
+            (
+                "This is review text.\n"
+                "\n"
+                "Tom Reviewer\n"
+                "\n"
+                "References\n"
+                "Smith, J. (2020). Some book. London: Press.\n"
+                "Jones, A. (2021). Another book. Oxford: Press.\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Tom Reviewer'
+
+    def test_returns_none_when_no_name_found(self):
+        """Returns None when no standalone name line exists."""
+        pages = [
+            (
+                "This is just some body text that goes on and on without any name.\n"
+                "And more text here about the review content that is quite long.\n"
+            ),
+        ]
+        doc = self._make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer is None

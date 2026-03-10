@@ -10,6 +10,9 @@ from backfill.generate_xml import (
     parse_date,
     split_author_name,
     generate_xml,
+    lookup_doi,
+    load_doi_registry,
+    _normalize_title,
     SECTIONS,
 )
 
@@ -248,3 +251,108 @@ class TestXmlEscaping:
         xml_str = generate_xml(toc)
         # Should parse without error
         root = ET.fromstring(xml_str)
+
+
+class TestDoiLookup:
+    """Test DOI registry loading and lookup."""
+
+    def _mock_registry(self):
+        """Build a mock DOI registry for testing."""
+        return {
+            (_normalize_title('Editorial'), '36', '2'): '10.65828/aaa',
+            (_normalize_title('37.1 Editorial'), '37', '1'): '10.65828/bbb',
+            (_normalize_title('Therapy for the Revolution'), '37', '1'): '10.65828/ccc',
+            (_normalize_title('Book reviews editorial'), '37', '1'): '10.65828/ddd',
+            (_normalize_title('An existential psychoanalyst'), '37', '1'): '10.65828/eee',
+            '_aliases': {
+                _normalize_title('Obituary: Andrea Sabbadini'): _normalize_title('An existential psychoanalyst'),
+            },
+        }
+
+    def test_exact_match(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Therapy for the Revolution', '37', '1') == '10.65828/ccc'
+
+    def test_prefix_match_with_subtitle(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Therapy for the Revolution: Lessons from the front line', '37', '1') == '10.65828/ccc'
+
+    def test_editorial_naming(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Editorial', '37', '1') == '10.65828/bbb'
+
+    def test_book_reviews_to_editorial(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Book Reviews', '37', '1') == '10.65828/ddd'
+
+    def test_alias_override(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Obituary: Andrea Sabbadini', '37', '1') == '10.65828/eee'
+
+    def test_wrong_volume_no_match(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Therapy for the Revolution', '99', '1') is None
+
+    def test_no_match_returns_none(self):
+        reg = self._mock_registry()
+        assert lookup_doi(reg, 'Completely Unknown Article', '37', '1') is None
+
+    def test_book_review_prefix_strip(self):
+        reg = self._mock_registry()
+        # "Book Review: An existential psychoanalyst" should match via prefix strip
+        assert lookup_doi(reg, 'Book Review: An existential psychoanalyst', '37', '1') == '10.65828/eee'
+
+    def test_real_registry_loads(self):
+        """Verify the actual doi-registry.json loads without errors."""
+        reg = load_doi_registry()
+        assert len(reg) > 40  # 41 DOIs + _aliases key
+
+
+class TestDoiInXml:
+    """Test that DOIs appear correctly in generated XML."""
+
+    def test_doi_in_publication(self):
+        toc = {
+            'volume': 37, 'issue': 1, 'date': 'January 2026',
+            'articles': [{
+                'title': 'Test Article',
+                'authors': 'John Doe',
+                'section': 'Articles',
+                'journal_page_start': 1,
+                'journal_page_end': 10,
+                'pdf_page_start': 1,
+                'pdf_page_end': 10,
+            }],
+        }
+        doi_registry = {
+            (_normalize_title('Test Article'), '37', '1'): '10.65828/test123',
+            '_aliases': {},
+        }
+        xml_str = generate_xml(toc, doi_registry=doi_registry)
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        ids = root.findall('.//ojs:publication/ojs:id', ns)
+        doi_ids = [i for i in ids if i.get('type') == 'doi']
+        assert len(doi_ids) == 1
+        assert doi_ids[0].text == '10.65828/test123'
+        assert doi_ids[0].get('advice') == 'update'
+
+    def test_no_doi_when_not_in_registry(self):
+        toc = {
+            'volume': 1, 'issue': 1, 'date': 'January 1990',
+            'articles': [{
+                'title': 'Old Article',
+                'authors': None,
+                'section': 'Articles',
+                'journal_page_start': 1,
+                'journal_page_end': 10,
+                'pdf_page_start': 1,
+                'pdf_page_end': 10,
+            }],
+        }
+        xml_str = generate_xml(toc, doi_registry={('_aliases'): {}})
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        ids = root.findall('.//ojs:publication/ojs:id', ns)
+        doi_ids = [i for i in ids if i.get('type') == 'doi']
+        assert len(doi_ids) == 0

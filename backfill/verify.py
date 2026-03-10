@@ -31,20 +31,23 @@ import subprocess
 def run_db_query(query, docker_container=None, db_host=None, db_port=None,
                  db_name='ojs', db_user='ojs', db_pass='ojs'):
     """Run a MariaDB query and return rows as list of dicts."""
+    env = None
     if docker_container:
         cmd = [
-            'docker', 'exec', docker_container,
-            'mariadb', '-u', db_user, f'-p{db_pass}', db_name,
+            'docker', 'exec', '-e', f'MYSQL_PWD={db_pass}',
+            docker_container,
+            'mariadb', '-u', db_user, db_name,
             '-N', '-e', query,
         ]
     else:
         cmd = [
             'mariadb', '-h', db_host or '127.0.0.1', '-P', str(db_port or 3306),
-            '-u', db_user, f'-p{db_pass}', db_name,
+            '-u', db_user, db_name,
             '-N', '-e', query,
         ]
+        env = {**os.environ, 'MYSQL_PWD': db_pass}
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if result.returncode != 0:
         print(f"  DB ERROR: {result.stderr.strip()}", file=sys.stderr)
         return []
@@ -78,10 +81,20 @@ def find_ojs_container(role='db'):
     return None
 
 
-def verify_issue(toc_data, container=None, **db_opts):
+def verify_issue(toc_data, container=None, journal_path='ea', **db_opts):
     """Verify an imported issue against expected TOC data."""
-    vol = toc_data.get('volume')
-    iss = toc_data.get('issue')
+    raw_vol = toc_data.get('volume')
+    raw_iss = toc_data.get('issue')
+    try:
+        vol = int(raw_vol)
+        iss = int(raw_iss)
+    except (ValueError, TypeError):
+        print(f"  ERROR: volume ({raw_vol!r}) and issue ({raw_iss!r}) must be integers",
+              file=sys.stderr)
+        return {
+            'volume': raw_vol, 'issue': raw_iss,
+            'checks': [], 'errors': 1, 'warnings': 0,
+        }
     year = toc_data.get('date', '').split()[-1] if toc_data.get('date') else None
 
     results = {
@@ -105,18 +118,32 @@ def verify_issue(toc_data, container=None, **db_opts):
         results['warnings'] += 1
         print(f"  ⚠ {name}" + (f" — {detail}" if detail else ''))
 
+    # Validate journal_path
+    if not re.match(r'^[a-zA-Z0-9_-]+$', journal_path):
+        print(f"  ERROR: Invalid journal path '{journal_path}'", file=sys.stderr)
+        return results
+
+    # Look up journal_id from path
+    journal_query = f"SELECT journal_id FROM journals WHERE path = '{journal_path}'"
+    rows = run_db_query(journal_query, docker_container=container, **db_opts)
+    if not rows:
+        check('Journal exists', False, f"Journal path '{journal_path}' not found")
+        return results
+    journal_id = int(rows[0][0])
+    check('Journal exists', True, f'journal_id={journal_id}')
+
     # 1. Find the issue (volume/number/year are columns in the issues table, not issue_settings)
     issue_query = f"""
         SELECT i.issue_id, i.volume, i.number, i.year
         FROM issues i
-        WHERE i.journal_id = 1 AND i.volume = {vol} AND i.number = {iss}
+        WHERE i.journal_id = {journal_id} AND i.volume = {vol} AND i.number = {iss}
     """
     rows = run_db_query(issue_query, docker_container=container, **db_opts)
     if not rows:
         check('Issue exists', False, f'Vol {vol}.{iss} not found in OJS')
         return results
 
-    issue_id = rows[0][0]
+    issue_id = int(rows[0][0])
     check('Issue exists', True, f'issue_id={issue_id}')
 
     if year:
@@ -134,7 +161,7 @@ def verify_issue(toc_data, container=None, **db_opts):
         JOIN submissions sub ON p.submission_id = sub.submission_id
         LEFT JOIN section_settings ss ON p.section_id = ss.section_id
             AND ss.setting_name = 'abbrev' AND ss.locale = 'en'
-        WHERE sub.context_id = 1
+        WHERE sub.context_id = {journal_id}
         AND p.issue_id = {issue_id}
         ORDER BY p.seq
     """
@@ -260,6 +287,7 @@ def main():
     parser.add_argument('--db-name', default='ojs')
     parser.add_argument('--db-user', default='ojs')
     parser.add_argument('--db-pass', default='ojs')
+    parser.add_argument('--journal-path', default='ea', help='OJS journal path (default: ea)')
     args = parser.parse_args()
 
     with open(args.toc_json) as f:
@@ -303,7 +331,7 @@ def main():
         db_opts['db_host'] = args.db_host
         db_opts['db_port'] = args.db_port
 
-    results = verify_issue(toc_data, container=container, **db_opts)
+    results = verify_issue(toc_data, container=container, journal_path=args.journal_path, **db_opts)
 
     print(f"\n{'='*50}")
     print(f"Results: {len(results['checks'])} checks, "

@@ -120,13 +120,115 @@ def split_author_name(full_name):
     return authors if authors else [('', '')]
 
 
+def load_doi_registry(script_dir=None):
+    """Load the DOI registry (existing Crossref DOIs to preserve).
+
+    Returns a dict keyed by (normalized_title, volume, issue) -> DOI string.
+    """
+    if script_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+    registry_path = os.path.join(script_dir, 'doi-registry.json')
+    if not os.path.exists(registry_path):
+        return {}
+    with open(registry_path) as f:
+        data = json.load(f)
+    lookup = {}
+    for entry in data.get('dois', []):
+        key = (_normalize_title(entry['title']), entry['volume'], entry['issue'])
+        lookup[key] = entry['doi']
+    # Load aliases (TOC title -> Crossref title) for manual overrides
+    lookup['_aliases'] = {}
+    for toc_title, crossref_title in data.get('aliases', {}).items():
+        if toc_title.startswith('_'):
+            continue
+        lookup['_aliases'][_normalize_title(toc_title)] = _normalize_title(crossref_title)
+    return lookup
+
+
+def _normalize_title(title):
+    """Normalize a title for DOI matching (lowercase, collapse whitespace, strip punctuation)."""
+    title = title.strip().lower()
+    # Collapse whitespace
+    title = re.sub(r'\s+', ' ', title)
+    # Strip leading/trailing punctuation
+    title = title.strip(' .,;:')
+    return title
+
+
+def lookup_doi(doi_registry, title, volume, issue):
+    """Look up an existing DOI for an article by title + volume + issue.
+
+    Tries exact match first, then falls back to prefix matching (TOC titles
+    often include subtitles that Crossref entries omit). Also handles
+    'Book Review: ...' prefixes and editorial naming differences.
+    """
+    vol = str(volume)
+    iss = str(issue)
+    norm = _normalize_title(title)
+
+    # Check aliases (manual title overrides)
+    aliases = doi_registry.get('_aliases', {})
+    if norm in aliases:
+        aliased = aliases[norm]
+        key = (aliased, vol, iss)
+        if key in doi_registry:
+            return doi_registry[key]
+
+    # Exact match
+    key = (norm, vol, iss)
+    if key in doi_registry:
+        return doi_registry[key]
+
+    # Strip 'book review: ' prefix and try again
+    stripped = re.sub(r'^book reviews?\s*:\s*', '', norm)
+    if stripped != norm:
+        key = (stripped, vol, iss)
+        if key in doi_registry:
+            return doi_registry[key]
+
+    # Strip 'obituary: ' prefix — Crossref may use the person's name as title
+    stripped = re.sub(r'^obituary\s*:\s*', '', norm)
+    if stripped != norm:
+        key = (stripped, vol, iss)
+        if key in doi_registry:
+            return doi_registry[key]
+
+    # Prefix match: TOC title starts with registry title (subtitle after colon)
+    for key_entry, doi in doi_registry.items():
+        if not isinstance(key_entry, tuple):
+            continue
+        reg_title, reg_vol, reg_iss = key_entry
+        if reg_vol != vol or reg_iss != iss:
+            continue
+        # Registry title is a prefix of the TOC title (min 20 chars to avoid false positives)
+        if len(reg_title) >= 20 and norm.startswith(reg_title):
+            return doi
+        # TOC title (after stripping prefixes) starts with registry title
+        if len(reg_title) >= 20 and stripped != norm and stripped.startswith(reg_title):
+            return doi
+
+    # Editorial naming: 'editorial' in TOC vs '{vol}.{iss} editorial' in Crossref
+    if norm == 'editorial':
+        key = (f'{vol}.{iss} editorial', vol, iss)
+        if key in doi_registry:
+            return doi_registry[key]
+
+    # 'Book Reviews' (section header) vs 'book reviews editorial' in Crossref
+    if norm in ('book reviews', 'book review'):
+        key = ('book reviews editorial', vol, iss)
+        if key in doi_registry:
+            return doi_registry[key]
+
+    return None
+
+
 def encode_pdf(pdf_path):
     """Read a PDF file and return base64-encoded content."""
     with open(pdf_path, 'rb') as f:
         return base64.b64encode(f.read()).decode('ascii')
 
 
-def generate_article_xml(article, article_idx, date_published, indent='      '):
+def generate_article_xml(article, article_idx, date_published, indent='      ', doi=None):
     """Generate XML for a single article."""
     i = indent
     i2 = indent + '  '
@@ -192,6 +294,8 @@ def generate_article_xml(article, article_idx, date_published, indent='      '):
                  f' section_ref="{section_ref}"'
                  f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
     lines.append(f'{i3}<id type="internal" advice="ignore">{pub_id}</id>')
+    if doi:
+        lines.append(f'{i3}<id type="doi" advice="update">{escape(doi)}</id>')
     lines.append(f'{i3}<title locale="en">{title}</title>')
 
     # Abstract
@@ -224,7 +328,10 @@ def generate_article_xml(article, article_idx, date_published, indent='      '):
             lines.append(f'{i4}  <familyname locale="en">{escape(family)}</familyname>')
             lines.append(f'{i4}  <country>GB</country>')
             # Email is required by OJS — use a placeholder
-            email = f'{given.lower().replace(" ", "")}.{family.lower().replace(" ", "")}@placeholder.invalid'
+            if given:
+                email = f'{given.lower().replace(" ", "")}.{family.lower().replace(" ", "")}@placeholder.invalid'
+            else:
+                email = f'{family.lower().replace(" ", "")}@placeholder.invalid'
             email = re.sub(r'[^a-z0-9.@_-]', '', email)
             lines.append(f'{i4}  <email>{email}</email>')
             lines.append(f'{i4}</author>')
@@ -247,13 +354,16 @@ def generate_article_xml(article, article_idx, date_published, indent='      '):
     return '\n'.join(lines)
 
 
-def generate_xml(toc_data):
+def generate_xml(toc_data, doi_registry=None):
     """Generate complete OJS Native XML for an issue."""
     vol = toc_data.get('volume', 1)
     iss = toc_data.get('issue', 1)
     date_str = toc_data.get('date')
     date_published = parse_date(date_str)
     year = date_published[:4]
+
+    if doi_registry is None:
+        doi_registry = load_doi_registry()
 
     # Determine which sections are actually used
     used_sections = set()
@@ -296,9 +406,15 @@ def generate_xml(toc_data):
 
     # Articles
     lines.append(f'    <articles>')
+    doi_count = 0
     for idx, article in enumerate(toc_data['articles']):
-        lines.append(generate_article_xml(article, idx, date_published, indent='      '))
+        doi = lookup_doi(doi_registry, article['title'], vol, iss)
+        if doi:
+            doi_count += 1
+        lines.append(generate_article_xml(article, idx, date_published, indent='      ', doi=doi))
     lines.append(f'    </articles>')
+    if doi_count > 0:
+        print(f"DOIs preserved: {doi_count}", file=sys.stderr)
 
     # Close
     lines.append(f'  </issue>')
@@ -312,21 +428,21 @@ def main():
         description='Generate OJS Native XML from TOC JSON')
     parser.add_argument('toc_json', help='TOC JSON file (from parse_toc.py + split.py)')
     parser.add_argument('--output', '-o', help='Output XML file (default: stdout)')
-    parser.add_argument('--dry-run', action='store_true',
+    parser.add_argument('--no-pdfs', action='store_true',
                         help='Skip PDF embedding (much faster, for testing XML structure)')
     args = parser.parse_args()
 
     with open(args.toc_json) as f:
         toc_data = json.load(f)
 
-    if args.dry_run:
+    if args.no_pdfs:
         # Remove PDF paths so they won't be embedded
         for article in toc_data['articles']:
             article.pop('split_pdf', None)
 
     print(f"Generating XML for Vol {toc_data.get('volume')}.{toc_data.get('issue')}", file=sys.stderr)
     print(f"Articles: {len(toc_data['articles'])}", file=sys.stderr)
-    if not args.dry_run:
+    if not args.no_pdfs:
         pdfs = sum(1 for a in toc_data['articles'] if a.get('split_pdf'))
         print(f"PDFs to embed: {pdfs}", file=sys.stderr)
 

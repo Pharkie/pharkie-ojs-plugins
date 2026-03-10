@@ -58,7 +58,7 @@ def find_page_offset(doc, toc_page_idx):
             printed_page = int(m.group(1))
             return test_idx - printed_page
 
-    return toc_page_idx - 1
+    return None
 
 
 def journal_page_to_pdf_index(journal_page, offset):
@@ -177,12 +177,35 @@ def parse_toc_text(toc_text):
 
 
 def classify_entry(title):
+    """Classify a TOC entry into an OJS section.
+
+    Returns a (section, skip) tuple where skip=True means the entry
+    should be omitted from output (e.g. 'Notes on Contributors').
+    """
     title_lower = title.lower().strip()
     if title_lower == 'editorial':
-        return SECTION_EDITORIAL
+        return (SECTION_EDITORIAL, False)
     if title_lower == 'book reviews':
-        return SECTION_BOOK_REVIEW_EDITORIAL
-    return SECTION_ARTICLES
+        return (SECTION_BOOK_REVIEW_EDITORIAL, False)
+    # Obituaries and errata are free content, filed under Editorial
+    if title_lower in ('obituary', 'erratum', 'errata') or title_lower.startswith('obituary:'):
+        return (SECTION_EDITORIAL, False)
+    # Correspondence / letters are articles
+    if title_lower in ('correspondence', 'letters'):
+        return (SECTION_ARTICLES, False)
+    # Contributors lists — skip these from output
+    if title_lower in ('contributors', 'notes on contributors'):
+        return (SECTION_EDITORIAL, True)
+    # Known article-like patterns: anything with substantial text
+    # Warn on short/unusual titles that might be new section types
+    known_section_words = {
+        'editorial', 'book reviews', 'obituary', 'erratum', 'errata',
+        'correspondence', 'letters', 'contributors', 'notes on contributors',
+    }
+    if title_lower not in known_section_words and len(title_lower.split()) <= 2:
+        print(f"WARNING: Unknown short TOC entry '{title}' — classifying as Articles. "
+              f"May be a new section type.", file=sys.stderr)
+    return (SECTION_ARTICLES, False)
 
 
 def extract_article_metadata(doc, pdf_start_idx, pdf_end_idx):
@@ -410,6 +433,9 @@ def main():
     parser.add_argument('--output', '-o', help='Output JSON file (default: stdout)')
     parser.add_argument('--no-metadata', action='store_true',
                         help='Skip per-article metadata extraction (faster)')
+    parser.add_argument('--page-offset', type=int, default=None,
+                        help='Manual page offset (pdf_index = journal_page + offset). '
+                             'Use when auto-detection fails.')
     args = parser.parse_args()
 
     doc = fitz.open(args.pdf)
@@ -420,8 +446,24 @@ def main():
         sys.exit(1)
     print(f"TOC found on PDF page {toc_page_idx + 1}", file=sys.stderr)
 
-    offset = find_page_offset(doc, toc_page_idx)
-    print(f"Page offset: journal_page + {offset} = pdf_index", file=sys.stderr)
+    if args.page_offset is not None:
+        offset = args.page_offset
+        print(f"Page offset (manual): journal_page + {offset} = pdf_index", file=sys.stderr)
+    else:
+        offset = find_page_offset(doc, toc_page_idx)
+        if offset is None:
+            print(
+                "ERROR: Could not determine page offset automatically.\n"
+                "  Strategy 1 (find EDITORIAL heading on journal page 3): no match.\n"
+                "  Strategy 2 (find printed page numbers in headers): no match.\n"
+                "\n"
+                "Please supply the offset manually with --page-offset=N\n"
+                "  where pdf_index = journal_page + N.\n"
+                "  (e.g. if journal page 3 is on PDF page 5, then N = 2)",
+                file=sys.stderr
+            )
+            sys.exit(1)
+        print(f"Page offset: journal_page + {offset} = pdf_index", file=sys.stderr)
 
     toc_text = doc[toc_page_idx].get_text()
 
@@ -458,7 +500,9 @@ def main():
         pdf_start = journal_page_to_pdf_index(entry['page'], offset)
         pdf_end = journal_page_to_pdf_index(end_journal, offset) if end_journal else len(doc) - 1
 
-        section = classify_entry(entry['title'])
+        section, skip = classify_entry(entry['title'])
+        if skip:
+            continue
 
         article = {
             'title': entry['title'],
@@ -475,6 +519,31 @@ def main():
             article.update(meta)
 
         articles.append(article)
+
+    # Validate page ranges
+    validated_articles = []
+    for idx, article in enumerate(articles):
+        start = article['pdf_page_start']
+        end = article['pdf_page_end']
+
+        # Check for backwards ranges (end < start)
+        if end < start:
+            print(f"WARNING: Skipping '{article['title']}' — backwards page range "
+                  f"(pdf pages {start}–{end})", file=sys.stderr)
+            continue
+
+        # Check for overlapping ranges with previous article
+        if validated_articles:
+            prev = validated_articles[-1]
+            if start <= prev['pdf_page_end']:
+                old_end = prev['pdf_page_end']
+                prev['pdf_page_end'] = start - 1
+                prev['journal_page_end'] = prev['pdf_page_end'] - offset
+                print(f"WARNING: Overlapping page ranges — '{prev['title']}' end adjusted "
+                      f"from pdf page {old_end} to {prev['pdf_page_end']}", file=sys.stderr)
+
+        validated_articles.append(article)
+    articles = validated_articles
 
     # Split Book Reviews into editorial + individual reviews
     final_articles = []
