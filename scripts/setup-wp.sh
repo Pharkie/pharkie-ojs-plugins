@@ -115,8 +115,6 @@ fi
 # Activate the SEAcomm theme if available, otherwise fall back to twentytwentyfive
 if wp theme is-installed seacomm --allow-root 2>/dev/null; then
   wp theme activate seacomm --allow-root 2>/dev/null
-  # Clear Gantry5 compiled cache (stale cache causes 500 after fresh install/upgrade)
-  rm -rf /var/www/html/web/app/cache/gantry5/ 2>/dev/null || true
   echo "[ok] SEAcomm theme activated."
 elif ! wp theme is-installed twentytwentyfive --allow-root 2>/dev/null; then
   wp theme install twentytwentyfive --activate --allow-root
@@ -141,6 +139,10 @@ for PLUGIN in "${REQUIRED_PLUGINS[@]}"; do
     wp_quiet plugin activate "$PLUGIN"
   fi
 done
+
+# Clear Gantry5 compiled cache after all plugins are active.
+# Theme activation before gantry5 plugin activation generates broken cache → 500.
+rm -rf /var/www/html/web/app/cache/gantry5/ 2>/dev/null || true
 
 # --- WooCommerce readiness gate ---
 # After activation, WC defers DB table creation and option seeding to the next
