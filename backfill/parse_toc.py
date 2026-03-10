@@ -16,6 +16,7 @@ import os
 import re
 import json
 import argparse
+import tempfile
 import fitz  # PyMuPDF
 
 
@@ -602,8 +603,15 @@ def main():
 
     result = json.dumps(output, indent=2, ensure_ascii=False)
     if args.output:
-        with open(args.output, 'w') as f:
-            f.write(result)
+        out_dir = os.path.dirname(os.path.abspath(args.output))
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=out_dir, suffix='.json.tmp')
+        try:
+            with os.fdopen(tmp_fd, 'w') as f:
+                f.write(result)
+            os.replace(tmp_path, args.output)
+        except BaseException:
+            os.unlink(tmp_path)
+            raise
         print(f"\nWritten to {args.output}", file=sys.stderr)
     else:
         print(result)

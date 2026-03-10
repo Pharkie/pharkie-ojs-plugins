@@ -118,7 +118,8 @@ def verify_issue(toc_data, container=None, journal_path='ea', **db_opts):
         results['warnings'] += 1
         print(f"  ⚠ {name}" + (f" — {detail}" if detail else ''))
 
-    # Validate journal_path
+    # Validate journal_path — SAFETY: this regex check is required to prevent
+    # SQL injection in the f-string queries below. Do not remove or relax.
     if not re.match(r'^[a-zA-Z0-9_-]+$', journal_path):
         print(f"  ERROR: Invalid journal path '{journal_path}'", file=sys.stderr)
         return results

@@ -22,6 +22,8 @@ import re
 import json
 import base64
 import argparse
+import unicodedata
+from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 from datetime import datetime
 
@@ -327,11 +329,15 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
             lines.append(f'{i4}  <givenname locale="en">{escape(given)}</givenname>')
             lines.append(f'{i4}  <familyname locale="en">{escape(family)}</familyname>')
             lines.append(f'{i4}  <country>GB</country>')
-            # Email is required by OJS — use a placeholder
+            # Email is required by OJS — use a placeholder.
+            # Transliterate accented chars (é→e, ü→u) instead of stripping.
+            def _ascii(s):
+                nfkd = unicodedata.normalize('NFKD', s)
+                return ''.join(c for c in nfkd if not unicodedata.combining(c)).lower().replace(' ', '')
             if given:
-                email = f'{given.lower().replace(" ", "")}.{family.lower().replace(" ", "")}@placeholder.invalid'
+                email = f'{_ascii(given)}.{_ascii(family)}@placeholder.invalid'
             else:
-                email = f'{family.lower().replace(" ", "")}@placeholder.invalid'
+                email = f'{_ascii(family)}@placeholder.invalid'
             email = re.sub(r'[^a-z0-9.@_-]', '', email)
             lines.append(f'{i4}  <email>{email}</email>')
             lines.append(f'{i4}</author>')
@@ -447,6 +453,13 @@ def main():
         print(f"PDFs to embed: {pdfs}", file=sys.stderr)
 
     xml = generate_xml(toc_data)
+
+    # Validate generated XML is well-formed
+    try:
+        ET.fromstring(xml)
+    except ET.ParseError as e:
+        print(f"ERROR: Generated XML is malformed: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if args.output:
         with open(args.output, 'w', encoding='utf-8') as f:

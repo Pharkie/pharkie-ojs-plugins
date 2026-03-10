@@ -23,6 +23,7 @@ import os
 import re
 import json
 import argparse
+import tempfile
 import fitz  # PyMuPDF
 
 
@@ -90,10 +91,16 @@ def split_pdf(toc_data, output_dir):
     if skipped > 0:
         print(f"WARNING: {skipped}/{total} articles have no split PDF (skipped due to bad page ranges)", file=sys.stderr)
 
-    # Save updated TOC with split file paths
+    # Save updated TOC with split file paths (atomic write)
     toc_output = os.path.join(issue_dir, 'toc.json')
-    with open(toc_output, 'w') as f:
-        json.dump(toc_data, f, indent=2, ensure_ascii=False)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=issue_dir, suffix='.json.tmp')
+    try:
+        with os.fdopen(tmp_fd, 'w') as f:
+            json.dump(toc_data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, toc_output)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
     print(f"\nUpdated TOC written to {toc_output}", file=sys.stderr)
 
     return created

@@ -28,6 +28,7 @@ import re
 import json
 import argparse
 import fcntl
+import tempfile
 import unicodedata
 from difflib import SequenceMatcher
 
@@ -83,7 +84,12 @@ def similarity(a, b):
 
 
 class AuthorRegistry:
-    """Maintains canonical author names and their variants."""
+    """Maintains canonical author names and their variants.
+
+    NOTE: Concurrent runs are not supported. The file lock only protects
+    individual read/write operations, not the full load-modify-save cycle.
+    Run author normalization sequentially (one process at a time).
+    """
 
     def __init__(self, path=REGISTRY_PATH):
         self.path = path
@@ -101,10 +107,15 @@ class AuthorRegistry:
             self._rebuild_index()
 
     def save(self):
-        with open(self.path, 'w') as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            json.dump(self.entries, f, indent=2, ensure_ascii=False, sort_keys=True)
-            fcntl.flock(f, fcntl.LOCK_UN)
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=os.path.dirname(os.path.abspath(self.path)), suffix='.json.tmp')
+        try:
+            with os.fdopen(tmp_fd, 'w') as f:
+                json.dump(self.entries, f, indent=2, ensure_ascii=False, sort_keys=True)
+            os.replace(tmp_path, self.path)
+        except BaseException:
+            os.unlink(tmp_path)
+            raise
 
     def _rebuild_index(self):
         self._key_index = {}
@@ -234,19 +245,22 @@ def process_toc(toc_path, registry):
 
         names = split_multiple_authors(raw_authors)
         normalized_names = []
+        already_counted = article.get('_authors_counted', False)
 
         for name in names:
             canonical, match_type = registry.lookup(name)
 
             if match_type == 'exact':
                 normalized_names.append(canonical)
-                registry.increment(canonical)
+                if not already_counted:
+                    registry.increment(canonical)
 
             elif match_type == 'fuzzy':
                 print(f"  FUZZY: '{name}' -> '{canonical}'", file=sys.stderr)
                 registry.add(canonical, variant=name)
                 normalized_names.append(canonical)
-                registry.increment(canonical)
+                if not already_counted:
+                    registry.increment(canonical)
                 changes += 1
 
             elif match_type == 'ambiguous':
@@ -263,8 +277,11 @@ def process_toc(toc_path, registry):
             elif match_type == 'new':
                 registry.add(name)
                 normalized_names.append(name)
-                registry.increment(name)
+                if not already_counted:
+                    registry.increment(name)
                 changes += 1
+
+        article['_authors_counted'] = True
 
         # Update the article with normalized names
         new_authors = ' & '.join(normalized_names)
@@ -272,9 +289,16 @@ def process_toc(toc_path, registry):
             article['authors_original'] = raw_authors
             article['authors'] = new_authors
 
-    # Save updated TOC
-    with open(toc_path, 'w') as f:
-        json.dump(toc, f, indent=2, ensure_ascii=False)
+    # Save updated TOC (atomic write)
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(os.path.abspath(toc_path)), suffix='.json.tmp')
+    try:
+        with os.fdopen(tmp_fd, 'w') as f:
+            json.dump(toc, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, toc_path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
     print(f"  {changes} new/updated entries, {len(review_items)} need review", file=sys.stderr)
     return review_items

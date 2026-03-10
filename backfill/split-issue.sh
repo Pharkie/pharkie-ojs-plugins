@@ -102,10 +102,12 @@ should_run() {
 FAILED=0
 SUCCEEDED=0
 
+PDF_NUM=0
 for PDF in "${EXPANDED_PDFS[@]}"; do
+  PDF_NUM=$((PDF_NUM + 1))
   PDF_ABS="$(cd "$(dirname "$PDF")" && pwd)/$(basename "$PDF")"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Processing: $(basename "$PDF")"
+  echo "Processing ($PDF_NUM/${#EXPANDED_PDFS[@]}): $(basename "$PDF")"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # Step 1: Preflight
