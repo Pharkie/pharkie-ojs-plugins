@@ -167,7 +167,7 @@ document.addEventListener("DOMContentLoaded", function() {
         $templateMgr = $args[0];
         $template = $args[1] ?? '';
 
-        if (str_contains($template, 'lostPassword.tpl')) {
+        if (str_contains($template, 'userLostPassword.tpl')) {
             $wpSiteUrl = Config::getVar('wpojs', 'wp_member_url', '');
             $wpResetUrl = rtrim($wpSiteUrl, '/') . '/wp-login.php?action=lostpassword';
 

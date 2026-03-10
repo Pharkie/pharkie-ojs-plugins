@@ -31,6 +31,19 @@ test.describe('OJS UI messages', () => {
     await page.screenshot({ path: 'e2e/screenshots/ojs-login-hint.png', fullPage: true });
   });
 
+  test('password reset page shows warning hint', async ({ page }) => {
+    await page.goto(`${OJS_BASE}/index.php/journal/login/lostPassword`);
+    const hint = page.locator('.wpojs-pw-reset-hint');
+    await expect(hint).toBeVisible({ timeout: 10_000 });
+    // Should mention password sync / membership website.
+    await expect(hint).toContainText(/password/i);
+    // Should contain a link to the WP password reset page.
+    const link = hint.locator('a[href*="wp-login.php?action=lostpassword"]');
+    await expect(link).toBeVisible();
+
+    await page.screenshot({ path: 'e2e/screenshots/ojs-pw-reset-hint.png', fullPage: true });
+  });
+
   test('site footer shows membership message', async ({ page }) => {
     await page.goto(`${OJS_BASE}/index.php/journal`);
     // Footer message contains "membership" and a link to the WP site.
