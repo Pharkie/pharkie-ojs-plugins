@@ -16,7 +16,7 @@
     "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
     "source=${localEnv:HOME}/Screenshots,target=/home/vscode/Screenshots,type=bind,readonly",
     "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
-    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly",
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind",
     "source=${localEnv:HOME}/.config/hcloud,target=/home/vscode/.config/hcloud,type=bind",
     // Performance: keep heavy I/O dirs on native Linux volumes instead of VirtioFS bind mount
     "source=wpojs-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",

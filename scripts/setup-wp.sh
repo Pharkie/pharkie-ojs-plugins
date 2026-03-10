@@ -195,8 +195,8 @@ if [ "$SAMPLE_DATA" = true ]; then
     # Capture full output so we can check for errors, show progress.
     IMPORT_LOG=$(mktemp)
     wp user import-csv "$CSV" --allow-root 2>&1 | tee "$IMPORT_LOG" | awk '
-      /^Success:/ { count++; if (count % 200 == 0) printf "  ...imported %d users\n", count }
-      END { if (count > 200) printf "  ...imported %d users (done)\n", count }'
+      /^Success:/ { count++; if (count % 200 == 0) { printf "  ...imported %d/%d users\n", count, 1418; fflush() } }
+      END { printf "  ...imported %d/%d users (done)\n", count, count; fflush() }'
     IMPORT_EXIT=${PIPESTATUS[0]}
     if [ "$IMPORT_EXIT" != "0" ]; then
       echo "ERROR: User import failed (exit $IMPORT_EXIT). Last 20 lines:"

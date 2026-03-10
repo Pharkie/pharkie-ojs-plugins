@@ -25,7 +25,10 @@ for arg in "$@"; do
 done
 
 REMOTE_DIR="/opt/wp-ojs-sync"
-SSH_CMD="ssh -o ConnectTimeout=10 $SSH_HOST"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+resolve_ssh "$SSH_HOST"
 
 # Check hey is installed
 if ! command -v hey &>/dev/null; then

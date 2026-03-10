@@ -13,7 +13,7 @@
 #   scripts/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
 #
 # Prerequisites:
-#   - SSH access configured (Host entry in ~/.ssh/config)
+#   - hcloud CLI with active context (resolves server IP automatically)
 #   - .env file on VPS (use --env-file on first deploy to copy it)
 set -eo pipefail
 
@@ -40,9 +40,11 @@ done
 REMOTE_DIR="/opt/wp-ojs-sync"
 REPO_URL="https://github.com/Pharkie/wp-ojs-sync.git"
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
-SSH_CMD="ssh -o ConnectTimeout=10 $SSH_HOST"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+resolve_ssh "$SSH_HOST"
 
 DEPLOY_START=$(date +%s)
 phase_time() {
@@ -89,8 +91,8 @@ if [ -n "$ENV_FILE" ]; then
     echo "ERROR: Local env file not found: $ENV_FILE"
     exit 1
   fi
-  scp -o ConnectTimeout=10 "$ENV_FILE" "$SSH_HOST:$REMOTE_DIR/.env"
-  echo "[ok] Env file copied to $SSH_HOST:$REMOTE_DIR/.env"
+  $SCP_CMD "$ENV_FILE" "$SCP_HOST:$REMOTE_DIR/.env"
+  echo "[ok] Env file copied to $SCP_HOST:$REMOTE_DIR/.env"
 fi
 
 # --- Check .env exists on remote ---
@@ -121,8 +123,8 @@ fi
 echo "--- Syncing non-git files ---"
 PAID_PLUGINS="$PROJECT_DIR/wordpress/paid-plugins"
 if [ -d "$PAID_PLUGINS" ] && [ "$(ls -A "$PAID_PLUGINS" 2>/dev/null | grep -v README)" ]; then
-  rsync -az --exclude='README.md' -e "ssh -o ConnectTimeout=10" \
-    "$PAID_PLUGINS/" "$SSH_HOST:$REMOTE_DIR/wordpress/paid-plugins/"
+  rsync -az --exclude='README.md' -e "$RSYNC_SSH" \
+    "$PAID_PLUGINS/" "$SCP_HOST:$REMOTE_DIR/wordpress/paid-plugins/"
   echo "[ok] Paid plugins synced."
 else
   echo "[skip] No paid plugins found locally."
@@ -131,8 +133,8 @@ fi
 IMPORT_XML="$PROJECT_DIR/data export/ojs-import-clean.xml"
 if [ -f "$IMPORT_XML" ]; then
   $SSH_CMD "mkdir -p '$REMOTE_DIR/data export'"
-  rsync -az -e "ssh -o ConnectTimeout=10" \
-    "$IMPORT_XML" "$SSH_HOST:$REMOTE_DIR/data export/ojs-import-clean.xml"
+  rsync -az -e "$RSYNC_SSH" \
+    "$IMPORT_XML" "$SCP_HOST:$REMOTE_DIR/data export/ojs-import-clean.xml"
   echo "[ok] OJS import XML synced."
 else
   echo "[skip] No OJS import XML found locally."

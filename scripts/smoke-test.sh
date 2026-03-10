@@ -18,8 +18,10 @@ done
 
 REMOTE_DIR="/opt/wp-ojs-sync"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
-SSH_CMD="ssh -o ConnectTimeout=10 $SSH_HOST"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+resolve_ssh "$SSH_HOST"
 
 # Read env values from remote .env
 WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")

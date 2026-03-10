@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-time VPS setup: create server, firewall, SSH config.
-# Runs FROM the devcontainer. Requires hcloud CLI and HCLOUD_TOKEN.
+# Runs FROM the devcontainer. Requires hcloud CLI with an active context.
 #
 # Usage:
 #   scripts/init-vps.sh --name=sea-staging                     # Create new server
@@ -51,10 +51,11 @@ for cmd in hcloud ssh-keygen; do
   fi
 done
 
-if [ -z "$HCLOUD_TOKEN" ]; then
-  echo "ERROR: HCLOUD_TOKEN not set. Export your Hetzner Cloud API token."
+if ! hcloud context active &>/dev/null; then
+  echo "ERROR: No active hcloud context. Set one with: hcloud context use <name>"
   exit 1
 fi
+echo "Using hcloud context: $(hcloud context active)"
 
 echo "============================================"
 echo "  Init VPS: $SERVER_NAME"
@@ -161,44 +162,14 @@ fi
 hcloud firewall apply-to-resource "$FW_NAME" --type server --server "$SERVER_NAME" 2>/dev/null || true
 echo ""
 
-# --- Step 4: SSH config ---
-echo "=== 4. SSH config ==="
-SSH_CONFIG="$HOME/.ssh/config"
-if grep -q "^Host $SERVER_NAME$" "$SSH_CONFIG" 2>/dev/null; then
-  # Update HostName if IP changed (common after server recreate)
-  OLD_IP=$(awk "/^Host $SERVER_NAME\$/{found=1;next} found&&/HostName/{print \$2;exit}" "$SSH_CONFIG")
-  if [ "$OLD_IP" != "$SERVER_IP" ]; then
-    sed -i "/^Host $SERVER_NAME$/,/^Host /{s/HostName .*/HostName $SERVER_IP/}" "$SSH_CONFIG"
-    echo "[ok] SSH config updated: $OLD_IP -> $SERVER_IP"
-  else
-    echo "[ok] SSH config entry for '$SERVER_NAME' already correct."
-  fi
-else
-  # Ensure file exists
-  mkdir -p "$(dirname "$SSH_CONFIG")"
-  touch "$SSH_CONFIG"
-  chmod 600 "$SSH_CONFIG"
-
-  cat >> "$SSH_CONFIG" << EOF
-
-Host $SERVER_NAME
-  HostName $SERVER_IP
-  User root
-  IdentityFile $SSH_KEY_PATH
-  IdentitiesOnly yes
-EOF
-  echo "[ok] Added '$SERVER_NAME' to SSH config."
-fi
-
-# Clear stale known_hosts entry for this hostname (IP may have changed)
-ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_NAME" 2>/dev/null || true
+# --- Step 4: SSH verify ---
+# Scripts resolve IP via hcloud at runtime — no SSH config needed.
+echo "=== 4. SSH verify ==="
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_IP" 2>/dev/null || true
-
-# Verify SSH works (accept new host key)
-if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "$SERVER_NAME" "true" 2>/dev/null; then
-  echo "[ok] SSH connection verified."
+if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "root@$SERVER_IP" "true" 2>/dev/null; then
+  echo "[ok] SSH verified (root@$SERVER_IP)."
 else
-  echo "[warn] SSH connection failed — check config manually."
+  echo "[warn] SSH connection failed."
 fi
 echo ""
 
