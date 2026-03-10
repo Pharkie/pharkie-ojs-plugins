@@ -27,22 +27,26 @@ json_escape() {
 
 echo "[OJS] Setting up OJS..."
 
-# --- Wait for OJS install to finish (admin user must exist) ---
+# --- Wait for OJS install to finish ---
 # The entrypoint runs the install wizard in the background. HTTP may respond
-# before the admin user is created, so we wait for user_id=1 to appear.
-echo "[OJS] Waiting for admin user (install may still be running)..."
+# before the install completes. We check two things:
+# 1. Admin user exists (users table populated)
+# 2. Versions table populated (OJS can actually serve requests)
+# Without both, OJS returns 500 (getVersionString() on null).
+echo "[OJS] Waiting for install to complete..."
 for i in $(seq 1 60); do
   ADMIN_EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM users WHERE user_id=1" 2>/dev/null || echo "0")
-  if [ "$ADMIN_EXISTS" = "1" ]; then
+  VERSIONS=$($MARIADB -N -e "SELECT COUNT(*) FROM versions" 2>/dev/null || echo "0")
+  if [ "$ADMIN_EXISTS" = "1" ] && [ "$VERSIONS" -gt "0" ]; then
     break
   fi
   if [ "$i" = "60" ]; then
-    echo "[OJS] ERROR: Admin user not found after 120s — install may have failed."
+    echo "[OJS] ERROR: Install not complete after 120s (admin=$ADMIN_EXISTS, versions=$VERSIONS)."
     exit 1
   fi
   sleep 2
 done
-echo "[OJS] Admin user ready."
+echo "[OJS] Install complete (admin user ready, $VERSIONS version records)."
 
 # --- Enable admin API key for scripted access ---
 API_KEY_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM user_settings WHERE user_id=1 AND setting_name='apiKeyEnabled'")
