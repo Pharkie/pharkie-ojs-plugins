@@ -140,9 +140,16 @@ for PLUGIN in "${REQUIRED_PLUGINS[@]}"; do
   fi
 done
 
-# Clear Gantry5 compiled cache after all plugins are active.
-# Theme activation before gantry5 plugin activation generates broken cache → 500.
-rm -rf /var/www/html/web/app/cache/gantry5/ 2>/dev/null || true
+# Gantry5 writes compiled CSS into the theme and cache dirs at runtime.
+# Apache runs as www-data but theme files are root-owned from rsync/cp.
+# Fix permissions and clear stale cache to prevent 500 errors.
+if [ -d /var/www/html/web/app/themes/seacomm/custom ]; then
+  chown -R www-data:www-data /var/www/html/web/app/themes/seacomm/custom/css-compiled/ 2>/dev/null || true
+  chown -R www-data:www-data /var/www/html/web/app/themes/g5_helium/custom/css-compiled/ 2>/dev/null || true
+fi
+mkdir -p /var/www/html/web/app/cache/gantry5
+chown -R www-data:www-data /var/www/html/web/app/cache/gantry5
+rm -rf /var/www/html/web/app/cache/gantry5/* 2>/dev/null || true
 
 # --- WooCommerce readiness gate ---
 # After activation, WC defers DB table creation and option seeding to the next
