@@ -47,7 +47,7 @@ test.describe('Synced user logs in to OJS', () => {
     setOjsPassword(ojsUserId!, username, OJS_PASSWORD);
 
     // Navigate to OJS login.
-    await page.goto('http://localhost:8081/index.php/journal/login');
+    await page.goto('http://localhost:8081/index.php/ea/login');
     await page.locator('#username').fill(username);
     await page.locator('#password').fill(OJS_PASSWORD);
     await page.locator('button[type="submit"], input[type="submit"]').first().click();

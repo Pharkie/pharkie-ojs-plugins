@@ -22,7 +22,7 @@ const OJS_BASE = 'http://localhost:8081';
 
 test.describe('OJS UI messages', () => {
   test('login page shows login hint', async ({ page }) => {
-    await page.goto(`${OJS_BASE}/index.php/journal/login`);
+    await page.goto(`${OJS_BASE}/index.php/ea/login`);
     const hint = page.locator('.wpojs-login-hint');
     await expect(hint).toBeVisible({ timeout: 10_000 });
     // Should mention password-related action.
@@ -32,7 +32,7 @@ test.describe('OJS UI messages', () => {
   });
 
   test('password reset page shows warning hint', async ({ page }) => {
-    await page.goto(`${OJS_BASE}/index.php/journal/login/lostPassword`);
+    await page.goto(`${OJS_BASE}/index.php/ea/login/lostPassword`);
     const hint = page.locator('.wpojs-pw-reset-hint');
     await expect(hint).toBeVisible({ timeout: 10_000 });
     // Should mention password sync / membership website.
@@ -45,7 +45,7 @@ test.describe('OJS UI messages', () => {
   });
 
   test('site footer shows membership message', async ({ page }) => {
-    await page.goto(`${OJS_BASE}/index.php/journal`);
+    await page.goto(`${OJS_BASE}/index.php/ea`);
     // Footer message contains "membership" and a link to the WP site.
     const footer = page.locator('text=membership').last();
     await expect(footer).toBeVisible({ timeout: 10_000 });
@@ -92,15 +92,15 @@ test.describe('OJS UI messages', () => {
       const username = getOjsUsername(ojsUserId!);
 
       // Log in to OJS.
-      await page.goto(`${OJS_BASE}/index.php/journal/login`);
+      await page.goto(`${OJS_BASE}/index.php/ea/login`);
       await page.locator('#username').fill(username);
       await page.locator('#password').fill(OJS_PASSWORD);
       await page.locator('button[type="submit"], input[type="submit"]').first().click();
-      await page.waitForURL(/journal/, { timeout: 15_000 });
+      await page.waitForURL(/ea/, { timeout: 15_000 });
 
       // Visit an article page. We need to find one that exists.
       // Try the first article link from the journal homepage.
-      await page.goto(`${OJS_BASE}/index.php/journal`);
+      await page.goto(`${OJS_BASE}/index.php/ea`);
       const articleLink = page.locator('a[href*="/article/view/"]').first();
 
       // If no articles exist, skip this assertion gracefully.

@@ -121,7 +121,7 @@ fi
 
 # --- 4. OJS ping ---
 echo "4. OJS plugin ping"
-PING=$(remote "$COMPOSE exec -T ojs curl -sf http://localhost:80/index.php/journal/api/v1/wpojs/ping") || PING=""
+PING=$(remote "$COMPOSE exec -T ojs curl -sf http://localhost:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/ping") || PING=""
 if echo "$PING" | grep -q '"status":"ok"'; then
   pass "OJS plugin responds to ping"
 else
@@ -131,7 +131,7 @@ fi
 # --- 5. OJS preflight (auth + IP + compatibility) ---
 echo "5. OJS preflight"
 API_KEY=$($SSH_CMD "grep '^WPOJS_API_KEY_SECRET=' $REMOTE_DIR/.env | cut -d= -f2")
-PREFLIGHT=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/journal/api/v1/wpojs/preflight") || PREFLIGHT=""
+PREFLIGHT=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/preflight") || PREFLIGHT=""
 if echo "$PREFLIGHT" | grep -q '"compatible":true'; then
   CHECKS=$(echo "$PREFLIGHT" | grep -o '"ok":true' | wc -l)
   pass "Preflight passes ($CHECKS checks OK)"
@@ -163,7 +163,7 @@ done
 
 # --- 8. OJS subscription types ---
 echo "8. OJS subscription types"
-SUB_TYPES=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/journal/api/v1/wpojs/subscription-types") || SUB_TYPES=""
+SUB_TYPES=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/subscription-types") || SUB_TYPES=""
 TYPE_COUNT=$(echo "$SUB_TYPES" | grep -o '"id"' | wc -l)
 if [ "$TYPE_COUNT" -gt "0" ]; then
   pass "$TYPE_COUNT subscription type(s) configured"
@@ -258,14 +258,14 @@ if [ "$SYNC_OK" = true ]; then
   wp_cli "action-scheduler run" > /dev/null 2>&1 || true
 
   # Verify OJS user exists
-  OJS_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/users?email=$TEST_EMAIL'") || OJS_USER=""
+  OJS_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/users?email=$TEST_EMAIL'") || OJS_USER=""
   if echo "$OJS_USER" | grep -q "$TEST_EMAIL"; then
     pass "User synced to OJS"
 
     # Verify subscription exists
     OJS_USER_ID=$(echo "$OJS_USER" | grep -o '"userId":[0-9]*' | head -1 | cut -d: -f2)
     if [ -n "$OJS_USER_ID" ]; then
-      OJS_SUBS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUBS=""
+      OJS_SUBS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUBS=""
       if echo "$OJS_SUBS" | grep -q '"status"'; then
         pass "OJS subscription created"
 
@@ -274,7 +274,7 @@ if [ "$SYNC_OK" = true ]; then
         wp_cli "user update $WP_USER_ID --user_pass=SmokeTest123!" > /dev/null 2>&1 || true
         wp_cli "action-scheduler run" > /dev/null 2>&1 || true
         LOGIN_RESPONSE=$(remote "$COMPOSE exec -T wp curl -s -L -c /tmp/smoke-cookies -X POST \
-          'http://ojs:80/index.php/journal/login/signIn' \
+          'http://ojs:80/index.php/$OJS_JOURNAL_PATH/login/signIn' \
           -d 'username=${TEST_LOGIN}&password=SmokeTest123!'") || LOGIN_RESPONSE=""
         if echo "$LOGIN_RESPONSE" | grep -q 'pkp_navigation_user\|logOut'; then
           pass "OJS password login works"
@@ -289,7 +289,7 @@ if [ "$SYNC_OK" = true ]; then
         EXPIRE_OK=false
         for _run in 1 2 3; do
           wp_cli "action-scheduler run" > /dev/null 2>&1 || true
-          OJS_SUB_STATUS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUB_STATUS=""
+          OJS_SUB_STATUS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUB_STATUS=""
           if echo "$OJS_SUB_STATUS" | grep -q '"status":16'; then
             EXPIRE_OK=true
             break
@@ -319,7 +319,7 @@ if [ "$SYNC_OK" = true ]; then
   # (the delete handler changes email to deleted_<id>@anonymised.invalid)
   CLEANUP_OK=false
   for _i in 1 2 3; do
-    OJS_DELETED_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/journal/api/v1/wpojs/users?email=$TEST_EMAIL'") || OJS_DELETED_USER=""
+    OJS_DELETED_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/users?email=$TEST_EMAIL'") || OJS_DELETED_USER=""
     if echo "$OJS_DELETED_USER" | grep -q '"found":false'; then
       CLEANUP_OK=true
       break

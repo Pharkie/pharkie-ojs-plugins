@@ -14,7 +14,7 @@ services:
       WORDPRESS_DB_PASSWORD: ${WP_DB_PASSWORD}
       WORDPRESS_DB_NAME: wordpress
       WP_ADMIN_PASSWORD: ${WP_ADMIN_PASSWORD:?WP_ADMIN_PASSWORD not set in .env}
-      WPOJS_BASE_URL: ${WPOJS_BASE_URL:-http://ojs:80/index.php/journal}
+      WPOJS_BASE_URL: ${WPOJS_BASE_URL:-http://ojs:80/index.php/ea}
     volumes:
       - ./wordpress:/var/www/html
       - ./plugins/wpojs-sync:/var/www/html/web/app/plugins/wpojs-sync
@@ -89,6 +89,11 @@ services:
       OJS_SUB_TYPES: ${OJS_SUB_TYPES:-}
       OJS_PURCHASE_ARTICLE_FEE: ${OJS_PURCHASE_ARTICLE_FEE:-0}
       OJS_PURCHASE_ISSUE_FEE: ${OJS_PURCHASE_ISSUE_FEE:-0}
+      OJS_DOI_PREFIX: ${OJS_DOI_PREFIX:-}
+      OJS_DOI_DEPOSITOR_NAME: ${OJS_DOI_DEPOSITOR_NAME:-}
+      OJS_DOI_DEPOSITOR_EMAIL: ${OJS_DOI_DEPOSITOR_EMAIL:-}
+      OJS_CROSSREF_USERNAME: ${OJS_CROSSREF_USERNAME:-}
+      OJS_CROSSREF_PASSWORD: ${OJS_CROSSREF_PASSWORD:-}
       OJS_SMTP_ENABLED: ${OJS_SMTP_ENABLED:-Off}
       OJS_SMTP_HOST: ${OJS_SMTP_HOST:-}
       OJS_SMTP_PORT: ${OJS_SMTP_PORT:-587}

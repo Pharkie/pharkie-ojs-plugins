@@ -98,7 +98,7 @@ function ensureOjsUrl(): void {
 
   if (!result || result === 'http://localhost:19999') {
     execSync(
-      "docker compose exec -T wp wp option update wpojs_url 'http://ojs:80/index.php/journal' --allow-root 2>/dev/null",
+      "docker compose exec -T wp wp option update wpojs_url 'http://ojs:80/index.php/ea' --allow-root 2>/dev/null",
       { timeout: 10_000 },
     );
   }

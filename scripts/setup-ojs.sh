@@ -353,6 +353,65 @@ else
   echo "[OJS] PayPal plugin already enabled, skipping."
 fi
 
+# --- DOI configuration ---
+DOI_PREFIX="${OJS_DOI_PREFIX:-}"
+if [ -n "$DOI_PREFIX" ]; then
+  DOI_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='doiPrefix'" 2>/dev/null)
+  if [ "$DOI_ENABLED" != "$DOI_PREFIX" ]; then
+    echo "[OJS] Configuring DOIs (prefix: $DOI_PREFIX)..."
+    # Enable DOIs, set prefix, assign to articles + issues, suffix = default, assignment = never
+    $MARIADB <<SQL
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'enableDois', '1')
+      ON DUPLICATE KEY UPDATE setting_value='1';
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'doiPrefix', '$DOI_PREFIX')
+      ON DUPLICATE KEY UPDATE setting_value='$DOI_PREFIX';
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'enabledDoiTypes', '["publication","issue"]')
+      ON DUPLICATE KEY UPDATE setting_value='["publication","issue"]';
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'doiSuffixType', 'default')
+      ON DUPLICATE KEY UPDATE setting_value='default';
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'doiCreationTime', 'never')
+      ON DUPLICATE KEY UPDATE setting_value='never';
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'doiVersioning', '0')
+      ON DUPLICATE KEY UPDATE setting_value='0';
+      INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'registrationAgency', 'crossrefplugin')
+      ON DUPLICATE KEY UPDATE setting_value='crossrefplugin';
+SQL
+    echo "[OJS] DOIs configured."
+  else
+    echo "[OJS] DOIs already configured (prefix: $DOI_PREFIX), skipping."
+  fi
+
+  # Crossref plugin settings (depositor info from env, credentials optional)
+  DEPOSITOR_NAME="${OJS_DOI_DEPOSITOR_NAME:-}"
+  DEPOSITOR_EMAIL="${OJS_DOI_DEPOSITOR_EMAIL:-}"
+  CROSSREF_USER="${OJS_CROSSREF_USERNAME:-}"
+  CROSSREF_PASS="${OJS_CROSSREF_PASSWORD:-}"
+
+  if [ -n "$DEPOSITOR_NAME" ] || [ -n "$DEPOSITOR_EMAIL" ]; then
+    echo "[OJS] Configuring Crossref depositor..."
+    sql_escape_doi() { printf '%s' "$1" | sed "s/'/''/g"; }
+
+    # Enable the Crossref plugin
+    $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'enabled', '1', 'bool') ON DUPLICATE KEY UPDATE setting_value='1';"
+
+    [ -n "$DEPOSITOR_NAME" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'depositorName', '$(sql_escape_doi "$DEPOSITOR_NAME")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_doi "$DEPOSITOR_NAME")';"
+    [ -n "$DEPOSITOR_EMAIL" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'depositorEmail', '$(sql_escape_doi "$DEPOSITOR_EMAIL")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_doi "$DEPOSITOR_EMAIL")';"
+    [ -n "$CROSSREF_USER" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'username', '$(sql_escape_doi "$CROSSREF_USER")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_doi "$CROSSREF_USER")';"
+    [ -n "$CROSSREF_PASS" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'password', '$(sql_escape_doi "$CROSSREF_PASS")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_doi "$CROSSREF_PASS")';"
+
+    echo "[OJS] Crossref depositor configured."
+  fi
+else
+  echo "[OJS] DOI prefix not set (OJS_DOI_PREFIX), skipping DOI config."
+fi
+
 echo "[OJS] OJS base setup complete."
 
 # --- Sample data (dev/staging only) ---
@@ -448,6 +507,17 @@ if [ "$PUB_CHECK" = "1" ]; then
 else
   echo "[OJS] [FAIL] Publishing mode: ${PUB_CHECK:-not set} (expected 1)."
   HEALTH_FAIL=1
+fi
+
+# DOI prefix configured (if set in env)
+if [ -n "${OJS_DOI_PREFIX:-}" ]; then
+  DOI_CHECK=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='doiPrefix'" 2>/dev/null) || true
+  if [ "$DOI_CHECK" = "$OJS_DOI_PREFIX" ]; then
+    echo "[OJS] [ok] DOI prefix: $DOI_CHECK"
+  else
+    echo "[OJS] [FAIL] DOI prefix: ${DOI_CHECK:-not set} (expected $OJS_DOI_PREFIX)."
+    HEALTH_FAIL=1
+  fi
 fi
 
 if [ "$HEALTH_FAIL" = "1" ]; then

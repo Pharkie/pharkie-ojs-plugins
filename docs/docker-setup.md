@@ -27,8 +27,8 @@ docker compose exec ojs bash /scripts/setup-ojs.sh --with-sample-data
 | WordPress | http://localhost:8080 | http://wp:80 |
 | WP admin | http://localhost:8080/wp/wp-admin/ | — |
 | OJS | http://localhost:8081 | http://ojs:80 |
-| OJS journal | http://localhost:8081/index.php/journal | http://ojs:80/index.php/journal |
-| OJS API (from WP) | — | http://ojs:80/index.php/journal/api/v1/wpojs/... |
+| OJS journal | http://localhost:8081/index.php/ea | http://ojs:80/index.php/ea |
+| OJS API (from WP) | — | http://ojs:80/index.php/ea/api/v1/wpojs/... |
 | Adminer (DB GUI) | http://localhost:8082 | http://adminer:8080 |
 
 Adminer connects to both databases — type `wp-db` or `ojs-db` as the server on the login screen. See credentials below.
@@ -85,7 +85,7 @@ docker compose exec wp bash
 docker compose exec ojs bash
 
 # Test WP → OJS connectivity
-docker compose exec wp curl http://ojs:80/index.php/journal/api/v1/wpojs/ping
+docker compose exec wp curl http://ojs:80/index.php/ea/api/v1/wpojs/ping
 ```
 
 ## Sample data (`--with-sample-data`)

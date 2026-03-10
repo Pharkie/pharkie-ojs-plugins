@@ -74,7 +74,7 @@ echo json_encode($result);
       const username = getOjsUsername(ojsUserId2!);
       expect(username).toBeTruthy();
 
-      await page.goto('http://localhost:8081/index.php/journal/login');
+      await page.goto('http://localhost:8081/index.php/ea/login');
       await page.locator('#username').fill(username);
       await page.locator('#password').fill(WP_PASSWORD);
       await page.locator('button[type="submit"], input[type="submit"]').first().click();
@@ -95,7 +95,7 @@ echo json_encode($result);
       // full single-member sync to also create the OJS subscription record.
       wpCli(`ojs-sync sync --member=${email}`);
 
-      await page.goto('http://localhost:8081/index.php/journal');
+      await page.goto('http://localhost:8081/index.php/ea');
       const articleLink = page.locator('a[href*="/article/view/"]').first();
       if ((await articleLink.count()) > 0) {
         await articleLink.click();
@@ -151,7 +151,7 @@ echo json_encode($result);
 
       // Verify login works with the new password.
       const username = getOjsUsername(ojsUserId!);
-      await page.goto('http://localhost:8081/index.php/journal/login');
+      await page.goto('http://localhost:8081/index.php/ea/login');
       await page.locator('#username').fill(username);
       await page.locator('#password').fill(NEW_PASSWORD);
       await page.locator('button[type="submit"], input[type="submit"]').first().click();
@@ -190,7 +190,7 @@ echo json_encode($result);
 
       // WP password should still work for OJS login even after expiry.
       const username = getOjsUsername(ojsUserId!);
-      await page.goto('http://localhost:8081/index.php/journal/login');
+      await page.goto('http://localhost:8081/index.php/ea/login');
       await page.locator('#username').fill(username);
       await page.locator('#password').fill(WP_PASSWORD);
       await page.locator('button[type="submit"], input[type="submit"]').first().click();

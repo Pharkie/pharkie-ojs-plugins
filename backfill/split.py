@@ -73,7 +73,7 @@ def split_pdf(toc_data, output_dir):
         # Extract pages
         out_doc = fitz.open()
         out_doc.insert_pdf(doc, from_page=start, to_page=end)
-        out_doc.save(filepath)
+        out_doc.save(filepath, garbage=3, deflate=1, clean=1)
         out_doc.close()
 
         pages = end - start + 1
@@ -84,6 +84,11 @@ def split_pdf(toc_data, output_dir):
         created.append(filepath)
 
     doc.close()
+
+    total = len(articles)
+    skipped = total - len(created)
+    if skipped > 0:
+        print(f"WARNING: {skipped}/{total} articles have no split PDF (skipped due to bad page ranges)", file=sys.stderr)
 
     # Save updated TOC with split file paths
     toc_output = os.path.join(issue_dir, 'toc.json')

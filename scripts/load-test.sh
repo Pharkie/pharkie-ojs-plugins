@@ -39,12 +39,14 @@ fi
 # Read env values
 WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
+OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
 API_KEY=$($SSH_CMD "grep '^WPOJS_API_KEY_SECRET=' $REMOTE_DIR/.env | cut -d= -f2")
+OJS_JOURNAL_URL="$OJS_BASE_URL/index.php/$OJS_JOURNAL_PATH"
 
 # Find an article URL for testing
-ARTICLE_PATH=$(curl -sf "$OJS_BASE_URL/index.php/journal/issue/view/1" 2>/dev/null \
-  | grep -oP '/journal/article/view/\d+' | head -1) || ARTICLE_PATH=""
-ARTICLE_URL="$OJS_BASE_URL/index.php${ARTICLE_PATH:-/journal}"
+ARTICLE_PATH=$(curl -sf "$OJS_JOURNAL_URL/issue/view/1" 2>/dev/null \
+  | grep -oP "/$OJS_JOURNAL_PATH/article/view/\\d+" | head -1) || ARTICLE_PATH=""
+ARTICLE_URL="$OJS_BASE_URL/index.php${ARTICLE_PATH:-/$OJS_JOURNAL_PATH}"
 
 echo "============================================"
 echo "  Load Test: $SSH_HOST"
@@ -143,13 +145,13 @@ echo "=== Running load tests ==="
 echo ""
 
 # 1. OJS journal homepage
-run_test "OJS journal homepage" "$OJS_BASE_URL/index.php/journal" $CONCURRENCY $REQUESTS
+run_test "OJS journal homepage" "$OJS_JOURNAL_URL" $CONCURRENCY $REQUESTS
 
 # 2. OJS article page
 run_test "OJS article page" "$ARTICLE_URL" $CONCURRENCY $REQUESTS
 
 # 3. OJS API preflight
-run_test "OJS API preflight" "$OJS_BASE_URL/index.php/journal/api/v1/wpojs/ping" $API_CONCURRENCY $API_REQUESTS
+run_test "OJS API preflight" "$OJS_JOURNAL_URL/api/v1/wpojs/ping" $API_CONCURRENCY $API_REQUESTS
 
 # 4. WP homepage
 run_test "WP homepage" "$WP_HOME" $CONCURRENCY $REQUESTS
