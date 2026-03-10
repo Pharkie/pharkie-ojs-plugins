@@ -66,6 +66,11 @@ if [ "$NEEDS_INSTALL" = true ]; then
 
     if echo "$RESULT" | grep -q "Installation of OJS has completed successfully"; then
       echo "[OJS] OJS install complete."
+      # Clear OPcache — PHP cached the bootstrap in pre-install state (versions
+      # table empty → getVersionString() returns null → 500). Graceful restart
+      # makes Apache reload all PHP files with the now-populated DB.
+      echo "[OJS] Restarting Apache to clear OPcache..."
+      apache2ctl graceful 2>/dev/null || true
     else
       echo "[OJS] WARNING: OJS install may have failed. Check logs or run manually."
     fi
