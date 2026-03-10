@@ -31,6 +31,8 @@ docker compose exec ojs bash /scripts/setup-ojs.sh --with-sample-data
 | OJS API (from WP) | — | http://ojs:80/index.php/journal/api/v1/wpojs/... |
 | Adminer (DB GUI) | http://localhost:8082 | http://adminer:8080 |
 
+Adminer connects to both databases — type `wp-db` or `ojs-db` as the server on the login screen. See credentials below.
+
 ## Credentials
 
 > **All passwords are randomly generated** — there are no default passwords. Run `scripts/generate-env.sh` to create your `.env`, or let `rebuild-dev.sh` / `setup.sh --env=dev` do it automatically. Check your `.env` file for the actual values.
