@@ -130,6 +130,15 @@ else
   echo "[skip] No paid plugins found locally."
 fi
 
+THEMES="$PROJECT_DIR/wordpress/themes"
+if [ -d "$THEMES" ] && [ "$(ls -A "$THEMES" 2>/dev/null | grep -v README)" ]; then
+  rsync -az --exclude='README.md' -e "$RSYNC_SSH" \
+    "$THEMES/" "$SCP_HOST:$REMOTE_DIR/wordpress/web/app/themes/"
+  echo "[ok] Themes synced."
+else
+  echo "[skip] No custom themes found locally."
+fi
+
 IMPORT_XML="$PROJECT_DIR/data export/ojs-import-clean.xml"
 if [ -f "$IMPORT_XML" ]; then
   $SSH_CMD "mkdir -p '$REMOTE_DIR/data export'"

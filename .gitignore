@@ -19,6 +19,7 @@ wordpress/web/app/plugins/
 wordpress/web/app/mu-plugins/
 wordpress/web/app/themes/
 wordpress/web/app/uploads/
+wordpress/web/app/cache/
 wordpress/paid-plugins/*/
 !wordpress/paid-plugins/README.md
 wordpress/themes/*/

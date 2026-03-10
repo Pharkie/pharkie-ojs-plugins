@@ -16,7 +16,8 @@
     "sea/woocommerce-subscriptions": "8.4.0",
     "sea/woocommerce-memberships": "1.27.5",
     "sea/um-notifications": "2.3.8",
-    "sea/um-woocommerce": "2.4.4"
+    "sea/um-woocommerce": "2.4.4",
+    "wpackagist-plugin/gantry5": "5.6.0"
   },
   "repositories": [
     {

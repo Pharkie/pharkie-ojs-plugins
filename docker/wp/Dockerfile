@@ -18,7 +18,8 @@ RUN curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cl
     && chmod +x wp-cli.phar && mv wp-cli.phar /usr/local/bin/wp
 
 # Apache: enable rewrite, set DocumentRoot to Bedrock's web/, allow .htaccess
-RUN a2enmod rewrite
+RUN a2enmod rewrite \
+    && echo "ServerName localhost" >> /etc/apache2/apache2.conf
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/web
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
     /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf \

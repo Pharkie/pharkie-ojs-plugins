@@ -28,7 +28,7 @@ wp_quiet() {
   TMPOUT=$(mktemp)
   wp "$@" --allow-root >"$TMPOUT" 2>&1
   local RC=$?
-  grep -v '_load_textdomain_just_in_time' "$TMPOUT" || true
+  grep -v -E '_load_textdomain_just_in_time|^Deprecated:' "$TMPOUT" || true
   rm -f "$TMPOUT"
   return $RC
 }
@@ -42,7 +42,7 @@ wp_retry() {
     TMPOUT=$(mktemp)
     wp "$@" --allow-root >"$TMPOUT" 2>&1
     local RC=$?
-    grep -v '_load_textdomain_just_in_time' "$TMPOUT" || true
+    grep -v -E '_load_textdomain_just_in_time|^Deprecated:' "$TMPOUT" || true
     rm -f "$TMPOUT"
     if [ "$RC" = "0" ]; then
       return 0
@@ -78,8 +78,38 @@ if ! wp core is-installed --allow-root 2>/dev/null; then
     --allow-root
 fi
 
-# Ensure a theme is installed (Bedrock doesn't bundle themes)
-if ! wp theme is-installed twentytwentyfive --allow-root 2>/dev/null; then
+# --- Copy custom themes from staging area (if present) ---
+# Themes live in wordpress/themes/ (gitignored) and need to be in the Bedrock
+# theme path (web/app/themes/) at runtime. Deploy.sh handles this for staging/prod
+# via rsync; for local dev the themes dir is already mounted, just needs copying.
+THEME_STAGING="/var/www/html/themes"
+THEME_DEST="/var/www/html/web/app/themes"
+if [ -d "$THEME_STAGING" ]; then
+  for THEME_DIR in "$THEME_STAGING"/*/; do
+    THEME_NAME=$(basename "$THEME_DIR")
+    [ "$THEME_NAME" = "README.md" ] && continue
+    if [ ! -d "$THEME_DEST/$THEME_NAME" ]; then
+      cp -r "$THEME_DIR" "$THEME_DEST/$THEME_NAME"
+      echo "[ok] Theme copied: $THEME_NAME"
+    fi
+  done
+fi
+
+# --- Bedrock wp-content compatibility symlink ---
+# Gantry5's SCSS compiler hardcodes wp-content/themes/ in generated CSS URLs.
+# Bedrock serves content from web/app/ not web/wp-content/. Create a symlink
+# so /wp-content/themes/… URLs resolve to /app/themes/… on the web server.
+WEB_ROOT="/var/www/html/web"
+if [ ! -e "$WEB_ROOT/wp-content" ]; then
+  ln -sfn "$WEB_ROOT/app" "$WEB_ROOT/wp-content"
+  echo "[ok] wp-content -> app symlink created."
+fi
+
+# Activate the SEAcomm theme if available, otherwise fall back to twentytwentyfive
+if wp theme is-installed seacomm --allow-root 2>/dev/null; then
+  wp theme activate seacomm --allow-root 2>/dev/null
+  echo "[ok] SEAcomm theme activated."
+elif ! wp theme is-installed twentytwentyfive --allow-root 2>/dev/null; then
   wp theme install twentytwentyfive --activate --allow-root
 fi
 
@@ -87,6 +117,7 @@ fi
 # Activate each plugin separately so failures are visible.
 # "already active" is fine (exit 0); genuine errors (missing plugin, PHP fatal) must fail loud.
 REQUIRED_PLUGINS=(
+  gantry5
   woocommerce
   woocommerce-subscriptions
   woocommerce-memberships
@@ -127,7 +158,7 @@ for i in $(seq 1 15); do
 done
 
 # Verify WC core tables exist (the install routine should have created them).
-WC_TABLE_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE \"{$wpdb->prefix}woocommerce%\"");' --allow-root 2>&1 | grep -v '_load_textdomain' | tr -d '[:space:]') || true
+WC_TABLE_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE \"{$wpdb->prefix}woocommerce%\"");' --allow-root 2>&1 | grep -v -E '_load_textdomain|^Deprecated:' | tr -d '[:space:]') || true
 if [ -z "$WC_TABLE_COUNT" ] || [ "$WC_TABLE_COUNT" -lt "5" ]; then
   echo "WARNING: Expected >=5 WooCommerce tables, found ${WC_TABLE_COUNT:-0}. Forcing WC install..."
   wp eval 'WC_Install::install();' --allow-root 2>/dev/null || true
@@ -170,6 +201,9 @@ wp_quiet eval-file /var/www/html/scripts/create-um-pages.php
 
 # Dismiss UM license + exif notices, WC onboarding/store notices
 wp_quiet eval-file /var/www/html/scripts/dismiss-notices.php
+
+# Create navigation menus and static front page (matches live site layout)
+wp_quiet eval-file /var/www/html/scripts/setup-theme-content.php
 
 echo "[ok] WordPress base setup complete."
 
@@ -240,7 +274,7 @@ if [ "$SAMPLE_DATA" = true ]; then
     wp_quiet eval-file /var/www/html/scripts/setup-and-sample-data.php "$CSV"
 
     # Validate: check subscription count (use wp eval for reliable cross-version DB access)
-    SUB_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type=\"shop_subscription\"");' --allow-root 2>&1 | grep -v '_load_textdomain' | tr -d '[:space:]') || true
+    SUB_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type=\"shop_subscription\"");' --allow-root 2>&1 | grep -v -E '_load_textdomain|^Deprecated:' | tr -d '[:space:]') || true
     if [ -z "$SUB_COUNT" ] || [ "$SUB_COUNT" = "0" ]; then
       echo "ERROR: No subscriptions found after seeding (got: '${SUB_COUNT}')."
       exit 1
@@ -248,12 +282,12 @@ if [ "$SAMPLE_DATA" = true ]; then
     echo "[ok] $SUB_COUNT subscriptions seeded."
 
     # Validate: check products and type mapping were saved
-    PRODUCT_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type=\"product\" AND post_status=\"publish\"");' --allow-root 2>&1 | grep -v '_load_textdomain' | tr -d '[:space:]') || true
+    PRODUCT_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type=\"product\" AND post_status=\"publish\"");' --allow-root 2>&1 | grep -v -E '_load_textdomain|^Deprecated:' | tr -d '[:space:]') || true
     if [ -z "$PRODUCT_COUNT" ] || [ "$PRODUCT_COUNT" = "0" ]; then
       echo "ERROR: No subscription products found after seeding (got: '${PRODUCT_COUNT}')."
       exit 1
     fi
-    MAPPING_COUNT=$(wp eval 'echo count(get_option("wpojs_type_mapping", []));' --allow-root 2>&1 | grep -v '_load_textdomain' | tr -d '[:space:]') || true
+    MAPPING_COUNT=$(wp eval 'echo count(get_option("wpojs_type_mapping", []));' --allow-root 2>&1 | grep -v -E '_load_textdomain|^Deprecated:' | tr -d '[:space:]') || true
     if [ -z "$MAPPING_COUNT" ] || [ "$MAPPING_COUNT" = "0" ]; then
       echo "ERROR: wpojs_type_mapping not set after seeding."
       exit 1
@@ -314,7 +348,7 @@ fi
 
 # All required plugins active
 ALL_ACTIVE=true
-for PLUGIN in woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync; do
+for PLUGIN in gantry5 woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync; do
   if ! wp plugin is-active "$PLUGIN" --allow-root 2>/dev/null; then
     echo "[FAIL] Plugin not active: $PLUGIN"
     ALL_ACTIVE=false
