@@ -46,6 +46,7 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
     public const DEFAULT_LOGIN_HINT = 'Member? Log in with your membership email and password.';
     public const DEFAULT_PAYWALL_HINT = 'If you believe you should have access through your membership, please contact <a href="mailto:{supportEmail}">{supportEmail}</a>.';
     public const DEFAULT_FOOTER_MESSAGE = 'Your journal access is provided by your membership. <a href="{wpUrl}">Manage your membership</a>.';
+    public const DEFAULT_PASSWORD_RESET_HINT = 'Members: <a href="{wpResetUrl}">change your password on the membership website</a> — it will sync to the journal automatically. Passwords set here may be overwritten by your membership password.';
 
     public function register($category, $path, $mainContextId = null)
     {
@@ -64,6 +65,7 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
 
         // UI messages
         Hook::add('TemplateManager::display', $this->addLoginMessage(...));
+        Hook::add('TemplateManager::display', $this->addPasswordResetMessage(...));
         Hook::add('Templates::Article::Footer::PageFooter', $this->addPaywallMessage(...));
         Hook::add('Templates::Common::Footer::PageFooter', $this->addFooterMessage(...));
 
@@ -143,6 +145,55 @@ document.addEventListener("DOMContentLoaded", function() {
     if (h1) {
         var div = document.createElement("div");
         div.className = "wpojs-login-hint";
+        div.innerHTML = "' . $jsEscapedHtml . '";
+        h1.insertAdjacentElement("afterend", div);
+    }
+});
+</script>');
+        }
+
+        return Hook::CONTINUE;
+    }
+
+    /**
+     * Password reset page hint message.
+     *
+     * Warns members that passwords set via OJS forgot-password may be
+     * overwritten by WP→OJS sync. Directs them to reset on WP instead.
+     * Same injection pattern as addLoginMessage().
+     */
+    public function addPasswordResetMessage(string $hookName, array $args): bool
+    {
+        $templateMgr = $args[0];
+        $template = $args[1] ?? '';
+
+        if (str_contains($template, 'lostPassword.tpl')) {
+            $wpSiteUrl = Config::getVar('wpojs', 'wp_member_url', '');
+            $wpResetUrl = rtrim($wpSiteUrl, '/') . '/wp-login.php?action=lostpassword';
+
+            $messageTemplate = $this->getMessage('passwordResetHint', self::DEFAULT_PASSWORD_RESET_HINT);
+            $escapedUrl = htmlspecialchars($wpResetUrl, ENT_QUOTES, 'UTF-8');
+            $hintHtml = str_replace('{wpResetUrl}', $escapedUrl, $messageTemplate);
+
+            $jsEscapedHtml = strtr($hintHtml, [
+                '\\' => '\\\\',
+                "'" => "\\'",
+                '"' => '\\"',
+                "\n" => '\\n',
+                "\r" => '\\r',
+                '</' => '<\\/',
+            ]);
+
+            $templateMgr->addHeader('wpojs-pw-reset-message', '<style>
+.wpojs-pw-reset-hint { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; line-height: 1.5; }
+.wpojs-pw-reset-hint a { color: #856404; text-decoration: underline; font-weight: 600; }
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var h1 = document.querySelector(".page_login h1, .page_lost_password h1, #content h1");
+    if (h1) {
+        var div = document.createElement("div");
+        div.className = "wpojs-pw-reset-hint";
         div.innerHTML = "' . $jsEscapedHtml . '";
         h1.insertAdjacentElement("afterend", div);
     }
@@ -322,6 +373,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
         if ($request->isPost()) {
             $this->updateSetting($contextId, 'loginHint', mb_substr(strip_tags($request->getUserVar('loginHint') ?? '', '<a>'), 0, 1000));
+            $this->updateSetting($contextId, 'passwordResetHint', mb_substr(strip_tags($request->getUserVar('passwordResetHint') ?? '', '<a>'), 0, 1000));
             $this->updateSetting($contextId, 'paywallHint', mb_substr(strip_tags($request->getUserVar('paywallHint') ?? '', '<a>'), 0, 1000));
             $this->updateSetting($contextId, 'footerMessage', mb_substr(strip_tags($request->getUserVar('footerMessage') ?? '', '<a>'), 0, 1000));
 
@@ -331,9 +383,11 @@ document.addEventListener("DOMContentLoaded", function() {
         $templateMgr = \APP\template\TemplateManager::getManager($request);
         $templateMgr->assign([
             'loginHint' => $this->getSetting($contextId, 'loginHint') ?: self::DEFAULT_LOGIN_HINT,
+            'passwordResetHint' => $this->getSetting($contextId, 'passwordResetHint') ?: self::DEFAULT_PASSWORD_RESET_HINT,
             'paywallHint' => $this->getSetting($contextId, 'paywallHint') ?: self::DEFAULT_PAYWALL_HINT,
             'footerMessage' => $this->getSetting($contextId, 'footerMessage') ?: self::DEFAULT_FOOTER_MESSAGE,
             'defaultLoginHint' => self::DEFAULT_LOGIN_HINT,
+            'defaultPasswordResetHint' => self::DEFAULT_PASSWORD_RESET_HINT,
             'defaultPaywallHint' => self::DEFAULT_PAYWALL_HINT,
             'defaultFooterMessage' => self::DEFAULT_FOOTER_MESSAGE,
         ]);

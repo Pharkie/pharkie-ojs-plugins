@@ -107,6 +107,15 @@ This calls OJS directly (not through Action Scheduler) and reports the result im
 
 ---
 
+### "I reset my password on the journal but it stopped working"
+
+1. **What happened:** The member used OJS's "Forgot Password" to set a new password on the journal. Later, a WP password sync (triggered by a WP password change or reconciliation) overwrote it with their WP password hash.
+2. **Fix:** Tell the member to reset their password on the **membership website** (WordPress), not the journal. The new WP password will sync to OJS automatically.
+3. **If they didn't change their WP password:** Their original WP password still works on both systems. The OJS-set password was overwritten by the next sync cycle.
+4. **Prevention:** The OJS forgot-password page now shows a hint directing members to reset on the membership site instead. If they still use OJS's reset, this scenario can recur.
+
+---
+
 > **For IT / server admins only.** Support staff can skip this section.
 
 ## Database access (Adminer)

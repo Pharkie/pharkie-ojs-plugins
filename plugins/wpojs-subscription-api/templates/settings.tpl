@@ -12,6 +12,14 @@
         </div>
 
         <div style="margin-bottom:16px;">
+            <label for="wpojs-passwordResetHint" style="display:block;font-weight:600;margin-bottom:4px;">
+                {translate key="plugins.generic.wpojsSubscriptionApi.settings.passwordResetHint"}
+            </label>
+            <textarea id="wpojs-passwordResetHint" name="passwordResetHint" rows="3" maxlength="500" style="width:100%;font-family:monospace;font-size:13px;">{$passwordResetHint|escape}</textarea>
+            <small style="color:#666;">Placeholder: <code>{literal}{wpResetUrl}{/literal}</code> &mdash; link to the WP password reset page.</small>
+        </div>
+
+        <div style="margin-bottom:16px;">
             <label for="wpojs-paywallHint" style="display:block;font-weight:600;margin-bottom:4px;">
                 {translate key="plugins.generic.wpojsSubscriptionApi.settings.paywallHint"}
             </label>
@@ -45,12 +53,14 @@
 (function() {
     var defaults = {
         loginHint: {$defaultLoginHint|json_encode},
+        passwordResetHint: {$defaultPasswordResetHint|json_encode},
         paywallHint: {$defaultPaywallHint|json_encode},
         footerMessage: {$defaultFooterMessage|json_encode}
     };
 
     document.getElementById('wpojs-restore-defaults').addEventListener('click', function() {
         document.getElementById('wpojs-loginHint').value = defaults.loginHint;
+        document.getElementById('wpojs-passwordResetHint').value = defaults.passwordResetHint;
         document.getElementById('wpojs-paywallHint').value = defaults.paywallHint;
         document.getElementById('wpojs-footerMessage').value = defaults.footerMessage;
     });

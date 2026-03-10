@@ -271,15 +271,17 @@ SQL
 # These pre-populate the Settings form. Admins can further edit via the UI.
 # Generic defaults are in the PHP plugin constants if env vars are not set.
 LOGIN_HINT="${WPOJS_DEFAULT_LOGIN_HINT:-}"
+PW_RESET_HINT="${WPOJS_DEFAULT_PASSWORD_RESET_HINT:-}"
 PAYWALL_HINT="${WPOJS_DEFAULT_PAYWALL_HINT:-}"
 FOOTER_MSG="${WPOJS_DEFAULT_FOOTER_MESSAGE:-}"
 
-if [ -n "$LOGIN_HINT" ] || [ -n "$PAYWALL_HINT" ] || [ -n "$FOOTER_MSG" ]; then
+if [ -n "$LOGIN_HINT" ] || [ -n "$PW_RESET_HINT" ] || [ -n "$PAYWALL_HINT" ] || [ -n "$FOOTER_MSG" ]; then
   echo "[OJS] Writing UI messages to plugin settings..."
   # Escape single quotes for SQL safety
   sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
 
   [ -n "$LOGIN_HINT" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('wpojssubscriptionapiplugin', $JOURNAL_ID, 'loginHint', '$(sql_escape "$LOGIN_HINT")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape "$LOGIN_HINT")';"
+  [ -n "$PW_RESET_HINT" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('wpojssubscriptionapiplugin', $JOURNAL_ID, 'passwordResetHint', '$(sql_escape "$PW_RESET_HINT")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape "$PW_RESET_HINT")';"
   [ -n "$PAYWALL_HINT" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('wpojssubscriptionapiplugin', $JOURNAL_ID, 'paywallHint', '$(sql_escape "$PAYWALL_HINT")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape "$PAYWALL_HINT")';"
   [ -n "$FOOTER_MSG" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('wpojssubscriptionapiplugin', $JOURNAL_ID, 'footerMessage', '$(sql_escape "$FOOTER_MSG")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape "$FOOTER_MSG")';"
   echo "[OJS] UI messages written."

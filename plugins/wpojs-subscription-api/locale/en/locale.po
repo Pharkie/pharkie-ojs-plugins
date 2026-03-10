@@ -38,6 +38,9 @@ msgstr "Customise the messages shown to users on the login page, paywall, and si
 msgid "plugins.generic.wpojsSubscriptionApi.settings.loginHint"
 msgstr "Login page hint"
 
+msgid "plugins.generic.wpojsSubscriptionApi.settings.passwordResetHint"
+msgstr "Password reset page hint"
+
 msgid "plugins.generic.wpojsSubscriptionApi.settings.paywallHint"
 msgstr "Paywall hint (shown to logged-in users without a subscription)"
 
