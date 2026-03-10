@@ -60,7 +60,7 @@ wp_retry() {
 COMPOSER_DIR="/var/www/html"
 LOCK_HASH_FILE="$COMPOSER_DIR/vendor/.composer-lock-hash"
 CURRENT_HASH=$(md5sum "$COMPOSER_DIR/composer.lock" 2>/dev/null | cut -d' ' -f1)
-STORED_HASH=$(cat "$LOCK_HASH_FILE" 2>/dev/null)
+STORED_HASH=$(cat "$LOCK_HASH_FILE" 2>/dev/null || true)
 if [ -f "$COMPOSER_DIR/composer.json" ] && { [ ! -d "$COMPOSER_DIR/web/wp/wp-includes" ] || [ "$CURRENT_HASH" != "$STORED_HASH" ]; }; then
   echo "Running composer install..."
   composer install --no-dev --no-interaction --working-dir="$COMPOSER_DIR" 2>&1
