@@ -38,6 +38,34 @@ Submissions, issues, contexts, DOIs, email templates, announcements, stats, inst
 - If Authorization header contains an invalid JWT, some versions throw a fatal PHP error instead of a 401 ([pkp-lib#6563](https://github.com/pkp/pkp-lib/issues/6563))
 - Slim Application errors reported on some 3.4 deployments
 
+## Author Database Schema
+
+### No central author entity
+
+OJS stores authors **per-article, not centrally**. The `authors` table has one row per author per publication — if "Emmy van Deurzen" has 20 articles, that's 20 separate rows with different `author_id` values, each linked to one `publication_id`. There is no shared author profile or deduplication.
+
+```
+publications (1) ──< (many) authors
+```
+
+**`authors`**
+| Column | Type | Notes |
+|---|---|---|
+| `author_id` | BIGINT PK | Auto-increment, unique per row |
+| `email` | VARCHAR(90) | Stored per-row, not deduplicated |
+| `publication_id` | BIGINT | FK to publications — one article |
+| `include_in_browse` | SMALLINT | Default 1 |
+| `seq` | DOUBLE | Display order within article |
+| `user_group_id` | BIGINT | |
+
+Author names are stored in `author_settings` (locale-specific `givenname`, `familyname`).
+
+### Consequences
+
+- **Author browse/search matches by exact string.** "Emmy van Deurzen" and "E. van Deurzen" appear as different authors. There is no fuzzy matching or alias support.
+- **No "other articles by this author" linking** beyond string matching. No ORCID-based linking in core (plugin exists but is optional).
+- **Backfill implication:** author name consistency across 30 years of issues depends entirely on us normalising names before import. A dedicated author registry (`authors.json`) maps every extracted name variant to a canonical form. This is more robust than anything OJS offers natively.
+
 ## Subscription Database Schema
 
 ### Tables

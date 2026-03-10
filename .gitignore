@@ -21,6 +21,8 @@ wordpress/web/app/themes/
 wordpress/web/app/uploads/
 wordpress/paid-plugins/*/
 !wordpress/paid-plugins/README.md
+wordpress/themes/*/
+!wordpress/themes/README.md
 
 # DB snapshots
 docker/snapshots/
@@ -36,6 +38,12 @@ docker/snapshots/
 
 # Rebuild logs
 logs/
+
+# Backfill pipeline output (split PDFs, generated XML — large files)
+backfill/output/
+
+# Python bytecode
+__pycache__/
 
 # E2E test artifacts
 node_modules/

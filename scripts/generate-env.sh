@@ -9,20 +9,25 @@ set -eo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${1:-$PROJECT_ROOT/.env}"
-ENV_EXAMPLE="$PROJECT_ROOT/.env.example"
 
 if [ -f "$ENV_FILE" ]; then
   echo "ERROR: $ENV_FILE already exists. Remove it first if you want to regenerate."
   exit 1
 fi
 
-if [ ! -f "$ENV_EXAMPLE" ]; then
-  echo "ERROR: $ENV_EXAMPLE not found."
+# Use .env.dev (project-specific defaults) if available, otherwise .env.example (generic)
+ENV_TEMPLATE="$PROJECT_ROOT/.env.dev"
+if [ ! -f "$ENV_TEMPLATE" ]; then
+  ENV_TEMPLATE="$PROJECT_ROOT/.env.example"
+fi
+
+if [ ! -f "$ENV_TEMPLATE" ]; then
+  echo "ERROR: No .env.dev or .env.example found."
   exit 1
 fi
 
-echo "Generating $ENV_FILE from $ENV_EXAMPLE..."
-cp "$ENV_EXAMPLE" "$ENV_FILE"
+echo "Generating $ENV_FILE from $ENV_TEMPLATE..."
+cp "$ENV_TEMPLATE" "$ENV_FILE"
 
 # --- Helper: generate a random value and fill an empty variable ---
 fill_empty() {

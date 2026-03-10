@@ -25,9 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI + Python pip + DNS tools + socat (for port forwarding to compose services)
-RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils socat \
+# poppler-utils: pdftotext/pdfinfo for journal backfill pipeline
+RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils socat poppler-utils \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --break-system-packages pyyaml grip
+    && pip install --break-system-packages pyyaml grip pymupdf
 
 # Hetzner Cloud CLI (for managing staging/prod VPS)
 RUN curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz \

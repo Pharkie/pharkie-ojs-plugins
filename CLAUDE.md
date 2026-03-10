@@ -95,6 +95,23 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 - **`scripts/load-test.sh`** — performance tests using `hey` with server resource monitoring.
 - **Post-rebuild prompt:** `docs/private/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
 
+## Backfill pipeline
+
+Imports ~30 years of journal back-issues (whole-issue PDFs) into OJS. Two scripts, two steps:
+
+1. **`backfill/split-issue.sh <issue.pdf>`** — split a whole-issue PDF into per-article PDFs + OJS Native XML. Local only, does not touch OJS. Output: `backfill/output/EA-vol##-iss#/` (toc.json, per-article PDFs, import.xml).
+2. **`backfill/import.sh <issue-dir>`** — load the split output into OJS via Docker CLI.
+
+Individual Python scripts (called by `split-issue.sh` in order):
+- `backfill/preflight.py` — validate PDF, detect vol/issue
+- `backfill/parse_toc.py` — parse CONTENTS page, extract metadata (titles, authors, abstracts, keywords, page ranges)
+- `backfill/split.py` — split PDF into per-article PDFs using PyMuPDF
+- `backfill/author_normalize.py` — normalize author names against registry (`backfill/authors.json`)
+- `backfill/generate_xml.py` — generate OJS Native XML with base64-embedded PDFs
+- `backfill/verify.py` — post-import verification against OJS database
+
+Output directory (`backfill/output/`) is gitignored (large PDFs + XML).
+
 ## Pre-commit hooks
 
 Installed via `./setup-hooks.sh` (runs automatically in dev container). Symlinks `.git/hooks/pre-commit` to `scripts/pre-commit`. Checks: secret detection, env var documentation, YAML syntax, doc link validation. Modular checks live in `scripts/lib/`.
