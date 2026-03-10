@@ -47,7 +47,8 @@ test.describe('WP My Account journal access widget', () => {
       await expect(card).toBeVisible();
       await expect(card.locator('.wpojs-status--active')).toBeVisible();
       // Should have a link to the journal.
-      await expect(card.locator('a[href*="journal"]')).toBeVisible();
+      // Link should point to the OJS journal (WPOJS_BASE_URL, e.g. .../index.php/ea).
+      await expect(card.locator('a[href*="/index.php/"]')).toBeVisible();
 
       await page.screenshot({ path: 'e2e/screenshots/wp-dashboard-active-member.png', fullPage: true });
     });
