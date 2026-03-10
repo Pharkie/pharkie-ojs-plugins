@@ -33,6 +33,7 @@ source "$SCRIPT_DIR/lib/check-secrets.sh"
 source "$SCRIPT_DIR/lib/check-env-vars.sh"
 source "$SCRIPT_DIR/lib/check-yaml-syntax.sh"
 source "$SCRIPT_DIR/lib/check-doc-links.sh"
+source "$SCRIPT_DIR/lib/check-backfill-tests.sh"
 
 # Track results
 ERRORS=0
@@ -90,6 +91,17 @@ echo ""
 echo -e "${BLUE}4. Checking documentation links...${NC}"
 if check_doc_links; then
     echo -e "    ${GREEN}OK${NC}: All internal links valid"
+else
+    ((ERRORS++))
+fi
+echo ""
+
+# ==========================================
+# CHECK 5: Backfill Tests (BLOCKS)
+# ==========================================
+echo -e "${BLUE}5. Checking backfill tests...${NC}"
+if check_backfill_tests; then
+    echo -e "    ${GREEN}OK${NC}: Backfill tests passed"
 else
     ((ERRORS++))
 fi

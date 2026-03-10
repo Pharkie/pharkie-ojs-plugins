@@ -86,6 +86,7 @@ THEME_STAGING="/var/www/html/themes"
 THEME_DEST="/var/www/html/web/app/themes"
 if [ -d "$THEME_STAGING" ]; then
   for THEME_DIR in "$THEME_STAGING"/*/; do
+    [ -d "$THEME_DIR" ] || continue          # no matches → skip
     THEME_NAME=$(basename "$THEME_DIR")
     [ "$THEME_NAME" = "README.md" ] && continue
     if [ ! -d "$THEME_DEST/$THEME_NAME" ]; then
