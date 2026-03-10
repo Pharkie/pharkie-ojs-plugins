@@ -44,12 +44,20 @@ SSH_CMD="ssh -o ConnectTimeout=10 $SSH_HOST"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+DEPLOY_START=$(date +%s)
+phase_time() {
+  local now=$(date +%s)
+  local elapsed=$(( now - DEPLOY_START ))
+  printf "[%dm%02ds]" $((elapsed / 60)) $((elapsed % 60))
+}
+
 echo "=== Deploying to $SSH_HOST (ref: $GIT_REF) ==="
 
 # --- Provision (optional) ---
 if [ -n "$PROVISION" ]; then
   echo "--- Provisioning VPS ---"
   $SSH_CMD 'bash -s' < "$SCRIPT_DIR/provision-vps.sh"
+  echo "$(phase_time) Provisioning done."
   echo ""
 fi
 
@@ -63,6 +71,7 @@ $SSH_CMD "
     git reset --hard origin/$GIT_REF 2>/dev/null || git reset --hard $GIT_REF
     echo '[ok] Repo updated.'
   else
+    echo 'Cloning repo...'
     git clone $REPO_URL ${REMOTE_DIR}.tmp
     # Preserve .env if it exists, then swap
     [ -f $REMOTE_DIR/.env ] && cp $REMOTE_DIR/.env ${REMOTE_DIR}.tmp/.env
@@ -133,14 +142,14 @@ fi
 if [ -n "$CLEAN" ]; then
   echo "--- Cleaning: removing containers + volumes ---"
   $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD down -v 2>/dev/null || true"
-  echo "[ok] Clean slate."
+  echo "$(phase_time) Clean slate."
 fi
 
 # --- Build images ---
 if [ -z "$SKIP_BUILD" ]; then
   echo "--- Building images ---"
   $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD build"
-  echo "[ok] Images built."
+  echo "$(phase_time) Images built."
 fi
 
 # --- Stop existing containers (prevents "name already in use" conflicts) ---
@@ -150,14 +159,17 @@ $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD down 2>/dev/null || true"
 # --- Start stack ---
 echo "--- Starting stack ---"
 $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD up -d"
-echo "[ok] Stack is up."
+echo "$(phase_time) Stack is up."
 
 # --- Run setup ---
 if [ -z "$SKIP_SETUP" ]; then
   echo "--- Running setup ---"
   $SSH_CMD "cd $REMOTE_DIR && bash scripts/setup.sh --env=staging"
+  echo "$(phase_time) Setup complete."
 fi
 
+DEPLOY_END=$(date +%s)
+DEPLOY_ELAPSED=$(( DEPLOY_END - DEPLOY_START ))
 echo ""
-echo "=== Deploy complete ==="
+echo "=== Deploy complete ($(( DEPLOY_ELAPSED / 60 ))m $(( DEPLOY_ELAPSED % 60 ))s) ==="
 $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"

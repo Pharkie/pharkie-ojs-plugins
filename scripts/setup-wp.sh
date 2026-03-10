@@ -192,9 +192,11 @@ if [ "$SAMPLE_DATA" = true ]; then
     echo "Importing anonymised test users from $CSV..."
     # CSV has 'role' (safe WP role) + 'original_role' (UM/WCS role).
     # wp user import-csv ignores unknown columns, so original_role is skipped.
-    # Capture full output so we can check for errors, show last 5 lines live.
+    # Capture full output so we can check for errors, show progress.
     IMPORT_LOG=$(mktemp)
-    wp user import-csv "$CSV" --allow-root 2>&1 | tee "$IMPORT_LOG" | tail -5
+    wp user import-csv "$CSV" --allow-root 2>&1 | tee "$IMPORT_LOG" | awk '
+      /^Success:/ { count++; if (count % 200 == 0) printf "  ...imported %d users\n", count }
+      END { if (count > 200) printf "  ...imported %d users (done)\n", count }'
     IMPORT_EXIT=${PIPESTATUS[0]}
     if [ "$IMPORT_EXIT" != "0" ]; then
       echo "ERROR: User import failed (exit $IMPORT_EXIT). Last 20 lines:"

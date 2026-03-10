@@ -34,6 +34,9 @@ for arg in "$@"; do
   esac
 done
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
 if [ -z "$SERVER_NAME" ]; then
   echo "ERROR: --name is required"
   echo "Usage: scripts/init-vps.sh --name=sea-staging"
@@ -162,7 +165,14 @@ echo ""
 echo "=== 4. SSH config ==="
 SSH_CONFIG="$HOME/.ssh/config"
 if grep -q "^Host $SERVER_NAME$" "$SSH_CONFIG" 2>/dev/null; then
-  echo "[ok] SSH config entry for '$SERVER_NAME' already exists."
+  # Update HostName if IP changed (common after server recreate)
+  OLD_IP=$(awk "/^Host $SERVER_NAME\$/{found=1;next} found&&/HostName/{print \$2;exit}" "$SSH_CONFIG")
+  if [ "$OLD_IP" != "$SERVER_IP" ]; then
+    sed -i "/^Host $SERVER_NAME$/,/^Host /{s/HostName .*/HostName $SERVER_IP/}" "$SSH_CONFIG"
+    echo "[ok] SSH config updated: $OLD_IP -> $SERVER_IP"
+  else
+    echo "[ok] SSH config entry for '$SERVER_NAME' already correct."
+  fi
 else
   # Ensure file exists
   mkdir -p "$(dirname "$SSH_CONFIG")"
@@ -190,6 +200,26 @@ if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "$SERVER_NAME" "
 else
   echo "[warn] SSH connection failed — check config manually."
 fi
+echo ""
+
+# --- Step 5: Update .env files with new IP ---
+echo "=== 5. Env files ==="
+# Update any .env.staging / .env.prod files that reference the old IP
+for ENV_CANDIDATE in "$PROJECT_DIR/.env.staging" "$PROJECT_DIR/.env.prod"; do
+  if [ -f "$ENV_CANDIDATE" ]; then
+    if grep -qE "://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" "$ENV_CANDIDATE"; then
+      OLD_ENV_IP=$(grep -oE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" "$ENV_CANDIDATE" | head -1)
+      if [ "$OLD_ENV_IP" != "$SERVER_IP" ]; then
+        sed -i "s/$OLD_ENV_IP/$SERVER_IP/g" "$ENV_CANDIDATE"
+        echo "[ok] $(basename "$ENV_CANDIDATE"): updated IP $OLD_ENV_IP -> $SERVER_IP"
+      else
+        echo "[ok] $(basename "$ENV_CANDIDATE"): IP already correct."
+      fi
+    else
+      echo "[skip] $(basename "$ENV_CANDIDATE"): no IP found to update."
+    fi
+  fi
+done
 echo ""
 
 # --- Done ---
