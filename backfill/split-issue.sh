@@ -10,6 +10,7 @@
 #   backfill/split-issue.sh /path/to/pdf-folder            # Split all PDFs in folder
 #   backfill/split-issue.sh <issue.pdf> --no-pdfs           # XML without embedded PDFs (fast, for testing XML structure)
 #   backfill/split-issue.sh <issue.pdf> --only=split        # Run one step only
+#   backfill/split-issue.sh <issue.pdf> --stop-after=normalize  # Run through normalize, export review CSV, stop
 #   backfill/split-issue.sh <issue.pdf> --page-offset=2     # Manual page offset (when auto-detection fails)
 #
 # Steps (run in order):
@@ -37,6 +38,7 @@ VALID_STEPS="preflight parse_toc split verify_split normalize generate_xml"
 PDFS=()
 NO_PDFS=""
 ONLY_STEP=""
+STOP_AFTER=""
 PAGE_OFFSET=""
 for arg in "$@"; do
   case "$arg" in
@@ -52,6 +54,14 @@ for arg in "$@"; do
         exit 1
       fi
       ;;
+    --stop-after=*)
+      STOP_AFTER="${arg#--stop-after=}"
+      if ! echo "$VALID_STEPS" | grep -qw "$STOP_AFTER"; then
+        echo "ERROR: Unknown step '$STOP_AFTER'"
+        echo "Valid steps: $VALID_STEPS"
+        exit 1
+      fi
+      ;;
     --help|-h)
       sed -n '2,/^set -eo/p' "$0" | head -n -1 | sed 's/^# \?//'
       exit 0
@@ -61,7 +71,7 @@ for arg in "$@"; do
 done
 
 if [ ${#PDFS[@]} -eq 0 ]; then
-  echo "Usage: backfill/split-issue.sh <issue.pdf|folder> [--no-pdfs] [--only=<step>]"
+  echo "Usage: backfill/split-issue.sh <issue.pdf|folder> [--no-pdfs] [--only=<step>] [--stop-after=<step>]"
   echo "Steps: $VALID_STEPS"
   exit 1
 fi
@@ -91,12 +101,17 @@ echo "Prepare: ${#EXPANDED_PDFS[@]} PDF(s)"
 echo "Output: $OUTPUT_DIR"
 [ -n "$NO_PDFS" ] && echo "Mode: --no-pdfs (XML without embedded PDFs)"
 [ -n "$ONLY_STEP" ] && echo "Step: $ONLY_STEP only"
+[ -n "$STOP_AFTER" ] && echo "Stop after: $STOP_AFTER"
 [ -n "$PAGE_OFFSET" ] && echo "Page offset: $PAGE_OFFSET (manual)"
 echo "=========================================="
 echo
 
 should_run() {
   [ -z "$ONLY_STEP" ] || [ "$ONLY_STEP" = "$1" ]
+}
+
+should_stop_after() {
+  [ -n "$STOP_AFTER" ] && [ "$STOP_AFTER" = "$1" ]
 }
 
 FAILED=0
@@ -137,6 +152,11 @@ sys.exit(1 if errors else 0)
       continue
     fi
     rm -f "$PREFLIGHT_TMP"
+  fi
+
+  if should_stop_after "preflight"; then
+    SUCCEEDED=$((SUCCEEDED + 1))
+    continue
   fi
 
   # Step 2: Parse TOC
@@ -193,6 +213,11 @@ print(0)
     continue
   fi
 
+  if should_stop_after "parse_toc"; then
+    SUCCEEDED=$((SUCCEEDED + 1))
+    continue
+  fi
+
   # Step 3: Split PDF
   if should_run "split"; then
     echo
@@ -205,6 +230,11 @@ print(0)
     TOC_JSON="$ISSUE_DIR/toc.json"
   fi
 
+  if should_stop_after "split"; then
+    SUCCEEDED=$((SUCCEEDED + 1))
+    continue
+  fi
+
   # Step 3b: Verify split PDFs match TOC titles
   if should_run "verify_split"; then
     echo
@@ -215,11 +245,32 @@ print(0)
     fi
   fi
 
+  if should_stop_after "verify_split"; then
+    SUCCEEDED=$((SUCCEEDED + 1))
+    continue
+  fi
+
   # Step 4: Normalize authors
   if should_run "normalize"; then
     echo
     echo "--- Step 4: Normalize authors ---"
     python3 "$SCRIPT_DIR/author_normalize.py" "$TOC_JSON"
+  fi
+
+  # Stop after normalize: export review CSV
+  if should_stop_after "normalize"; then
+    REVIEW_CSV="$ISSUE_DIR/review.csv"
+    echo
+    echo "--- Exporting review CSV ---"
+    python3 "$SCRIPT_DIR/export_review.py" "$TOC_JSON" -o "$REVIEW_CSV"
+    echo
+    echo "  Review CSV: $REVIEW_CSV"
+    echo "  Edit in Google Sheets, then run:"
+    echo "    python3 backfill/import_review.py $REVIEW_CSV"
+    echo "    ./backfill/split-issue.sh $PDF_ABS --only=normalize"
+    echo "    ./backfill/split-issue.sh $PDF_ABS --only=generate_xml"
+    SUCCEEDED=$((SUCCEEDED + 1))
+    continue
   fi
 
   # Step 5: Generate XML

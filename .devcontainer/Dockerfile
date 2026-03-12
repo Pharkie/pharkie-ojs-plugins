@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # GitHub CLI + Python pip + DNS tools + socat (for port forwarding to compose services)
 # poppler-utils: pdftotext/pdfinfo for journal backfill pipeline
-RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils socat poppler-utils \
+RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils socat poppler-utils sox \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --break-system-packages pyyaml grip pymupdf
 

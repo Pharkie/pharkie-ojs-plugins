@@ -2,10 +2,11 @@
 
 Converts whole-issue PDFs of Existential Analysis into per-article PDFs and OJS Native XML for import. Designed for backfilling the journal archive -- 30+ years of issues that predate the OJS installation.
 
-Two-step workflow:
+Three-step workflow:
 
-1. **`split-issue.sh`** -- validates the PDF, parses the table of contents, splits into individual article PDFs, verifies splits match TOC titles, normalizes author names, and generates OJS import XML. Does not touch OJS.
-2. **`import.sh`** -- loads the generated XML into OJS via the Native Import/Export CLI. Checks for existing issues to prevent duplicates.
+1. **`split-issue.sh`** -- validates the PDF, parses the table of contents, splits into individual article PDFs, verifies splits match TOC titles, and normalizes author names. Does not touch OJS.
+2. **Human review** -- export metadata to CSV, correct titles/authors/abstracts/sections/keywords in Google Sheets, import corrections back. See [Human review](#4b-human-review-export_reviewpy--import_reviewpy) below.
+3. **`import.sh`** -- generates OJS Native XML and loads it into OJS via the Native Import/Export CLI. Checks for existing issues to prevent duplicates.
 
 ---
 
@@ -14,13 +15,20 @@ Two-step workflow:
 Process a single issue:
 
 ```bash
-# Step 1: Split the issue PDF into articles + XML
+# Step 1: Split the issue PDF into articles
 backfill/split-issue.sh path/to/EA-vol37-iss1.pdf
 
-# Step 2: Import into OJS (requires running OJS Docker container)
+# Step 2: Review and correct metadata (see Human review section)
+python3 backfill/export_review.py backfill/output/EA-vol37-iss1/toc.json -o review.csv
+# ... edit review.csv in Google Sheets ...
+python3 backfill/import_review.py review.csv --dry-run
+python3 backfill/import_review.py review.csv
+
+# Step 3: Generate XML and import into OJS
+backfill/split-issue.sh path/to/EA-vol37-iss1.pdf --only=generate_xml
 backfill/import.sh backfill/output/EA-vol37-iss1
 
-# Step 3: Verify the import
+# Step 4: Verify the import
 backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
 ```
 
@@ -28,6 +36,9 @@ Process all PDFs in a folder:
 
 ```bash
 backfill/split-issue.sh /path/to/pdf-folder
+python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
+# ... review in Sheets, import corrections ...
+backfill/split-issue.sh /path/to/pdf-folder --only=generate_xml
 backfill/import.sh backfill/output/EA-vol*
 ```
 
@@ -107,6 +118,105 @@ Resolves author name variants to canonical forms using a persistent registry.
 ```bash
 python3 backfill/author_normalize.py backfill/output/EA-vol37-iss1/toc.json
 ```
+
+### 4b. Human review (`export_review.py` + `import_review.py`)
+
+A human review step between splitting and XML generation. The automated TOC parser does a good job, but over 30 years of issues you'll find titles with OCR artefacts, author names split incorrectly, abstracts that captured too much or too little, and articles in the wrong section. This step lets you scan everything in a spreadsheet and fix problems before they're baked into OJS.
+
+This runs once across the entire archive. There's no second pass.
+
+#### How it works
+
+Each article gets a stable ID (like `v37i1a0` -- volume 37, issue 1, article 0). The ID is stored in the toc.json and included in the CSV. Matching on import is by ID, not row position, so you can sort, filter, and rearrange the spreadsheet without breaking anything.
+
+#### Export
+
+```bash
+# Single issue
+python3 backfill/export_review.py backfill/output/EA-vol37-iss1/toc.json -o review.csv
+
+# All issues at once
+python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
+```
+
+Creates a CSV with one row per article. Also assigns a `_review_id` to each article in the toc.json if not already present.
+
+#### Edit in Google Sheets
+
+1. Upload `review.csv` to Google Sheets (File > Import > Upload)
+2. Edit the columns you need to correct:
+   - **title** -- fix typos, missing words, OCR errors
+   - **authors** -- correct names, fix splitting (use `&` between multiple authors)
+   - **section** -- must be exactly one of: `Editorial`, `Articles`, `Book Review Editorial`, `Book Reviews`
+   - **abstract** -- fix or add abstract text
+   - **keywords** -- semicolon-separated (e.g. `phenomenology; therapy; Heidegger`)
+3. Don't edit these columns (used for matching):
+   - **id** -- the stable article ID
+   - **file** -- path to the toc.json
+   - **index** -- original position in toc.json
+   - **pages** -- page range (informational)
+4. Download as CSV (File > Download > Comma-separated values)
+
+**Don't** delete rows (every article must have a row), edit the `id` column, or add rows. The import rejects all of these with a clear error.
+
+#### Preview changes (always do this first)
+
+```bash
+python3 backfill/import_review.py review.csv --dry-run
+```
+
+Shows every change field by field without writing anything. Also flags automatic transformations (newline removal, control character stripping). Review the output before applying.
+
+#### Import corrections
+
+```bash
+python3 backfill/import_review.py review.csv
+```
+
+Updates each toc.json in place. A backup is saved as `toc.json.pre-review` before changes are written.
+
+If you changed author names, re-run normalization afterwards:
+
+```bash
+python3 backfill/author_normalize.py backfill/output/*/toc.json
+```
+
+#### Undo
+
+```bash
+python3 backfill/import_review.py review.csv --restore
+```
+
+Restores every toc.json from its `.pre-review` backup.
+
+#### What gets validated
+
+The import checks all of these **before writing anything**. If any check fails, no files are touched.
+
+| Check | What it catches |
+|---|---|
+| Missing `id` column | CSV was exported before review IDs existed -- re-export |
+| Empty ID | An `id` cell was accidentally cleared |
+| Unknown ID | ID in CSV doesn't exist in toc.json (typo or wrong file) |
+| Missing article | A toc.json article has no matching CSV row (row deleted) |
+| Duplicate ID | Two CSV rows have the same ID (row duplicated) |
+| Missing toc.json | A file path in the CSV doesn't exist on disk |
+| Invalid section | Section value isn't one of the four valid options |
+
+Automatic transformations (applied silently, reported in `--dry-run`):
+
+| Transformation | Why |
+|---|---|
+| Newlines replaced with spaces | Google Sheets allows Ctrl+Enter; newlines break XML generation |
+| Control characters removed | Copy-paste from PDFs can introduce invisible chars that produce invalid XML |
+
+#### Testing
+
+```bash
+python3 backfill/test_review.py
+```
+
+14 automated tests covering validation, round-trips, sanitization, dry-run, restore, and idempotency.
 
 ### 5. Generate XML (`generate_xml.py`)
 
@@ -216,6 +326,7 @@ Each article object:
 | `keywords` | List of extracted keywords (articles only) |
 | `split_pdf` | Path to the individual article PDF |
 | `split_pages` | Page count of the split PDF |
+| `_review_id` | Stable ID for human review matching (e.g. `v37i1a0`) |
 
 Book review articles also have `book_title`, `book_author`, `book_year`, `publisher`, and `reviewer`.
 
@@ -310,6 +421,21 @@ Unknown short titles (≤2 words) are classified as Articles with a warning.
 | `--admin=<user>` | `admin` | OJS admin username for the import. |
 | `--force` | Off | Reimport issues that already exist in OJS. |
 
+### export_review.py
+
+| Argument | Default | Description |
+|---|---|---|
+| `toc.json files` | (required) | One or more toc.json files to export |
+| `-o`, `--output` | `review.csv` | Output CSV path |
+
+### import_review.py
+
+| Flag | Description |
+|---|---|
+| `csv_file` | (required) The reviewed CSV file |
+| `--dry-run` | Run all validation and show what would change, without writing files |
+| `--restore` | Restore toc.json files from `.pre-review` backups |
+
 ### verify.py
 
 | Flag | Description |
@@ -357,6 +483,18 @@ python3 backfill/verify_split.py backfill/output/EA-vol37-iss1/toc.json
 
 # Normalize authors across all processed issues
 python3 backfill/author_normalize.py backfill/output/*/toc.json
+
+# Export metadata for review
+python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
+
+# Preview review corrections (dry run)
+python3 backfill/import_review.py review.csv --dry-run
+
+# Apply review corrections
+python3 backfill/import_review.py review.csv
+
+# Undo review corrections
+python3 backfill/import_review.py review.csv --restore
 
 # Generate XML without PDFs (fast, for testing)
 python3 backfill/generate_xml.py backfill/output/EA-vol37-iss1/toc.json -o import.xml --no-pdfs
