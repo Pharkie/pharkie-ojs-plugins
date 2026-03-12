@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from backfill.generate_xml import generate_xml, lookup_doi, SECTIONS
 from backfill.verify_split import extract_title_words, verify_split
-from backfill.parse_toc import classify_entry, parse_toc_text
+from backfill.parse_toc import classify_entry, parse_toc_text, extract_article_metadata
 
 # Namespace for OJS XML
 NS = {'pkp': 'http://pkp.sfu.ca'}
@@ -339,3 +339,113 @@ class TestTocParserIntegration:
         assert entries[0]['title'] == 'A Very Long Title That Spans Multiple Lines'
         assert entries[0]['page'] == 15
         assert entries[0]['author'] == 'Author Name'
+
+
+class FakePage:
+    """Mock PyMuPDF page that returns preset text."""
+
+    def __init__(self, text):
+        self._text = text
+
+    def get_text(self):
+        return self._text
+
+
+class TestExtractArticleMetadata:
+    """Test extract_article_metadata with various heading formats."""
+
+    def test_standard_key_words_comma_separated(self):
+        page = FakePage(
+            "Abstract\n"
+            "This explores existential therapy.\n"
+            "Key Words\n"
+            "phenomenology, therapy, Heidegger\n"
+            "Introduction\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['abstract'] == 'This explores existential therapy.'
+        assert meta['keywords'] == ['phenomenology', 'therapy', 'Heidegger']
+
+    def test_keywords_no_space(self):
+        page = FakePage(
+            "Abstract\n"
+            "An article about ontology.\n"
+            "Keywords\n"
+            "ontology, being, dasein\n"
+            "Introduction\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['abstract'] == 'An article about ontology.'
+        assert meta['keywords'] == ['ontology', 'being', 'dasein']
+
+    def test_semicolon_separated_keywords(self):
+        page = FakePage(
+            "Abstract\n"
+            "A study of meaning.\n"
+            "Key Words\n"
+            "phenomenology; therapy; Heidegger\n"
+            "Introduction\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['keywords'] == ['phenomenology', 'therapy', 'Heidegger']
+
+    def test_keywords_with_colon(self):
+        page = FakePage(
+            "Abstract\n"
+            "Brief study.\n"
+            "Keywords:\n"
+            "anxiety, freedom, choice\n"
+            "Introduction\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['keywords'] == ['anxiety', 'freedom', 'choice']
+
+    def test_abstract_with_colon(self):
+        page = FakePage(
+            "Abstract:\n"
+            "This article examines despair.\n"
+            "Key Words\n"
+            "despair, hope\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['abstract'] == 'This article examines despair.'
+
+    def test_abstract_terminates_at_keywords_no_space(self):
+        page = FakePage(
+            "Abstract\n"
+            "Exploring lived experience.\n"
+            "Keywords\n"
+            "lived experience, phenomenology\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['abstract'] == 'Exploring lived experience.'
+        assert 'lived experience' in meta['keywords']
+
+    def test_no_abstract_no_keywords(self):
+        page = FakePage("This is just body text with no headings.\n")
+        meta = extract_article_metadata([page], 0, 1)
+        assert 'abstract' not in meta
+        assert 'keywords' not in meta
+
+    def test_multiline_abstract(self):
+        page = FakePage(
+            "Abstract\n"
+            "First line of abstract.\n"
+            "Second line of abstract.\n"
+            "Introduction\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        assert meta['abstract'] == 'First line of abstract. Second line of abstract.'
+
+    def test_key_word_singular(self):
+        """Handles 'Key Word' (singular) heading."""
+        page = FakePage(
+            "Abstract\n"
+            "Brief.\n"
+            "Key Word\n"
+            "solitude\n"
+            "Introduction\n"
+        )
+        meta = extract_article_metadata([page], 0, 1)
+        # Single keyword without delimiter still captured
+        assert meta['keywords'] == ['solitude']

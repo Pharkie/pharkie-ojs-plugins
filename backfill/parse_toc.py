@@ -220,19 +220,30 @@ def extract_article_metadata(doc, pdf_start_idx, pdf_end_idx):
 
     metadata = {}
 
+    # Abstract: match "Abstract" heading, capture until next section heading.
+    # Handles both "Abstract\n text..." and "Abstract: text..." formats.
+    # Terminators: "Key Words", "Keywords", "Introduction", or any capitalised heading.
     abstract_match = re.search(
-        r'Abstract\s*\n(.*?)(?=\nKey\s*Words|\nIntroduction|\n[A-Z][a-z]+\s*\n)',
+        r'Abstract[:\s]*\n(.*?)(?=\nKey\s*Words?|\nKeywords?|\nIntroduction|\n[A-Z][a-z]+\s*\n)',
         text, re.DOTALL
     )
+    if not abstract_match:
+        # Try inline form: "Abstract: text..." or "Abstract text..." on same line
+        abstract_match = re.search(
+            r'Abstract[:\s]+(.*?)(?=\nKey\s*Words?|\nKeywords?|\nIntroduction|\n[A-Z][a-z]+\s*\n)',
+            text, re.DOTALL
+        )
     if abstract_match:
         abstract = abstract_match.group(1).strip()
         abstract = re.sub(r'\s*\n\s*', ' ', abstract)
         abstract = re.sub(r'\s+', ' ', abstract)
-        metadata['abstract'] = abstract
+        if abstract:
+            metadata['abstract'] = abstract
 
-    # Extract keywords — collect lines after "Key Words" that contain commas
-    # (keyword lists are comma-separated). Stop at first non-keyword line.
-    kw_start = re.search(r'Key\s*Words?\s*\n', text)
+    # Extract keywords — collect lines after keyword heading.
+    # Handles "Key Words", "Keywords", "Key Word" with optional colon/newline.
+    # Supports both comma-separated and semicolon-separated keywords.
+    kw_start = re.search(r'Key\s*Words?[:\s]*\n|Keywords?[:\s]*\n', text)
     if kw_start:
         remaining = text[kw_start.end():]
         kw_lines = []
@@ -240,14 +251,19 @@ def extract_article_metadata(doc, pdf_start_idx, pdf_end_idx):
             line = line.strip()
             if not line:
                 break
-            # Keyword lines contain commas; continuation lines start lowercase
-            if ',' in line or (kw_lines and line[0].islower()):
+            # First line after heading is always a keyword line.
+            # Subsequent lines need delimiters or lowercase start (continuation).
+            if not kw_lines or ',' in line or ';' in line or line[0].islower():
                 kw_lines.append(line)
             else:
                 break
         if kw_lines:
             keywords = ' '.join(kw_lines)
-            kw_list = [k.strip() for k in keywords.split(',') if k.strip()]
+            # Split on whichever delimiter is present (prefer semicolons if both)
+            if ';' in keywords:
+                kw_list = [k.strip() for k in keywords.split(';') if k.strip()]
+            else:
+                kw_list = [k.strip() for k in keywords.split(',') if k.strip()]
             metadata['keywords'] = kw_list
 
     return metadata
