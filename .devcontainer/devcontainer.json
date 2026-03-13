@@ -26,9 +26,13 @@
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
   },
 
-  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && sudo chown vscode:vscode node_modules /home/vscode/.cache/ms-playwright && npm install && npx playwright install chromium && bash setup-hooks.sh && docker network connect wp-ojs-sync_sea-net $(hostname) 2>/dev/null || true",
+  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && sudo chown vscode:vscode node_modules /home/vscode/.cache/ms-playwright && npm install && npx playwright install chromium && bash setup-hooks.sh",
+  // Start socat port forwarders on every devcontainer start (DinD can't use
+  // compose port mappings — socat bridges localhost to Docker network hostnames).
+  // Silenced: services may not be running yet; rebuild-dev.sh re-runs this anyway.
+  "postStartCommand": "scripts/forward-ports.sh 2>/dev/null || true",
 
-  // Forward the WP and OJS ports from compose services
+  // VS Code Ports tab entries — socat makes these actually reachable in DinD
   "forwardPorts": [8080, 8081, 8082],
 
   "customizations": {

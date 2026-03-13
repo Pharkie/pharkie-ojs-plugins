@@ -76,55 +76,9 @@ echo "--- Running setup-dev.sh $SAMPLE_DATA ---"
 scripts/setup-dev.sh $SAMPLE_DATA
 echo ""
 
-# --- 5. Prepare for tests ---
-# Kill stale socat forwarders from a previous run (they hold the ports but
-# point at containers that no longer exist after the teardown+rebuild).
-echo "--- Preparing test infrastructure ---"
-# [s] trick prevents pkill from matching its own command line
-pkill -f '[s]ocat.*TCP-LISTEN' 2>/dev/null || true
-sleep 1  # Let killed processes release their ports
-
-# Connect the devcontainer to the compose network so hostname resolution
-# (wp, ojs) works for socat and direct connectivity checks.
-NETWORK="wp-ojs-sync_sea-net"
-CONTAINER_ID=$(cat /etc/hostname)
-if ! docker network inspect "$NETWORK" --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null | grep -q "$CONTAINER_ID"; then
-  echo "Connecting devcontainer to $NETWORK..."
-  docker network connect "$NETWORK" "$CONTAINER_ID" 2>/dev/null || true
-fi
-
-# Start socat forwarders and verify they work. Playwright's global-setup also
-# does this, but it spawns socat with stdio:ignore so errors are invisible.
-# Doing it here lets us catch failures with full error output.
-for FORWARD in "8080:wp:80" "8081:ojs:80" "8082:adminer:8080"; do
-  LOCAL_PORT="${FORWARD%%:*}"
-  REMOTE="${FORWARD#*:}"
-  REMOTE_HOST="${REMOTE%%:*}"
-  REMOTE_PORT="${REMOTE#*:}"
-
-  # Skip if already listening (from a surviving forwarder)
-  if bash -c "echo >/dev/tcp/localhost/$LOCAL_PORT" 2>/dev/null; then
-    echo "[ok] localhost:$LOCAL_PORT already forwarding."
-    continue
-  fi
-
-  socat "TCP-LISTEN:$LOCAL_PORT,fork,reuseaddr" "TCP:$REMOTE_HOST:$REMOTE_PORT" 2>/dev/null &
-  SOCAT_PID=$!
-
-  # Wait up to 5s for it to start listening
-  for i in $(seq 1 10); do
-    if bash -c "echo >/dev/tcp/localhost/$LOCAL_PORT" 2>/dev/null; then
-      echo "[ok] localhost:$LOCAL_PORT → $REMOTE_HOST:$REMOTE_PORT (pid $SOCAT_PID)"
-      break
-    fi
-    if [ "$i" = "10" ]; then
-      echo "ERROR: socat failed to forward localhost:$LOCAL_PORT → $REMOTE_HOST:$REMOTE_PORT"
-      exit 1
-    fi
-    sleep 0.5
-  done
-done
-echo "[ok] Test infrastructure ready."
+# --- 5. Port forwarding (DinD) ---
+echo "--- Setting up port forwarding ---"
+scripts/forward-ports.sh
 echo ""
 
 # --- 6. Run tests (unless --skip-tests) ---
