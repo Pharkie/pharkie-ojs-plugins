@@ -1,6 +1,78 @@
 # Backfill Reference
 
-Technical reference for the backfill pipeline. For the process overview and operator guide, see [Backfill Pipeline](backfill-pipeline.md).
+Technical reference for the backfill pipeline. For the process overview and reviewer guide, see [Backfill Pipeline](backfill-pipeline.md).
+
+---
+
+## Common workflows
+
+### Full pipeline (single issue)
+
+```bash
+# Step 1: Split the issue PDF into articles
+backfill/split-issue.sh path/to/EA-vol37-iss1.pdf
+
+# Step 2: Human review (see Backfill Pipeline for what to check)
+# 2a: Check split PDFs -- open backfill/output/EA-vol37-iss1/*.pdf
+#     Verify page alignment, article boundaries, book review splits
+# 2b: Review metadata in spreadsheet
+python3 backfill/export_review.py backfill/output/EA-vol37-iss1/toc.json -o review.csv
+# ... edit review.csv in Google Sheets ...
+python3 backfill/import_review.py review.csv --dry-run
+python3 backfill/import_review.py review.csv
+
+# Step 3: Enrich metadata (optional but recommended)
+python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --dry-run
+python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json
+# ... optionally re-export CSV to review enrichment, then import corrections ...
+
+# Step 4: Generate XML and import into OJS
+backfill/split-issue.sh path/to/EA-vol37-iss1.pdf --only=generate_xml
+backfill/import.sh backfill/output/EA-vol37-iss1
+
+# Step 5: Verify the import
+backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
+
+# Optional: Generate archive manifest
+python3 backfill/manifest.py backfill/output/*/toc.json
+```
+
+### Batch workflows
+
+```bash
+# Export all issues for review at once
+python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
+
+# Enrich all issues
+python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+python3 backfill/enrich.py backfill/output/*/toc.json
+
+# Re-export after enrichment (includes subjects, disciplines, keywords_enriched)
+python3 backfill/export_review.py backfill/output/*/toc.json -o review-enriched.csv
+python3 backfill/import_review.py review-enriched.csv --dry-run
+python3 backfill/import_review.py review-enriched.csv
+
+# Normalize authors across all issues
+python3 backfill/author_normalize.py backfill/output/*/toc.json
+
+# Vocabulary report (after enrichment)
+python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+```
+
+### Re-running after corrections
+
+```bash
+# Re-run a single step (e.g. after editing toc.json)
+backfill/split-issue.sh path/to/issue.pdf --only=split
+backfill/split-issue.sh path/to/issue.pdf --only=normalize
+backfill/split-issue.sh path/to/issue.pdf --only=generate_xml
+
+# Undo review corrections (restore from backup)
+python3 backfill/import_review.py review.csv --restore
+
+# Re-run normalization after changing author names in review
+python3 backfill/author_normalize.py backfill/output/*/toc.json
+```
 
 ---
 
@@ -85,7 +157,42 @@ Each article object:
 | `token_count_output` | int | -- | API output tokens used |
 | `_enriched_at` | string | -- | ISO 8601 timestamp |
 
-"Flows to OJS XML" fields are searchable and visible in OJS out of the box. "Sidecar only" fields are preserved for future use (browse-by-theme pages, thinker indexes, related articles, corpus analysis, search enhancement). See the [Enrichment section](backfill-pipeline.md#enrichment) for details on what each field enables.
+"Flows to OJS XML" fields are searchable and visible in OJS out of the box. "Sidecar only" fields are preserved for future use (browse-by-theme pages, thinker indexes, related articles, corpus analysis, search enhancement). See the [Enrichment section](backfill-pipeline.md#enrichment) for what each field enables.
+
+---
+
+## Enrichment details
+
+### Cost
+
+| Model | Per article | 1000 articles |
+|---|---|---|
+| Sonnet 4 (default) | ~$0.03 | ~$32 |
+| Opus 4 | ~$0.16 | ~$158 |
+
+### Enrichment commands
+
+```bash
+# Dry run: estimate cost without calling API
+python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+
+# Enrich all issues (8 parallel workers by default)
+python3 backfill/enrich.py backfill/output/*/toc.json
+
+# More parallelism (if not hitting rate limits)
+python3 backfill/enrich.py backfill/output/*/toc.json --concurrency=16
+
+# Force re-enrichment of already-processed articles
+python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --force
+
+# Use a different model
+python3 backfill/enrich.py backfill/output/*/toc.json --model=claude-opus-4-20250514
+
+# Vocabulary report (flags near-duplicates)
+python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+```
+
+Enrichment is resumable -- if interrupted, re-running picks up where it left off (articles already in `enrichment.json` are skipped). The `--report` flag gives an overview of extracted vocabulary, useful for spotting inconsistencies before building anything on top.
 
 ---
 
@@ -225,6 +332,18 @@ python3 backfill/test_review.py
 
 ---
 
+## Known limitations
+
+- **TOC parser tuned for recent issues.** The `CONTENTS` page format, text extraction patterns, and page offset detection are calibrated against issues from the last ~10 years. Older issues with different layouts may need the `--page-offset=N` flag or manual `toc.json` adjustment.
+- **Book review detection is heuristic.** Individual reviews are identified by publication-line patterns near the top of pages. Reviews that don't start on a new page, or that use unusual citation formats, may be missed or mis-split.
+- **Keyword extraction edge cases.** Keywords are extracted by finding "Key Words", "Keywords", or "Key Word" headings (with or without colons), supporting both comma and semicolon separators. Articles that use other keyword formats (e.g. inline keywords with no heading) may not be captured.
+- **Abstract extraction relies on section headers.** Abstracts are captured between "Abstract" (or "Abstract:") and the next section heading ("Key Words", "Keywords", "Introduction", or a capitalised heading). Unusual article structures may yield incomplete or missing abstracts.
+- **Reviewer name extraction is best-effort.** The pipeline scans backwards from the end of each book review looking for a standalone name line. Long reference sections can cause missed extractions.
+- **Author email placeholders.** OJS requires an email for every author. The XML uses `firstname.lastname@placeholder.invalid` since historical articles don't have author emails.
+- **DOI matching is fuzzy.** The registry lookup handles common differences but unusual title variations may need manual aliases in `doi-registry.json`.
+
+---
+
 ## Flags reference
 
 ### split-issue.sh
@@ -267,6 +386,7 @@ python3 backfill/test_review.py
 | `--dry-run` | Off | Estimate token count and cost without calling API |
 | `--force` | Off | Re-enrich articles that already have enrichment data |
 | `--model` | `claude-sonnet-4-20250514` | Claude model to use |
+| `--concurrency` | `8` | Number of parallel API calls |
 | `--report` | Off | Generate vocabulary report from enrichment.json files |
 
 ### manifest.py
