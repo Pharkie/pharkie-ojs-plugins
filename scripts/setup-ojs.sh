@@ -225,6 +225,208 @@ fi
 
 echo "[OJS] Journal metadata configured."
 
+# --- Branding (logo, favicon, homepage image) ---
+# Images are baked into the Docker image at /opt/ojs-branding/ (from docker/ojs/branding/).
+# This copies them to OJS's public directory and sets the DB metadata so OJS serves them.
+# Idempotent — skips if files already exist.
+BRANDING_SRC="/opt/ojs-branding"
+PUBLIC_DIR="/var/www/html/public/journals/$JOURNAL_ID_META"
+
+if [ -d "$BRANDING_SRC" ] && [ "$(ls -A "$BRANDING_SRC" 2>/dev/null)" ]; then
+  echo "[OJS] Applying branding images..."
+  mkdir -p "$PUBLIC_DIR"
+
+  # Helper: install one branding image (copies file + writes DB setting)
+  # Usage: install_branding_image <setting_name> <source_file> <upload_name> <width> <height> [alt_text]
+  install_branding_image() {
+    local SETTING=$1 SRC_FILE=$2 UPLOAD_NAME=$3 WIDTH=$4 HEIGHT=$5 ALT_TEXT=${6:-}
+    local DEST="$PUBLIC_DIR/$UPLOAD_NAME"
+
+    if [ ! -f "$SRC_FILE" ]; then
+      echo "[OJS]   Skipping $SETTING — source not found: $SRC_FILE"
+      return
+    fi
+
+    # Copy file (always overwrite to pick up any updates)
+    cp "$SRC_FILE" "$DEST"
+    chown www-data:www-data "$DEST"
+
+    # Build the JSON value OJS expects: {name, uploadName, width, height, dateUploaded, altText}
+    local DATE_NOW
+    DATE_NOW=$(date -u '+%Y-%m-%d %H:%M:%S')
+    local JSON_VAL
+    JSON_VAL=$(jq -n \
+      --arg name "$(basename "$SRC_FILE")" \
+      --arg uploadName "$UPLOAD_NAME" \
+      --argjson width "$WIDTH" \
+      --argjson height "$HEIGHT" \
+      --arg dateUploaded "$DATE_NOW" \
+      --arg altText "$ALT_TEXT" \
+      '{name: $name, uploadName: $uploadName, width: $width, height: $height, dateUploaded: $dateUploaded, altText: $altText}')
+
+    # OJS stores multilingual image settings as JSON in journal_settings (locale = 'en')
+    local SQL_VAL
+    SQL_VAL=$(printf '%s' "$JSON_VAL" | sed "s/'/''/g")
+    $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID_META, 'en', '$SETTING', '$SQL_VAL')
+      ON DUPLICATE KEY UPDATE setting_value='$SQL_VAL';"
+
+    echo "[OJS]   $SETTING → $UPLOAD_NAME (${WIDTH}x${HEIGHT})"
+  }
+
+  install_branding_image "pageHeaderLogoImage" \
+    "$BRANDING_SRC/pageHeaderLogoImage_en.png" "pageHeaderLogoImage_en.png" 1173 511 \
+    "Existential Analysis journal logo"
+
+  install_branding_image "favicon" \
+    "$BRANDING_SRC/favicon_en.png" "favicon_en.png" 771 800 ""
+
+  install_branding_image "homepageImage" \
+    "$BRANDING_SRC/homepageImage_en.png" "homepageImage_en.png" 7175 1880 \
+    "Existential Analysis homepage banner"
+
+  echo "[OJS] Branding images applied."
+else
+  echo "[OJS] No branding images found at $BRANDING_SRC, skipping."
+fi
+
+# --- Theme settings (default theme options to match live site) ---
+OJS_THEME_COLOUR="${OJS_THEME_COLOUR:-#b91515}"
+OJS_THEME_TYPOGRAPHY="${OJS_THEME_TYPOGRAPHY:-notoSans}"
+OJS_THEME_SHOW_DESCRIPTION="${OJS_THEME_SHOW_DESCRIPTION:-1}"
+
+echo "[OJS] Configuring theme (colour: $OJS_THEME_COLOUR, font: $OJS_THEME_TYPOGRAPHY)..."
+$MARIADB <<SQL
+  INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('defaultthemeplugin', $JOURNAL_ID_META, 'baseColour', '$OJS_THEME_COLOUR', 'string')
+  ON DUPLICATE KEY UPDATE setting_value='$OJS_THEME_COLOUR';
+  INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('defaultthemeplugin', $JOURNAL_ID_META, 'showDescriptionInJournalIndex', '$OJS_THEME_SHOW_DESCRIPTION', 'string')
+  ON DUPLICATE KEY UPDATE setting_value='$OJS_THEME_SHOW_DESCRIPTION';
+  INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('defaultthemeplugin', $JOURNAL_ID_META, 'typography', '$OJS_THEME_TYPOGRAPHY', 'string')
+  ON DUPLICATE KEY UPDATE setting_value='$OJS_THEME_TYPOGRAPHY';
+SQL
+# Clear compiled CSS cache so theme changes take effect immediately
+rm -f /var/www/html/cache/1-stylesheet-*.css /var/www/html/cache/1-font-*.css
+echo "[OJS] Theme configured (CSS cache cleared)."
+
+# --- Nav menu (flat layout matching live site) ---
+# OJS 3.5 default creates nested About dropdown. We flatten it to match the live
+# OJS 3.4 layout: Current | Archives | About | Submissions | Editorial Team | Contact
+# Also removes Announcements and Privacy from primary nav.
+echo "[OJS] Configuring navigation menu..."
+# Get primary nav menu ID (NMI_TYPE_PRIMARY)
+PRIMARY_NAV_ID=$($MARIADB -N -e "SELECT navigation_menu_id FROM navigation_menus WHERE area_name='primary' AND context_id=$JOURNAL_ID_META" 2>/dev/null)
+if [ -n "$PRIMARY_NAV_ID" ]; then
+  # Remove nested items from About dropdown; promote Submissions, Masthead, Contact to top-level
+  # First, get the item IDs we need
+  ABOUT_ID=$($MARIADB -N -e "SELECT i.navigation_menu_item_id FROM navigation_menu_items i JOIN navigation_menu_item_assignments a ON i.navigation_menu_item_id = a.navigation_menu_item_id WHERE i.type='NMI_TYPE_ABOUT' AND a.navigation_menu_id=$PRIMARY_NAV_ID AND a.parent_id IS NULL LIMIT 1" 2>/dev/null)
+  if [ -n "$ABOUT_ID" ]; then
+    # Delete child assignments under the About dropdown
+    $MARIADB -e "DELETE FROM navigation_menu_item_assignments WHERE navigation_menu_id=$PRIMARY_NAV_ID AND parent_id=$ABOUT_ID;"
+
+    # Remove Announcements and Privacy from nav (if present as top-level)
+    $MARIADB -e "DELETE a FROM navigation_menu_item_assignments a JOIN navigation_menu_items i ON a.navigation_menu_item_id = i.navigation_menu_item_id WHERE a.navigation_menu_id=$PRIMARY_NAV_ID AND i.type IN ('NMI_TYPE_ANNOUNCEMENTS','NMI_TYPE_PRIVACY');"
+
+    # Ensure Submissions, Masthead, Contact are top-level (parent_id = NULL)
+    for TYPE in NMI_TYPE_SUBMISSIONS NMI_TYPE_MASTHEAD NMI_TYPE_CONTACT; do
+      ITEM_ID=$($MARIADB -N -e "SELECT i.navigation_menu_item_id FROM navigation_menu_items i WHERE i.context_id=$JOURNAL_ID_META AND i.type='$TYPE' LIMIT 1" 2>/dev/null)
+      if [ -n "$ITEM_ID" ]; then
+        ASSIGNED=$($MARIADB -N -e "SELECT COUNT(*) FROM navigation_menu_item_assignments WHERE navigation_menu_id=$PRIMARY_NAV_ID AND navigation_menu_item_id=$ITEM_ID" 2>/dev/null)
+        if [ "$ASSIGNED" = "0" ]; then
+          MAX_SEQ=$($MARIADB -N -e "SELECT COALESCE(MAX(seq),0) FROM navigation_menu_item_assignments WHERE navigation_menu_id=$PRIMARY_NAV_ID" 2>/dev/null)
+          $MARIADB -e "INSERT INTO navigation_menu_item_assignments (navigation_menu_id, navigation_menu_item_id, parent_id, seq) VALUES ($PRIMARY_NAV_ID, $ITEM_ID, NULL, $((MAX_SEQ + 1)));"
+        else
+          $MARIADB -e "UPDATE navigation_menu_item_assignments SET parent_id = NULL WHERE navigation_menu_id=$PRIMARY_NAV_ID AND navigation_menu_item_id=$ITEM_ID;"
+        fi
+      fi
+    done
+
+    # Rename "Editorial Masthead" → "Editorial Team" (OJS 3.5 changed the label)
+    MASTHEAD_ID=$($MARIADB -N -e "SELECT navigation_menu_item_id FROM navigation_menu_items WHERE context_id=$JOURNAL_ID_META AND type='NMI_TYPE_MASTHEAD' LIMIT 1" 2>/dev/null)
+    if [ -n "$MASTHEAD_ID" ]; then
+      $MARIADB -e "INSERT INTO navigation_menu_item_settings (navigation_menu_item_id, locale, setting_name, setting_value, setting_type) VALUES ($MASTHEAD_ID, 'en', 'title', 'Editorial Team', 'string') ON DUPLICATE KEY UPDATE setting_value='Editorial Team';"
+    fi
+
+    # Re-sequence: Current(0), Archives(1), About(2), Submissions(3), Masthead(4), Contact(5)
+    SEQ_NUM=0
+    for TYPE in NMI_TYPE_CURRENT NMI_TYPE_ARCHIVES NMI_TYPE_ABOUT NMI_TYPE_SUBMISSIONS NMI_TYPE_MASTHEAD NMI_TYPE_CONTACT; do
+      ITEM_ID=$($MARIADB -N -e "SELECT i.navigation_menu_item_id FROM navigation_menu_items i JOIN navigation_menu_item_assignments a ON i.navigation_menu_item_id = a.navigation_menu_item_id WHERE i.context_id=$JOURNAL_ID_META AND i.type='$TYPE' AND a.navigation_menu_id=$PRIMARY_NAV_ID AND a.parent_id IS NULL LIMIT 1" 2>/dev/null)
+      if [ -n "$ITEM_ID" ]; then
+        $MARIADB -e "UPDATE navigation_menu_item_assignments SET seq=$SEQ_NUM WHERE navigation_menu_id=$PRIMARY_NAV_ID AND navigation_menu_item_id=$ITEM_ID;"
+      fi
+      SEQ_NUM=$((SEQ_NUM + 1))
+    done
+    echo "[OJS] Nav menu restructured (flat layout)."
+  else
+    echo "[OJS] Nav menu: About item not found, skipping restructure."
+  fi
+else
+  echo "[OJS] Nav menu: primary nav not found, skipping."
+fi
+
+# --- Disable user registration (members are created via sync) ---
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, '', 'disableUserReg', '1')
+  ON DUPLICATE KEY UPDATE setting_value='1';"
+echo "[OJS] User registration disabled."
+
+# --- Custom sidebar blocks (event banners from live site) ---
+# Uses OJS Custom Block Manager plugin to create sidebar banners.
+# Banner images are baked into Docker image at /opt/ojs-branding/.
+echo "[OJS] Configuring sidebar blocks..."
+
+# Enable Custom Block Manager plugin
+$MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('customblockmanagerplugin', $JOURNAL_ID_META, 'enabled', '1', 'bool')
+  ON DUPLICATE KEY UPDATE setting_value='1';"
+
+# Register block names
+$MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('customblockmanagerplugin', $JOURNAL_ID_META, 'blocks', '[\"banner\",\"sea-events-banner\"]', 'object')
+  ON DUPLICATE KEY UPDATE setting_value='[\"banner\",\"sea-events-banner\"]';"
+
+# Copy banner images to site public directory
+SITE_IMG_DIR="/var/www/html/public/site/images"
+mkdir -p "$SITE_IMG_DIR"
+for IMG in sea-events-1.png sea-events-2.png; do
+  if [ -f "$BRANDING_SRC/$IMG" ]; then
+    cp "$BRANDING_SRC/$IMG" "$SITE_IMG_DIR/$IMG"
+  fi
+done
+chown -R www-data:www-data "$SITE_IMG_DIR" 2>/dev/null || true
+
+# Create block settings using PHP for correct JSON encoding
+php -r '
+$pdo = new PDO("mysql:host='"$OJS_DB_HOST"';dbname='"$OJS_DB_NAME"'", "'"$OJS_DB_USER"'", "'"$OJS_DB_PASSWORD"'", [PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false]);
+$ctx = '"$JOURNAL_ID_META"';
+
+$blocks = [
+  "banner" => "<a href=\"http://localhost:8080\"><img src=\"/public/site/images/sea-events-1.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
+  "sea-events-banner" => "<a href=\"http://localhost:8080\"><img src=\"/public/site/images/sea-events-2.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
+];
+
+$stmt = $pdo->prepare("INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), setting_type = VALUES(setting_type)");
+
+foreach ($blocks as $name => $html) {
+  $content = json_encode(["en" => $html]);
+  $title = json_encode(["en" => ""]);
+  $stmt->execute([$name, $ctx, "blockContent", $content, "object"]);
+  $stmt->execute([$name, $ctx, "blockTitle", $title, "object"]);
+  $stmt->execute([$name, $ctx, "enabled", "1", "bool"]);
+}
+echo "Custom blocks configured.\n";
+'
+
+# Configure sidebar: Information block + both custom banners
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, '', 'sidebar', '[\"informationblockplugin\",\"banner\",\"sea-events-banner\"]')
+  ON DUPLICATE KEY UPDATE setting_value='[\"informationblockplugin\",\"banner\",\"sea-events-banner\"]';"
+
+echo "[OJS] Sidebar blocks configured."
+
 # --- Subscription types ---
 # Defined via OJS_SUB_TYPES env var: pipe-separated entries of "name:cost" in GBP.
 # Example: "UK Membership:50|Student Membership:35|International Membership:60"
@@ -414,6 +616,18 @@ fi
 
 echo "[OJS] OJS base setup complete."
 
+# --- Clear caches ---
+# Nav menu, sidebar, and theme changes require a full cache flush.
+# OJS caches compiled templates, CSS, and DB queries aggressively.
+# Note: apache2ctl restart is NOT safe inside docker exec (kills the parent process).
+# Instead, we clear all cache files and do a graceful reload, which is sufficient
+# because OJS recompiles templates on cache miss.
+echo "[OJS] Clearing caches..."
+find /var/www/html/cache/ -type f -delete 2>/dev/null || true
+apache2ctl graceful 2>/dev/null || true
+sleep 2
+echo "[OJS] Caches cleared, Apache reloaded."
+
 # --- Sample data (dev/staging only) ---
 if [ "$SAMPLE_DATA" = true ]; then
   IMPORT_XML="/data/ojs-import-clean.xml"
@@ -507,6 +721,17 @@ if [ "$PUB_CHECK" = "1" ]; then
 else
   echo "[OJS] [FAIL] Publishing mode: ${PUB_CHECK:-not set} (expected 1)."
   HEALTH_FAIL=1
+fi
+
+# Branding images installed
+if [ -d "/opt/ojs-branding" ] && [ "$(ls -A /opt/ojs-branding 2>/dev/null)" ]; then
+  LOGO_EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='pageHeaderLogoImage' AND locale='en'" 2>/dev/null) || true
+  if [ "$LOGO_EXISTS" = "1" ]; then
+    echo "[OJS] [ok] Branding: logo installed."
+  else
+    echo "[OJS] [FAIL] Branding: logo not found in DB."
+    HEALTH_FAIL=1
+  fi
 fi
 
 # DOI prefix configured (if set in env)
