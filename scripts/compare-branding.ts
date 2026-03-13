@@ -22,10 +22,15 @@ const DEV_BASE = `${DEV_OJS_ORIGIN}/index.php/ea`;
 
 const OUT_DIR = join(__dirname, '..', 'docs', 'images', 'branding-comparison');
 
+// Live OJS 3.4 uses /about/editorialTeam; dev OJS 3.5 uses /about/editorialMasthead.
+// We handle this with separate live/dev paths where they differ.
 const PAGES = [
   { name: 'homepage', path: '' },
   { name: 'archives', path: '/issue/archive' },
   { name: 'about', path: '/about' },
+  { name: 'editorial-team', path: '/about/editorialTeam', devPath: '/about/editorialMasthead' },
+  { name: 'submissions', path: '/about/submissions' },
+  { name: 'contact', path: '/about/contact' },
   { name: 'login', path: '/login' },
 ];
 
@@ -40,7 +45,7 @@ for (const pg of PAGES) {
     const liveTab = await liveCtx.newPage();
     await liveTab.goto(`${LIVE_BASE}${pg.path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await liveTab.waitForTimeout(1000);
-    await liveTab.screenshot({ path: join(OUT_DIR, `${pg.name}-live.png`) });
+    await liveTab.screenshot({ path: join(OUT_DIR, `${pg.name}-live.png`), fullPage: true });
     await liveCtx.close();
 
     // --- Dev ---
@@ -57,9 +62,10 @@ for (const pg of PAGES) {
       await route.fulfill({ response });
     });
 
-    await devTab.goto(`${DEV_BASE}${pg.path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const devPath = ('devPath' in pg && pg.devPath) ? pg.devPath : pg.path;
+    await devTab.goto(`${DEV_BASE}${devPath}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await devTab.waitForTimeout(1000);
-    await devTab.screenshot({ path: join(OUT_DIR, `${pg.name}-dev.png`) });
+    await devTab.screenshot({ path: join(OUT_DIR, `${pg.name}-dev.png`), fullPage: true });
     await devCtx.close();
   });
 }

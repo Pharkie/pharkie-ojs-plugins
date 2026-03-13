@@ -372,6 +372,78 @@ $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, set
   ON DUPLICATE KEY UPDATE setting_value='1';"
 echo "[OJS] User registration disabled."
 
+# --- Editorial team users (for OJS 3.5 masthead page) ---
+# OJS 3.5 auto-generates the masthead from user accounts assigned to editorial groups.
+# Live OJS 3.4 uses a static HTML `editorialTeam` setting instead.
+# We create both: user accounts for 3.5 masthead + static HTML fallback for the setting.
+echo "[OJS] Setting up editorial team..."
+
+# Create editorial team users (idempotent — skips if username exists)
+create_editorial_user() {
+  local USERNAME=$1 GIVEN=$2 FAMILY=$3 EMAIL=$4 GROUP_ID=$5
+  local EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM users WHERE username='$USERNAME'")
+  if [ "$EXISTS" = "0" ]; then
+    $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled)
+      VALUES ('$USERNAME', '\$2y\$10\$placeholder', '$EMAIL', NOW(), 0, 0);"
+    local UID=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$USERNAME'")
+    $MARIADB -e "INSERT INTO user_settings (user_id, setting_name, setting_value, locale) VALUES
+      ($UID, 'givenName', '$GIVEN', 'en'),
+      ($UID, 'familyName', '$FAMILY', 'en');"
+    $MARIADB -e "INSERT INTO user_user_groups (user_group_id, user_id) VALUES ($GROUP_ID, $UID);"
+    echo "[OJS]   Created $USERNAME ($GIVEN $FAMILY) → group $GROUP_ID"
+  else
+    echo "[OJS]   $USERNAME already exists, skipping."
+  fi
+}
+
+# Group 3 = Journal editor, Group 5 = Section editor
+create_editorial_user "martin.adams" "Martin" "Adams" "journal@existentialanalysis.org.uk" 3
+create_editorial_user "simon.duplock" "Simon" "du Plock" "sduplock@existentialanalysis.org.uk" 3
+create_editorial_user "ondine.smulders" "Ondine" "Smulders" "smuldersea@outlook.com" 5
+create_editorial_user "richard.swann" "Richard" "Swann" "rswann@existentialanalysis.org.uk" 5
+
+# Enable masthead page
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, '', 'masthead', '1')
+  ON DUPLICATE KEY UPDATE setting_value='1';"
+
+# Static editorialTeam HTML (used by OJS 3.4; kept as fallback content)
+if [ -f "/opt/ojs-branding/editorialTeam.html" ]; then
+  EDITORIAL_HTML=$(cat /opt/ojs-branding/editorialTeam.html)
+  EDITORIAL_SQL=$(printf '%s' "$EDITORIAL_HTML" | sed "s/'/''/g")
+  $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID_META, 'en', 'editorialTeam', '$EDITORIAL_SQL')
+    ON DUPLICATE KEY UPDATE setting_value='$EDITORIAL_SQL';"
+  echo "[OJS]   editorialTeam HTML set."
+fi
+
+# Author guidelines (submissions page content from live site)
+if [ -f "/opt/ojs-branding/authorGuidelines.html" ]; then
+  GUIDELINES_HTML=$(cat /opt/ojs-branding/authorGuidelines.html)
+  GUIDELINES_SQL=$(printf '%s' "$GUIDELINES_HTML" | sed "s/'/''/g")
+  $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID_META, 'en', 'authorGuidelines', '$GUIDELINES_SQL')
+    ON DUPLICATE KEY UPDATE setting_value='$GUIDELINES_SQL';"
+  echo "[OJS]   authorGuidelines set."
+fi
+
+# Contact info (matching live site)
+$MARIADB <<SQL
+  UPDATE journal_settings SET setting_value='Richard Swann'
+    WHERE journal_id=$JOURNAL_ID_META AND setting_name='contactName';
+  UPDATE journal_settings SET setting_value='journal@existentialanalysis.org.uk'
+    WHERE journal_id=$JOURNAL_ID_META AND setting_name='contactEmail';
+  INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID_META, 'en', 'contactAffiliation', 'Society for Existential Analysis')
+    ON DUPLICATE KEY UPDATE setting_value='Society for Existential Analysis';
+  UPDATE journal_settings SET setting_value='Steve'
+    WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportName';
+  UPDATE journal_settings SET setting_value='steve@picus.works'
+    WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportEmail';
+SQL
+echo "[OJS]   Contact info configured."
+echo "[OJS] Editorial team setup complete."
+
 # --- Custom sidebar blocks (event banners from live site) ---
 # Uses OJS Custom Block Manager plugin to create sidebar banners.
 # Banner images are baked into Docker image at /opt/ojs-branding/.
