@@ -5,7 +5,7 @@ Converts whole-issue PDFs of Existential Analysis into per-article PDFs and OJS 
 Four-step workflow:
 
 1. **Split** -- validate the PDF, parse the table of contents, split into individual article PDFs, verify splits match TOC titles, and normalize author names.
-2. **Human review** -- export metadata to a spreadsheet, correct titles/authors/abstracts/sections/keywords in Google Sheets, import corrections back.
+2. **Human review** -- check the split PDFs are correct (right pages, right articles, book reviews properly separated), then export metadata to a spreadsheet and correct titles, authors, abstracts, sections, and keywords.
 3. **Enrich** -- deep metadata extraction via Claude API: subjects, disciplines, themes, thinkers, references, and more. Outputs to enrichment.json sidecar. Optional second human review of enrichment data.
 4. **Import** -- generate OJS Native XML and load it into OJS. Checks for existing issues to prevent duplicates.
 
@@ -17,7 +17,10 @@ Four-step workflow:
 # Step 1: Split the issue PDF into articles
 backfill/split-issue.sh path/to/EA-vol37-iss1.pdf
 
-# Step 2: Review and correct metadata (see Human review section)
+# Step 2: Human review (see Human review section)
+# 2a: Check split PDFs -- open backfill/output/EA-vol37-iss1/*.pdf
+#     Verify page alignment, article boundaries, book review splits
+# 2b: Review metadata in spreadsheet
 python3 backfill/export_review.py backfill/output/EA-vol37-iss1/toc.json -o review.csv
 # ... edit review.csv in Google Sheets ...
 python3 backfill/import_review.py review.csv --dry-run
@@ -67,7 +70,12 @@ python3 backfill/manifest.py backfill/output/*/toc.json
 ┌──────┴───────────────────────────────────────────────┐
 │  4b. Human review                                    │
 │                                                      │
+│  Check split PDFs ── page alignment, boundaries,     │
+│       │              book reviews, missing articles   │
+│       │                                              │
 │  export_review.py ──► Google Sheets ──► import_review│
+│       │              titles, authors, sections,       │
+│       │              abstracts, keywords              │
 │                                                      │
 └──────┬───────────────────────────────────────────────┘
        │
@@ -117,9 +125,28 @@ Resolves author name variants to canonical forms using a persistent registry (`b
 
 ## Human review
 
-A spreadsheet review step between splitting and XML generation. The automated TOC parser does a good job, but over 30 years of issues you'll find titles with OCR artefacts, author names split incorrectly, abstracts that captured too much or too little, and articles in the wrong section. This step lets you scan everything in a spreadsheet and fix problems before they're baked into OJS.
+Two parts: check the split PDFs visually, then review metadata in a spreadsheet. The automated pipeline does a good job, but over 30 years of issues you'll find page offsets that are wrong, book reviews that weren't separated properly, titles with OCR artefacts, and abstracts that captured too much or too little. This step catches those problems before they're baked into OJS.
 
-This runs once across the entire archive. There's no second pass.
+### Part 1: Check the split PDFs
+
+Open the issue output directory (`backfill/output/EA-vol##-iss#/`) and spot-check the split PDFs. The `pdf_file` column in the review CSV (see Part 2) maps each row to its PDF filename.
+
+**What to check:**
+
+- **Page alignment.** Open a few PDFs and confirm the content matches the title. If article 3's PDF contains article 4's text, the page offset is wrong -- re-run with `--page-offset=N`.
+- **Article boundaries.** Each PDF should start at the beginning of its article and end before the next one. Look for articles that are cut short or include pages from the next article.
+- **Book reviews.** The trickiest part. The pipeline detects individual book reviews by scanning for publication-line patterns, but reviews that don't start on a new page or use unusual citation formats may be missed. Check that:
+  - Each book review is its own PDF (not merged with the next review)
+  - The Book Review Editorial (the introductory overview) is separate from the individual reviews
+  - No reviews are missing entirely
+- **Page order.** Scan through the numbered PDF filenames (`01-editorial.pdf`, `02-...`, etc.) and confirm they follow the issue's actual article order.
+- **Missing articles.** Compare the PDF count against the CONTENTS page. If articles are missing, the TOC parser may have failed to detect them -- check `toc.json` and the pipeline output for warnings.
+
+If you find page offset problems, re-run with `--page-offset=N`. For other issues, you can edit `toc.json` directly and re-run `--only=split`.
+
+### Part 2: Review metadata in a spreadsheet
+
+Export metadata to CSV, correct it in Google Sheets, and import corrections back.
 
 Each article gets a stable ID (like `v37i1a0` -- volume 37, issue 1, article 0). The ID is stored in the toc.json and included in the CSV. Matching on import is by ID, not row position, so you can sort, filter, and rearrange the spreadsheet without breaking anything.
 
@@ -136,17 +163,22 @@ python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
 ### Edit in Google Sheets
 
 1. Upload `review.csv` to Google Sheets (File > Import > Upload)
-2. Edit the columns you need to correct:
-   - **title** -- fix typos, missing words, OCR errors
-   - **authors** -- correct names, fix splitting (use `&` between multiple authors)
-   - **section** -- must be exactly one of: `Editorial`, `Articles`, `Book Review Editorial`, `Book Reviews`
-   - **abstract** -- fix or add abstract text
-   - **keywords** -- semicolon-separated (e.g. `phenomenology; therapy; Heidegger`)
+2. Review and correct each column:
+
+**What to check per column:**
+
+- **title** -- Fix OCR artefacts (broken characters, missing spaces), missing words, or truncated titles. Compare against the PDF if unsure. Book review titles should be `Book Review: <book title>`.
+- **authors** -- Check names are complete and correctly split. Multiple authors should be separated by `&` (e.g. `John Smith & Jane Doe`). Watch for: first/last name swaps, missing initials, OCR mangling of accented characters (van Deurzen, not van Deu rzen).
+- **section** -- Must be exactly one of: `Editorial`, `Articles`, `Book Review Editorial`, `Book Reviews`. Check that: editorials aren't classified as Articles, the Book Review Editorial (introductory overview) isn't mixed in with individual Book Reviews, obituaries and errata are under Editorial.
+- **abstract** -- Check it captured the right text. Common problems: abstract includes the keywords line, abstract is truncated mid-sentence, abstract captured the introduction instead, or abstract is entirely missing (add it manually from the PDF). Not all articles have abstracts -- editorials and book reviews typically don't.
+- **keywords** -- Semicolon-separated (e.g. `phenomenology; therapy; Heidegger`). Check they were extracted correctly. Common problems: keywords merged into one blob, keywords include the heading text ("Key Words:"), or keywords are missing entirely.
+- **pages** -- Page range (informational, read-only). Useful for cross-referencing against the PDF.
+- **pdf_file** -- Filename of the split PDF (read-only). Open this file to check the content matches the row.
+
 3. Don't edit these columns (used for matching):
    - **id** -- the stable article ID
    - **file** -- path to the toc.json
    - **index** -- original position in toc.json
-   - **pages** -- page range (informational)
 4. Download as CSV (File > Download > Comma-separated values)
 
 **Don't** delete rows (every article must have a row), edit the `id` column, or add rows. The import rejects all of these with a clear error.
