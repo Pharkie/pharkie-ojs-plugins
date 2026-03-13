@@ -11,6 +11,7 @@ After `split-issue.sh` completes, each issue gets a directory under `backfill/ou
 ```
 backfill/output/EA-vol37-iss1/
     toc.json                          # Structured TOC with all metadata
+    enrichment.json                   # Deep enrichment sidecar (from enrich.py)
     import.xml                        # OJS Native XML (large, base64 PDFs)
     01-editorial.pdf                  # Per-article PDFs
     02-therapy-for-the-revolution.pdf
@@ -50,6 +51,41 @@ Each article object:
 | `_review_id` | Stable ID for human review matching (e.g. `v37i1a0`) |
 
 Book review articles also have `book_title`, `book_author`, `book_year`, `publisher`, and `reviewer`.
+
+After enrichment review, articles may also have `subjects` (list) and `disciplines` (list) stored directly in toc.json.
+
+### enrichment.json schema
+
+One per issue directory, created by `enrich.py`. Keyed by `_review_id`:
+
+| Top-level field | Description |
+|---|---|
+| `_generated` | ISO 8601 timestamp of last generation |
+| `_model` | Claude model used |
+| `_version` | Schema version (currently 1) |
+| `articles` | Object keyed by `_review_id` |
+
+Each article object:
+
+| Field | Type | Flows to OJS XML | Description |
+|---|---|---|---|
+| `subjects` | string[] | `<subjects>` | Broad topic areas from controlled vocabulary |
+| `disciplines` | string[] | `<disciplines>` | Academic fields |
+| `themes` | string[] | sidecar only | Existential concepts |
+| `thinkers` | string[] | sidecar only | Philosophers/theorists substantially engaged with |
+| `modalities` | string[] | sidecar only | Therapeutic approaches |
+| `methodology` | string? | sidecar only | Research method if applicable |
+| `keywords_enriched` | string[] | replaces `<keywords>` | Superset of original + Claude-suggested keywords |
+| `summary` | string | sidecar only | 2-3 sentence synopsis |
+| `references` | object[] | `<citations>` | Key works cited (author, year, title, internal flag) |
+| `geographical_context` | string? | `<coverage>` | Cultural/regional focus |
+| `clinical_population` | string? | sidecar only | Specific groups discussed |
+| `era_focus` | string? | `<coverage>` | Historical period |
+| `token_count_input` | int | -- | API input tokens used |
+| `token_count_output` | int | -- | API output tokens used |
+| `_enriched_at` | string | -- | ISO 8601 timestamp |
+
+"Flows to OJS XML" fields are searchable and visible in OJS out of the box. "Sidecar only" fields are preserved for future use (browse-by-theme pages, thinker indexes, related articles, corpus analysis, search enhancement). See the [Enrichment section](backfill-pipeline.md#enrichment) for details on what each field enables.
 
 ---
 
@@ -223,6 +259,23 @@ python3 backfill/test_review.py
 | `--dry-run` | Run all validation and show what would change, without writing files |
 | `--restore` | Restore toc.json files from `.pre-review` backups |
 
+### enrich.py
+
+| Argument | Default | Description |
+|---|---|---|
+| `toc.json files` | (required) | One or more toc.json files to enrich |
+| `--dry-run` | Off | Estimate token count and cost without calling API |
+| `--force` | Off | Re-enrich articles that already have enrichment data |
+| `--model` | `claude-sonnet-4-20250514` | Claude model to use |
+| `--report` | Off | Generate vocabulary report from enrichment.json files |
+
+### manifest.py
+
+| Argument | Default | Description |
+|---|---|---|
+| `toc.json files` | (required) | One or more toc.json files |
+| `-o`, `--output` | `backfill/output/MANIFEST.md` | Output path |
+
 ### verify.py
 
 | Flag | Description |
@@ -270,6 +323,18 @@ python3 backfill/import_review.py review.csv
 
 # Undo review corrections
 python3 backfill/import_review.py review.csv --restore
+
+# Enrich metadata (dry run)
+python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+
+# Enrich metadata
+python3 backfill/enrich.py backfill/output/*/toc.json
+
+# Vocabulary report
+python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+
+# Archive manifest
+python3 backfill/manifest.py backfill/output/*/toc.json
 
 # Generate XML without PDFs (fast, for testing)
 python3 backfill/generate_xml.py backfill/output/EA-vol37-iss1/toc.json -o import.xml --no-pdfs

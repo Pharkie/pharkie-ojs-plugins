@@ -200,6 +200,93 @@ class TestFullXmlGeneration:
         assert obit_pub.get('access_status') == '1'
 
 
+class TestXmlWithEnrichment:
+    """Test subjects, disciplines, pages, and citations in XML output."""
+
+    def test_subjects_emitted(self):
+        toc_data = make_toc_data()
+        toc_data['articles'][1]['subjects'] = ['Existential Therapy', 'Clinical Practice']
+        xml_str = generate_xml(toc_data, doi_registry={})
+        root = ET.fromstring(xml_str)
+        articles = root.findall('.//pkp:article', NS)
+        subjects = articles[1].findall('.//pkp:subject', NS)
+        assert len(subjects) == 2
+        assert subjects[0].text == 'Existential Therapy'
+        assert subjects[1].text == 'Clinical Practice'
+
+    def test_disciplines_emitted(self):
+        toc_data = make_toc_data()
+        toc_data['articles'][1]['disciplines'] = ['Psychotherapy', 'Philosophy']
+        xml_str = generate_xml(toc_data, doi_registry={})
+        root = ET.fromstring(xml_str)
+        articles = root.findall('.//pkp:article', NS)
+        disciplines = articles[1].findall('.//pkp:discipline', NS)
+        assert len(disciplines) == 2
+        assert disciplines[0].text == 'Psychotherapy'
+
+    def test_pages_emitted(self):
+        toc_data = make_toc_data()
+        xml_str = generate_xml(toc_data, doi_registry={})
+        root = ET.fromstring(xml_str)
+        articles = root.findall('.//pkp:article', NS)
+        pages = articles[1].find('.//pkp:pages', NS)
+        assert pages is not None
+        assert pages.text == '5-20'
+
+    def test_no_subjects_without_data(self):
+        toc_data = make_toc_data()
+        xml_str = generate_xml(toc_data, doi_registry={})
+        root = ET.fromstring(xml_str)
+        articles = root.findall('.//pkp:article', NS)
+        # Article 0 (editorial) has no subjects
+        subjects = articles[0].findall('.//pkp:subject', NS)
+        assert len(subjects) == 0
+
+    def test_citations_from_enrichment(self):
+        """Citations from enrichment sidecar appear in XML."""
+        import tempfile
+        toc_data = make_toc_data()
+        toc_data['articles'][1]['_review_id'] = 'v37i1a1'
+
+        # Create a temp dir with enrichment.json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toc_path = os.path.join(tmpdir, 'toc.json')
+            with open(toc_path, 'w') as f:
+                json.dump(toc_data, f)
+
+            enrichment = {
+                '_generated': '2026-01-01T00:00:00Z',
+                '_model': 'test',
+                '_version': 1,
+                'articles': {
+                    'v37i1a1': {
+                        'references': [
+                            {'author': 'Heidegger, M.', 'year': 1927, 'title': 'Being and Time', 'internal': False},
+                        ],
+                        'geographical_context': 'UK',
+                        'era_focus': 'Contemporary',
+                    }
+                }
+            }
+            enrichment_path = os.path.join(tmpdir, 'enrichment.json')
+            with open(enrichment_path, 'w') as f:
+                json.dump(enrichment, f)
+
+            xml_str = generate_xml(toc_data, doi_registry={}, toc_json_path=toc_path)
+            root = ET.fromstring(xml_str)
+            articles = root.findall('.//pkp:article', NS)
+            citations = articles[1].findall('.//pkp:citation', NS)
+            assert len(citations) == 1
+            assert 'Heidegger' in citations[0].text
+            assert '1927' in citations[0].text
+
+            # Check coverage
+            coverage = articles[1].find('.//pkp:coverage', NS)
+            assert coverage is not None
+            assert 'UK' in coverage.text
+            assert 'Contemporary' in coverage.text
+
+
 class TestXmlWithDois:
     """Test DOI preservation through the XML generation chain."""
 

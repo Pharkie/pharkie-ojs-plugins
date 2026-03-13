@@ -2,11 +2,12 @@
 
 Converts whole-issue PDFs of Existential Analysis into per-article PDFs and OJS Native XML for import. Designed for backfilling the journal archive -- 30+ years of issues that predate the OJS installation.
 
-Three-step workflow:
+Four-step workflow:
 
 1. **Split** -- validate the PDF, parse the table of contents, split into individual article PDFs, verify splits match TOC titles, and normalize author names.
 2. **Human review** -- export metadata to a spreadsheet, correct titles/authors/abstracts/sections/keywords in Google Sheets, import corrections back.
-3. **Import** -- generate OJS Native XML and load it into OJS. Checks for existing issues to prevent duplicates.
+3. **Enrich** -- deep metadata extraction via Claude API: subjects, disciplines, themes, thinkers, references, and more. Outputs to enrichment.json sidecar. Optional second human review of enrichment data.
+4. **Import** -- generate OJS Native XML and load it into OJS. Checks for existing issues to prevent duplicates.
 
 ---
 
@@ -22,12 +23,20 @@ python3 backfill/export_review.py backfill/output/EA-vol37-iss1/toc.json -o revi
 python3 backfill/import_review.py review.csv --dry-run
 python3 backfill/import_review.py review.csv
 
-# Step 3: Generate XML and import into OJS
+# Step 3: Enrich metadata (optional but recommended)
+python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --dry-run
+python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json
+# ... optionally re-export CSV to review enrichment, then import corrections ...
+
+# Step 4: Generate XML and import into OJS
 backfill/split-issue.sh path/to/EA-vol37-iss1.pdf --only=generate_xml
 backfill/import.sh backfill/output/EA-vol37-iss1
 
-# Step 4: Verify the import
+# Step 5: Verify the import
 backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
+
+# Optional: Generate archive manifest
+python3 backfill/manifest.py backfill/output/*/toc.json
 ```
 
 ---
@@ -64,8 +73,19 @@ backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
        │
        ▼  corrected toc.json
        │
-  5. Generate XML ── OJS Native XML with embedded PDFs
+┌──────┴───────────────────────────────────────────────┐
+│  4c. Enrich (Claude API)                             │
+│                                                      │
+│  enrich.py ──► enrichment.json (per-issue sidecar)   │
+│  optional: re-export CSV ──► spot-check ──► import   │
+│                                                      │
+└──────┬───────────────────────────────────────────────┘
        │
+       ▼  enrichment.json + updated toc.json
+       │
+  5. Generate XML ── OJS Native XML with embedded PDFs,
+       │               subjects, disciplines, coverage,
+       │               pages, citations
        ▼
   import.sh ──────── load into OJS
        │
@@ -160,6 +180,101 @@ python3 backfill/import_review.py review.csv --restore
 ```
 
 Restores every toc.json from its `.pre-review` backup.
+
+---
+
+## Enrichment
+
+Deep metadata extraction using the Claude API. Reads the full text of each split PDF and extracts structured metadata for discoverability. This is the only time Claude reads every article in the archive, so the extraction is deliberately broad -- capturing everything potentially useful, even if some fields aren't surfaced in OJS today.
+
+Output is written to `enrichment.json` in each issue directory, alongside `toc.json`. The enrichment is optional -- XML generation works without it. Runs 8 parallel API calls by default (~10 minutes for 1000 articles).
+
+```bash
+# Dry run: estimate cost without calling API
+python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+
+# Enrich all issues (8 parallel workers by default)
+python3 backfill/enrich.py backfill/output/*/toc.json
+
+# More parallelism (if not hitting rate limits)
+python3 backfill/enrich.py backfill/output/*/toc.json --concurrency=16
+
+# Force re-enrichment of already-processed articles
+python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --force
+
+# Use a different model
+python3 backfill/enrich.py backfill/output/*/toc.json --model=claude-opus-4-20250514
+```
+
+Enrichment is resumable -- if the process is interrupted, re-running picks up where it left off (articles already in `enrichment.json` are skipped).
+
+### What flows into OJS
+
+These fields are written into the OJS Native XML and are searchable and visible on article pages out of the box:
+
+| Field | OJS XML element | Visible in OJS |
+|---|---|---|
+| `subjects` | `<subjects>` | Article page, search, browse (if theme supports facets) |
+| `disciplines` | `<disciplines>` | Article page, search |
+| `keywords_enriched` | replaces `<keywords>` | Article page, search -- most visible of all |
+| `references` | `<citations>` | "References" tab on article page |
+| `geographical_context` + `era_focus` | `<coverage>` | Article page, search |
+| `pages` | `<pages>` | Page range on article page |
+
+### What stays in the sidecar only
+
+These fields are extracted into `enrichment.json` but are **not** imported into OJS. They require custom development to surface:
+
+| Field | Description | Example values |
+|---|---|---|
+| `themes` | Existential concepts and philosophical themes | authenticity, dasein, being-toward-death |
+| `thinkers` | Philosophers/theorists substantially engaged with | Heidegger, Merleau-Ponty, van Deurzen |
+| `modalities` | Therapeutic approaches | Daseinsanalysis, logotherapy |
+| `methodology` | Research method | phenomenological study, case study |
+| `summary` | 2-3 sentence synopsis | |
+| `clinical_population` | Specific groups discussed | adolescents, veterans |
+
+### Future uses for sidecar data
+
+The sidecar data is a structured index of the entire 30-year archive. Potential uses:
+
+- **Browse-by-theme page.** Static HTML generated from the sidecar: click "dasein" and see every article that substantially engages with it. Could live alongside OJS or be embedded in the SEA website.
+- **Thinker index.** "All articles engaging with Heidegger" / "All articles engaging with Merleau-Ponty". Useful for students and researchers.
+- **Related articles.** Given an article's themes and thinkers, find the most similar articles in the archive. Could power a "You might also read" sidebar.
+- **Modality navigator.** Browse the archive by therapeutic approach -- useful for practitioners looking for clinical literature on specific modalities.
+- **Research methodology filter.** Let researchers find all phenomenological studies, all case studies, etc.
+- **Article summaries.** Display Claude-generated summaries on article pages (via OJS theme customisation or a separate portal) to help readers decide what to read.
+- **Corpus analysis.** Track how the journal's focus has evolved over 30 years -- which themes grew, which thinkers appear more in recent issues, how the balance of clinical vs philosophical content has shifted.
+- **Search enhancement.** Feed sidecar data into a custom search index (e.g. Elasticsearch, Typesense) for richer search than OJS provides natively.
+- **SEA website integration.** The SEA's main website could pull from the sidecar to surface journal content -- "Featured articles on anxiety", "Key articles for trainees", etc.
+
+The `--report` flag gives an overview of what's been extracted, useful for spotting the most common themes and checking vocabulary consistency before building anything on top.
+
+### Review enrichment
+
+After enrichment, re-export the review CSV. It will now include `subjects`, `disciplines`, and `keywords_enriched` columns:
+
+```bash
+python3 backfill/export_review.py backfill/output/*/toc.json -o review-enriched.csv
+# Spot-check subjects and disciplines in Google Sheets
+python3 backfill/import_review.py review-enriched.csv --dry-run
+python3 backfill/import_review.py review-enriched.csv
+```
+
+### Vocabulary report
+
+List all unique values used across the corpus per field, flagging near-duplicates:
+
+```bash
+python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+```
+
+### Cost
+
+| Model | Per article | 1000 articles |
+|---|---|---|
+| Sonnet 4 (default) | ~$0.03 | ~$32 |
+| Opus 4 | ~$0.16 | ~$158 |
 
 ---
 

@@ -30,7 +30,8 @@ import argparse
 import tempfile
 
 
-EDITABLE_FIELDS = ['title', 'authors', 'section', 'abstract', 'keywords']
+EDITABLE_FIELDS = ['title', 'authors', 'section', 'abstract', 'keywords',
+                    'subjects', 'disciplines', 'keywords_enriched']
 VALID_SECTIONS = {'Editorial', 'Articles', 'Book Review Editorial', 'Book Reviews'}
 
 # XML-invalid control chars (U+0000-U+001F except tab, newline, CR)
@@ -290,6 +291,51 @@ def apply_edits(toc_path, toc, edits, dry_run=False):
                 article['keywords'] = new_keywords
             other_changes += 1
             changed = True
+
+        # Subjects (from enrichment review)
+        if 'subjects' in row:
+            new_subj_str = row.get('subjects', '').strip()
+            new_subj_str, subj_transforms = sanitize_text(new_subj_str)
+            new_subjects = [s.strip() for s in new_subj_str.split(';') if s.strip()] if new_subj_str else []
+            old_subjects = article.get('subjects', [])
+            if isinstance(old_subjects, str):
+                old_subjects = [s.strip() for s in old_subjects.split(';') if s.strip()]
+            if new_subjects != old_subjects:
+                article_diffs.append(f"    subjects: {old_subjects!r} → {new_subjects!r}")
+                if not dry_run:
+                    article['subjects'] = new_subjects
+                other_changes += 1
+                changed = True
+
+        # Disciplines (from enrichment review)
+        if 'disciplines' in row:
+            new_disc_str = row.get('disciplines', '').strip()
+            new_disc_str, disc_transforms = sanitize_text(new_disc_str)
+            new_disciplines = [d.strip() for d in new_disc_str.split(';') if d.strip()] if new_disc_str else []
+            old_disciplines = article.get('disciplines', [])
+            if isinstance(old_disciplines, str):
+                old_disciplines = [d.strip() for d in old_disciplines.split(';') if d.strip()]
+            if new_disciplines != old_disciplines:
+                article_diffs.append(f"    disciplines: {old_disciplines!r} → {new_disciplines!r}")
+                if not dry_run:
+                    article['disciplines'] = new_disciplines
+                other_changes += 1
+                changed = True
+
+        # Enriched keywords (replaces keywords when imported)
+        if 'keywords_enriched' in row:
+            new_ekw_str = row.get('keywords_enriched', '').strip()
+            new_ekw_str, ekw_transforms = sanitize_text(new_ekw_str)
+            new_ekw = [k.strip() for k in new_ekw_str.split(';') if k.strip()] if new_ekw_str else []
+            old_ekw = article.get('keywords', [])
+            if isinstance(old_ekw, str):
+                old_ekw = [k.strip() for k in old_ekw.split(';') if k.strip()]
+            if new_ekw and new_ekw != old_ekw:
+                article_diffs.append(f"    keywords (enriched): {old_ekw!r} → {new_ekw!r}")
+                if not dry_run:
+                    article['keywords'] = new_ekw
+                other_changes += 1
+                changed = True
 
         if changed:
             updated += 1

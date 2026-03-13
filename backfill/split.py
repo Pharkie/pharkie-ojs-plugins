@@ -27,7 +27,7 @@ import tempfile
 import fitz  # PyMuPDF
 
 
-def slugify(text, max_len=60):
+def slugify(text, max_len=80):
     """Convert title to a filesystem-safe slug."""
     # Remove "Book Review: " prefix for cleaner filenames
     text = re.sub(r'^Book Review:\s*', 'book-review-', text, flags=re.IGNORECASE)

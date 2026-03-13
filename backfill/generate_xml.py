@@ -230,7 +230,7 @@ def encode_pdf(pdf_path):
         return base64.b64encode(f.read()).decode('ascii')
 
 
-def generate_article_xml(article, article_idx, date_published, indent='      ', doi=None):
+def generate_article_xml(article, article_idx, date_published, indent='      ', doi=None, enrichment=None):
     """Generate XML for a single article."""
     i = indent
     i2 = indent + '  '
@@ -318,6 +318,42 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
             lines.append(f'{i4}<keyword>{escape(kw)}</keyword>')
         lines.append(f'{i3}</keywords>')
 
+    # Subjects (from toc.json, populated by enrichment review)
+    subjects = article.get('subjects', [])
+    if subjects:
+        lines.append(f'{i3}<subjects locale="en">')
+        for subj in subjects:
+            lines.append(f'{i4}<subject>{escape(subj)}</subject>')
+        lines.append(f'{i3}</subjects>')
+
+    # Disciplines (from toc.json, populated by enrichment review)
+    disciplines = article.get('disciplines', [])
+    if disciplines:
+        lines.append(f'{i3}<disciplines locale="en">')
+        for disc in disciplines:
+            lines.append(f'{i4}<discipline>{escape(disc)}</discipline>')
+        lines.append(f'{i3}</disciplines>')
+
+    # Coverage (from enrichment sidecar)
+    if enrichment:
+        coverage_parts = []
+        geo = enrichment.get('geographical_context')
+        if geo:
+            coverage_parts.append(geo)
+        era = enrichment.get('era_focus')
+        if era:
+            coverage_parts.append(era)
+        if coverage_parts:
+            lines.append(f'{i3}<coverage locale="en">{escape("; ".join(coverage_parts))}</coverage>')
+
+    # Pages
+    page_start = article.get('journal_page_start')
+    page_end = article.get('journal_page_end')
+    if page_start and page_end:
+        lines.append(f'{i3}<pages>{page_start}-{page_end}</pages>')
+    elif page_start:
+        lines.append(f'{i3}<pages>{page_start}</pages>')
+
     # Authors
     if author_pairs:
         lines.append(f'{i3}<authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
@@ -343,6 +379,17 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
             lines.append(f'{i4}</author>')
         lines.append(f'{i3}</authors>')
 
+    # Citations (from enrichment sidecar)
+    if enrichment and enrichment.get('references'):
+        lines.append(f'{i3}<citations>')
+        for ref in enrichment['references']:
+            author = ref.get('author', '')
+            year = ref.get('year', '')
+            title = ref.get('title', '')
+            citation_str = f'{author} ({year}). {title}.' if year else f'{author}. {title}.'
+            lines.append(f'{i4}<citation>{escape(citation_str)}</citation>')
+        lines.append(f'{i3}</citations>')
+
     # Galley (PDF link)
     if has_pdf:
         lines.append(f'{i3}<article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
@@ -360,7 +407,22 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     return '\n'.join(lines)
 
 
-def generate_xml(toc_data, doi_registry=None):
+def load_enrichment(toc_json_path):
+    """Load enrichment.json from the same directory as toc.json, if it exists.
+
+    Returns: {review_id: article_enrichment_dict} or empty dict.
+    """
+    if not toc_json_path:
+        return {}
+    enrichment_path = os.path.join(os.path.dirname(os.path.abspath(toc_json_path)), 'enrichment.json')
+    if not os.path.exists(enrichment_path):
+        return {}
+    with open(enrichment_path) as f:
+        data = json.load(f)
+    return data.get('articles', {})
+
+
+def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
     """Generate complete OJS Native XML for an issue."""
     vol = toc_data.get('volume', 1)
     iss = toc_data.get('issue', 1)
@@ -370,6 +432,8 @@ def generate_xml(toc_data, doi_registry=None):
 
     if doi_registry is None:
         doi_registry = load_doi_registry()
+
+    enrichment_data = load_enrichment(toc_json_path)
 
     # Determine which sections are actually used
     used_sections = set()
@@ -417,7 +481,10 @@ def generate_xml(toc_data, doi_registry=None):
         doi = lookup_doi(doi_registry, article['title'], vol, iss)
         if doi:
             doi_count += 1
-        lines.append(generate_article_xml(article, idx, date_published, indent='      ', doi=doi))
+        review_id = article.get('_review_id', '')
+        article_enrichment = enrichment_data.get(review_id, {}) if enrichment_data else None
+        lines.append(generate_article_xml(article, idx, date_published, indent='      ',
+                                          doi=doi, enrichment=article_enrichment))
     lines.append(f'    </articles>')
     if doi_count > 0:
         print(f"DOIs preserved: {doi_count}", file=sys.stderr)
@@ -452,7 +519,7 @@ def main():
         pdfs = sum(1 for a in toc_data['articles'] if a.get('split_pdf'))
         print(f"PDFs to embed: {pdfs}", file=sys.stderr)
 
-    xml = generate_xml(toc_data)
+    xml = generate_xml(toc_data, toc_json_path=args.toc_json)
 
     # Validate generated XML is well-formed
     try:

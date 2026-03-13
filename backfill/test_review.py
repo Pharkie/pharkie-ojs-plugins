@@ -478,6 +478,119 @@ def test_ids_stable_across_reexport():
     print("  PASS: test_ids_stable_across_reexport")
 
 
+def test_pdf_file_column_in_csv():
+    """15. Export includes pdf_file column with basename of split PDF."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        articles = [
+            {
+                'title': 'Test Article',
+                'authors': 'Smith, John',
+                'section': 'Articles',
+                'abstract': 'Test.',
+                'keywords': [],
+                'journal_page_start': 1,
+                'journal_page_end': 10,
+                'split_pdf': '/some/path/01-test-article.pdf',
+            },
+        ]
+        toc_path = make_toc(tmpdir, articles=articles)
+        csv_path = os.path.join(tmpdir, 'review.csv')
+
+        rc, _ = run_export([toc_path], csv_path)
+        assert rc == 0
+
+        rows = read_csv_rows(csv_path)
+        assert rows[0]['pdf_file'] == '01-test-article.pdf'
+
+    print("  PASS: test_pdf_file_column_in_csv")
+
+
+def test_enrichment_columns_in_csv():
+    """16. Export includes enrichment columns when enrichment.json exists."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        toc_path = make_toc(tmpdir)
+
+        # Create enrichment.json
+        issue_dir = os.path.dirname(toc_path)
+        enrichment = {
+            '_generated': '2026-01-01T00:00:00Z',
+            '_model': 'test',
+            '_version': 1,
+            'articles': {
+                'v37i1a0': {
+                    'subjects': ['Existential Therapy'],
+                    'disciplines': ['Psychotherapy'],
+                    'keywords_enriched': ['phenomenology', 'therapy', 'existentialism'],
+                }
+            }
+        }
+        with open(os.path.join(issue_dir, 'enrichment.json'), 'w') as f:
+            json.dump(enrichment, f)
+
+        csv_path = os.path.join(tmpdir, 'review.csv')
+
+        # Need to export first to assign review IDs
+        rc, _ = run_export([toc_path], csv_path)
+        assert rc == 0
+
+        rows = read_csv_rows(csv_path)
+        assert 'subjects' in rows[0]
+        assert 'disciplines' in rows[0]
+        assert 'keywords_enriched' in rows[0]
+        assert rows[0]['subjects'] == 'Existential Therapy'
+        assert rows[0]['disciplines'] == 'Psychotherapy'
+
+    print("  PASS: test_enrichment_columns_in_csv")
+
+
+def test_subjects_disciplines_round_trip():
+    """17. Export enrichment → edit subjects/disciplines → import → verify in toc.json."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        toc_path = make_toc(tmpdir)
+
+        # Create enrichment.json
+        issue_dir = os.path.dirname(toc_path)
+        enrichment = {
+            '_generated': '2026-01-01T00:00:00Z',
+            '_model': 'test',
+            '_version': 1,
+            'articles': {
+                'v37i1a0': {
+                    'subjects': ['Existential Therapy'],
+                    'disciplines': ['Psychotherapy'],
+                    'keywords_enriched': ['phenomenology', 'therapy'],
+                }
+            }
+        }
+        with open(os.path.join(issue_dir, 'enrichment.json'), 'w') as f:
+            json.dump(enrichment, f)
+
+        csv_path = os.path.join(tmpdir, 'review.csv')
+        rc, _ = run_export([toc_path], csv_path)
+        assert rc == 0
+
+        # Edit subjects in CSV
+        def edit(rows):
+            rows[0]['subjects'] = 'Existential Therapy; Phenomenology'
+            rows[0]['disciplines'] = 'Psychotherapy; Philosophy'
+            rows[0]['keywords_enriched'] = 'phenomenology; therapy; dasein'
+            return rows
+        modify_csv(csv_path, edit)
+
+        # Import
+        rc, stderr = run_import(csv_path)
+        assert rc == 0, f"import failed: {stderr}"
+
+        # Verify
+        toc = read_toc(toc_path)
+        assert toc['articles'][0]['subjects'] == ['Existential Therapy', 'Phenomenology']
+        assert toc['articles'][0]['disciplines'] == ['Psychotherapy', 'Philosophy']
+        # keywords_enriched replaces keywords
+        assert toc['articles'][0]['keywords'] == ['phenomenology', 'therapy', 'dasein']
+
+    print("  PASS: test_subjects_disciplines_round_trip")
+
+
 # ─── Runner ──────────────────────────────────────────────────────────────────
 
 def main():
@@ -496,6 +609,9 @@ def main():
         test_restore_works,
         test_idempotent_reimport,
         test_ids_stable_across_reexport,
+        test_pdf_file_column_in_csv,
+        test_enrichment_columns_in_csv,
+        test_subjects_disciplines_round_trip,
     ]
 
     print(f"Running {len(tests)} tests...\n")
