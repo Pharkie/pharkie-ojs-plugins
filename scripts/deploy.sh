@@ -132,6 +132,7 @@ fi
 
 THEMES="$PROJECT_DIR/wordpress/themes"
 if [ -d "$THEMES" ] && [ "$(ls -A "$THEMES" 2>/dev/null | grep -v README)" ]; then
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/wordpress/web/app/themes'"
   rsync -az --exclude='README.md' -e "$RSYNC_SSH" \
     "$THEMES/" "$SCP_HOST:$REMOTE_DIR/wordpress/web/app/themes/"
   echo "[ok] Themes synced."
