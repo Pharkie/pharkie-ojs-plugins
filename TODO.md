@@ -8,7 +8,7 @@
 - Member dashboard widget (WooCommerce My Account)
 - UI messages (OJS login hint, paywall hint, footer)
 - Non-Docker setup guide — `docs/non-docker-setup.md`
-- Dev environment clean rebuild verified — all 58 e2e tests passing
+- Dev environment clean rebuild verified — all 61 e2e tests passing
 - Staging VPS on Hetzner (Michal's org account) — fully scripted, smoke tests (22/22) + load tests passing, bulk sync 684/684 clean
 - Deployment automation — `init-vps.sh`, `deploy.sh`, `provision-vps.sh`, `smoke-test.sh`, `load-test.sh`
 - Deployment docs — `docs/vps-deployment.md` (public), `docs/private/staging-prod-setup.md` (private)
@@ -18,49 +18,48 @@
 - Three-phase rollout plan — `docs/private/pre-production-checklist.md`
 - Live WP plugin audit — `data export/live-wp-plugin-audit.md` (35 plugins, theme identified)
 - Password hash sync (bulk, new members, ongoing password changes) — WP hashes sent to OJS, members log in with existing WP password, lazy rehash to cost 12 on first OJS login
+- Dev-vs-live branding parity — journal metadata, theme, nav menu, editorial team, sidebar blocks (Information + event banners), "For Advertisers" static page + sidebar link
 
 ## Blocked — waiting on access
 
 - [x] ~~**Hetzner Cloud account for SEA**~~ — Done. Using Michal's org account (`sea-michal`).
-- [ ] **Krystal WP SSH access** — pull SEAcomm/Helium theme files, check config
-- [ ] **Krystal OJS staging SSH access** — pull OJS theme
+- [x] ~~**Krystal WP SSH access**~~ — Working (`sea-wp-live`, port 722).
+- [x] ~~**OJS branding/theme**~~ — Fully replicated in `setup-ojs.sh` (config-as-code). No SSH to PKP-hosted live OJS needed.
 
-## Phase 1: OJS on Hetzner + WP on Krystal
+## Next: OJS live on Hetzner
 
-Deploy sync plugin to existing Krystal WP. OJS runs on new SEA-owned Hetzner VPS.
+OJS is ready to go live. Branding matches the PKP-hosted live site. Deploy to Hetzner, point `journal.existentialanalysis.org.uk` at it.
 
 - [x] ~~Set up SEA Hetzner VPS (staging)~~ — `scripts/init-vps.sh`, deployed and verified 2026-03-10
+- [ ] Deploy OJS to Hetzner staging — `deploy.sh --host=sea-staging --env-file=.env.staging`
+- [ ] SSL certificate (Let's Encrypt) for `journal.existentialanalysis.org.uk`
+- [ ] Smoke tests + manual review of staging OJS
+- [ ] DNS cutover — point `journal.existentialanalysis.org.uk` to Hetzner
 - [ ] Set up transactional email (Resend) — domain verification, SPF/DKIM/DMARC, OJS SMTP config
-- [ ] Integrate SEAcomm/Helium themes into staging (requires Krystal access)
-- [ ] Integrate OJS theme from Krystal staging (requires Krystal access)
-- [ ] Add live plugins to `composer.json` (Gantry 5, Wordfence, Enhancer for WCS, others TBD)
-- [ ] Test sync on staging with live-matching plugin set
+- [ ] Monitor 24-48h
+- [ ] Decommission PKP hosting
+
+## Later: WP sync (Phase 2)
+
+Connect Krystal WP to the new Hetzner OJS via the sync plugins. WP stays on Krystal for now.
+
 - [ ] Deploy wpojs-sync plugin to Krystal WP (non-Docker install per `docs/non-docker-setup.md`)
 - [ ] Configure WP settings: type mapping for all 6 WC products, manual roles, OJS URL
 - [ ] Configure OJS: API key, allowed IPs (Krystal's outbound IP), subscription types
 - [ ] `wp ojs-sync test-connection` → `sync --dry-run` → `sync`
 - [ ] Verify: new member flow, cancellation/expiry, on-hold/failed payment, OJS login with WP password
 
-## Phase 2: Hetzner WP (parallel, no domain)
+## Later: WP migration to Hetzner (Phase 3)
 
-Second Hetzner VPS running WP + OJS. Runs quietly on IP while Krystal stays live.
+Move WP from Krystal to Hetzner. Both WP + OJS on same VPS.
 
-- [ ] All live plugins in `composer.json`
-- [ ] SEAcomm theme active
+- [ ] Integrate SEAcomm/Helium theme (pull from Krystal via SSH)
+- [ ] Add live plugins to `composer.json` (Gantry 5, Wordfence, Enhancer for WCS, others TBD)
 - [ ] Stripe test mode configured
 - [ ] Database + uploads migrated from Krystal
 - [ ] `wp search-replace` for domain
-- [ ] Smoke tests + load tests passing
-- [ ] Full sync verified
-
-## Phase 3: Domain switchover
-
-- [ ] Lower DNS TTL 24h before
-- [ ] Final database + uploads sync from Krystal
-- [ ] DNS cutover to Hetzner
-- [ ] Update Stripe webhook URL
+- [ ] DNS cutover for `community.existentialanalysis.org.uk`
 - [ ] Update OJS allowed_ips (now Docker network)
-- [ ] Monitor 24-48h
 - [ ] Cancel Krystal hosting
 
 ## Staging test results (2026-03-10, sea-michal account)
@@ -77,7 +76,7 @@ Second Hetzner VPS running WP + OJS. Runs quietly on IP while Krystal stays live
 
 ## Playwright E2E browser tests (`e2e/`)
 
-All passing (58/58):
+All passing (61/61):
 
 - [x] Sync lifecycle — WCS activate/expire → OJS subscription status
 - [x] OJS login — synced user logs in with WP password (no password setup needed)

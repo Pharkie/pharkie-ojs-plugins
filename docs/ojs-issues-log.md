@@ -83,6 +83,29 @@ One community image (`teic/docker-pkp-ojs`) builds for both amd64 and arm64 and 
 - **Community ARM64 image:** [teic/docker-pkp-ojs](https://hub.docker.com/r/teic/docker-pkp-ojs)
 - **Workaround:** OJS load-based backpressure handles this automatically. No manual `--delay` needed.
 
+## Caching
+
+### 11. Serialized plugin cache (`cache/HTML/*.ser`) prevents new sidebar blocks from appearing
+
+After adding a new custom block via direct DB inserts (Custom Block Manager plugin), the block doesn't render in the sidebar until `cache/HTML/*.ser` files are deleted. Clearing `t_compile/` and `opcache/` alone is insufficient — OJS serializes plugin settings into `cache/HTML/` and serves from that cache until it's manually purged.
+
+This is not a bug per se — it's expected cache behaviour — but it's a trap when provisioning via setup scripts. A full `find cache/ -type f -delete` is needed after any plugin setting changes.
+
+- **Not reported upstream** — expected behaviour, easy to miss.
+- **Workaround:** Delete all cache files after setup, which `setup-ojs.sh` already does.
+
+## Breaking changes in 3.5
+
+### 10. "Editorial Team" renamed to "Editorial Masthead"
+
+OJS 3.5 renamed the Editorial Team page to Editorial Masthead. This affects the route (`/about/editorialTeam` → `/about/editorialMasthead`), the page title locale key (`common.editorialMasthead`), and the nav menu item type (`NMI_TYPE_MASTHEAD`). The new page auto-populates from assigned editorial roles rather than being manually edited — there's no longer a free-text field for the editorial team list.
+
+This is a deliberate change: "masthead" is the traditional publishing term. PKP is still iterating on it — [pkp/pkp-lib#11800](https://github.com/pkp/pkp-lib/issues/11800) and [pkp/pkp-lib#11805](https://github.com/pkp/pkp-lib/issues/11805) track improvements for 3.5.0-2, including better handling of roles that don't map to OJS's predefined list.
+
+- **Forum discussion:** [PKP Forum #97267](https://forum.pkp.sfu.ca/t/error-to-include-editorial-masthead-in-omp-3-5/97267/5)
+- **Impact for SEA:** Nav menu item needed updating from "Editorial Team" to "Editorial Masthead". The editorial team content is now driven by OJS role assignments rather than a static page — ensure editorial board members are assigned appropriate roles in OJS.
+- **Fixed in:** `setup-ojs.sh` sets the nav label to "Editorial Masthead".
+
 ## Static analysis
 
 ### 8. PHPStan cannot fully analyse OJS plugins

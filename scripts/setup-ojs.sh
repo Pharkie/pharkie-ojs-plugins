@@ -313,7 +313,7 @@ echo "[OJS] Theme configured (CSS cache cleared)."
 
 # --- Nav menu (flat layout matching live site) ---
 # OJS 3.5 default creates nested About dropdown. We flatten it to match the live
-# OJS 3.4 layout: Current | Archives | About | Submissions | Editorial Team | Contact
+# OJS 3.4 layout: Current | Archives | About | Submissions | Editorial Masthead | Contact
 # Also removes Announcements and Privacy from primary nav.
 echo "[OJS] Configuring navigation menu..."
 # Get primary nav menu ID (NMI_TYPE_PRIMARY)
@@ -343,10 +343,10 @@ if [ -n "$PRIMARY_NAV_ID" ]; then
       fi
     done
 
-    # Rename "Editorial Masthead" → "Editorial Team" (OJS 3.5 changed the label)
+    # Use OJS 3.5's correct label "Editorial Masthead" (was "Editorial Team" in 3.4)
     MASTHEAD_ID=$($MARIADB -N -e "SELECT navigation_menu_item_id FROM navigation_menu_items WHERE context_id=$JOURNAL_ID_META AND type='NMI_TYPE_MASTHEAD' LIMIT 1" 2>/dev/null)
     if [ -n "$MASTHEAD_ID" ]; then
-      $MARIADB -e "INSERT INTO navigation_menu_item_settings (navigation_menu_item_id, locale, setting_name, setting_value, setting_type) VALUES ($MASTHEAD_ID, 'en', 'title', 'Editorial Team', 'string') ON DUPLICATE KEY UPDATE setting_value='Editorial Team';"
+      $MARIADB -e "INSERT INTO navigation_menu_item_settings (navigation_menu_item_id, locale, setting_name, setting_value, setting_type) VALUES ($MASTHEAD_ID, 'en', 'title', 'Editorial Masthead', 'string') ON DUPLICATE KEY UPDATE setting_value='Editorial Masthead';"
     fi
 
     # Re-sequence: Current(0), Archives(1), About(2), Submissions(3), Masthead(4), Contact(5)
@@ -385,11 +385,11 @@ create_editorial_user() {
   if [ "$EXISTS" = "0" ]; then
     $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled)
       VALUES ('$USERNAME', '\$2y\$10\$placeholder', '$EMAIL', NOW(), 0, 0);"
-    local UID=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$USERNAME'")
+    local USER_ID=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$USERNAME'")
     $MARIADB -e "INSERT INTO user_settings (user_id, setting_name, setting_value, locale) VALUES
-      ($UID, 'givenName', '$GIVEN', 'en'),
-      ($UID, 'familyName', '$FAMILY', 'en');"
-    $MARIADB -e "INSERT INTO user_user_groups (user_group_id, user_id) VALUES ($GROUP_ID, $UID);"
+      ($USER_ID, 'givenName', '$GIVEN', 'en'),
+      ($USER_ID, 'familyName', '$FAMILY', 'en');"
+    $MARIADB -e "INSERT INTO user_user_groups (user_group_id, user_id) VALUES ($GROUP_ID, $USER_ID);"
     echo "[OJS]   Created $USERNAME ($GIVEN $FAMILY) → group $GROUP_ID"
   else
     echo "[OJS]   $USERNAME already exists, skipping."
@@ -456,8 +456,8 @@ $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name,
 
 # Register block names
 $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-  VALUES ('customblockmanagerplugin', $JOURNAL_ID_META, 'blocks', '[\"banner\",\"sea-events-banner\"]', 'object')
-  ON DUPLICATE KEY UPDATE setting_value='[\"banner\",\"sea-events-banner\"]';"
+  VALUES ('customblockmanagerplugin', $JOURNAL_ID_META, 'blocks', '[\"advertisers-link\",\"banner\",\"sea-events-banner\"]', 'object')
+  ON DUPLICATE KEY UPDATE setting_value='[\"advertisers-link\",\"banner\",\"sea-events-banner\"]';"
 
 # Copy banner images to site public directory
 SITE_IMG_DIR="/var/www/html/public/site/images"
@@ -475,6 +475,7 @@ $pdo = new PDO("mysql:host='"$OJS_DB_HOST"';dbname='"$OJS_DB_NAME"'", "'"$OJS_DB
 $ctx = '"$JOURNAL_ID_META"';
 
 $blocks = [
+  "advertisers-link" => "<ul style=\"list-style:none;padding:0;margin:0\"><li><a href=\"/ea/advertisers\">For Advertisers</a></li></ul>",
   "banner" => "<a href=\"http://localhost:8080\"><img src=\"/public/site/images/sea-events-1.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
   "sea-events-banner" => "<a href=\"http://localhost:8080\"><img src=\"/public/site/images/sea-events-2.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
 ];
@@ -494,10 +495,112 @@ echo "Custom blocks configured.\n";
 
 # Configure sidebar: Information block + both custom banners
 $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
-  VALUES ($JOURNAL_ID_META, '', 'sidebar', '[\"informationblockplugin\",\"banner\",\"sea-events-banner\"]')
-  ON DUPLICATE KEY UPDATE setting_value='[\"informationblockplugin\",\"banner\",\"sea-events-banner\"]';"
+  VALUES ($JOURNAL_ID_META, '', 'sidebar', '[\"informationblockplugin\",\"advertisers-link\",\"banner\",\"sea-events-banner\"]')
+  ON DUPLICATE KEY UPDATE setting_value='[\"informationblockplugin\",\"advertisers-link\",\"banner\",\"sea-events-banner\"]';"
 
 echo "[OJS] Sidebar blocks configured."
+
+# --- Static Pages plugin (For Advertisers page, matching live site) ---
+echo "[OJS] Configuring Static Pages plugin..."
+
+# Enable the plugin
+$MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('staticpagesplugin', $JOURNAL_ID_META, 'enabled', '1', 'bool')
+  ON DUPLICATE KEY UPDATE setting_value='1';"
+
+# Register in versions table (OJS requires this for generic plugins)
+$MARIADB -e "INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
+  VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'staticPages', 'StaticPagesPlugin', 1, 0);"
+
+# Create the advertisers static page
+OJS_DB_HOST="$OJS_DB_HOST" OJS_DB_NAME="$OJS_DB_NAME" OJS_DB_USER="$OJS_DB_USER" \
+OJS_DB_PASSWORD="$OJS_DB_PASSWORD" JOURNAL_ID_META="$JOURNAL_ID_META" \
+php <<'PHPEOF'
+<?php
+$pdo = new PDO(
+  "mysql:host=" . getenv("OJS_DB_HOST") . ";dbname=" . getenv("OJS_DB_NAME"),
+  getenv("OJS_DB_USER"), getenv("OJS_DB_PASSWORD"),
+  [PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false]
+);
+$ctx = (int) getenv("JOURNAL_ID_META");
+
+// Check if page already exists
+$check = $pdo->prepare("SELECT static_page_id FROM static_pages WHERE path = ? AND context_id = ?");
+$check->execute(["advertisers", $ctx]);
+$pageId = $check->fetchColumn();
+
+if (!$pageId) {
+    $ins = $pdo->prepare("INSERT INTO static_pages (path, context_id) VALUES (?, ?)");
+    $ins->execute(["advertisers", $ctx]);
+    $pageId = $pdo->lastInsertId();
+}
+
+$content = <<<'HTML'
+<p>Existential Analysis reaches a specialist readership of psychotherapists, counsellors, psychologists, researchers, supervisors, trainers, and students with an interest in existential and phenomenological approaches to therapy and life.</p>
+
+<p>We accept a limited number of advertising placements that are relevant to our community, including:</p>
+
+<ul>
+<li>Training programmes and CPD events</li>
+<li>Conferences and workshops</li>
+<li>Books and journals</li>
+<li>Clinical services and supervision directories</li>
+<li>Professional organisations and member services</li>
+</ul>
+
+<h2>Advertising options</h2>
+<ul>
+<li>Website placement (sidebar / homepage placement, subject to availability)</li>
+<li>Issue-based placements (e.g., inside-cover or back-page for PDF/print, if applicable)</li>
+<li>Sponsored announcements (clearly labelled)</li>
+</ul>
+
+<h2>Audience and fit</h2>
+<p>We prioritise adverts that are aligned with the journal's ethos and likely to be of genuine interest to readers. We do not accept advertising that is misleading, sensational, or unrelated to the journal's remit.</p>
+
+<h2>Rates and booking</h2>
+<p>Rates depend on placement, duration, and format. To request the current rate card and availability, contact us with:</p>
+<ul>
+<li>What you want to promote</li>
+<li>Preferred dates / issue (if relevant)</li>
+<li>Your website link</li>
+<li>Any artwork you already have (PDF/PNG/JPG)</li>
+</ul>
+
+<h2>Further Information for Issue-based Placements</h2>
+
+<h3>Advertising rates</h3>
+<ul>
+<li>Full page (115mm width x 190mm height) <strong>£80</strong></li>
+<li>Half page (115mm width x 90mm height) <strong>£50</strong></li>
+</ul>
+
+<p><strong>10% discount</strong> when 2 adverts are booked consecutively.</p>
+
+<h3>Submission deadlines</h3>
+<ul>
+<li><strong>1st December</strong> for January issue inclusion</li>
+<li><strong>1st June</strong> for July issue inclusion</li>
+</ul>
+
+<h3>Submission details</h3>
+<ul>
+<li>As a word document</li>
+<li>By email to: <a href="mailto:journal@existentialanalysis.org.uk">journal@existentialanalysis.org.uk</a></li>
+</ul>
+
+<h2>Contact</h2>
+<p>Email: <a href="mailto:journal@existentialanalysis.org.uk">journal@existentialanalysis.org.uk</a></p>
+HTML;
+
+$stmt = $pdo->prepare("INSERT INTO static_page_settings (static_page_id, locale, setting_name, setting_value, setting_type)
+  VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+$stmt->execute([$pageId, "en", "title", "For Advertisers", "string"]);
+$stmt->execute([$pageId, "en", "content", $content, "string"]);
+echo "Static page \"advertisers\" configured (id=$pageId).\n";
+PHPEOF
+
+echo "[OJS] Static Pages plugin configured."
 
 # --- Subscription types ---
 # Defined via OJS_SUB_TYPES env var: pipe-separated entries of "name:cost" in GBP.
@@ -740,6 +843,17 @@ if [ "$SAMPLE_DATA" = true ]; then
     $MARIADB -e "UPDATE issues SET access_status = 2 WHERE journal_id=$JOURNAL_ID"
     echo "[OJS] Issue access updated."
   fi
+
+  # Fix section ordering to match live site: Editorial, Articles, Book Review Editorial, Book Reviews.
+  # OJS import ignores seq values from XML, so all sections get seq=0 and fall back to section_id order.
+  echo "[OJS] Fixing section display order..."
+  $MARIADB -e "
+    UPDATE sections SET seq=0 WHERE section_id=(SELECT section_id FROM (SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Editorial') t);
+    UPDATE sections SET seq=1 WHERE section_id=(SELECT section_id FROM (SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Articles') t);
+    UPDATE sections SET seq=2 WHERE section_id=(SELECT section_id FROM (SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Book Review Editorial') t);
+    UPDATE sections SET seq=3 WHERE section_id=(SELECT section_id FROM (SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Book Reviews') t);
+  "
+  echo "[OJS] Section order fixed."
   fi
 fi
 
