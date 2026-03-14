@@ -225,6 +225,16 @@ fi
 
 echo "[OJS] Journal metadata configured."
 
+# --- Footer (links + SEA logo, matching live site) ---
+# The live site has two columns of nav links + the SEA logo on the right.
+# The OJS brand image (ojs_brand.png) still appears below via the template.
+JPATH="${OJS_JOURNAL_PATH:-ea}"
+FOOTER_HTML="<div style=\"display:flex;justify-content:space-between;align-items:flex-start;gap:40px;\"><div style=\"display:flex;gap:40px;\"><div><a href=\"/$JPATH/issue/current\">Current</a><br><a href=\"/$JPATH/issue/archive\">Archives</a><br><a href=\"/$JPATH/about\">About</a><br><a href=\"/$JPATH/about/submissions\">Submissions</a></div><div><a href=\"/$JPATH/about/editorialMasthead\">Editorial Masthead</a><br><a href=\"/$JPATH/about/contact\">Contact</a><br><a href=\"/$JPATH/about/privacy\">Privacy Statement</a></div></div><div><img style=\"max-height:80px\" src=\"/public/site/images/sea-logo-footer.png\" alt=\"Society for Existential Analysis\" width=\"200\" height=\"87\"></div></div>"
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, 'en', 'pageFooter', '$(echo "$FOOTER_HTML" | sed "s/'/''/g")')
+  ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
+echo "[OJS] Footer configured."
+
 # --- Branding (logo, favicon, homepage image) ---
 # Images are baked into the Docker image at /opt/ojs-branding/ (from docker/ojs/branding/).
 # This copies them to OJS's public directory and sets the DB metadata so OJS serves them.
@@ -462,7 +472,7 @@ $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name,
 # Copy banner images to site public directory
 SITE_IMG_DIR="/var/www/html/public/site/images"
 mkdir -p "$SITE_IMG_DIR"
-for IMG in sea-events-1.png sea-events-2.png; do
+for IMG in sea-events-1.png sea-events-2.png sea-logo-footer.png; do
   if [ -f "$BRANDING_SRC/$IMG" ]; then
     cp "$BRANDING_SRC/$IMG" "$SITE_IMG_DIR/$IMG"
   fi
