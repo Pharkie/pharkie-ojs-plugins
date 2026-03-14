@@ -90,6 +90,36 @@ All passing (61/61):
 - [x] Error recovery — sync fails when OJS unreachable, succeeds on retry
 - [x] Manual roles, settings behaviour, WP-CLI commands, API auth
 
+## Backfill: journal archive (30 years of back-issues)
+
+66 PDFs audited (`backfill/audit.py`). See `backfill/output/audit-report.md` for full report.
+
+**Goal: clean, complete set of PDFs first, then pipeline.**
+
+### Step 1: Fix problem PDFs (before any pipeline work)
+
+8 PDFs need fixing. Originals almost certainly don't exist — these are the only copies.
+
+**6 scanned PDFs — OCR → reflow into clean text PDFs:**
+- [ ] EA6.1 (Vol 6.1) — scanned, no text
+- [ ] EA13.1, EA13.2 (Vol 13) — scanned, no text
+- [ ] EA14.1, EA14.2 (Vol 14) — scanned, no text
+- [ ] EA6.2 (Vol 6.2) — scanned, rotated 90°, double-page spreads (11 PDF pages ≈ 22 journal pages). Rotate → split spreads → OCR → reflow.
+
+**EA16.2** (Vol 16.2) — has text but missing cover/CONTENTS page:
+- [ ] Reconstruct or obtain missing TOC page
+
+**Vol 36 Issue 2** — missing entirely (deferred, will ask):
+- [ ] Obtain PDF
+
+### Step 2: Re-audit, confirm 66/66 clean
+
+- [ ] Re-run `backfill/audit.py`, all PDFs should pass
+
+### Step 3: Run pipeline
+
+- [ ] Run all PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
+
 ## Future improvements
 
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.

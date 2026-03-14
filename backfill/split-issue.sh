@@ -12,6 +12,7 @@
 #   backfill/split-issue.sh <issue.pdf> --only=split        # Run one step only
 #   backfill/split-issue.sh <issue.pdf> --stop-after=normalize  # Run through normalize, export review CSV, stop
 #   backfill/split-issue.sh <issue.pdf> --page-offset=2     # Manual page offset (when auto-detection fails)
+#   backfill/split-issue.sh <issue.pdf> --toc-file=toc.json  # Skip preflight+parse, use hand-written TOC
 #
 # Steps (run in order):
 #   preflight    — validate PDF is readable, has TOC, extract vol/issue
@@ -40,9 +41,17 @@ NO_PDFS=""
 ONLY_STEP=""
 STOP_AFTER=""
 PAGE_OFFSET=""
+TOC_FILE=""
 for arg in "$@"; do
   case "$arg" in
     --no-pdfs) NO_PDFS="--no-pdfs" ;;
+    --toc-file=*)
+      TOC_FILE="${arg#--toc-file=}"
+      if [ ! -f "$TOC_FILE" ]; then
+        echo "ERROR: TOC file not found: $TOC_FILE"
+        exit 1
+      fi
+      ;;
     --page-offset=*)
       PAGE_OFFSET="${arg#--page-offset=}"
       ;;
@@ -103,6 +112,7 @@ echo "Output: $OUTPUT_DIR"
 [ -n "$ONLY_STEP" ] && echo "Step: $ONLY_STEP only"
 [ -n "$STOP_AFTER" ] && echo "Stop after: $STOP_AFTER"
 [ -n "$PAGE_OFFSET" ] && echo "Page offset: $PAGE_OFFSET (manual)"
+[ -n "$TOC_FILE" ] && echo "TOC file: $TOC_FILE (skipping preflight + parse_toc)"
 echo "=========================================="
 echo
 
@@ -125,8 +135,8 @@ for PDF in "${EXPANDED_PDFS[@]}"; do
   echo "Processing ($PDF_NUM/${#EXPANDED_PDFS[@]}): $(basename "$PDF")"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Step 1: Preflight
-  if should_run "preflight"; then
+  # Step 1: Preflight (skipped with --toc-file)
+  if should_run "preflight" && [ -z "$TOC_FILE" ]; then
     echo
     echo "--- Step 1: Preflight ---"
     PREFLIGHT_TMP=$(mktemp /tmp/preflight-XXXXXX.json)
@@ -159,8 +169,26 @@ sys.exit(1 if errors else 0)
     continue
   fi
 
-  # Step 2: Parse TOC
-  if should_run "parse_toc"; then
+  # Step 2: Parse TOC (or use --toc-file)
+  if [ -n "$TOC_FILE" ]; then
+    echo
+    echo "--- Step 2: Using provided TOC file ---"
+    TOC_FILE_ABS="$(cd "$(dirname "$TOC_FILE")" && pwd)/$(basename "$TOC_FILE")"
+    VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TOC_FILE_ABS")
+    ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TOC_FILE_ABS")
+    ISSUE_DIR="$OUTPUT_DIR/EA-vol$(printf '%02d' "$VOL")-iss${ISS}"
+    mkdir -p "$ISSUE_DIR"
+    # Copy TOC file, updating source_pdf to point to the actual PDF
+    python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+data['source_pdf'] = sys.argv[2]
+with open(sys.argv[3], 'w') as f:
+    json.dump(data, f, indent=2)
+" "$TOC_FILE_ABS" "$PDF_ABS" "$ISSUE_DIR/toc.json"
+    echo "  Volume $VOL, Issue $ISS → $ISSUE_DIR"
+  elif should_run "parse_toc"; then
     echo
     echo "--- Step 2: Parse TOC ---"
     TEMP_TOC=$(mktemp /tmp/toc-XXXXXX.json)
