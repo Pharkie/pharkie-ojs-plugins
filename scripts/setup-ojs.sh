@@ -227,9 +227,9 @@ echo "[OJS] Journal metadata configured."
 
 # --- Footer (links + SEA logo, matching live site) ---
 # The live site has two columns of nav links + the SEA logo on the right.
-# The OJS brand image (ojs_brand.png) still appears below via the template.
+# Hide the OJS brand image (ojs_brand.png) via CSS — can't modify core templates.
 JPATH="${OJS_JOURNAL_PATH:-ea}"
-FOOTER_HTML="<div style=\"display:flex;justify-content:space-between;align-items:flex-start;gap:40px;\"><div style=\"display:flex;gap:40px;\"><div><a href=\"/$JPATH/issue/current\">Current</a><br><a href=\"/$JPATH/issue/archive\">Archives</a><br><a href=\"/$JPATH/about\">About</a><br><a href=\"/$JPATH/about/submissions\">Submissions</a></div><div><a href=\"/$JPATH/about/editorialMasthead\">Editorial Masthead</a><br><a href=\"/$JPATH/about/contact\">Contact</a><br><a href=\"/$JPATH/about/privacy\">Privacy Statement</a></div></div><div><img style=\"max-height:80px\" src=\"/public/site/images/sea-logo-footer.png\" alt=\"Society for Existential Analysis\" width=\"200\" height=\"87\"></div></div>"
+FOOTER_HTML="<style>.pkp_brand_footer{display:none}</style><div style=\"display:flex;justify-content:space-between;align-items:flex-start;gap:40px;\"><div style=\"display:flex;gap:40px;\"><div><a href=\"/$JPATH/issue/current\">Current</a><br><a href=\"/$JPATH/issue/archive\">Archives</a><br><a href=\"/$JPATH/about\">About</a><br><a href=\"/$JPATH/about/submissions\">Submissions</a></div><div><a href=\"/$JPATH/about/editorialMasthead\">Editorial Masthead</a><br><a href=\"/$JPATH/about/contact\">Contact</a><br><a href=\"/$JPATH/about/privacy\">Privacy Statement</a></div></div><div><img style=\"max-height:80px\" src=\"/public/site/images/sea-logo-footer.png\" alt=\"Society for Existential Analysis\" width=\"200\" height=\"87\"></div></div>"
 $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
   VALUES ($JOURNAL_ID_META, 'en', 'pageFooter', '$(echo "$FOOTER_HTML" | sed "s/'/''/g")')
   ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
