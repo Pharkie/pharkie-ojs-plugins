@@ -264,39 +264,51 @@ def audit_pdf(filepath):
     # Preflight compatibility
     result["preflight"] = run_preflight_check(doc, filepath)
 
+    # Check for sidecar TOC file (e.g. 6.2.toc.json next to 6.2.pdf)
+    stem = os.path.splitext(os.path.basename(filepath))[0]
+    sidecar_path = os.path.join(os.path.dirname(filepath), f"{stem}.toc.json")
+    has_sidecar = os.path.exists(sidecar_path)
+    result["sidecar_toc"] = has_sidecar
+
     # Overall status — separate pipeline blockers from informational notes
-    problems = []  # blockers: prevent pipeline from processing this PDF
-    notes = []     # informational: worth knowing but won't block pipeline
+    issues = []    # things worth noting
+    notes = []     # informational
+    blocked = False  # true if pipeline can't handle this PDF
 
     if text_info["classification"] == "SCAN":
-        problems.append("SCAN (no extractable text)")
-    if toc_page is None:
-        # Only a blocker if the PDF has text (scans already flagged above)
-        if text_info["classification"] == "TEXT":
-            problems.append("no CONTENTS page")
+        if has_sidecar:
+            notes.append("SCAN — sidecar TOC provided")
         else:
-            pass  # already covered by SCAN flag
+            issues.append("SCAN (no extractable text, no sidecar TOC)")
+            blocked = True
+    if toc_page is None:
+        if text_info["classification"] == "TEXT":
+            if has_sidecar:
+                notes.append("no CONTENTS page — sidecar TOC provided")
+            else:
+                issues.append("no CONTENTS page, no sidecar TOC")
+                blocked = True
     if len(landscape_pages) > 0:
-        problems.append(f"{len(landscape_pages)} landscape pages")
+        issues.append(f"{len(landscape_pages)} landscape pages")
+        blocked = True
     if not result["preflight"]["would_pass"] and text_info["classification"] == "TEXT":
-        problems.append("preflight would fail")
+        issues.append("preflight would fail")
+        blocked = True
 
     # Informational notes (don't block pipeline)
     if not has_cover:
         if text_info["classification"] == "TEXT":
             notes.append("no cover detected (vol/issue from filename OK)")
-        # Scans already flagged — no cover is expected
     if not dims["consistent"] and not dims["within_tolerance"]:
         notes.append(f"mixed page dimensions ({', '.join(dims['unique_dimensions'])})")
     elif not dims["consistent"]:
         notes.append("minor dimension variance (within tolerance)")
 
-    if problems:
-        result["status"] = "PROBLEM"
-        result["problems"] = problems
+    if blocked:
+        result["status"] = "BLOCKED"
     else:
         result["status"] = "OK"
-        result["problems"] = []
+    result["issues"] = issues
     result["notes"] = notes
 
     doc.close()
@@ -359,43 +371,43 @@ def _coverage_section(results):
 def generate_markdown(results, output_path):
     """Generate a human-readable markdown report."""
     ok = [r for r in results if r["status"] == "OK"]
-    problems = [r for r in results if r["status"] == "PROBLEM"]
+    blocked = [r for r in results if r["status"] == "BLOCKED"]
     errors = [r for r in results if r["status"] == "ERROR"]
 
     lines = []
     lines.append("# PDF Archive Audit Report\n")
     lines.append(f"**Total PDFs:** {len(results)}\n")
     lines.append(f"- OK: {len(ok)}")
-    lines.append(f"- Problems: {len(problems)}")
+    lines.append(f"- Blocked: {len(blocked)}")
     lines.append(f"- Errors: {len(errors)}")
     lines.append("")
 
     # Coverage analysis
     lines.extend(_coverage_section(results))
 
-    # Problem PDFs section
-    if problems or errors:
-        lines.append("## Problem PDFs\n")
-        lines.append("| File | Pages | Size | Status | Problems |")
-        lines.append("|------|-------|------|--------|----------|")
-        for r in sorted(problems + errors, key=lambda x: x["file"]):
+    # Blocked PDFs section
+    if blocked or errors:
+        lines.append("## Blocked PDFs\n")
+        lines.append("| File | Pages | Size | Status | Issues |")
+        lines.append("|------|-------|------|--------|--------|")
+        for r in sorted(blocked + errors, key=lambda x: x["file"]):
             if r["status"] == "ERROR":
                 lines.append(
                     f"| {r['file']} | — | {r['size_mb']}MB "
                     f"| ERROR | {r.get('error', '?')} |"
                 )
             else:
-                prob_str = "; ".join(r["problems"])
+                issue_str = "; ".join(r["issues"])
                 lines.append(
                     f"| {r['file']} | {r['pages']} | {r['size_mb']}MB "
-                    f"| PROBLEM | {prob_str} |"
+                    f"| BLOCKED | {issue_str} |"
                 )
         lines.append("")
 
-    # Detailed problem analysis
-    if problems:
-        lines.append("### Problem Details\n")
-        for r in sorted(problems, key=lambda x: x["file"]):
+    # Detailed blocked analysis
+    if blocked:
+        lines.append("### Blocked Details\n")
+        for r in sorted(blocked, key=lambda x: x["file"]):
             lines.append(f"**{r['file']}** (Vol {r['vol_issue']['from_filename']})")
             lines.append(f"- Pages: {r['pages']}, Size: {r['size_mb']}MB")
             lines.append(f"- Text: {r['text']['classification']} "
@@ -407,7 +419,7 @@ def generate_markdown(results, output_path):
                 lines.append(f"- Landscape pages: {r['orientation']['landscape_pages']}")
             if not r["dimensions"]["consistent"]:
                 lines.append(f"- Dimensions: {', '.join(r['dimensions']['unique_dimensions'])}")
-            lines.append(f"- Problems: {', '.join(r['problems'])}")
+            lines.append(f"- Issues: {', '.join(r['issues'])}")
             lines.append("")
 
     # OK PDFs summary table
@@ -484,16 +496,16 @@ def main():
 
     # Summary to stderr
     ok = sum(1 for r in results if r["status"] == "OK")
-    prob = sum(1 for r in results if r["status"] == "PROBLEM")
+    blocked = sum(1 for r in results if r["status"] == "BLOCKED")
     err = sum(1 for r in results if r["status"] == "ERROR")
     print(f"\n{'='*60}", file=sys.stderr)
-    print(f"Audit complete: {len(results)} PDFs — {ok} OK, {prob} problems, {err} errors",
+    print(f"Audit complete: {len(results)} PDFs — {ok} OK, {blocked} blocked, {err} errors",
           file=sys.stderr)
     for r in results:
         icon = "OK" if r["status"] == "OK" else "!!"
         print(f"  [{icon}] {r['file']}", end="", file=sys.stderr)
-        if r.get("problems"):
-            print(f"  — {', '.join(r['problems'])}", end="", file=sys.stderr)
+        if r.get("issues"):
+            print(f"  — {', '.join(r['issues'])}", end="", file=sys.stderr)
         elif r.get("error"):
             print(f"  — {r['error']}", end="", file=sys.stderr)
         print(file=sys.stderr)
