@@ -92,42 +92,25 @@ All passing (61/61):
 
 ## Backfill: journal archive (30 years of back-issues)
 
-66 PDFs audited (`backfill/audit.py`). See `backfill/output/audit-report.md` for full report.
+All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/`. See `docs/backfill-issue-inventory.md` for full inventory with page counts, TOC status, and article counts.
 
-**Goal: clean, complete set of PDFs first, then pipeline.**
+### Done
 
-### Step 1: Fix problem PDFs (before any pipeline work)
+- [x] Audit all source PDFs (`backfill/audit.py`)
+- [x] OCR 6 scanned PDFs (6.1, 13.1, 13.2, 14.1, 14.2, 29.2)
+- [x] Manual TOC sidecars for 4 unparseable issues (2, 6.2, 16.1, 16.2)
+- [x] Download live WP archive (`securepdfs/`), compare all three sources
+- [x] Fix mislabelled PDFs: 34.1 and 35.1 (archive had wrong issue content)
+- [x] Replace truncated 6.2 (22pp) with full 204-page version from live server
+- [x] Obtain missing PDFs: 34.1, 35.1, 36.2 (from live WP), 37.1 (provided manually)
+- [x] Rebuild 6.2.toc.json for full 204-page issue
+- [x] Human review of all prepared PDFs
 
-8 PDFs need fixing. Originals almost certainly don't exist — these are the only copies.
+### Next
 
-**6 scanned PDFs — OCR'd, in `backfill/prepared/`:**
-- [x] EA6.1 (Vol 6.1) — OCR'd
-- [x] EA13.1, EA13.2 (Vol 13) — OCR'd
-- [x] EA14.1, EA14.2 (Vol 14) — OCR'd
-- [x] EA6.2 (Vol 6.2) — rotated, split spreads, OCR'd (22 pages from 11 double-page scans)
-
-**EA16.2 + EA6.2 — no CONTENTS page, manual TOC files created:**
-- [x] `backfill/toc-manual/EA16.2-toc.json` (16 articles + book reviews)
-- [x] `backfill/toc-manual/EA6.2-toc.json` (1 article)
-- Use `--toc-file=` flag with `split-issue.sh`
-
-**Vol 36 Issue 2** — missing entirely (deferred, will ask):
-- [ ] Obtain PDF
-
-### Step 2: Human review of all 66 prepared PDFs
-
-- [ ] Open every PDF in `backfill/prepared/` and verify: correct page order, readable text, no clipping, no blank/corrupt pages
-- [ ] Pay special attention to the 6 OCR'd scans (EA6.1, EA6.2, EA13.1, EA13.2, EA14.1, EA14.2) — Claude can't reliably judge visual PDF quality
-- Not a spot-check — every PDF must be opened and checked
-
-### Step 3: Re-audit, confirm all clean
-
-- [ ] Re-run `backfill/audit.py` on `backfill/prepared/`, all 66 PDFs should pass
-
-### Step 4: Run pipeline
-
-- [ ] Run all 66 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
-- EA6.2 and EA16.2: use `--toc-file=backfill/toc-manual/EA*.json`
+- [ ] Re-run `backfill/audit.py` on `backfill/prepared/`, all 68 PDFs should pass
+- [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
+- Sidecar TOC files (`.toc.json`) are auto-discovered — no flags needed
 
 ## Future improvements
 

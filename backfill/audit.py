@@ -30,17 +30,9 @@ import fitz  # PyMuPDF
 
 
 def parse_vol_issue_from_filename(filename):
-    """Extract volume and issue from filename patterns like EA6.1.pdf or 29.1.pdf."""
+    """Extract volume and issue from filename patterns like 6.1.pdf or 29.1.pdf."""
     base = os.path.splitext(filename)[0]
-    # Pattern: EA6.1 or EA13.2
-    m = re.match(r'EA(\d+)\.(\d+)', base)
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    # Pattern: EA1 (single-issue volumes)
-    m = re.match(r'EA(\d+)$', base)
-    if m:
-        return int(m.group(1)), None
-    # Pattern: 29.1
+    # Pattern: 29.1 or 6.1
     m = re.match(r'(\d+)\.(\d+)', base)
     if m:
         return int(m.group(1)), int(m.group(2))
@@ -84,10 +76,8 @@ def find_toc_page(doc):
     """Find which page contains CONTENTS. Returns (0-based index, format)."""
     for i in range(min(10, len(doc))):
         text = doc[i].get_text()
-        if re.search(r'^CONTENTS\s*$', text, re.MULTILINE):
+        if re.search(r'^[-\s]*Contents[-\s]*$', text, re.IGNORECASE | re.MULTILINE):
             return i, "standard"
-        if re.search(r'CONTENTS', text, re.IGNORECASE):
-            return i, "non-standard"
     return None, None
 
 
@@ -192,7 +182,7 @@ def run_preflight_check(doc, filepath):
     toc_found = False
     for i in range(min(10, len(doc))):
         text = doc[i].get_text()
-        if re.search(r'^CONTENTS\s*$', text, re.MULTILINE):
+        if re.search(r'^[-\s]*Contents[-\s]*$', text, re.IGNORECASE | re.MULTILINE):
             toc_found = True
             break
     if not toc_found:

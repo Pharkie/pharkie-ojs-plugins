@@ -22,7 +22,7 @@
 #   normalize    — normalize author names against registry (backfill/authors.json)
 #   generate_xml — generate OJS Native XML with base64-embedded PDFs
 #
-# Output: backfill/output/EA-vol##-iss#/
+# Output: backfill/output/vol##-iss#/
 #   toc.json, per-article PDFs, import.xml
 set -eo pipefail
 
@@ -169,14 +169,24 @@ sys.exit(1 if errors else 0)
     continue
   fi
 
-  # Step 2: Parse TOC (or use --toc-file)
-  if [ -n "$TOC_FILE" ]; then
+  # Step 2: Parse TOC (or use --toc-file / auto-discovered manual TOC)
+  # Auto-discover manual TOC if no --toc-file was given
+  EFFECTIVE_TOC_FILE="$TOC_FILE"
+  if [ -z "$EFFECTIVE_TOC_FILE" ]; then
+    # Sidecar manual TOC: "16.1.pdf" → "16.1.toc.json" in same directory
+    SIDECAR_TOC="${PDF_ABS%.pdf}.toc.json"
+    if [ -f "$SIDECAR_TOC" ]; then
+      EFFECTIVE_TOC_FILE="$SIDECAR_TOC"
+      echo "  (using sidecar TOC: $(basename "$SIDECAR_TOC"))"
+    fi
+  fi
+  if [ -n "$EFFECTIVE_TOC_FILE" ]; then
     echo
     echo "--- Step 2: Using provided TOC file ---"
-    TOC_FILE_ABS="$(cd "$(dirname "$TOC_FILE")" && pwd)/$(basename "$TOC_FILE")"
+    TOC_FILE_ABS="$(cd "$(dirname "$EFFECTIVE_TOC_FILE")" && pwd)/$(basename "$EFFECTIVE_TOC_FILE")"
     VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TOC_FILE_ABS")
     ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TOC_FILE_ABS")
-    ISSUE_DIR="$OUTPUT_DIR/EA-vol$(printf '%02d' "$VOL")-iss${ISS}"
+    ISSUE_DIR="$OUTPUT_DIR/vol$(printf '%02d' "$VOL")-iss${ISS}"
     mkdir -p "$ISSUE_DIR"
     # Copy TOC file, updating source_pdf to point to the actual PDF
     python3 -c "
@@ -203,7 +213,7 @@ with open(sys.argv[3], 'w') as f:
     fi
     VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TEMP_TOC")
     ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TEMP_TOC")
-    ISSUE_DIR="$OUTPUT_DIR/EA-vol$(printf '%02d' "$VOL")-iss${ISS}"
+    ISSUE_DIR="$OUTPUT_DIR/vol$(printf '%02d' "$VOL")-iss${ISS}"
     mkdir -p "$ISSUE_DIR"
     mv "$TEMP_TOC" "$ISSUE_DIR/toc.json"
     echo "  Volume $VOL, Issue $ISS → $ISSUE_DIR"
@@ -218,6 +228,13 @@ for i in range(min(3, len(doc))):
         v, s = int(m.group(1)), int(m.group(2))
         if 1 <= v <= 50 and 1 <= s <= 4:
             print(v); sys.exit()
+# Single-issue format (Vol 1-5)
+for i in range(min(3, len(doc))):
+    m = re.search(r'Analysis\s+(\d{1,2})\s', doc[i].get_text(), re.IGNORECASE)
+    if m:
+        v = int(m.group(1))
+        if 1 <= v <= 50:
+            print(v); sys.exit()
 print(0)
 " "$PDF_ABS")
     ISS=$(python3 -c "
@@ -229,9 +246,16 @@ for i in range(min(3, len(doc))):
         v, s = int(m.group(1)), int(m.group(2))
         if 1 <= v <= 50 and 1 <= s <= 4:
             print(s); sys.exit()
+# Single-issue format (Vol 1-5): always issue 1
+for i in range(min(3, len(doc))):
+    m = re.search(r'Analysis\s+(\d{1,2})\s', doc[i].get_text(), re.IGNORECASE)
+    if m:
+        v = int(m.group(1))
+        if 1 <= v <= 50:
+            print(1); sys.exit()
 print(0)
 " "$PDF_ABS")
-    ISSUE_DIR="$OUTPUT_DIR/EA-vol$(printf '%02d' "$VOL")-iss${ISS}"
+    ISSUE_DIR="$OUTPUT_DIR/vol$(printf '%02d' "$VOL")-iss${ISS}"
   fi
 
   TOC_JSON="$ISSUE_DIR/toc.json"

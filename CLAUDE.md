@@ -99,7 +99,7 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 
 Imports ~30 years of journal back-issues (whole-issue PDFs) into OJS. Two scripts, two steps:
 
-1. **`backfill/split-issue.sh <issue.pdf>`** — split a whole-issue PDF into per-article PDFs + OJS Native XML. Local only, does not touch OJS. Output: `backfill/output/EA-vol##-iss#/` (toc.json, per-article PDFs, import.xml).
+1. **`backfill/split-issue.sh <issue.pdf>`** — split a whole-issue PDF into per-article PDFs + OJS Native XML. Local only, does not touch OJS. Output: `backfill/output/vol##-iss#/` (toc.json, per-article PDFs, import.xml).
 2. **`backfill/import.sh <issue-dir>`** — load the split output into OJS via Docker CLI.
 
 Individual Python scripts (called by `split-issue.sh` in order):

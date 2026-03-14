@@ -17,7 +17,7 @@ Usage:
     python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
 
     # Force re-enrichment
-    python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --force
+    python3 backfill/enrich.py backfill/output/vol37-iss1/toc.json --force
 
     # Model override (default: claude-sonnet-4-20250514)
     python3 backfill/enrich.py backfill/output/*/toc.json --model=claude-opus-4-20250514

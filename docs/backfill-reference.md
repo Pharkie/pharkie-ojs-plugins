@@ -10,28 +10,28 @@ Technical reference for the backfill pipeline. For the process overview and revi
 
 ```bash
 # Step 1: Split the issue PDF into articles
-backfill/split-issue.sh path/to/EA-vol37-iss1.pdf
+backfill/split-issue.sh path/to/vol37-iss1.pdf
 
 # Step 2: Human review (see Backfill Pipeline for what to check)
-# 2a: Check split PDFs -- open backfill/output/EA-vol37-iss1/*.pdf
+# 2a: Check split PDFs -- open backfill/output/vol37-iss1/*.pdf
 #     Verify page alignment, article boundaries, book review splits
 # 2b: Review metadata in spreadsheet
-python3 backfill/export_review.py backfill/output/EA-vol37-iss1/toc.json -o review.csv
+python3 backfill/export_review.py backfill/output/vol37-iss1/toc.json -o review.csv
 # ... edit review.csv in Google Sheets ...
 python3 backfill/import_review.py review.csv --dry-run
 python3 backfill/import_review.py review.csv
 
 # Step 3: Enrich metadata (optional but recommended)
-python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --dry-run
-python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json
+python3 backfill/enrich.py backfill/output/vol37-iss1/toc.json --dry-run
+python3 backfill/enrich.py backfill/output/vol37-iss1/toc.json
 # ... optionally re-export CSV to review enrichment, then import corrections ...
 
 # Step 4: Generate XML and import into OJS
-backfill/split-issue.sh path/to/EA-vol37-iss1.pdf --only=generate_xml
-backfill/import.sh backfill/output/EA-vol37-iss1
+backfill/split-issue.sh path/to/vol37-iss1.pdf --only=generate_xml
+backfill/import.sh backfill/output/vol37-iss1
 
 # Step 5: Verify the import
-backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
+backfill/verify.py backfill/output/vol37-iss1/toc.json --docker
 
 # Optional: Generate archive manifest
 python3 backfill/manifest.py backfill/output/*/toc.json
@@ -81,7 +81,7 @@ python3 backfill/author_normalize.py backfill/output/*/toc.json
 After `split-issue.sh` completes, each issue gets a directory under `backfill/output/`:
 
 ```
-backfill/output/EA-vol37-iss1/
+backfill/output/vol37-iss1/
     toc.json                          # Structured TOC with all metadata
     enrichment.json                   # Deep enrichment sidecar (from enrich.py)
     import.xml                        # OJS Native XML (large, base64 PDFs)
@@ -183,7 +183,7 @@ python3 backfill/enrich.py backfill/output/*/toc.json
 python3 backfill/enrich.py backfill/output/*/toc.json --concurrency=16
 
 # Force re-enrichment of already-processed articles
-python3 backfill/enrich.py backfill/output/EA-vol37-iss1/toc.json --force
+python3 backfill/enrich.py backfill/output/vol37-iss1/toc.json --force
 
 # Use a different model
 python3 backfill/enrich.py backfill/output/*/toc.json --model=claude-opus-4-20250514
@@ -415,7 +415,7 @@ Each Python script can be run standalone. This is useful for debugging a specifi
 python3 backfill/preflight.py path/to/issue.pdf
 
 # Parse TOC, write to specific file
-python3 backfill/parse_toc.py path/to/issue.pdf -o backfill/output/EA-vol37-iss1/toc.json
+python3 backfill/parse_toc.py path/to/issue.pdf -o backfill/output/vol37-iss1/toc.json
 
 # Parse TOC with manual page offset
 python3 backfill/parse_toc.py path/to/issue.pdf -o toc.json --page-offset=2
@@ -424,10 +424,10 @@ python3 backfill/parse_toc.py path/to/issue.pdf -o toc.json --page-offset=2
 python3 backfill/parse_toc.py path/to/issue.pdf --no-metadata -o toc.json
 
 # Split PDF using existing toc.json
-python3 backfill/split.py backfill/output/EA-vol37-iss1/toc.json -o backfill/output
+python3 backfill/split.py backfill/output/vol37-iss1/toc.json -o backfill/output
 
 # Verify split PDFs match their TOC titles
-python3 backfill/verify_split.py backfill/output/EA-vol37-iss1/toc.json
+python3 backfill/verify_split.py backfill/output/vol37-iss1/toc.json
 
 # Normalize authors across all processed issues
 python3 backfill/author_normalize.py backfill/output/*/toc.json
@@ -457,13 +457,13 @@ python3 backfill/enrich.py --report backfill/output/*/enrichment.json
 python3 backfill/manifest.py backfill/output/*/toc.json
 
 # Generate XML without PDFs (fast, for testing)
-python3 backfill/generate_xml.py backfill/output/EA-vol37-iss1/toc.json -o import.xml --no-pdfs
+python3 backfill/generate_xml.py backfill/output/vol37-iss1/toc.json -o import.xml --no-pdfs
 
 # Generate XML with embedded PDFs
-python3 backfill/generate_xml.py backfill/output/EA-vol37-iss1/toc.json -o import.xml
+python3 backfill/generate_xml.py backfill/output/vol37-iss1/toc.json -o import.xml
 
 # Verify import against OJS database
-python3 backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
+python3 backfill/verify.py backfill/output/vol37-iss1/toc.json --docker
 ```
 
 To re-run a single step via `split-issue.sh` (uses the same orchestration logic but skips other steps):

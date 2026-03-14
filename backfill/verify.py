@@ -9,7 +9,7 @@ Usage:
     python backfill/verify.py <toc.json> [--db-host 127.0.0.1] [--db-port 3306]
 
     # Dev environment (Docker):
-    python backfill/verify.py backfill/output/EA-vol37-iss1/toc.json --docker
+    python backfill/verify.py backfill/output/vol37-iss1/toc.json --docker
 
 Checks:
 - Issue exists with correct volume/number/year

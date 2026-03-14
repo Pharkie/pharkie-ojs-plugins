@@ -26,12 +26,22 @@ SECTION_ARTICLES = 'Articles'
 SECTION_BOOK_REVIEW_EDITORIAL = 'Book Review Editorial'
 SECTION_BOOK_REVIEWS = 'Book Reviews'
 
+# Case-insensitive CONTENTS heading — matches "CONTENTS", "Contents",
+# "--- Contents ---" with dashes/spaces
+CONTENTS_RE = re.compile(r'^[-\s]*Contents[-\s]*$', re.IGNORECASE | re.MULTILINE)
+
+# Section headers in TOC that should not be treated as article titles
+SECTION_HEADERS = {
+    'conference papers', 'articles', 'book reviews', 'letters',
+    'responses', 'obituary', 'obituaries', 'reports', 'poem', 'poems',
+}
+
 
 def find_toc_page(doc):
     """Find the 0-based page index containing 'CONTENTS'."""
     for i in range(min(10, len(doc))):
         text = doc[i].get_text()
-        if re.search(r'^CONTENTS\s*$', text, re.MULTILINE):
+        if CONTENTS_RE.search(text):
             return i
     return None
 
@@ -59,6 +69,20 @@ def find_page_offset(doc, toc_page_idx):
             printed_page = int(m.group(1))
             return test_idx - printed_page
 
+    # Strategy 3: look for printed page numbers in footers
+    # Many issues have a bare number as the last line of each page
+    for test_idx in range(toc_page_idx + 1, min(toc_page_idx + 10, len(doc))):
+        text = doc[test_idx].get_text().strip()
+        lines = text.split('\n')
+        if lines:
+            last_line = lines[-1].strip()
+            m = re.match(r'^(\d{1,3})$', last_line)
+            if m:
+                printed_page = int(m.group(1))
+                candidate = test_idx - printed_page
+                if candidate >= 0:
+                    return candidate
+
     return None
 
 
@@ -66,8 +90,457 @@ def journal_page_to_pdf_index(journal_page, offset):
     return journal_page + offset
 
 
-def parse_toc_text(toc_text):
-    """Parse the CONTENTS section into entries.
+def detect_toc_format(toc_text):
+    """Detect which TOC format is used in the text after CONTENTS heading.
+
+    Returns one of: 'dot-leader', 'stacked', 'spaced', 'tabbed'
+    """
+    m = CONTENTS_RE.search(toc_text)
+    if not m:
+        return 'tabbed'  # fallback to existing parser
+    after = toc_text[m.end():]
+
+    # Has tab characters → tabbed format (existing parser)
+    if '\t' in after:
+        return 'tabbed'
+
+    # Has clean dot-leaders (5+ dots followed by a digit)
+    if re.search(r'\.{5,}\s*\d', after):
+        return 'dot-leader'
+
+    # Has inline page numbers with 3+ spaces on the same line → spaced
+    # Use [ ] not \s to avoid matching across newlines
+    # Must check spaced BEFORE OCR'd dot-leaders (both have long lines with pages)
+    spaced_lines = re.findall(r'\S[ ]{3,}\d{1,3}\s*$', after, re.MULTILINE)
+    if len(spaced_lines) >= 3:
+        return 'spaced'
+
+    # OCR'd dot-leaders: long lines (>40 chars) ending with a page number
+    # In stacked format, page numbers are on their own short lines
+    # Use [^\n] and [ ] to prevent matching across line breaks
+    long_with_page = re.findall(r'^[^\n]{40,}[ ]+\d{1,3}[ ]*$', after, re.MULTILINE)
+    if len(long_with_page) >= 3:
+        return 'dot-leader'
+
+    # Otherwise → stacked (title, author, page on separate lines)
+    return 'stacked'
+
+
+def _find_contents_start(lines):
+    """Find the line index after the CONTENTS heading."""
+    for i, line in enumerate(lines):
+        if CONTENTS_RE.match(line.strip()):
+            return i + 1
+    return None
+
+
+def _is_name_like(text):
+    """Heuristic: does text look like an author name?"""
+    text = text.strip()
+    if not text:
+        return False
+    # Quick rejections
+    if len(text) > 80:
+        return False
+    if not re.match(r'^[A-Z]', text):
+        return False
+    # Names don't contain em-dashes, colons, question marks, or exclamation marks
+    if any(c in text for c in '\u2013\u2014:?!'):
+        return False
+    # Names don't end with punctuation (except period for initials)
+    if text[-1] in '?:!;':
+        return False
+    # Names are short (2-8 words)
+    words = text.split()
+    if len(words) > 8 or len(words) < 1:
+        return False
+    # Names don't start with common title words
+    first_lower = text.lower()
+    title_starters = (
+        'a ', 'an ', 'the ', 'on ', 'some ', 'towards', 'toward',
+        'is ', 'what ', 'why ', 'how ', 'from ', 'between ', 'beyond ',
+        'being ', 'not ', 'can ', 'could ', 'in ', 'of ', 'for ',
+    )
+    if any(first_lower.startswith(s) for s in title_starters):
+        return False
+    # Reject if it looks like a publication/journal name
+    if text.startswith('Existential') or text.startswith('Journal'):
+        return False
+    # Reject if there are too many lowercase words (titles have articles/prepositions)
+    lowercase_words = [w for w in words if w[0].islower() and len(w) > 3]
+    if len(lowercase_words) > 2:
+        return False
+    # Capitalized function words in interior positions indicate a title, not a name
+    # (names use lowercase: "van", "de", "du"; titles capitalize: "Of", "The", "And")
+    cap_function = {'The', 'And', 'Or', 'In', 'Of', 'For', 'To', 'With', 'On', 'At', 'By', 'As'}
+    if any(w in cap_function for w in words[1:]):
+        return False
+    return True
+
+
+def _parse_toc_format_a(toc_text):
+    """Parse Format A: dot-leader TOCs (Vol 1, 3–11.1).
+
+    Pattern: author/title lines with dot-leaders to page numbers.
+    Title on preceding line(s), author on the dot-leader line.
+    One-liner entries like "Editorial.....1" have title=dot-line text, no author.
+    """
+    entries = []
+    lines = toc_text.split('\n')
+    start_idx = _find_contents_start(lines)
+    if start_idx is None:
+        return entries
+
+    # Classify lines
+    classified = []  # (type, content, page)
+    for line in lines[start_idx:]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Clean dot-leader line: text....page
+        m = re.match(r'^(.+?)\.{3,}\s*(\d{1,3})\s*$', stripped)
+        if m:
+            text = m.group(1).strip()
+            page = int(m.group(2))
+            classified.append(('dot', text, page))
+            continue
+        # OCR'd dot-leader: text..noise..page (dots mixed with OCR garbage)
+        m = re.match(r'^(.+?)(?:\s*\.{2,}).+?(\d{1,3})\s*$', stripped)
+        if m and len(stripped) > 40:
+            text = m.group(1).strip()
+            page = int(m.group(2))
+            classified.append(('dot', text, page))
+            continue
+        classified.append(('text', stripped, None))
+
+    # Group into entries
+    pending_texts = []
+    for kind, text, page in classified:
+        if kind == 'text':
+            # Skip known section headers
+            if text.lower().strip() in SECTION_HEADERS:
+                continue
+            # Skip journal header lines
+            if text.startswith('Journal of the Society'):
+                continue
+            pending_texts.append(text)
+        elif kind == 'dot':
+            if pending_texts:
+                # Preceding text lines = title, dot-line text = author
+                title = ' '.join(pending_texts)
+                author = text if _is_name_like(text) else None
+                if not author:
+                    # Dot-line text is part of title, not author
+                    title = title + ' ' + text if text else title
+                entries.append({'title': title.strip(), 'author': author, 'page': page})
+            else:
+                # No preceding text — dot-line text is the title (e.g. "Editorial.....1")
+                entries.append({'title': text, 'author': None, 'page': page})
+            pending_texts = []
+
+    return entries
+
+
+def _parse_toc_format_b_newline(toc_text):
+    """Parse Format B-newline: title, author, page on separate lines.
+
+    Two sub-orderings:
+    1. title→author→page (Vol 11.2–14.1, 15.2, 17.1, 17.2):
+        Title Line
+        Author Name
+        42
+
+    2. title→page→author (Vol 27.2–28.2):
+        Title Line
+        244
+        Author Name
+
+    Also handles separated format (e.g. 14.2) where all page numbers
+    are grouped at the end.
+    """
+    entries = []
+    lines = toc_text.split('\n')
+    start_idx = _find_contents_start(lines)
+    if start_idx is None:
+        return entries
+
+    # Classify lines
+    classified = []  # (type, content)
+    for line in lines[start_idx:]:
+        stripped = line.strip()
+        if not stripped:
+            classified.append(('blank', ''))
+            continue
+        if re.match(r'^\d{1,3}$', stripped):
+            classified.append(('page', int(stripped)))
+        elif stripped.startswith('Journal of the Society'):
+            continue
+        else:
+            classified.append(('text', stripped))
+
+    # Check if page numbers are all grouped at the end (separated/columnar style)
+    last_non_blank = [c for c in classified if c[0] != 'blank']
+    page_count = 0
+    for item in reversed(last_non_blank):
+        if item[0] == 'page':
+            page_count += 1
+        else:
+            break
+    interleaved_pages = sum(1 for c in classified if c[0] == 'page') - page_count
+    if page_count >= 5 and interleaved_pages == 0:
+        return _parse_toc_format_b_separated(classified, page_count)
+
+    # Detect ordering: look at first few non-blank items after any initial
+    # text+page (Editorial/page pattern). If text→page→text-name, it's
+    # title→page→author. If text→text-name→page, it's title→author→page.
+    ordering = _detect_b_newline_ordering(classified)
+
+    if ordering == 'title-page-author':
+        return _parse_b_newline_tpa(classified)
+    else:
+        return _parse_b_newline_tap(classified)
+
+
+def _detect_b_newline_ordering(classified):
+    """Detect whether B-newline uses title→author→page or title→page→author."""
+    non_blank = [c for c in classified if c[0] != 'blank']
+    # Skip initial Editorial+page pair
+    i = 0
+    while i < len(non_blank) and non_blank[i][0] == 'text':
+        i += 1
+    if i < len(non_blank) and non_blank[i][0] == 'page':
+        i += 1  # skip past first page
+
+    # Now look at the next sequence: text(s), then page or name
+    texts_seen = 0
+    for j in range(i, min(i + 6, len(non_blank))):
+        kind, val = non_blank[j]
+        if kind == 'text':
+            texts_seen += 1
+        elif kind == 'page':
+            # If we saw text then hit page quickly (1-2 texts), and the next
+            # item is a name, it's title→page→author
+            if texts_seen <= 2 and j + 1 < len(non_blank):
+                next_kind, next_val = non_blank[j + 1]
+                if next_kind == 'text' and _is_name_like(next_val):
+                    return 'title-page-author'
+            # Otherwise title→author→page (accumulated more text before page)
+            return 'title-author-page'
+
+    return 'title-author-page'  # default
+
+
+def _parse_b_newline_tap(classified):
+    """Parse B-newline: title→author→page ordering."""
+    entries = []
+    pending_texts = []
+    for kind, val in classified:
+        if kind == 'blank':
+            continue
+        if kind == 'text':
+            pending_texts.append(val)
+        elif kind == 'page':
+            if not pending_texts:
+                continue
+            # Last text line before page = author (if it looks like a name)
+            author = None
+            title_parts = pending_texts[:]
+            if len(pending_texts) >= 2 and _is_name_like(pending_texts[-1]):
+                author = pending_texts[-1]
+                title_parts = pending_texts[:-1]
+
+            title = ' '.join(title_parts)
+            entries.append({'title': title, 'author': author, 'page': val})
+            pending_texts = []
+
+    return entries
+
+
+def _parse_b_newline_tpa(classified):
+    """Parse B-newline: title→page→author ordering.
+
+    Forward scan: collect title lines → page number → subtitle lines → author.
+    If no author is found before the next page number, any text collected after
+    the page was actually the next entry's title, not subtitles.
+    """
+    entries = []
+    items = [(k, v) for k, v in classified if k != 'blank']
+    i = 0
+    # Seed: collect initial title
+    carry_title = []
+
+    while i < len(items):
+        # Collect title lines (or use carried-over title from previous iteration)
+        title_parts = carry_title[:]
+        carry_title = []
+        while i < len(items) and items[i][0] == 'text':
+            title_parts.append(items[i][1])
+            i += 1
+
+        # Expect page number
+        if i >= len(items) or items[i][0] != 'page':
+            break
+        page = items[i][1]
+        i += 1
+
+        # Collect subtitle continuations and author after the page
+        subtitle_parts = []
+        author = None
+        while i < len(items) and items[i][0] == 'text':
+            if _is_name_like(items[i][1]) and author is None:
+                author = items[i][1]
+                i += 1
+                break  # author found — next text is next entry's title
+            subtitle_parts.append(items[i][1])
+            i += 1
+
+        if author is not None:
+            # Found author: subtitles are part of this entry's title
+            full_title = ' '.join(title_parts + subtitle_parts)
+            entries.append({'title': full_title, 'author': author, 'page': page})
+        else:
+            # No author found: subtitle_parts are actually the next entry's title
+            entries.append({'title': ' '.join(title_parts), 'author': None, 'page': page})
+            carry_title = subtitle_parts
+
+    # Flush any remaining carry_title as a title-only entry (shouldn't happen normally)
+    return entries
+
+
+def _parse_toc_format_b_separated(classified, page_count):
+    """Parse B-newline variant where all page numbers are at the end.
+
+    Strategy: collect text entries (separated by author-name heuristic),
+    then pair with page numbers in order.
+    """
+    # Extract page numbers from end
+    pages = []
+    for item in reversed([c for c in classified if c[0] != 'blank']):
+        if item[0] == 'page':
+            pages.insert(0, item[1])
+        else:
+            break
+
+    # Extract text entries — group into (title, author) pairs
+    # An entry ends when we see a name-like line followed by another
+    # non-name line or a blank gap
+    text_lines = []
+    for kind, val in classified:
+        if kind == 'text':
+            text_lines.append(val)
+        elif kind == 'page':
+            break  # stop at first page number
+
+    # Group text lines into entries using author-name heuristic
+    raw_entries = []
+    current = []
+    for line in text_lines:
+        current.append(line)
+        # If this line looks like an author name, close the entry
+        if _is_name_like(line) and len(current) >= 2:
+            raw_entries.append(current[:])
+            current = []
+
+    # Remaining lines (like "Book Reviews", "Letters to the Editors") are
+    # single-line entries without authors
+    if current:
+        for line in current:
+            raw_entries.append([line])
+
+    # Pair with page numbers
+    entries = []
+    for i, group in enumerate(raw_entries):
+        if i >= len(pages):
+            break
+        if len(group) >= 2 and _is_name_like(group[-1]):
+            author = group[-1]
+            title = ' '.join(group[:-1])
+        else:
+            author = None
+            title = ' '.join(group)
+        entries.append({'title': title, 'author': author, 'page': pages[i]})
+
+    return entries
+
+
+def _parse_toc_format_b_spaced(toc_text):
+    """Parse Format B-spaced: inline page numbers with spaces (Vol 15.1–23.1, 27.2–28.2).
+
+    Pattern:
+        Title Text                                                    42
+        Subtitle if any
+        Author Name
+
+    Blank lines separate entries.
+    """
+    entries = []
+    lines = toc_text.split('\n')
+    start_idx = _find_contents_start(lines)
+    if start_idx is None:
+        return entries
+
+    # Parse entries separated by blank lines
+    current_group = []
+    groups = []
+    for line in lines[start_idx:]:
+        stripped = line.strip()
+        if not stripped:
+            if current_group:
+                groups.append(current_group)
+                current_group = []
+        else:
+            if stripped.startswith('Journal of the Society'):
+                continue
+            current_group.append(stripped)
+    if current_group:
+        groups.append(current_group)
+
+    for group in groups:
+        if not group:
+            continue
+
+        # Try to extract inline page number from first line
+        page = None
+        title_parts = []
+        author = None
+
+        # Check first line for inline page: "Title text       42"
+        m = re.match(r'^(.+?)\s{3,}(\d{1,3})\s*$', group[0])
+        if m:
+            title_parts.append(m.group(1).strip())
+            page = int(m.group(2))
+        else:
+            # No inline page — might be on a subsequent line as bare number
+            title_parts.append(group[0])
+
+        # Process remaining lines: subtitles, author, or bare page number
+        for line in group[1:]:
+            bare_page = re.match(r'^(\d{1,3})$', line)
+            if bare_page and page is None:
+                page = int(bare_page.group(1))
+            elif _is_name_like(line):
+                author = line
+            else:
+                # Subtitle or title continuation
+                # Check if it has an inline page
+                m2 = re.match(r'^(.+?)\s{3,}(\d{1,3})\s*$', line)
+                if m2 and page is None:
+                    title_parts.append(m2.group(1).strip())
+                    page = int(m2.group(2))
+                else:
+                    title_parts.append(line)
+
+        if page is None:
+            continue  # skip entries without page numbers
+
+        title = ' '.join(title_parts)
+        entries.append({'title': title, 'author': author, 'page': page})
+
+    return entries
+
+
+def _parse_toc_format_c(toc_text):
+    """Parse Format C: tab-based TOCs (Vol 23.2–36.1).
 
     PyMuPDF extracts the EA TOC with this pattern:
         CONTENTS
@@ -91,11 +564,7 @@ def parse_toc_text(toc_text):
     entries = []
     lines = toc_text.split('\n')
 
-    start_idx = None
-    for i, line in enumerate(lines):
-        if line.strip() == 'CONTENTS':
-            start_idx = i + 1
-            break
+    start_idx = _find_contents_start(lines)
     if start_idx is None:
         return entries
 
@@ -175,6 +644,25 @@ def parse_toc_text(toc_text):
             i += 1  # skip orphan text/page lines
 
     return entries
+
+
+def parse_toc_text(toc_text):
+    """Parse the CONTENTS section into entries.
+
+    Detects the TOC format and dispatches to the appropriate parser.
+    All parsers return [{title, author, page}, ...].
+    """
+    fmt = detect_toc_format(toc_text)
+    print(f"TOC format: {fmt}", file=sys.stderr)
+
+    if fmt == 'dot-leader':
+        return _parse_toc_format_a(toc_text)
+    elif fmt == 'stacked':
+        return _parse_toc_format_b_newline(toc_text)
+    elif fmt == 'spaced':
+        return _parse_toc_format_b_spaced(toc_text)
+    else:
+        return _parse_toc_format_c(toc_text)
 
 
 def classify_entry(title):
@@ -491,6 +979,8 @@ def main():
     print(f"Found {len(raw_entries)} TOC entries", file=sys.stderr)
 
     # Volume/issue/date from cover
+    # Try two-issue format on all pages first, then single-issue fallback.
+    # This avoids "ANALYSIS 1 0 .2" (garbled OCR) matching single-issue "1".
     vol, iss, date = None, None, None
     for i in range(min(3, len(doc))):
         text = doc[i].get_text()
@@ -500,6 +990,17 @@ def main():
                 v, s = int(m.group(1)), int(m.group(2))
                 if 1 <= v <= 50 and 1 <= s <= 4:
                     vol, iss = v, s
+    if vol is None:
+        for i in range(min(3, len(doc))):
+            text = doc[i].get_text()
+            m = re.search(r'Analysis\s+(\d{1,2})\s', text, re.IGNORECASE)
+            if m:
+                v = int(m.group(1))
+                if 1 <= v <= 50:
+                    vol, iss = v, 1
+                    break
+    for i in range(min(3, len(doc))):
+        text = doc[i].get_text()
         if date is None:
             months = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)'
             m = re.search(rf'({months})\s+(\d{{4}})', text)

@@ -11,7 +11,7 @@ Checks:
 - Text is extractable (not scanned images)
 - Page count is plausible for a journal issue
 - TOC page is detectable
-- Proposes consistent renaming (EA-vol##-iss#.pdf)
+- Proposes consistent renaming (vol##-iss#.pdf)
 
 Outputs a JSON report to stdout.
 """
@@ -27,7 +27,7 @@ def detect_toc_page(doc):
     """Find the page containing 'CONTENTS' heading. Returns 0-based page index."""
     for i in range(min(10, len(doc))):  # TOC should be in first 10 pages
         text = doc[i].get_text()
-        if re.search(r'^CONTENTS\s*$', text, re.MULTILINE):
+        if re.search(r'^[-\s]*Contents[-\s]*$', text, re.IGNORECASE | re.MULTILINE):
             return i
     return None
 
@@ -60,6 +60,14 @@ def extract_vol_issue(doc):
         m = re.search(r'Vol(?:ume)?\.?\s*(\d+)\s*(?:No|Issue|Iss)\.?\s*(\d+)', text, re.IGNORECASE)
         if m:
             return int(m.group(1)), int(m.group(2))
+    # Single-issue format (Vol 1-5): "ANALYSIS  1" or "Analysis\n2\n"
+    for i in range(min(3, len(doc))):
+        text = doc[i].get_text()
+        m = re.search(r'Analysis\s+(\d{1,2})\s', text, re.IGNORECASE)
+        if m:
+            v = int(m.group(1))
+            if 1 <= v <= 50:
+                return v, 1
     return None, None
 
 
@@ -123,7 +131,7 @@ def analyse_pdf(filepath):
 
     # Suggested filename
     if vol is not None and iss is not None:
-        result['suggested_name'] = f"EA-vol{vol:02d}-iss{iss}.pdf"
+        result['suggested_name'] = f"vol{vol:02d}-iss{iss}.pdf"
     else:
         result['suggested_name'] = None
 
