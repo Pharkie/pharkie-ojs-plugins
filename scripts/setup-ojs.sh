@@ -436,9 +436,9 @@ $MARIADB <<SQL
   INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
     VALUES ($JOURNAL_ID_META, 'en', 'contactAffiliation', 'Society for Existential Analysis')
     ON DUPLICATE KEY UPDATE setting_value='Society for Existential Analysis';
-  UPDATE journal_settings SET setting_value='Steve'
+  UPDATE journal_settings SET setting_value='Richard Swann'
     WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportName';
-  UPDATE journal_settings SET setting_value='steve@picus.works'
+  UPDATE journal_settings SET setting_value='journal@existentialanalysis.org.uk'
     WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportEmail';
 SQL
 echo "[OJS]   Contact info configured."
