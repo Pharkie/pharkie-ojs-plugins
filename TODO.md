@@ -100,25 +100,34 @@ All passing (61/61):
 
 8 PDFs need fixing. Originals almost certainly don't exist — these are the only copies.
 
-**6 scanned PDFs — OCR → reflow into clean text PDFs:**
-- [ ] EA6.1 (Vol 6.1) — scanned, no text
-- [ ] EA13.1, EA13.2 (Vol 13) — scanned, no text
-- [ ] EA14.1, EA14.2 (Vol 14) — scanned, no text
-- [ ] EA6.2 (Vol 6.2) — scanned, rotated 90°, double-page spreads (11 PDF pages ≈ 22 journal pages). Rotate → split spreads → OCR → reflow.
+**6 scanned PDFs — OCR'd, in `backfill/prepared/`:**
+- [x] EA6.1 (Vol 6.1) — OCR'd
+- [x] EA13.1, EA13.2 (Vol 13) — OCR'd
+- [x] EA14.1, EA14.2 (Vol 14) — OCR'd
+- [x] EA6.2 (Vol 6.2) — rotated, split spreads, OCR'd (22 pages from 11 double-page scans)
 
-**EA16.2** (Vol 16.2) — has text but missing cover/CONTENTS page:
-- [ ] Reconstruct or obtain missing TOC page
+**EA16.2 + EA6.2 — no CONTENTS page, manual TOC files created:**
+- [x] `backfill/toc-manual/EA16.2-toc.json` (16 articles + book reviews)
+- [x] `backfill/toc-manual/EA6.2-toc.json` (1 article)
+- Use `--toc-file=` flag with `split-issue.sh`
 
 **Vol 36 Issue 2** — missing entirely (deferred, will ask):
 - [ ] Obtain PDF
 
-### Step 2: Re-audit, confirm 66/66 clean
+### Step 2: Human review of all 66 prepared PDFs
 
-- [ ] Re-run `backfill/audit.py`, all PDFs should pass
+- [ ] Open every PDF in `backfill/prepared/` and verify: correct page order, readable text, no clipping, no blank/corrupt pages
+- [ ] Pay special attention to the 6 OCR'd scans (EA6.1, EA6.2, EA13.1, EA13.2, EA14.1, EA14.2) — Claude can't reliably judge visual PDF quality
+- Not a spot-check — every PDF must be opened and checked
 
-### Step 3: Run pipeline
+### Step 3: Re-audit, confirm all clean
 
-- [ ] Run all PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
+- [ ] Re-run `backfill/audit.py` on `backfill/prepared/`, all 66 PDFs should pass
+
+### Step 4: Run pipeline
+
+- [ ] Run all 66 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
+- EA6.2 and EA16.2: use `--toc-file=backfill/toc-manual/EA*.json`
 
 ## Future improvements
 
