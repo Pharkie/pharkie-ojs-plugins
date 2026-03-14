@@ -5,8 +5,8 @@
 # and loads it into OJS via the Native Import/Export CLI.
 #
 # Usage:
-#   backfill/import.sh backfill/output/vol37-iss1       # Import one issue
-#   backfill/import.sh backfill/output/vol*              # Import all prepared issues
+#   backfill/import.sh backfill/output/37.1       # Import one issue
+#   backfill/import.sh backfill/output/*                  # Import all prepared issues
 #
 # Requires: OJS running in Docker (auto-detected), or --container=<name>.
 #
@@ -59,8 +59,8 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --admin=<user>      Admin username (default: admin)"
   echo "  --force             Reimport issues that already exist in OJS"
   echo
-  echo "Example: backfill/import.sh backfill/output/vol37-iss1"
-  echo "         backfill/import.sh backfill/output/vol*"
+  echo "Example: backfill/import.sh backfill/output/37.1"
+  echo "         backfill/import.sh backfill/output/*"
   exit 1
 fi
 

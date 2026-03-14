@@ -9,7 +9,7 @@ Usage:
 
 Output structure:
     split-output/
-        vol37-iss1/
+        37.1/
             01-editorial.pdf
             02-therapy-for-the-revolution.pdf
             03-all-those-useless-passions.pdf
@@ -45,7 +45,7 @@ def split_pdf(toc_data, output_dir):
     vol = toc_data.get('volume', 0)
     iss = toc_data.get('issue', 0)
 
-    issue_dir = os.path.join(output_dir, f"vol{vol:02d}-iss{iss}")
+    issue_dir = os.path.join(output_dir, f"{vol}.{iss}")
     os.makedirs(issue_dir, exist_ok=True)
 
     doc = fitz.open(source_pdf)

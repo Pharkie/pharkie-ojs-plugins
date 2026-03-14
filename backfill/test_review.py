@@ -23,7 +23,7 @@ IMPORT_SCRIPT = os.path.join(SCRIPT_DIR, 'import_review.py')
 
 def make_toc(tmpdir, vol=37, iss=1, articles=None):
     """Create a toc.json in an appropriately-named subdirectory."""
-    issue_dir = os.path.join(tmpdir, f'vol{vol}-iss{iss}')
+    issue_dir = os.path.join(tmpdir, f'{vol}.{iss}')
     os.makedirs(issue_dir, exist_ok=True)
     toc_path = os.path.join(issue_dir, 'toc.json')
 

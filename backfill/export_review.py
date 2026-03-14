@@ -11,7 +11,7 @@ stored in toc.json. This survives row reordering, title edits, and
 re-exports.
 
 Usage:
-    python backfill/export_review.py backfill/output/vol37-iss1/toc.json -o review.csv
+    python backfill/export_review.py backfill/output/37.1/toc.json -o review.csv
     python backfill/export_review.py backfill/output/*/toc.json -o review.csv
 """
 
@@ -44,15 +44,9 @@ def write_json_atomic(path, data):
 
 def assign_review_ids(toc_path, toc):
     """Assign _review_id to each article if not already set. Returns True if toc was modified."""
-    # Extract vol/issue from directory name (vol37-iss1 -> v37i1)
-    dirname = os.path.basename(os.path.dirname(os.path.abspath(toc_path)))
-    m = re.search(r'vol(\d+)-iss(\d+)', dirname)
-    if m:
-        vol, iss = m.group(1), m.group(2)
-    else:
-        # Fallback: use toc metadata if available
-        vol = toc.get('volume', '0')
-        iss = toc.get('issue', '0')
+    # Extract vol/issue from toc metadata (preferred) or directory name
+    vol = toc.get('volume', '0')
+    iss = toc.get('issue', '0')
 
     modified = False
     for i, article in enumerate(toc.get('articles', [])):

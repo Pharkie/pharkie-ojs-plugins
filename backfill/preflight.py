@@ -131,7 +131,7 @@ def analyse_pdf(filepath):
 
     # Suggested filename
     if vol is not None and iss is not None:
-        result['suggested_name'] = f"vol{vol:02d}-iss{iss}.pdf"
+        result['suggested_name'] = f"{vol}.{iss}.pdf"
     else:
         result['suggested_name'] = None
 
