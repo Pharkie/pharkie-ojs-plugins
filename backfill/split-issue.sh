@@ -1,9 +1,8 @@
 #!/bin/bash
 # Split a whole-issue PDF into per-article PDFs and OJS import XML.
 #
-# Takes one or more issue PDFs → validates → parses TOC → splits into
-# individual article PDFs → normalizes author names → generates OJS XML.
-# Does NOT touch OJS — use backfill/import.sh to load into OJS.
+# Requires toc.json to already exist in backfill/output/<vol>.<iss>/.
+# See docs/backfill-toc-guide.md for how to create toc.json files.
 #
 # Usage:
 #   backfill/split-issue.sh <issue.pdf>                    # Split one issue
@@ -11,19 +10,16 @@
 #   backfill/split-issue.sh <issue.pdf> --no-pdfs           # XML without embedded PDFs (fast, for testing XML structure)
 #   backfill/split-issue.sh <issue.pdf> --only=split        # Run one step only
 #   backfill/split-issue.sh <issue.pdf> --stop-after=normalize  # Run through normalize, export review CSV, stop
-#   backfill/split-issue.sh <issue.pdf> --page-offset=2     # Manual page offset (when auto-detection fails)
-#   backfill/split-issue.sh <issue.pdf> --toc-file=toc.json  # Skip preflight+parse, use hand-written TOC
 #
 # Steps (run in order):
-#   preflight    — validate PDF is readable, has TOC, extract vol/issue
-#   parse_toc    — extract article titles, authors, page ranges, abstracts, keywords
+#   preflight    — validate PDF is readable, extract vol/issue
 #   split        — split issue PDF into one PDF per article
 #   verify_split — check each split PDF's first page matches its TOC title
-#   normalize    — normalize author names against registry (backfill/authors.json)
+#   normalize    — normalize author names
 #   generate_xml — generate OJS Native XML with base64-embedded PDFs
 #
 # Output: backfill/output/<vol>.<iss>/
-#   toc.json, per-article PDFs, import.xml
+#   toc.json (pre-existing), per-article PDFs, import.xml
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,27 +30,15 @@ cleanup() { rm -f "${CLEANUP_FILES[@]}"; }
 trap cleanup EXIT
 
 # --- Parse arguments ---
-VALID_STEPS="preflight parse_toc split verify_split normalize generate_xml"
+VALID_STEPS="preflight split verify_split normalize generate_xml"
 
 PDFS=()
 NO_PDFS=""
 ONLY_STEP=""
 STOP_AFTER=""
-PAGE_OFFSET=""
-TOC_FILE=""
 for arg in "$@"; do
   case "$arg" in
     --no-pdfs) NO_PDFS="--no-pdfs" ;;
-    --toc-file=*)
-      TOC_FILE="${arg#--toc-file=}"
-      if [ ! -f "$TOC_FILE" ]; then
-        echo "ERROR: TOC file not found: $TOC_FILE"
-        exit 1
-      fi
-      ;;
-    --page-offset=*)
-      PAGE_OFFSET="${arg#--page-offset=}"
-      ;;
     --only=*)
       ONLY_STEP="${arg#--only=}"
       if ! echo "$VALID_STEPS" | grep -qw "$ONLY_STEP"; then
@@ -111,8 +95,6 @@ echo "Output: $OUTPUT_DIR"
 [ -n "$NO_PDFS" ] && echo "Mode: --no-pdfs (XML without embedded PDFs)"
 [ -n "$ONLY_STEP" ] && echo "Step: $ONLY_STEP only"
 [ -n "$STOP_AFTER" ] && echo "Stop after: $STOP_AFTER"
-[ -n "$PAGE_OFFSET" ] && echo "Page offset: $PAGE_OFFSET (manual)"
-[ -n "$TOC_FILE" ] && echo "TOC file: $TOC_FILE (skipping preflight + parse_toc)"
 echo "=========================================="
 echo
 
@@ -145,8 +127,8 @@ for PDF in "${EXPANDED_PDFS[@]}"; do
   echo "Processing ($PDF_NUM/${#EXPANDED_PDFS[@]}): $(basename "$PDF")"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Step 1: Preflight (skipped with --toc-file)
-  if should_run "preflight" && [ -z "$TOC_FILE" ]; then
+  # Step 1: Preflight
+  if should_run "preflight"; then
     echo
     echo "--- Step 1: Preflight ---"
     PREFLIGHT_TMP=$(mktemp /tmp/preflight-XXXXXX.json)
@@ -157,7 +139,6 @@ for PDF in "${EXPANDED_PDFS[@]}"; do
       FAILED=$((FAILED + 1))
       continue
     fi
-    # Check for errors in the JSON output
     if python3 -c "
 import sys, json
 data = json.load(open(sys.argv[1]))
@@ -179,86 +160,8 @@ sys.exit(1 if errors else 0)
     continue
   fi
 
-  # Step 2: Parse TOC (or use --toc-file / auto-discovered manual TOC)
-  # Auto-discover manual TOC if no --toc-file was given
-  EFFECTIVE_TOC_FILE="$TOC_FILE"
-  if [ -z "$EFFECTIVE_TOC_FILE" ]; then
-    # Sidecar manual TOC: "16.1.pdf" → "16.1.toc.json" in same directory
-    SIDECAR_TOC="${PDF_ABS%.pdf}.toc.json"
-    if [ -f "$SIDECAR_TOC" ]; then
-      EFFECTIVE_TOC_FILE="$SIDECAR_TOC"
-      echo "  (using sidecar TOC: $(basename "$SIDECAR_TOC"))"
-    fi
-  fi
-  if [ -n "$EFFECTIVE_TOC_FILE" ]; then
-    echo
-    echo "--- Step 2: Using provided TOC file ---"
-    TOC_FILE_ABS="$(cd "$(dirname "$EFFECTIVE_TOC_FILE")" && pwd)/$(basename "$EFFECTIVE_TOC_FILE")"
-    VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TOC_FILE_ABS")
-    ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TOC_FILE_ABS")
-    ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
-    mkdir -p "$ISSUE_DIR"
-    # Copy TOC file, updating source_pdf, and split Book Reviews into
-    # individual reviews (sidecar TOCs often have a single "Book Reviews" entry)
-    python3 -c "
-import json, sys, fitz
-from backfill.parse_toc import parse_book_reviews, extract_reviewer_name, apply_toc_overrides, SECTION_BOOK_REVIEWS, SECTION_BOOK_REVIEW_EDITORIAL
-
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-data['source_pdf'] = sys.argv[2]
-
-# Split any Book Reviews / Book Review Editorial entries into individual reviews
-doc = fitz.open(sys.argv[2])
-final = []
-for art in data.get('articles', []):
-    if art.get('section') in (SECTION_BOOK_REVIEWS, SECTION_BOOK_REVIEW_EDITORIAL) and not art.get('book_title'):
-        br_start = art.get('pdf_page_start', 0)
-        br_end = art.get('pdf_page_end', len(doc) - 1)
-        reviews = parse_book_reviews(doc, br_start, br_end)
-        if reviews:
-            # Keep original entry as Book Review Editorial (trimmed)
-            art['section'] = SECTION_BOOK_REVIEW_EDITORIAL
-            new_end = reviews[0]['pdf_page_start'] - 1
-            art['pdf_page_end'] = max(new_end, art['pdf_page_start'])
-            final.append(art)
-            final.extend(reviews)
-            continue
-    final.append(art)
-doc.close()
-data['articles'] = final
-
-# Apply manual reviewer overrides
-vol = data.get('volume', 0)
-iss = data.get('issue', 0)
-apply_toc_overrides(final, vol, iss)
-
-with open(sys.argv[3], 'w') as f:
-    json.dump(data, f, indent=2)
-" "$TOC_FILE_ABS" "$PDF_ABS" "$ISSUE_DIR/toc.json"
-    echo "  Volume $VOL, Issue $ISS → $ISSUE_DIR"
-  elif should_run "parse_toc"; then
-    echo
-    echo "--- Step 2: Parse TOC ---"
-    TEMP_TOC=$(mktemp /tmp/toc-XXXXXX.json)
-    CLEANUP_FILES+=("$TEMP_TOC")
-    PAGE_OFFSET_ARG=""
-    [ -n "$PAGE_OFFSET" ] && PAGE_OFFSET_ARG="--page-offset=$PAGE_OFFSET"
-    if ! python3 "$SCRIPT_DIR/parse_toc.py" "$PDF_ABS" -o "$TEMP_TOC" $PAGE_OFFSET_ARG; then
-      echo "  ERROR: TOC parsing failed"
-      rm -f "$TEMP_TOC"
-      FAILED=$((FAILED + 1))
-      continue
-    fi
-    VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TEMP_TOC")
-    ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TEMP_TOC")
-    ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
-    mkdir -p "$ISSUE_DIR"
-    mv "$TEMP_TOC" "$ISSUE_DIR/toc.json"
-    echo "  Volume $VOL, Issue $ISS → $ISSUE_DIR"
-  else
-    # Detect vol/iss from PDF to find existing output dir
-    VOL=$(python3 -c "
+  # Detect vol/iss from PDF to find output dir
+  VOL=$(python3 -c "
 import fitz, re, sys
 doc = fitz.open(sys.argv[1])
 for i in range(min(3, len(doc))):
@@ -267,7 +170,6 @@ for i in range(min(3, len(doc))):
         v, s = int(m.group(1)), int(m.group(2))
         if 1 <= v <= 50 and 1 <= s <= 4:
             print(v); sys.exit()
-# Single-issue format (Vol 1-5)
 for i in range(min(3, len(doc))):
     m = re.search(r'Analysis\s+(\d{1,2})\s', doc[i].get_text(), re.IGNORECASE)
     if m:
@@ -276,7 +178,7 @@ for i in range(min(3, len(doc))):
             print(v); sys.exit()
 print(0)
 " "$PDF_ABS")
-    ISS=$(python3 -c "
+  ISS=$(python3 -c "
 import fitz, re, sys
 doc = fitz.open(sys.argv[1])
 for i in range(min(3, len(doc))):
@@ -285,7 +187,6 @@ for i in range(min(3, len(doc))):
         v, s = int(m.group(1)), int(m.group(2))
         if 1 <= v <= 50 and 1 <= s <= 4:
             print(s); sys.exit()
-# Single-issue format (Vol 1-5): always issue 1
 for i in range(min(3, len(doc))):
     m = re.search(r'Analysis\s+(\d{1,2})\s', doc[i].get_text(), re.IGNORECASE)
     if m:
@@ -294,25 +195,31 @@ for i in range(min(3, len(doc))):
             print(1); sys.exit()
 print(0)
 " "$PDF_ABS")
-    ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
-  fi
+  ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
 
   TOC_JSON="$ISSUE_DIR/toc.json"
   if [ ! -f "$TOC_JSON" ]; then
     echo "  ERROR: No toc.json found at $TOC_JSON"
+    echo "  Create it first — see docs/backfill-toc-guide.md"
     FAILED=$((FAILED + 1))
     continue
   fi
 
-  if should_stop_after "parse_toc"; then
-    SUCCEEDED=$((SUCCEEDED + 1))
-    continue
-  fi
+  # Update source_pdf path in toc.json to point to the current PDF
+  python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+data['source_pdf'] = sys.argv[2]
+with open(sys.argv[1], 'w') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+" "$TOC_JSON" "$PDF_ABS"
+  echo "  Volume $VOL, Issue $ISS → $ISSUE_DIR"
 
-  # Step 3: Split PDF
+  # Step 2: Split PDF
   if should_run "split"; then
     echo
-    echo "--- Step 3: Split PDF ---"
+    echo "--- Step 2: Split PDF ---"
     if ! python3 "$SCRIPT_DIR/split.py" "$TOC_JSON" -o "$OUTPUT_DIR"; then
       echo "  ERROR: PDF splitting failed"
       FAILED=$((FAILED + 1))
@@ -326,13 +233,13 @@ print(0)
     continue
   fi
 
-  # Step 3b: Verify split PDFs match TOC titles
+  # Step 2b: Verify split PDFs match TOC titles
   if should_run "verify_split"; then
     echo
-    echo "--- Step 3b: Verify split ---"
+    echo "--- Step 2b: Verify split ---"
     if ! python3 "$SCRIPT_DIR/verify_split.py" "$TOC_JSON"; then
       echo "  WARNING: Some split PDFs don't match their TOC titles"
-      echo "  Check page offsets and TOC parsing before importing."
+      echo "  Check page offsets and TOC entries before importing."
     fi
   fi
 
@@ -341,10 +248,10 @@ print(0)
     continue
   fi
 
-  # Step 4: Normalize authors
+  # Step 3: Normalize authors
   if should_run "normalize"; then
     echo
-    echo "--- Step 4: Normalize authors ---"
+    echo "--- Step 3: Normalize authors ---"
     python3 "$SCRIPT_DIR/author_normalize.py" "$TOC_JSON"
   fi
 
@@ -356,18 +263,14 @@ print(0)
     python3 "$SCRIPT_DIR/export_review.py" "$TOC_JSON" -o "$REVIEW_CSV"
     echo
     echo "  Review CSV: $REVIEW_CSV"
-    echo "  Edit in Google Sheets, then run:"
-    echo "    python3 backfill/import_review.py $REVIEW_CSV"
-    echo "    ./backfill/split-issue.sh $PDF_ABS --only=normalize"
-    echo "    ./backfill/split-issue.sh $PDF_ABS --only=generate_xml"
     SUCCEEDED=$((SUCCEEDED + 1))
     continue
   fi
 
-  # Step 5: Generate XML
+  # Step 4: Generate XML
   if should_run "generate_xml"; then
     echo
-    echo "--- Step 5: Generate OJS XML ---"
+    echo "--- Step 4: Generate OJS XML ---"
     XML_OUT="$ISSUE_DIR/import.xml"
     if ! python3 "$SCRIPT_DIR/generate_xml.py" "$TOC_JSON" -o "$XML_OUT" $NO_PDFS; then
       echo "  ERROR: XML generation failed"

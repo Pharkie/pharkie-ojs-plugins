@@ -499,7 +499,7 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
 def main():
     parser = argparse.ArgumentParser(
         description='Generate OJS Native XML from TOC JSON')
-    parser.add_argument('toc_json', help='TOC JSON file (from parse_toc.py + split.py)')
+    parser.add_argument('toc_json', help='TOC JSON file (see docs/backfill-toc-guide.md)')
     parser.add_argument('--output', '-o', help='Output XML file (default: stdout)')
     parser.add_argument('--no-pdfs', action='store_true',
                         help='Skip PDF embedding (much faster, for testing XML structure)')

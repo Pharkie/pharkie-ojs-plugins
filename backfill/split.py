@@ -2,7 +2,7 @@
 """
 Step 2b: Split an issue PDF into individual article PDFs.
 
-Takes the TOC JSON from parse_toc.py and the source PDF, outputs one PDF per article.
+Takes the TOC JSON see docs/backfill-toc-guide.md and the source PDF, outputs one PDF per article.
 
 Usage:
     python backfill/split.py <toc.json> [--output-dir ./split-output]
@@ -108,7 +108,7 @@ def split_pdf(toc_data, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description='Split issue PDF into article PDFs')
-    parser.add_argument('toc_json', help='TOC JSON file from parse_toc.py')
+    parser.add_argument('toc_json', help='TOC JSON file see docs/backfill-toc-guide.md')
     parser.add_argument('--output-dir', '-o', default='./backfill/output',
                         help='Output directory (default: ./backfill/output)')
     args = parser.parse_args()
