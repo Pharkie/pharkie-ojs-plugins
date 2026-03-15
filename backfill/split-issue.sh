@@ -198,12 +198,41 @@ sys.exit(1 if errors else 0)
     ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TOC_FILE_ABS")
     ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
     mkdir -p "$ISSUE_DIR"
-    # Copy TOC file, updating source_pdf to point to the actual PDF
+    # Copy TOC file, updating source_pdf, and split Book Reviews into
+    # individual reviews (sidecar TOCs often have a single "Book Reviews" entry)
     python3 -c "
-import json, sys
+import json, sys, fitz
+from backfill.parse_toc import parse_book_reviews, extract_reviewer_name, apply_toc_overrides, SECTION_BOOK_REVIEWS, SECTION_BOOK_REVIEW_EDITORIAL
+
 with open(sys.argv[1]) as f:
     data = json.load(f)
 data['source_pdf'] = sys.argv[2]
+
+# Split any Book Reviews / Book Review Editorial entries into individual reviews
+doc = fitz.open(sys.argv[2])
+final = []
+for art in data.get('articles', []):
+    if art.get('section') in (SECTION_BOOK_REVIEWS, SECTION_BOOK_REVIEW_EDITORIAL) and not art.get('book_title'):
+        br_start = art.get('pdf_page_start', 0)
+        br_end = art.get('pdf_page_end', len(doc) - 1)
+        reviews = parse_book_reviews(doc, br_start, br_end)
+        if reviews:
+            # Keep original entry as Book Review Editorial (trimmed)
+            art['section'] = SECTION_BOOK_REVIEW_EDITORIAL
+            new_end = reviews[0]['pdf_page_start'] - 1
+            art['pdf_page_end'] = max(new_end, art['pdf_page_start'])
+            final.append(art)
+            final.extend(reviews)
+            continue
+    final.append(art)
+doc.close()
+data['articles'] = final
+
+# Apply manual reviewer overrides
+vol = data.get('volume', 0)
+iss = data.get('issue', 0)
+apply_toc_overrides(final, vol, iss)
+
 with open(sys.argv[3], 'w') as f:
     json.dump(data, f, indent=2)
 " "$TOC_FILE_ABS" "$PDF_ABS" "$ISSUE_DIR/toc.json"

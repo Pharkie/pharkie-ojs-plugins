@@ -14,6 +14,14 @@ from backfill.parse_toc import (
     find_page_offset,
     parse_book_reviews,
     extract_reviewer_name,
+    _strip_markers,
+    _try_split_trailing_author,
+    _get_known_authors,
+    _strip_publisher_from_author,
+    _validate_review_titles,
+    _is_name_like,
+    _is_reviewer_name_like,
+    _match_known_author,
     SECTION_EDITORIAL,
     SECTION_ARTICLES,
     SECTION_BOOK_REVIEW_EDITORIAL,
@@ -485,3 +493,322 @@ class TestExtractReviewerName:
         doc = _make_mock_doc(pages)
         reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
         assert reviewer is None
+
+    def test_skips_intentionally_left_blank(self):
+        """Fix 3c: 'page intentionally left blank' should not be returned."""
+        pages = [
+            (
+                "This is review text.\n"
+                "\n"
+                "Jane Critic\n"
+                "\n"
+                "This page intentionally left blank\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Jane Critic'
+
+    def test_uses_is_name_like_instead_of_strict_regex(self):
+        """Fix 5: _is_name_like is more permissive than _REVIEWER_NAME_RE."""
+        pages = [
+            (
+                "This is some review discussion that goes on for a while.\n"
+                "More text about the book and its arguments and themes here.\n"
+                "\n"
+                "Greg Madison\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Greg Madison'
+
+    def test_consecutive_long_lines_needed_to_stop(self):
+        """Fix 5: Need 3+ consecutive long lines to stop, not just 1."""
+        pages = [
+            (
+                "Short intro.\n"
+                "This is a single long body text line that exceeds fifty characters in length easily.\n"
+                "\n"
+                "Mike Reviewer\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Mike Reviewer'
+
+
+class TestStripMarkers:
+    """Fix 2: Strip asterisks/stars from book titles."""
+
+    def test_strip_leading_asterisk(self):
+        assert _strip_markers('*The Art of Being') == 'The Art of Being'
+
+    def test_strip_trailing_asterisk(self):
+        assert _strip_markers('The Art of Being*') == 'The Art of Being'
+
+    def test_strip_double_asterisks(self):
+        assert _strip_markers('**Title Here**') == 'Title Here'
+
+    def test_strip_star_character(self):
+        assert _strip_markers('\u2605Title Here\u2605') == 'Title Here'
+
+    def test_no_markers(self):
+        assert _strip_markers('Normal Title') == 'Normal Title'
+
+    def test_none_passthrough(self):
+        assert _strip_markers(None) is None
+
+    def test_empty_string(self):
+        assert _strip_markers('') == ''
+
+
+class TestClassifyEntryIndex:
+    """Fix 3d: Index entries should be skipped."""
+
+    def test_index_skipped(self):
+        section, skip = classify_entry('Index')
+        assert skip is True
+
+    def test_journal_index_skipped(self):
+        section, skip = classify_entry('Journal Index')
+        assert skip is True
+
+    def test_index_case_insensitive(self):
+        _, skip = classify_entry('INDEX')
+        assert skip is True
+
+
+class TestStripPublisherFromAuthor:
+    """Fix 4: Publisher/location leaking into book_author."""
+
+    def test_known_publisher_stripped(self):
+        reviews = [{'book_author': 'John Smith. London: Routledge'}]
+        _strip_publisher_from_author(reviews)
+        assert reviews[0]['book_author'] == 'John Smith'
+
+    def test_standalone_publisher_stripped(self):
+        reviews = [{'book_author': 'John Smith Erlbaum Associates'}]
+        _strip_publisher_from_author(reviews)
+        assert reviews[0]['book_author'] == 'John Smith'
+
+    def test_series_name_stripped(self):
+        reviews = [{'book_author': 'Michael Inwood Past Masters'}]
+        _strip_publisher_from_author(reviews)
+        assert reviews[0]['book_author'] == 'Michael Inwood'
+
+    def test_city_without_period_stripped(self):
+        reviews = [{'book_author': 'Ian Parker London'}]
+        _strip_publisher_from_author(reviews)
+        assert reviews[0]['book_author'] == 'Ian Parker'
+
+    def test_state_abbreviation_stripped(self):
+        reviews = [{'book_author': 'Some Press, Boulder, CO.'}]
+        _strip_publisher_from_author(reviews)
+        assert reviews[0]['book_author'] == 'Some Press, Boulder'
+
+
+class TestTrySplitTrailingAuthor:
+    """Fix 6: Author names embedded in article titles."""
+
+    def test_no_split_short_title(self):
+        """Don't split if remaining title would be too short."""
+        title, author = _try_split_trailing_author('Short Jane Smith')
+        assert author is None
+        assert title == 'Short Jane Smith'
+
+    def test_split_with_name_like_suffix(self):
+        """Split when trailing words look like a name."""
+        title, author = _try_split_trailing_author(
+            'Therapy for the Revolution and Its Discontents Greg Madison'
+        )
+        assert author == 'Greg Madison'
+        assert 'Therapy' in title
+
+    def test_no_split_when_all_title(self):
+        """Don't split genuine titles that happen to have capitalized words."""
+        title, author = _try_split_trailing_author(
+            'Being and Time Revisited'
+        )
+        assert author is None
+
+
+class TestIsReviewerNameLike:
+    """Test _is_reviewer_name_like() permissive reviewer name check."""
+
+    def test_simple_name(self):
+        assert _is_reviewer_name_like('John Smith') is True
+
+    def test_dr_prefix(self):
+        assert _is_reviewer_name_like('Dr John Smith') is True
+
+    def test_prof_prefix(self):
+        assert _is_reviewer_name_like('Prof Sarah Jones') is True
+
+    def test_professor_prefix(self):
+        assert _is_reviewer_name_like('Professor Michael Brown') is True
+
+    def test_single_word_name(self):
+        assert _is_reviewer_name_like('Thompson') is True
+
+    def test_long_name_with_credentials(self):
+        """Names with credentials like MA PhD should be allowed up to 10 words."""
+        assert _is_reviewer_name_like('Dr John Smith MA PhD UKCP') is True
+
+    def test_rejects_body_text(self):
+        assert _is_reviewer_name_like('This is clearly a sentence about something.') is False
+
+    def test_rejects_colon(self):
+        assert _is_reviewer_name_like('Title: Subtitle') is False
+
+    def test_rejects_question_mark(self):
+        assert _is_reviewer_name_like('What is Being?') is False
+
+    def test_rejects_title_starter(self):
+        assert _is_reviewer_name_like('The Art of Being') is False
+
+    def test_rejects_empty(self):
+        assert _is_reviewer_name_like('') is False
+
+    def test_rejects_references(self):
+        assert _is_reviewer_name_like('References') is False
+
+
+class TestExtractReviewerNameImproved:
+    """Test improved extract_reviewer_name() with three-pass strategy."""
+
+    def test_finds_name_after_many_long_lines(self):
+        """Pass 1/2: reviewer name below multiple long body-text lines."""
+        pages = [
+            (
+                "This review examines the themes of existential anxiety and authentic living.\n"
+                "The author provides a compelling analysis of Heidegger's contribution to modern therapy.\n"
+                "Drawing on extensive clinical examples, the work demonstrates practical applications.\n"
+                "The integration of philosophical concepts with therapeutic practice is masterfully done.\n"
+                "Each chapter builds upon the previous, creating a cohesive theoretical framework.\n"
+                "\n"
+                "Sarah Thompson\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Sarah Thompson'
+
+    def test_finds_name_on_last_page_of_multipage_review(self):
+        """Name on last page, after long body text on earlier pages."""
+        pages = [
+            (
+                "This is a very long review that spans multiple pages discussing various themes.\n"
+                "The author provides extensive analysis of phenomenological approaches to therapy.\n"
+                "More text that is quite long and detailed about existential concepts here.\n"
+                "Additional long paragraphs discussing the philosophical underpinnings of the work.\n"
+            ),
+            (
+                "Continuing the review with more detailed analysis and discussion of the text.\n"
+                "Further examination of how the ideas presented apply to clinical practice.\n"
+                "The reviewer finds that the book makes a significant contribution to the field.\n"
+                "\n"
+                "Jane Critic\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=1)
+        assert reviewer == 'Jane Critic'
+
+    def test_finds_name_with_dr_prefix(self):
+        """Reviewer with Dr prefix should be found."""
+        pages = [
+            (
+                "This review covers important themes in existential therapy and clinical practice.\n"
+                "The arguments presented are well-structured and convincing throughout the book.\n"
+                "\n"
+                "Dr Michael Brown\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Dr Michael Brown'
+
+    def test_name_before_references_section(self):
+        """Reviewer name should be found before References, not after."""
+        pages = [
+            (
+                "This is a detailed book review with thorough analysis of the content.\n"
+                "The text explores many important themes in psychotherapy and philosophy.\n"
+                "\n"
+                "Tom Reviewer\n"
+                "\n"
+                "References\n"
+                "Smith, J. (2020). Some book title. London: Routledge.\n"
+                "Jones, A. (2021). Another important book. Oxford: Oxford University Press.\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer == 'Tom Reviewer'
+
+    def test_returns_none_for_no_name(self):
+        """No reviewer name — all body text."""
+        pages = [
+            (
+                "This is just body text about a book that goes on and on without any name.\n"
+                "More body text here about the review content that is quite detailed and long.\n"
+                "Even more analysis of themes that fills the entire page without attribution.\n"
+            ),
+        ]
+        doc = _make_mock_doc(pages)
+        reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
+        assert reviewer is None
+
+
+class TestValidateReviewTitlesGarbage:
+    """BRE garbage rejection in _validate_review_titles()."""
+
+    def test_rejects_bare_editors_as_author(self):
+        """Reject when entire book_author is just '(Editors)'."""
+        reviews = [{'book_title': 'Some Title', 'book_author': '(Editors)'}]
+        assert _validate_review_titles(reviews) == []
+
+    def test_keeps_author_with_eds(self):
+        """Authors with (Eds) notation are legitimate."""
+        reviews = [{'book_title': 'Some Title', 'book_author': 'Smith and Jones (Eds)'}]
+        assert len(_validate_review_titles(reviews)) == 1
+
+    def test_rejects_hardback_in_author(self):
+        reviews = [{'book_title': 'Some Title', 'book_author': 'Hardback Edition'}]
+        assert _validate_review_titles(reviews) == []
+
+    def test_rejects_edited_by_in_author(self):
+        reviews = [{'book_title': 'Some Title', 'book_author': 'edited by Smith'}]
+        assert _validate_review_titles(reviews) == []
+
+    def test_rejects_year_dot_in_author(self):
+        reviews = [{'book_title': 'Some Title', 'book_author': 'Smith (2020). London'}]
+        assert _validate_review_titles(reviews) == []
+
+    def test_rejects_film_as_author(self):
+        reviews = [{'book_title': 'Some Film Title', 'book_author': 'Film'}]
+        assert _validate_review_titles(reviews) == []
+
+    def test_keeps_valid_review(self):
+        reviews = [{'book_title': 'Valid Book', 'book_author': 'John Smith'}]
+        assert len(_validate_review_titles(reviews)) == 1
+
+
+class TestMatchKnownAuthor:
+    """Test _match_known_author() with normalized lookup."""
+
+    def test_exact_match(self):
+        known = _get_known_authors()
+        if known:
+            name = next(iter(known))
+            assert _match_known_author(name) == name
+
+    def test_whitespace_tolerance(self):
+        known = _get_known_authors()
+        if known:
+            name = next(iter(known))
+            assert _match_known_author(f'  {name}  ') == name
+
+    def test_no_match(self):
+        assert _match_known_author('Xyzzy Nonexistent Person') is None

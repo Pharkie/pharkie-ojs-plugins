@@ -55,7 +55,7 @@ _KNOWN_CITIES = frozenset({
 })
 
 _KNOWN_PUBLISHERS = frozenset({
-    'Sage', 'Routledge', 'Penguin', 'Vintage', 'Karnac', 'PCCS',
+    'Sage', 'Routledge', 'Penguin', 'Vintage', 'Karnac', 'PCCS', 'Erlbaum',
 })
 
 # Backmatter markers — stop parsing book reviews at these boundaries
@@ -112,8 +112,10 @@ _PUB_NOCITY_RE = re.compile(
     r'^(.+?)\s+\((\d{4})\)\.?\s+([A-Z][A-Za-z &]+?)(?:\s+[\d£€$].+)?\.?\s*$'
 )
 # 1990s inverted: "Title by Author, Publisher (Year)."
+# After year+paren, allow optional page-count/price info (e.g. "599 pp, £20.00")
 _PUB_INVERTED_A_RE = re.compile(
-    r'^\*?\s*(.+?)[\s.]+[Bb]y\s+(.+?),\s*(.+?)\s*[\(,]\s*(\d{4})\)?[.,]'
+    r'^\*?\s*(.+?)[\s.]+[Bb]y\s+(.+?),\s*(.+?)\s*[\(,]\s*(\d{4})\)?'
+    r'(?:\s+\d+\s*pp[^.]*)?[.,]'
 )
 # Inverted B: "Title by Author. Year. Publisher."
 _PUB_INVERTED_B_RE = re.compile(
@@ -127,6 +129,53 @@ _PUB_INVERTED_C_RE = re.compile(
 # Star review patterns
 _STAR_LINE_RE = re.compile(r'^\s*★\s*(.+)$')
 _YEAR_SPLIT_RE = re.compile(r'[.,]\s*(\d{4})[¹²³⁴⁵⁶⁷⁸⁹⁰]*[.,\s]\s*(.+)$')
+
+_KNOWN_AUTHORS = None
+_KNOWN_AUTHORS_NORMALIZED = None
+
+
+def _get_known_authors():
+    """Lazy-load the set of all known author names from authors.json."""
+    global _KNOWN_AUTHORS
+    if _KNOWN_AUTHORS is None:
+        _KNOWN_AUTHORS = set()
+        authors_path = os.path.join(os.path.dirname(__file__), 'authors.json')
+        try:
+            with open(authors_path) as f:
+                registry = json.load(f)
+            for name, info in registry.items():
+                _KNOWN_AUTHORS.add(name)
+                for variant in info.get('variants', []):
+                    _KNOWN_AUTHORS.add(variant)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+    return _KNOWN_AUTHORS
+
+
+def _get_known_authors_normalized():
+    """Lazy-load a dict mapping normalized (stripped, title-cased) names to originals."""
+    global _KNOWN_AUTHORS_NORMALIZED
+    if _KNOWN_AUTHORS_NORMALIZED is None:
+        _KNOWN_AUTHORS_NORMALIZED = {}
+        for name in _get_known_authors():
+            key = name.strip().title()
+            _KNOWN_AUTHORS_NORMALIZED[key] = name
+    return _KNOWN_AUTHORS_NORMALIZED
+
+
+def _match_known_author(line):
+    """Check if line matches a known author (exact or normalized).
+
+    Returns the canonical name if matched, else None.
+    """
+    stripped = line.strip()
+    if stripped in _get_known_authors():
+        return stripped
+    normalized = _get_known_authors_normalized()
+    key = stripped.title()
+    if key in normalized:
+        return normalized[key]
+    return None
 
 
 def find_toc_page(doc):
@@ -283,6 +332,55 @@ def _is_name_like(text):
     # (names use lowercase: "van", "de", "du"; titles capitalize: "Of", "The", "And")
     cap_function = {'The', 'And', 'Or', 'In', 'Of', 'For', 'To', 'With', 'On', 'At', 'By', 'As'}
     if any(w in cap_function for w in words[1:]):
+        return False
+    return True
+
+
+def _is_reviewer_name_like(line):
+    """More permissive name check for reviewer bylines.
+
+    Strips title prefixes (Dr, Prof, Professor), allows single-word names,
+    tolerates up to 10 words (handles "Dr John Smith MA PhD"), but still
+    rejects lines with sentence punctuation or title-word starters.
+    """
+    text = line.strip()
+    if not text:
+        return False
+    if len(text) > _MAX_NAME_LENGTH:
+        return False
+    # Reject sentence punctuation
+    if any(c in text for c in ':?!'):
+        return False
+    # Strip title prefixes
+    for prefix in ('Dr ', 'Prof ', 'Professor '):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            break
+    if not text or not text[0].isupper():
+        return False
+    words = text.split()
+    if len(words) < 1 or len(words) > 10:
+        return False
+    # Reject title-word starters (same as _is_name_like)
+    first_lower = text.lower()
+    title_starters = (
+        'a ', 'an ', 'the ', 'on ', 'some ', 'towards', 'toward',
+        'is ', 'what ', 'why ', 'how ', 'from ', 'between ', 'beyond ',
+        'being ', 'not ', 'can ', 'could ', 'in ', 'of ', 'for ',
+    )
+    if any(first_lower.startswith(s) for s in title_starters):
+        return False
+    # Reject journal/section names
+    if text.startswith('Existential') or text.startswith('Journal'):
+        return False
+    if text.lower() in _FORMAT_B_SECTION_HEADERS | {'references', 'bibliography'}:
+        return False
+    # Allow single-word names but reject if all lowercase
+    if len(words) == 1:
+        return words[0][0].isupper()
+    # Reject too many lowercase content words (body text)
+    lowercase_words = [w for w in words if w[0].islower() and len(w) > 3]
+    if len(lowercase_words) > 2:
         return False
     return True
 
@@ -902,6 +1000,30 @@ def _parse_spaced_format_a(all_lines, page_line_indices):
     return entries
 
 
+def _try_split_trailing_author(text):
+    """Try to split a trailing author name from the end of a title string.
+
+    Returns (title, author) if a split is found, or (text, None) if not.
+    """
+    # Try known authors first (longest match)
+    known = _get_known_authors()
+    for name in sorted(known, key=len, reverse=True):
+        if text.endswith(name) and len(text) > len(name) + 20:
+            title_part = text[:-len(name)].rstrip(' .')
+            if title_part:
+                return (title_part, name)
+
+    # Fallback: try _is_name_like on successively shorter suffixes
+    words = text.split()
+    for n in range(2, min(6, len(words))):
+        candidate = ' '.join(words[-n:])
+        remaining = ' '.join(words[:-n])
+        if _is_name_like(candidate) and len(remaining) > 20:
+            return (remaining.rstrip(' .'), candidate)
+
+    return (text, None)
+
+
 def _parse_spaced_pages_on_authors(all_lines, page_line_indices):
     """Format B: page numbers on author lines, titles on separate lines.
 
@@ -938,9 +1060,12 @@ def _parse_spaced_pages_on_authors(all_lines, page_line_indices):
                 title = text_part
                 author = None
         else:
-            # This page-bearing line is a title (e.g. "Editorial    1", "Book Reviews   159")
-            title = text_part
-            author = None
+            # This page-bearing line might be "Title Author" concatenated
+            # Strip trailing dot-leaders before trying to split
+            clean_text = re.sub(r'\s*\.{3,}[\s.]*$', '', text_part).strip()
+            title, author = _try_split_trailing_author(clean_text)
+            if author is None:
+                title = text_part
 
         entries.append({'title': title, 'author': author, 'page': page})
 
@@ -1222,6 +1347,9 @@ def classify_entry(title):
     if title_lower not in known_section_words and len(title_lower.split()) <= 2:
         print(f"WARNING: Unknown short TOC entry '{title}' — classifying as Articles. "
               f"May be a new section type.", file=sys.stderr)
+    # Index entries — skip from output
+    if re.match(r'(?i)(journal\s+)?index\b', title):
+        return (SECTION_ARTICLES, True)  # skip=True
     return (SECTION_ARTICLES, False)
 
 
@@ -1819,8 +1947,27 @@ def _validate_review_titles(reviews):
         ba = review.get('book_author', '')
         if ba and re.match(r'^[A-Z][a-z]+,\s+[A-Z][\.\-]', ba):
             continue
+        # Reject BRE garbage: citation fragments, publisher remnants
+        if ba and (re.search(r'(?i)\bHardback\b', ba)
+                   or re.search(r'\(\d{4}\)\.', ba)):
+            continue
+        # Reject if the ENTIRE book_author is just "(Editors)" or "edited by X"
+        if ba and re.match(r'^\((?:Editors?|eds?\.?)\)\s*$', ba, re.IGNORECASE):
+            continue
+        if ba and re.match(r'^edited\s+by\s+', ba, re.IGNORECASE):
+            continue
+        # "Film" as book_author — film reviews, not book reviews
+        if ba and ba.strip() == 'Film':
+            continue
         validated.append(review)
     return validated
+
+
+def _strip_markers(text):
+    """Strip leading/trailing *, star (★), ** markers from text."""
+    if not text:
+        return text
+    return re.sub(r'^[\s*\u2605]+|[\s*\u2605]+$', '', text).strip()
 
 
 def _strip_publisher_from_author(reviews):
@@ -1845,6 +1992,29 @@ def _strip_publisher_from_author(reviews):
             candidate_name = ' '.join(words[:-1])
             if _is_name_like(candidate_name):
                 review['book_author'] = candidate_name
+                continue
+
+        # Strip known standalone publisher names appended to author
+        for pub in ('Erlbaum Associates', 'Lawrence Erlbaum',
+                    'Jessica Kingsley', 'Free Association Books'):
+            if ba.endswith(pub):
+                candidate = ba[:-len(pub)].rstrip(' ,.')
+                if candidate and _is_name_like(candidate):
+                    review['book_author'] = candidate
+                    break
+
+        # Strip series names ("Michael Inwood Past Masters")
+        for series in ('Past Masters', 'Key Figures'):
+            if series in ba:
+                candidate = ba[:ba.index(series)].rstrip(' ,.')
+                if candidate and _is_name_like(candidate):
+                    review['book_author'] = candidate
+                    break
+
+        # Strip trailing state abbreviations ("Press, Boulder, CO.")
+        stripped = re.sub(r',\s*[A-Z]{2}\.?\s*$', '', ba)
+        if stripped != ba:
+            review['book_author'] = stripped.rstrip(' ,.')
 
 
 def _fix_truncated_titles(reviews):
@@ -2039,37 +2209,332 @@ def _parse_book_reviews_by_regex(doc, br_start_pdf, br_end_pdf):
     return reviews
 
 
+def _is_reviewer_skip_line(line):
+    """Return True if this line should be skipped during reviewer scanning."""
+    if line.startswith('Existential Analysis'):
+        return True
+    if 'Society for Existential Analysis' in line:
+        return True
+    if line.startswith('Journal of The Society') or line.startswith('Journal of the Society'):
+        return True
+    if line == 'Book Reviews' or line == 'Book Review':
+        return True
+    if re.match(r'^\d+$', line):
+        return True
+    if re.match(r'^References$', line):
+        return True
+    if re.search(r'\(\d{4}\)', line):  # contains (year) — reference
+        return True
+    if re.search(r'Vol\.\s*\d+', line):  # journal ref
+        return True
+    if re.search(r'(?i)intentionally\s+left\s+blank', line):
+        return True
+    if re.search(r'ISSN\s+\d', line):
+        return True
+    if re.search(r'(?i)^chapter\s+\d', line):
+        return True
+    # Journal/publication metadata lines
+    if re.search(r'(?i)\bNo\.\s*\d+\s+pp\b', line):
+        return True
+    # Publisher/press fragments
+    if re.search(r'(?i)\bPress\.?\s*$', line):
+        return True
+    if re.search(r'(?i)\bPublishers?\.?\s*$', line):
+        return True
+    if re.search(r'(?i)\bUniversity\b', line):
+        return True
+    return False
+
+
+def _is_reviewer_candidate(line):
+    """Check if line could be a reviewer name (permissive check)."""
+    # Quick rejects for common false positives
+    if _is_reviewer_skip_line(line):
+        return None
+    if ';' in line:  # semicolons indicate lists/references, not names
+        return None
+    if ',' in line and len(line.split(',')) > 2:  # multiple commas = list, not name
+        return None
+    if '\u2013' in line or '\u2014' in line:  # em/en dashes = title, not name
+        return None
+    # Reject lines starting with "and" — continuation of a list
+    if re.match(r'^(?:and|&)\s', line, re.IGNORECASE):
+        return None
+    # Reject known publisher names (with optional trailing period)
+    if line.rstrip('.') in _KNOWN_PUBLISHERS:
+        return None
+    # Reject long lines (body text) — reviewer names are short
+    if len(line) > _BODY_TEXT_MIN_LENGTH:
+        return None
+    # Reject lines ending with "." unless it's an initial (e.g. "J." or "PhD.")
+    stripped = line.rstrip()
+    if stripped.endswith('.') and not re.search(r'\b[A-Z]\.$', stripped):
+        # Allow credentials like "PhD." "MA." etc.
+        if not re.search(r'(?:PhD|MA|MSc|BA|BSc|MD|UKCP)\.$', stripped):
+            return None
+    known = _match_known_author(line)
+    if known:
+        return known
+    if _is_reviewer_name_like(line) and len(line) <= _MAX_NAME_LENGTH:
+        return line
+    if _is_name_like(line) and len(line) <= _MAX_NAME_LENGTH:
+        return line
+    return None
+
+
 def extract_reviewer_name(doc, start_pdf, end_pdf):
-    """Extract reviewer name from end of a book review."""
+    """Extract reviewer name from end of a book review.
+
+    Multi-pass strategy:
+    0. Spillover scan — check start of next page for name between References and next title.
+    1. Last page, bottom-third short-line scan — find name-like lines near bottom.
+    2. All pages forward scan — look for name-like lines after blank-line boundaries.
+    3. Backward scan fallback — original approach with 3-consecutive-long-lines cutoff.
+    4. Inline name — known author embedded at end of body text line.
+    """
     if end_pdf >= len(doc):
         return None
-    # Scan backwards from end, checking up to 4 pages (long reviews may have
-    # multi-page reference sections between the reviewer name and the end)
-    for page_idx in range(min(end_pdf, len(doc) - 1), max(start_pdf - 1, end_pdf - 4), -1):
+
+    last_page = min(end_pdf, len(doc) - 1)
+
+    # --- Pass 0: Spillover — reviewer name on next page before next review ---
+    # Reviews often share pages. The current review's text may continue onto
+    # the next page: body text → [References →] reviewer name → next review.
+    # Scan backward from the next review's pub line looking for a name.
+    next_page = last_page + 1
+    if next_page < len(doc):
+        text = doc[next_page].get_text()
+        lines = [l.strip() for l in text.split('\n')]
+        # Two sub-strategies for finding the reviewer on the next page:
+        #
+        # (a) Forward scan: after a References section, the first short
+        #     name-like line is the reviewer.
+        # (b) Backward scan: find where the next review starts (pub line
+        #     with valid title above it), scan backward from there —
+        #     the last short name-like line is the reviewer.
+        #
+        # Try (a) first, fall back to (b).
+
+        # --- (a) Forward: first name after References ---
+        saw_refs = False
+        for line in lines:
+            if not line:
+                continue
+            if line in ('References', 'Bibliography'):
+                saw_refs = True
+                continue
+            if _is_reviewer_skip_line(line) or re.match(r'^\d+$', line):
+                continue
+            if re.search(r'\(\d{4}\)', line):
+                continue  # reference/citation entry
+            if saw_refs and len(line) < _BODY_TEXT_MIN_LENGTH:
+                cand = _is_reviewer_candidate(line)
+                if cand:
+                    return cand
+
+        # --- (b) Backward: scan back from next review's pub line ---
+        # Find a pub line with valid title lines above it (= real review start)
+        pub_idx = None
+        for i, line in enumerate(lines):
+            if not line:
+                continue
+            match, _ = _match_pub_line(line, try_inverted=True,
+                                       lines=lines, line_idx=i)
+            if match:
+                title_lines = _extract_backward_title(lines, i)
+                if title_lines:
+                    pub_idx = i
+                    break
+        if pub_idx is not None:
+            # Scan backward from just before the pub line
+            for j in range(pub_idx - 1, -1, -1):
+                line = lines[j]
+                if not line:
+                    continue
+                if _is_reviewer_skip_line(line) or re.match(r'^\d+$', line):
+                    continue
+                if re.search(r'\(\d{4}\)', line):
+                    continue
+                if len(line) < _BODY_TEXT_MIN_LENGTH:
+                    cand = _is_reviewer_candidate(line)
+                    if cand:
+                        return cand
+                if len(line) >= _BODY_TEXT_MIN_LENGTH:
+                    break
+
+    # --- Pass 1: Last page, bottom-third short-line scan ---
+    text = doc[last_page].get_text()
+    all_lines = [l.strip() for l in text.split('\n')]
+    non_empty = [(i, l) for i, l in enumerate(all_lines) if l.strip()]
+    if non_empty:
+        # Bottom third of non-empty lines
+        bottom_start = len(non_empty) * 2 // 3
+        best = None
+        for _, line in non_empty[bottom_start:]:
+            if _is_reviewer_skip_line(line):
+                continue
+            if len(line) >= _BODY_TEXT_MIN_LENGTH:
+                continue
+            candidate = _is_reviewer_candidate(line)
+            if candidate:
+                best = candidate
+        if best:
+            return best
+
+    # --- Pass 2: All review pages, forward scan for name after blank line ---
+    best = None
+    for page_idx in range(start_pdf, last_page + 1):
+        text = doc[page_idx].get_text()
+        lines_raw = text.split('\n')
+        lines = [l.strip() for l in lines_raw]
+        after_blank = False
+        in_references = False
+        for i, line in enumerate(lines):
+            if not line:
+                after_blank = True
+                continue
+            # Stop scanning forward if we hit References
+            if line == 'References':
+                in_references = True
+                after_blank = False
+                continue
+            if in_references:
+                after_blank = False
+                continue
+            if _is_reviewer_skip_line(line):
+                after_blank = False
+                continue
+            if after_blank and len(line) < _BODY_TEXT_MIN_LENGTH:
+                candidate = _is_reviewer_candidate(line)
+                if candidate:
+                    # Check next non-blank line — if it's also short or blank/end, good
+                    next_is_ok = True
+                    for j in range(i + 1, len(lines)):
+                        next_line = lines[j]
+                        if not next_line:
+                            break  # blank after name — good
+                        if _is_reviewer_skip_line(next_line):
+                            break
+                        if len(next_line) >= _BODY_TEXT_MIN_LENGTH:
+                            next_is_ok = False  # body text follows — probably not a name
+                        break
+                    if next_is_ok:
+                        best = candidate
+            after_blank = False
+        # Don't return early — keep scanning to find the *last* such candidate
+
+    if best:
+        return best
+
+    # --- Pass 3: Backward scan fallback (original logic) ---
+    for page_idx in range(last_page, max(start_pdf - 1, last_page - 4), -1):
         text = doc[page_idx].get_text()
         lines = [l.strip() for l in text.split('\n') if l.strip()]
-        # Scan backwards through all lines looking for a standalone name
+        consecutive_long = 0
         for line in reversed(lines):
-            if line.startswith('Existential Analysis: Journal of The Society'):
+            if _is_reviewer_skip_line(line):
                 continue
-            if line == 'Book Reviews':
-                continue
-            if re.match(r'^\d+$', line):
-                continue
-            # Skip reference entries (Author. (Year). Title... or similar)
-            if re.match(r'^References$', line):
-                continue
-            if re.search(r'\(\d{4}\)', line):  # contains (year) — reference
-                continue
-            if re.search(r'Vol\.\s*\d+', line):  # journal ref
-                continue
-            # Check for standalone name
-            if _REVIEWER_NAME_RE.match(line):
-                return line
-            # If we hit regular body text, stop searching this page
+            candidate = _is_reviewer_candidate(line)
+            if candidate:
+                return candidate
             if len(line) > _BODY_TEXT_MIN_LENGTH:
+                consecutive_long += 1
+                if consecutive_long >= 3:
+                    break
+            else:
+                consecutive_long = 0
+
+    # --- Pass 4: Inline name at end of body text (e.g. "...do so. Emmy van Deurzen-Smith") ---
+    # Scan ALL review pages forward, keeping the last match (closest to end of review).
+    known = _get_known_authors()
+    last_inline_match = None
+    for page_idx in range(start_pdf, last_page + 1):
+        text = doc[page_idx].get_text()
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+        for line in lines:
+            if _is_reviewer_skip_line(line):
+                continue
+            if len(line) < 20:
+                continue
+            # Check if a known author name appears at the end of this line
+            for name in sorted(known, key=len, reverse=True):
+                if line.endswith(name) and len(line) > len(name) + 5:
+                    # Verify the part before the name ends with sentence punctuation
+                    prefix = line[:-len(name)].rstrip()
+                    if prefix and prefix[-1] in '.!':
+                        last_inline_match = name
+                        break  # longest match wins for this line
+    if last_inline_match:
+        return last_inline_match
+
+    # --- Pass 5: Bold font detection ---
+    # Reviewer names are typically set in bold while body text is not.
+    # Scan review pages + spillover page for bold short name-like spans.
+    _bold_skip = {'Book Reviews', 'Book Review', 'References', 'Bibliography',
+                  'Endnotes', 'Notes', 'Acknowledgements', 'Abstract'}
+    best_bold = None
+    for page_idx in range(start_pdf, min(last_page + 2, len(doc))):
+        try:
+            blocks = doc[page_idx].get_text('dict')['blocks']
+        except Exception:
+            continue
+        for block in blocks:
+            if 'lines' not in block:
+                continue
+            for line_obj in block['lines']:
+                for span in line_obj['spans']:
+                    text = span['text'].strip()
+                    is_bold = bool(span['flags'] & (1 << 4))
+                    if not is_bold or not text:
+                        continue
+                    if len(text) <= 3 or len(text) > _MAX_NAME_LENGTH:
+                        continue
+                    if text in _bold_skip or text.isdigit():
+                        continue
+                    if _is_reviewer_skip_line(text):
+                        continue
+                    cand = _is_reviewer_candidate(text)
+                    if cand:
+                        best_bold = cand
+    return best_bold
+
+
+_TOC_OVERRIDES = None
+
+
+def _get_toc_overrides():
+    """Lazy-load TOC overrides from toc_overrides.json."""
+    global _TOC_OVERRIDES
+    if _TOC_OVERRIDES is None:
+        _TOC_OVERRIDES = []
+        path = os.path.join(os.path.dirname(__file__), 'toc_overrides.json')
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            _TOC_OVERRIDES = data.get('overrides', [])
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+    return _TOC_OVERRIDES
+
+
+def apply_toc_overrides(articles, vol, iss):
+    """Apply manual overrides to articles list. Each override patches
+    fields on matched articles. Match key: 'vol.issue:title_prefix'."""
+    overrides = _get_toc_overrides()
+    if not overrides:
+        return
+    prefix = f"{vol}.{iss}:"
+    for override in overrides:
+        match_key = override.get('match', '')
+        if not match_key.startswith(prefix):
+            continue
+        title_prefix = match_key[len(prefix):]
+        fields = override.get('set', {})
+        for art in articles:
+            title = art.get('title', '')
+            if title.startswith(title_prefix):
+                art.update(fields)
                 break
-    return None
 
 
 def _detect_vol_issue_date(doc):
@@ -2211,6 +2676,14 @@ def main():
         validated_articles.append(article)
     articles = validated_articles
 
+    # Post-process: try to split trailing author from title for authorless articles
+    for article in articles:
+        if not article.get('authors') and article['section'] == SECTION_ARTICLES:
+            title, author = _try_split_trailing_author(article['title'])
+            if author:
+                article['title'] = title
+                article['authors'] = author
+
     # Split Book Reviews into editorial + individual reviews
     final_articles = []
     for article in articles:
@@ -2226,18 +2699,23 @@ def main():
                 article['journal_page_end'] = article['pdf_page_end'] - offset
 
             # Extract book review editorial author — a standalone name line
-            # Scan forward, find last name-like line before ERRATUM/end
+            # Only scan BRE intro pages (up to 2 pages), not into individual reviews
             if not article.get('authors'):
-                name_pattern = _REVIEWER_NAME_RE
-                for pi in range(article['pdf_page_start'],
-                                min(article['pdf_page_end'] + 1, len(doc))):
+                _bre_reject = {'book reviews', 'the society for existential analysis',
+                               'book review'}
+                # Limit to first 2 pages of BRE section
+                bre_scan_end = min(article['pdf_page_start'] + 2,
+                                   article['pdf_page_end'] + 1, len(doc))
+                for pi in range(article['pdf_page_start'], bre_scan_end):
                     page_text = doc[pi].get_text()
                     page_lines = [l.strip() for l in page_text.split('\n')
                                   if l.strip()]
                     for line in page_lines:
                         if line == 'ERRATUM':
                             break  # stop before erratum
-                        if name_pattern.match(line):
+                        if (line.lower() not in _bre_reject
+                                and _is_name_like(line)
+                                and len(line) <= _MAX_NAME_LENGTH):
                             article['authors'] = line
 
             final_articles.append(article)
@@ -2246,11 +2724,29 @@ def main():
         else:
             final_articles.append(article)
 
+    # Apply manual reviewer overrides
+    apply_toc_overrides(final_articles, vol, iss)
+
     # Post-process: collapse letter-spaced OCR artifacts in all titles
     for article in final_articles:
         for key in ('title', 'book_title'):
             if key in article and article[key]:
                 article[key] = collapse_letter_spacing(article[key])
+        if article.get('book_title'):
+            cleaned = _strip_markers(article['book_title'])
+            if cleaned != article['book_title']:
+                article['book_title'] = cleaned
+                article['title'] = f"Book Review: {cleaned}"
+        # Strip trailing dot-leader artifacts from OCR
+        if article.get('title'):
+            article['title'] = re.sub(r'\s*\.{3,}[\s.]*$', '', article['title']).strip()
+            # If stripped title is just "Editorial", ensure correct section
+            if article['title'].lower() == 'editorial' and article['section'] != SECTION_EDITORIAL:
+                article['section'] = SECTION_EDITORIAL
+        # Fix hyphenation artifacts from line breaks
+        for key in ('title', 'book_title'):
+            if key in article and article[key]:
+                article[key] = re.sub(r'(\w)- (\w)', r'\1\2', article[key])
 
     output = {
         'source_pdf': os.path.abspath(args.pdf),
