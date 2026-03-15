@@ -19,7 +19,7 @@ TOC page = PDF page number where CONTENTS heading was found. Manual TOC = sideca
 |:----------:|:-------:|:------:|:------:|
 | <img src="images/toc-format-dot-leader.png" width="150"> | <img src="images/toc-format-stacked.png" width="150"> | <img src="images/toc-format-spaced.png" width="150"> | <img src="images/toc-format-tabbed.png" width="150"> |
 | `Title.......page` | Title, author, page on separate lines | `Title                page` | `Title\tpage` |
-| 14 issues | 14 issues | 12 issues | 24 issues |
+| 13 issues | 13 issues | 12 issues | 25 issues |
 
 | Issue | Date | Pages | Size (MB) | TOC page | Manual TOC | TOC format | Ed | Articles | Reviews |
 |-------|------|-------|-----------|----------|------------|------------|----|---------:|--------:|
@@ -28,8 +28,8 @@ TOC page = PDF page number where CONTENTS heading was found. Manual TOC = sideca
 | 3 | Jul 1992 | 146 | 1 | 4 | - | dot-leader | 0 | 12 | 1 |
 | 4 | Jul 1993 | 168 | 1 | 4 | - | dot-leader | 0 | 10 | 1 |
 | 5 | Jul 1994 | 187 | 1 | 2 | - | dot-leader | 1 | 13 | 1 |
-| 6.1 | Jan 1995 | 202 | 11 | 4 | - | dot-leader | 0 | 12 | 0 |
-| 6.2 | Jul 1995 | 204 | 11 | - | 6.2.toc.json | dot-leader | 1 | 13 | 1 |
+| 6.1 | Jan 1995 | 202 | 11 | - | 6.1.toc.json | - | 1 | 14 | 1 |
+| 6.2 | Jul 1995 | 204 | 11 | - | 6.2.toc.json | - | 1 | 12 | 1 |
 | 7.1 | Jan 1996 | 178 | 1 | 4 | - | dot-leader | 1 | 12 | 1 |
 | 7.2 | Jul 1996 | 136 | 1 | 4 | - | dot-leader | 1 | 10 | 0 |
 | 8.1 | Jan 1996 | 154 | 1 | 4 | - | dot-leader | 1 | 12 | 1 |
@@ -44,8 +44,8 @@ TOC page = PDF page number where CONTENTS heading was found. Manual TOC = sideca
 | 12.2 | Jul 2001 | 182 | 1 | 4 | - | stacked | 0 | 12 | 0 |
 | 13.1 | Jan 2002 | 182 | 11 | 4 | - | stacked | 1 | 12 | 2 |
 | 13.2 | Jul 2002 | 188 | 11 | 4 | - | stacked | 1 | 11 | 0 |
-| 14.1 | Jan 2003 | 190 | 12 | 4 | - | stacked | 1 | 11 | 0 |
-| 14.2 | Jul 2003 | 220 | 13 | 4 | - | stacked | 1 | 14 | 0 |
+| 14.1 | Jan 2003 | 190 | 12 | 4 | - | stacked | 1 | 12 | 5 |
+| 14.2 | Jul 2003 | 220 | 13 | 4 | - | stacked | 1 | 14 | 1 |
 | 15.1 | Jan 2004 | 185 | 1 | 2 | - | spaced | 2 | 15 | 1 |
 | 15.2 | Jul 2004 | 235 | 1 | 2 | - | stacked | 2 | 15 | 1 |
 | 16.1 | Jan 2005 | 200 | 1 | - | 16.1.toc.json | - | 1 | 16 | 1 |
@@ -84,10 +84,10 @@ TOC page = PDF page number where CONTENTS heading was found. Manual TOC = sideca
 | 32.2 | Jul 2021 | 195 | 2 | 4 | - | tabbed | 1 | 12 | 0 |
 | 33.1 | Jan 2022 | 212 | 2 | 4 | - | tabbed | 1 | 14 | 1 |
 | 33.2 | Jul 2022 | 196 | 14 | 4 | - | tabbed | 1 | 13 | 0 |
-| 34.1 | Jan 2023 | 215 | 2 | 4 | - | tabbed | 1 | 15 | 4 |
+| 34.1 | Jan 2023 | 215 | 2 | 4 | - | tabbed | 1 | 13 | 5 |
 | 34.2 | Jul 2023 | 203 | 2 | 4 | - | tabbed | 1 | 12 | 0 |
-| 35.1 | Jan 2024 | 215 | 2 | 4 | - | tabbed | 1 | 14 | 0 |
+| 35.1 | Jan 2024 | 215 | 2 | 4 | - | tabbed | 1 | 12 | 1 |
 | 35.2 | Jul 2024 | 220 | 2 | 4 | - | tabbed | 1 | 12 | 0 |
 | 36.1 | Jan 2025 | 223 | 2 | 4 | - | tabbed | 1 | 12 | 1 |
-| 36.2 | Jul 2025 | 207 | 2 | 4 | - | tabbed | 1 | 15 | 0 |
-| 37.1 | Jan 2026 | 233 | 8 | 4 | - | tabbed | 1 | 15 | 6 |
+| 36.2 | Jul 2025 | 207 | 2 | 4 | - | tabbed | 1 | 14 | 0 |
+| 37.1 | Jan 2026 | 233 | 8 | 4 | - | tabbed | 3 | 13 | 6 |

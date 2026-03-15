@@ -32,8 +32,7 @@ CONTENTS_RE = re.compile(r'^[-\s]*Contents[-\s]*$', re.IGNORECASE | re.MULTILINE
 
 # Section headers in TOC that should not be treated as article titles
 SECTION_HEADERS = {
-    'conference papers', 'articles', 'book reviews', 'letters',
-    'responses', 'obituary', 'obituaries', 'reports', 'poem', 'poems',
+    'conference papers', 'articles', 'reports', 'poem', 'poems',
 }
 
 
@@ -466,12 +465,12 @@ def _parse_toc_format_b_separated(classified, page_count):
 def _parse_toc_format_b_spaced(toc_text):
     """Parse Format B-spaced: inline page numbers with spaces (Vol 15.1–23.1, 27.2–28.2).
 
-    Pattern:
-        Title Text                                                    42
-        Subtitle if any
-        Author Name
+    Handles two sub-formats:
+    - Original PDFs: blank lines separate entries (group-based parsing)
+    - Re-OCR'd PDFs: no blank lines, entries run together continuously
 
-    Blank lines separate entries.
+    For re-OCR'd text, detects whether page numbers appear on title lines
+    (format A: 14.1, 14.2) or on author lines (format B: 13.1).
     """
     entries = []
     lines = toc_text.split('\n')
@@ -479,27 +478,48 @@ def _parse_toc_format_b_spaced(toc_text):
     if start_idx is None:
         return entries
 
-    # Parse entries separated by blank lines
+    # Collect lines into groups separated by blank lines
     current_group = []
     groups = []
+    has_blank_separators = False
     for line in lines[start_idx:]:
         stripped = line.strip()
         if not stripped:
             if current_group:
                 groups.append(current_group)
                 current_group = []
+                has_blank_separators = True
         else:
             if stripped.startswith('Journal of the Society'):
+                continue
+            if stripped.startswith('Existential Analysis'):
                 continue
             current_group.append(stripped)
     if current_group:
         groups.append(current_group)
 
+    # If blank-line grouping produced multiple groups, use group-based parser
+    if has_blank_separators and len(groups) >= 3:
+        return _parse_spaced_groups(groups)
+
+    # No blank-line separators (re-OCR'd text) — parse by structure
+    all_lines = []
+    for group in groups:
+        all_lines.extend(group)
+    return _parse_spaced_no_blanks(all_lines)
+
+
+def _parse_spaced_groups(groups):
+    """Parse spaced TOC entries from blank-line-separated groups.
+
+    Each group is a list of stripped lines forming one TOC entry.
+    Uses \\s{3,} for inline page number detection (original PDF spacing).
+    """
+    entries = []
     for group in groups:
         if not group:
             continue
 
-        # Try to extract inline page number from first line
         page = None
         title_parts = []
         author = None
@@ -510,10 +530,9 @@ def _parse_toc_format_b_spaced(toc_text):
             title_parts.append(m.group(1).strip())
             page = int(m.group(2))
         else:
-            # No inline page — might be on a subsequent line as bare number
             title_parts.append(group[0])
 
-        # Process remaining lines: subtitles, author, or bare page number
+        # Process remaining lines
         for line in group[1:]:
             bare_page = re.match(r'^(\d{1,3})$', line)
             if bare_page and page is None:
@@ -521,8 +540,6 @@ def _parse_toc_format_b_spaced(toc_text):
             elif _is_name_like(line):
                 author = line
             else:
-                # Subtitle or title continuation
-                # Check if it has an inline page
                 m2 = re.match(r'^(.+?)\s{3,}(\d{1,3})\s*$', line)
                 if m2 and page is None:
                     title_parts.append(m2.group(1).strip())
@@ -531,9 +548,152 @@ def _parse_toc_format_b_spaced(toc_text):
                     title_parts.append(line)
 
         if page is None:
-            continue  # skip entries without page numbers
+            continue
 
         title = ' '.join(title_parts)
+        entries.append({'title': title, 'author': author, 'page': page})
+
+    return entries
+
+
+def _parse_spaced_no_blanks(all_lines):
+    """Parse spaced TOC with no blank-line separators (re-OCR'd text).
+
+    Detects format by checking where page numbers appear:
+    - Format A: page numbers on title lines (14.1, 14.2 style)
+    - Format B: page numbers on author/name lines (13.1 style)
+
+    Uses \\s{2,} for inline page detection (re-OCR'd spacing is tighter).
+    """
+    # Classify each line: has inline page number or not
+    page_lines = []  # indices of lines with inline page numbers
+    non_page_lines = []  # indices of lines without
+    for i, line in enumerate(all_lines):
+        if re.match(r'^(.+?)\s{2,}(\d{1,3})\s*$', line):
+            page_lines.append(i)
+        else:
+            non_page_lines.append(i)
+
+    if not page_lines:
+        return []
+
+    # Detect format: check if non-page lines are mostly names (format A)
+    # or mostly titles (format B)
+    name_count = sum(1 for i in non_page_lines if _is_name_like(all_lines[i]))
+    if non_page_lines:
+        name_ratio = name_count / len(non_page_lines)
+    else:
+        name_ratio = 0
+
+    # Format A: non-page lines are mostly names → pages are on title lines
+    # Format B: non-page lines are mostly titles → pages are on author lines
+    if name_ratio >= 0.5:
+        return _parse_spaced_format_a(all_lines, page_lines)
+    else:
+        return _parse_spaced_pages_on_authors(all_lines, page_lines)
+
+
+def _parse_spaced_format_a(all_lines, page_line_indices):
+    """Format A: page numbers on title lines, authors on separate lines.
+
+    E.g. 14.1, 14.2:
+        Scheler, Nietzsche & Social Psychology                2
+        Daniel Burston
+        The Internalisation of Nietzsche's Master...         14
+        Steve Kirby
+
+    Lines between consecutive page-bearing lines belong to the preceding entry.
+    The last name-like line in each partition is the author; everything else
+    is title overflow. Multi-author lines are joined when the preceding line
+    ends with a comma.
+    """
+    entries = []
+
+    for idx, i in enumerate(page_line_indices):
+        line = all_lines[i]
+        m = re.match(r'^(.+?)\s{2,}(\d{1,3})\s*$', line)
+        if not m:
+            continue
+
+        title_parts = [m.group(1).strip()]
+        page = int(m.group(2))
+
+        # Lines belonging to this entry: from after this page-line
+        # to before the next page-line
+        next_page = page_line_indices[idx + 1] if idx + 1 < len(page_line_indices) else len(all_lines)
+        trailing = all_lines[i + 1 : next_page]
+
+        author = None
+        if trailing:
+            # Find last name-like line — that's the author
+            last_name_idx = None
+            for j in range(len(trailing) - 1, -1, -1):
+                if _is_name_like(trailing[j]):
+                    last_name_idx = j
+                    break
+
+            if last_name_idx is not None:
+                # Include preceding name-like lines that end with comma
+                # (multi-author continuation)
+                author_start = last_name_idx
+                while author_start > 0:
+                    prev = trailing[author_start - 1]
+                    if _is_name_like(prev) and prev.rstrip().endswith(','):
+                        author_start -= 1
+                    else:
+                        break
+
+                author = ' '.join(trailing[author_start:last_name_idx + 1])
+                title_parts.extend(trailing[:author_start])
+            else:
+                title_parts.extend(trailing)
+
+        title = ' '.join(title_parts)
+        entries.append({'title': title, 'author': author, 'page': page})
+
+    return entries
+
+
+def _parse_spaced_pages_on_authors(all_lines, page_line_indices):
+    """Format B: page numbers on author lines, titles on separate lines.
+
+    E.g. 13.1:
+        Death - a Philosophical Perspective
+        Alfons Grieder                                        2
+        'Illness' ... and Its Human Values
+        Greg Madison                                         10
+    """
+    page_set = set(page_line_indices)
+    entries = []
+
+    for i in page_line_indices:
+        line = all_lines[i]
+        m = re.match(r'^(.+?)\s{2,}(\d{1,3})\s*$', line)
+        if not m:
+            continue
+
+        text_part = m.group(1).strip()
+        page = int(m.group(2))
+
+        if _is_name_like(text_part):
+            author = text_part
+            # Collect title lines going backwards until we hit another page line
+            title_parts = []
+            for j in range(i - 1, -1, -1):
+                if j in page_set:
+                    break
+                title_parts.insert(0, all_lines[j])
+            if title_parts:
+                title = ' '.join(title_parts)
+            else:
+                # No title lines before this — it's a section header, not an author
+                title = text_part
+                author = None
+        else:
+            # This page-bearing line is a title (e.g. "Editorial    1", "Book Reviews   159")
+            title = text_part
+            author = None
+
         entries.append({'title': title, 'author': author, 'page': page})
 
     return entries
