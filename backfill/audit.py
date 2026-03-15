@@ -264,10 +264,12 @@ def audit_pdf(filepath):
     # Preflight compatibility
     result["preflight"] = run_preflight_check(doc, filepath)
 
-    # Check for sidecar TOC file (e.g. 6.2.toc.json next to 6.2.pdf)
+    # Check for TOC file: sidecar (e.g. 6.2.toc.json next to PDF) or output dir
     stem = os.path.splitext(os.path.basename(filepath))[0]
     sidecar_path = os.path.join(os.path.dirname(filepath), f"{stem}.toc.json")
-    has_sidecar = os.path.exists(sidecar_path)
+    output_toc_path = os.path.join(os.path.dirname(os.path.dirname(filepath)),
+                                   "output", stem, "toc.json")
+    has_sidecar = os.path.exists(sidecar_path) or os.path.exists(output_toc_path)
     result["sidecar_toc"] = has_sidecar
 
     # Overall status — separate pipeline blockers from informational notes

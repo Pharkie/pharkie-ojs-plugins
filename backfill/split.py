@@ -45,7 +45,9 @@ def split_pdf(toc_data, output_dir):
     vol = toc_data.get('volume', 0)
     iss = toc_data.get('issue', 0)
 
-    issue_dir = os.path.join(output_dir, f"{vol}.{iss}")
+    # Single-issue volumes (1-5) use just the volume number as dir name
+    dir_name = str(vol) if vol <= 5 and iss == 1 else f"{vol}.{iss}"
+    issue_dir = os.path.join(output_dir, dir_name)
     os.makedirs(issue_dir, exist_ok=True)
 
     doc = fitz.open(source_pdf)

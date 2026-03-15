@@ -79,7 +79,17 @@ FAILED=0
 SUCCEEDED=0
 SKIPPED=0
 
-for DIR in "${DIRS[@]}"; do
+# Sort directories by volume.issue numerically
+IFS=$'\n' SORTED_DIRS=($(for d in "${DIRS[@]}"; do
+  base="$(basename "$d")"
+  # Extract vol and issue for numeric sorting (e.g., "25.1" → "025.1", "3" → "003.0")
+  vol="${base%%.*}"
+  if [[ "$base" == *.* ]]; then iss="${base#*.}"; else iss="0"; fi
+  printf "%03d.%s\t%s\n" "$vol" "$iss" "$d"
+done | sort -t. -k1,1n -k2,2n | cut -f2))
+unset IFS
+
+for DIR in "${SORTED_DIRS[@]}"; do
   DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "ERROR: $DIR not found"; FAILED=$((FAILED + 1)); continue; }
   XML_FILE="$DIR/import.xml"
   ISSUE_NAME="$(basename "$DIR")"
@@ -89,9 +99,9 @@ for DIR in "${DIRS[@]}"; do
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   if [ ! -f "$XML_FILE" ]; then
-    echo "  ERROR: No import.xml in $DIR"
-    echo "  Run backfill/split-issue.sh first."
-    FAILED=$((FAILED + 1))
+    echo "  SKIP: No import.xml in $DIR (not a prepared issue)"
+    SKIPPED=$((SKIPPED + 1))
+    echo
     continue
   fi
 
@@ -159,7 +169,7 @@ for DIR in "${DIRS[@]}"; do
 done
 
 echo "=========================================="
-echo "Complete: $SUCCEEDED imported, $SKIPPED skipped, $FAILED failed out of ${#DIRS[@]}"
+echo "Complete: $SUCCEEDED imported, $SKIPPED skipped, $FAILED failed out of ${#SORTED_DIRS[@]}"
 echo "=========================================="
 
 [ $FAILED -eq 0 ] || exit 1

@@ -14,7 +14,6 @@ Ask Claude: "Read `backfill/prepared/<vol>.pdf` and create `backfill/output/<vol
   "volume": 23,
   "issue": 1,
   "date": "January 2012",
-  "page_offset": 3,
   "total_pdf_pages": 193,
   "articles": [ ... ]
 }
@@ -28,7 +27,6 @@ Ask Claude: "Read `backfill/prepared/<vol>.pdf` and create `backfill/output/<vol
 | `volume` | int | Volume number (1-37). |
 | `issue` | int | Issue number (1 for single-issue volumes 1-5, 1 or 2 for the rest). |
 | `date` | string | Publication date, e.g. "January 2012", "July 2015". |
-| `page_offset` | int | `pdf_page_index = journal_page_number + offset`. E.g. if journal page 1 is PDF page 4, offset = 3. |
 | `total_pdf_pages` | int | Total pages in the PDF. |
 
 ### Article entry fields
@@ -39,11 +37,9 @@ Every item in the `articles` array has these fields:
 |---|---|---|
 | `title` | yes | Article title. Book reviews: `"Book Review: <book title>"`. |
 | `authors` | yes | Author name(s) as a string. For book reviews, this is the **reviewer**. Null for unsigned editorials. |
-| `section` | yes | One of: `"Editorial"`, `"Articles"`, `"Book Review Editorial"`, `"Book Reviews"`, `"Obituary"`, `"Conference Papers"`, `"Poem"`. |
-| `journal_page_start` | yes | First printed page number. |
-| `journal_page_end` | yes | Last printed page number. |
-| `pdf_page_start` | yes | 0-based PDF page index (= `journal_page_start + page_offset`). |
-| `pdf_page_end` | yes | 0-based PDF page index (= `journal_page_end + page_offset`). |
+| `section` | yes | One of: `"Editorial"`, `"Articles"`, `"Book Review Editorial"`, `"Book Reviews"`. |
+| `pdf_page_start` | yes | 0-based PDF page index. Page 0 is the first page of the PDF. |
+| `pdf_page_end` | yes | 0-based PDF page index of the last page (inclusive). |
 
 Book reviews have additional fields:
 
@@ -57,19 +53,24 @@ Book reviews have additional fields:
 
 ### Sections
 
-- **Editorial** — usually the first entry, often unsigned (authors: null).
-- **Articles** — research papers, essays, clinical reports. Default for anything not otherwise classified.
-- **Conference Papers** — papers from SEA conferences (vol 1 only).
+- **Editorial** — usually the first entry. Authors should be the editor(s) of the issue — check the masthead/cover page.
+- **Articles** — everything else: research papers, essays, poems, conference papers, clinical reports, correspondence, letters, obituaries. Default for anything not a book review or editorial.
 - **Book Review Editorial** — the introductory page(s) of the book reviews section, before individual reviews start. Usually by the Book Review Editor.
 - **Book Reviews** — individual book reviews. Each is a separate entry with book metadata + reviewer name.
-- **Obituary** — memorial pieces.
-- **Poem** — occasional poetry entries.
+
+These are the ONLY four valid sections. Do not invent others (e.g. "Poem", "Obituary", "Essay Review", "Thinking Aloud", "Conference Papers" — all go under "Articles").
+
+### Page numbering
+
+All page numbers are **0-based PDF page indices**. Page 0 is the first page of the PDF file. Ignore printed page numbers on the pages themselves — just count from 0 in the PDF.
+
+Use PyMuPDF to check: `doc[N].get_text()` reads 0-based page N.
 
 ## How to create toc.json from a PDF
 
 ### Step 1: Read the CONTENTS page
 
-Open the PDF with PyMuPDF and find the CONTENTS/TOC page (usually within the first 5 pages). This gives you all article titles, authors, and journal page numbers.
+Open the PDF with PyMuPDF and find the CONTENTS/TOC page (usually within the first 5 pages). This gives you all article titles, authors, and printed page numbers.
 
 ```python
 import fitz
@@ -82,18 +83,16 @@ for i in range(min(10, len(doc))):
         break
 ```
 
-### Step 2: Determine the page offset
+### Step 2: Map printed page numbers to PDF pages
 
-Find a page where you know the printed page number (e.g. the Editorial is usually journal page 1). The offset is `pdf_page_index - journal_page_number`.
-
-Example: if the Editorial is on PDF page 4 and its printed page number is 1, then `offset = 4 - 1 = 3`.
+The CONTENTS page lists printed page numbers (e.g. "Editorial ... 1"). You need to figure out which 0-based PDF page that corresponds to. Check a known page — e.g. read the first article's PDF page and verify the content matches.
 
 ### Step 3: Build the articles array
 
 For each TOC entry:
 1. Use the title and author from the CONTENTS page.
-2. Calculate `pdf_page_start = journal_page + offset`.
-3. Calculate `pdf_page_end` from the next entry's start page - 1.
+2. Set `pdf_page_start` to the 0-based PDF page where the article begins.
+3. Set `pdf_page_end` to the last page of the article (typically the page before the next article starts).
 4. Assign the correct section.
 
 ### Step 4: Process book reviews
@@ -132,9 +131,6 @@ The CONTENTS page is the primary source for titles and authors. However:
 - Volumes 1-5 (single-issue): `backfill/output/<vol>/` (e.g. `output/3/`)
 - Volumes 6+: `backfill/output/<vol>.<iss>/` (e.g. `output/23.1/`)
 
-### Fields the splitter needs
-`split.py` only needs: `source_pdf`, `articles[].title`, `articles[].pdf_page_start`, `articles[].pdf_page_end`. Everything else is metadata for XML generation and the Google Sheet.
-
 ## Example entries
 
 ### Article
@@ -143,8 +139,6 @@ The CONTENTS page is the primary source for titles and authors. However:
   "title": "Towards the Cybernetic Mind",
   "authors": "Niklas Serning",
   "section": "Articles",
-  "journal_page_start": 7,
-  "journal_page_end": 14,
   "pdf_page_start": 10,
   "pdf_page_end": 17
 }
@@ -156,8 +150,6 @@ The CONTENTS page is the primary source for titles and authors. However:
   "title": "Book Review: Heidegger's Contribution to the Understanding of Work-Based Studies",
   "authors": "Mo Mandic",
   "section": "Book Reviews",
-  "journal_page_start": 162,
-  "journal_page_end": 164,
   "pdf_page_start": 165,
   "pdf_page_end": 166,
   "book_title": "Heidegger's Contribution to the Understanding of Work-Based Studies",
@@ -172,10 +164,8 @@ The CONTENTS page is the primary source for titles and authors. However:
 ```json
 {
   "title": "Editorial",
-  "authors": null,
+  "authors": "Simon du Plock",
   "section": "Editorial",
-  "journal_page_start": 1,
-  "journal_page_end": 2,
   "pdf_page_start": 4,
   "pdf_page_end": 5
 }

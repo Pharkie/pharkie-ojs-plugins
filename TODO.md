@@ -105,17 +105,24 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/
 - [x] Obtain missing PDFs: 34.1, 35.1, 36.2 (from live WP), 37.1 (provided manually)
 - [x] Rebuild 6.2.toc.json for full 204-page issue
 - [x] Human review of all prepared PDFs
-- [x] Verified all 1298 articles against Google Sheet — parse_toc.py produces correct output
-- [x] parse_toc.py code review & refactoring (constants, regex, decomposition, docs)
+- [x] Pivot: delete automated TOC parser, adopt Claude-reviewed toc.json as primary
+- [x] All 68 toc.json files created and verified (1356 articles/reviews)
+- [x] Phase 1: Add ~60 missing book review entries across 16 early issues (vols 2–17.1)
+- [x] Phase 2: Fix PAGE_OFF_BY_1 (~120 entries), page range bugs, honorifics, gaps, missing entries
+- [x] Full verification pass (7 agents across all 68 volumes) — all findings resolved
+- [x] Data quality clean: zero honorifics, zero malformed metadata, all book_years filled
+- [x] Google Sheet published (1356 rows): `backfill/sheets_export.py`
+- [x] Enrichment data imported from spreadsheet review (`backfill/import_review.py`)
 
 ### Next
 
 - [ ] Re-run `backfill/audit.py` on `backfill/prepared/`, all 68 PDFs should pass
 - [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
-- Sidecar TOC files (`.toc.json`) are auto-discovered — no flags needed
+- toc.json files are auto-discovered by `split-issue.sh` — no flags needed
 
 ## Future improvements
 
+- [ ] **Inline HTML for editorials** — render editorial/book review editorial content inline on the OJS article page (no download click). Plan: new standalone OJS plugin (`inlineHtmlGalley`), generate HTML galleys from PyMuPDF text extraction for unpaywalled sections only (~133 articles). See saved plan: `.claude/plans/composed-herding-koala.md`. Reference: [ulsdevteam/inlineHtmlGalley](https://github.com/ulsdevteam/inlineHtmlGalley) (OJS 3.4 only, not porting — writing simpler purpose-built version for 3.5).
 - [ ] **Cross-issue browsing** — let readers browse articles by type (e.g., Book Reviews) across issue boundaries. Two things to investigate:
   - [ ] **Browse by Section plugin** (`pkp/browseBySection`) — install from Plugin Gallery, enable per-section. Works with existing section assignments, no extra metadata. Easiest win.
   - [ ] **OJS categories** — decide taxonomy/topology (hierarchical, one level of nesting supported). Categories are independent of sections and require assigning articles (could be done during backfill import). Decide what categories to create and whether they add value beyond section browsing.

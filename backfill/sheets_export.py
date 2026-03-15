@@ -21,8 +21,7 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
 
 HEADERS = [
     'Volume', 'Issue', 'Date', 'Section', 'Title', 'Authors',
-    'Journal Page Start', 'Journal Page End', 'PDF Page Start', 'PDF Page End',
-    'Split Pages', 'Split PDF',
+    'PDF Page Start', 'PDF Page End',
     # Book review fields
     'Book Title', 'Book Author', 'Book Year', 'Reviewer',
 ]
@@ -55,12 +54,8 @@ def load_all_tocs(output_dir):
                 article.get('section', ''),
                 article.get('title', ''),
                 article.get('authors', '') or '',
-                article.get('journal_page_start', '') or '',
-                article.get('journal_page_end', '') or '',
                 article.get('pdf_page_start', '') or '',
                 article.get('pdf_page_end', '') or '',
-                article.get('split_pages', ''),
-                os.path.basename(article.get('split_pdf', '') or ''),
                 # Book review fields
                 article.get('book_title', '') or '',
                 article.get('book_author', '') or '',
@@ -94,7 +89,7 @@ def export_to_sheets(rows, dry_run=False):
     ws.update(range_name='A1', values=all_data)
 
     # Bold header row + freeze
-    ws.format('A1:P1', {'textFormat': {'bold': True}})
+    ws.format('A1:L1', {'textFormat': {'bold': True}})
     ws.freeze(rows=1)
 
     print(f"Published {len(rows)} rows to: https://docs.google.com/spreadsheets/d/{SHEET_KEY}")
