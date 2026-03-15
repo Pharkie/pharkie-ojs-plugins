@@ -99,7 +99,7 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 
 Imports ~30 years of journal back-issues (whole-issue PDFs) into OJS. Two scripts, two steps:
 
-1. **`backfill/split-issue.sh <issue.pdf>`** — split a whole-issue PDF into per-article PDFs + OJS Native XML. Local only, does not touch OJS. Output: `backfill/output/<vol>.<iss>/` (toc.json, per-article PDFs, import.xml).
+1. **`backfill/split-issue.sh <issue.pdf>`** — split a whole-issue PDF into per-article PDFs + OJS Native XML. Local only, does not touch OJS. Output: `backfill/output/<vol>.<iss>/` for two-issue volumes, `backfill/output/<vol>/` for single-issue volumes (vol 1–5).
 2. **`backfill/import.sh <issue-dir>`** — load the split output into OJS via Docker CLI.
 
 Individual Python scripts (called by `split-issue.sh` in order):
@@ -107,8 +107,17 @@ Individual Python scripts (called by `split-issue.sh` in order):
 - `backfill/parse_toc.py` — parse CONTENTS page, extract metadata (titles, authors, abstracts, keywords, page ranges)
 - `backfill/split.py` — split PDF into per-article PDFs using PyMuPDF
 - `backfill/author_normalize.py` — normalize author names against registry (`backfill/authors.json`)
+- `backfill/enrich.py` — enrich toc.json with subjects, disciplines, citations from spreadsheet data
 - `backfill/generate_xml.py` — generate OJS Native XML with base64-embedded PDFs
 - `backfill/verify.py` — post-import verification against OJS database
+
+Standalone utilities (not part of `split-issue.sh` pipeline):
+- `backfill/audit.py` — audit all source PDFs in `backfill/prepared/` for completeness
+- `backfill/compare_archive.py` — compare PDF sources (prepared/, live WP securepdfs/, etc.)
+- `backfill/export_review.py` — export toc.json entries to spreadsheet-compatible format
+- `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
+
+5 issues have unparseable TOCs and use manual sidecar files: vol 2, 6.1, 6.2, 16.1, 16.2.
 
 Output directory (`backfill/output/`) is gitignored (large PDFs + XML).
 

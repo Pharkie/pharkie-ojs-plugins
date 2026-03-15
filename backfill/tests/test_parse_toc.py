@@ -21,6 +21,19 @@ from backfill.parse_toc import (
 )
 
 
+def _make_mock_doc(pages_text):
+    """Create a mock PyMuPDF doc with given page texts."""
+    doc = MagicMock()
+    doc.__len__ = MagicMock(return_value=len(pages_text))
+    mock_pages = []
+    for text in pages_text:
+        page = MagicMock()
+        page.get_text.return_value = text
+        mock_pages.append(page)
+    doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
+    return doc
+
+
 class TestParseTocText:
     """Test parse_toc_text() with synthetic PyMuPDF-style output."""
 
@@ -140,6 +153,53 @@ class TestParseTocText:
         entries = parse_toc_text(toc_text)
         assert entries[0]['author'] == 'Alice Brown & Bob White'
 
+    def test_tab_continuation_after_page_with_author(self):
+        """Q1: Tab-line after page number followed by author is title continuation."""
+        toc_text = (
+            "CONTENTS\n"
+            "Meetings With A Remarkable Man \u2013 A Personal Recollection Of \t\n"
+            "4\n"
+            "Professor Maurice Friedman\t\n"
+            "Simon du Plock\n"
+            "Next Article Title\t\n"
+            "48\n"
+            "Jane Smith\n"
+        )
+        entries = parse_toc_text(toc_text)
+        assert len(entries) == 2
+        assert 'Professor Maurice Friedman' in entries[0]['title']
+        assert entries[0]['author'] == 'Simon du Plock'
+        assert entries[0]['page'] == 4
+        assert entries[1]['title'] == 'Next Article Title'
+        assert entries[1]['author'] == 'Jane Smith'
+
+    def test_tab_title_after_page_followed_by_page_is_new_entry(self):
+        """Tab-line after page followed by another page is a real new entry."""
+        toc_text = (
+            "CONTENTS\n"
+            "First Article\t\n"
+            "3\n"
+            "Second Article\t\n"
+            "7\n"
+        )
+        entries = parse_toc_text(toc_text)
+        assert len(entries) == 2
+        assert entries[0]['title'] == 'First Article'
+        assert entries[1]['title'] == 'Second Article'
+
+    def test_dot_leader_title_continuation_after_conjunction(self):
+        """Q5: Dot-leader text after conjunction is title continuation, not author."""
+        toc_text = (
+            "CONTENTS\n"
+            "Existentialism, Existential Psychotherapy and\n"
+            "African Philosophy ........................................................................138\n"
+        )
+        entries = parse_toc_text(toc_text)
+        assert len(entries) == 1
+        assert entries[0]['title'] == 'Existentialism, Existential Psychotherapy and African Philosophy'
+        assert entries[0]['author'] is None
+        assert entries[0]['page'] == 138
+
 
 class TestClassifyEntry:
     """Test classify_entry() section assignment."""
@@ -186,20 +246,8 @@ class TestClassifyEntry:
 class TestFindTocPage:
     """Test find_toc_page() with mock fitz doc."""
 
-    def _make_mock_doc(self, pages_text):
-        """Create a mock PyMuPDF doc with given page texts."""
-        doc = MagicMock()
-        doc.__len__ = MagicMock(return_value=len(pages_text))
-        mock_pages = []
-        for text in pages_text:
-            page = MagicMock()
-            page.get_text.return_value = text
-            mock_pages.append(page)
-        doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
-        return doc
-
     def test_toc_on_page_2(self):
-        doc = self._make_mock_doc([
+        doc = _make_mock_doc([
             "Cover page text",
             "Some other page",
             "CONTENTS\nEditorial\t\n3\n",
@@ -208,7 +256,7 @@ class TestFindTocPage:
         assert find_toc_page(doc) == 2
 
     def test_toc_not_found(self):
-        doc = self._make_mock_doc([
+        doc = _make_mock_doc([
             "Cover page",
             "No table of contents here",
             "Just text",
@@ -216,7 +264,7 @@ class TestFindTocPage:
         assert find_toc_page(doc) is None
 
     def test_toc_on_first_page(self):
-        doc = self._make_mock_doc([
+        doc = _make_mock_doc([
             "CONTENTS\nEditorial\t\n3\n",
         ])
         assert find_toc_page(doc) == 0
@@ -224,17 +272,6 @@ class TestFindTocPage:
 
 class TestFindPageOffset:
     """Test find_page_offset() — editorial detection strategy."""
-
-    def _make_mock_doc(self, pages_text):
-        doc = MagicMock()
-        doc.__len__ = MagicMock(return_value=len(pages_text))
-        mock_pages = []
-        for text in pages_text:
-            page = MagicMock()
-            page.get_text.return_value = text
-            mock_pages.append(page)
-        doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
-        return doc
 
     def test_editorial_on_expected_page(self):
         """EDITORIAL on pdf page 4 => journal page 3, offset = 4 - 3 = 1."""
@@ -246,7 +283,7 @@ class TestFindPageOffset:
             "EDITORIAL\nSome editorial text...",  # 4 (journal page 3)
             "More content",      # 5
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         offset = find_page_offset(doc, toc_page_idx=2)
         assert offset == 1  # pdf_index 4 - journal_page 3 = 1
 
@@ -259,7 +296,7 @@ class TestFindPageOffset:
             "5\tSome article starting on journal page 5",  # 3
             "More content",       # 4
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         offset = find_page_offset(doc, toc_page_idx=1)
         # pdf_index 3 - printed_page 5 = -2
         assert offset == -2
@@ -272,25 +309,13 @@ class TestFindPageOffset:
             "Plain text no markers",
             "More plain text",
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         offset = find_page_offset(doc, toc_page_idx=1)
         assert offset is None
 
 
 class TestParseBookReviews:
     """Test parse_book_reviews() with mock fitz docs."""
-
-    def _make_mock_doc(self, pages_text):
-        """Create a mock PyMuPDF doc with given page texts."""
-        doc = MagicMock()
-        doc.__len__ = MagicMock(return_value=len(pages_text))
-        mock_pages = []
-        for text in pages_text:
-            page = MagicMock()
-            page.get_text.return_value = text
-            mock_pages.append(page)
-        doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
-        return doc
 
     def test_two_book_reviews(self):
         """Parse two book reviews across two pages."""
@@ -319,7 +344,7 @@ class TestParseBookReviews:
                 "Tom Critic\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=1)
         assert len(reviews) == 2
         assert reviews[0]['book_title'] == 'The Art of Existence'
@@ -361,7 +386,7 @@ class TestParseBookReviews:
                 "Fay Reader\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=2)
         assert len(reviews) == 3
         assert reviews[0]['book_title'] == 'Meaning and Method'
@@ -385,7 +410,7 @@ class TestParseBookReviews:
                 "Please submit manuscripts to...\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=1)
         assert len(reviews) == 1
         assert reviews[0]['book_title'] == 'The Art of Existence'
@@ -409,7 +434,7 @@ class TestParseBookReviews:
                 "Contact us for details.\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviews = parse_book_reviews(doc, br_start_pdf=0, br_end_pdf=1)
         assert len(reviews) == 1
         assert reviews[0]['pdf_page_end'] == 0
@@ -417,17 +442,6 @@ class TestParseBookReviews:
 
 class TestExtractReviewerName:
     """Test extract_reviewer_name() finding a name at end of review pages."""
-
-    def _make_mock_doc(self, pages_text):
-        doc = MagicMock()
-        doc.__len__ = MagicMock(return_value=len(pages_text))
-        mock_pages = []
-        for text in pages_text:
-            page = MagicMock()
-            page.get_text.return_value = text
-            mock_pages.append(page)
-        doc.__getitem__ = MagicMock(side_effect=lambda i: mock_pages[i])
-        return doc
 
     def test_finds_reviewer_at_end_of_page(self):
         """Reviewer name as the last meaningful line."""
@@ -439,7 +453,7 @@ class TestExtractReviewerName:
                 "Sarah Thompson\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
         assert reviewer == 'Sarah Thompson'
 
@@ -456,7 +470,7 @@ class TestExtractReviewerName:
                 "Jones, A. (2021). Another book. Oxford: Press.\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
         assert reviewer == 'Tom Reviewer'
 
@@ -468,6 +482,6 @@ class TestExtractReviewerName:
                 "And more text here about the review content that is quite long.\n"
             ),
         ]
-        doc = self._make_mock_doc(pages)
+        doc = _make_mock_doc(pages)
         reviewer = extract_reviewer_name(doc, start_pdf=0, end_pdf=0)
         assert reviewer is None

@@ -120,6 +120,16 @@ should_run() {
   [ -z "$ONLY_STEP" ] || [ "$ONLY_STEP" = "$1" ]
 }
 
+# Issue directory name: "<vol>.<iss>" for multi-issue volumes, "<vol>" for single-issue
+issue_dir_name() {
+  local v="$1" s="$2"
+  if [ "$v" -le 5 ] && [ "$s" -eq 1 ]; then
+    echo "$v"
+  else
+    echo "${v}.${s}"
+  fi
+}
+
 should_stop_after() {
   [ -n "$STOP_AFTER" ] && [ "$STOP_AFTER" = "$1" ]
 }
@@ -186,7 +196,7 @@ sys.exit(1 if errors else 0)
     TOC_FILE_ABS="$(cd "$(dirname "$EFFECTIVE_TOC_FILE")" && pwd)/$(basename "$EFFECTIVE_TOC_FILE")"
     VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TOC_FILE_ABS")
     ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TOC_FILE_ABS")
-    ISSUE_DIR="$OUTPUT_DIR/${VOL}.${ISS}"
+    ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
     mkdir -p "$ISSUE_DIR"
     # Copy TOC file, updating source_pdf to point to the actual PDF
     python3 -c "
@@ -213,7 +223,7 @@ with open(sys.argv[3], 'w') as f:
     fi
     VOL=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('volume', 0))" "$TEMP_TOC")
     ISS=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('issue', 0))" "$TEMP_TOC")
-    ISSUE_DIR="$OUTPUT_DIR/${VOL}.${ISS}"
+    ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
     mkdir -p "$ISSUE_DIR"
     mv "$TEMP_TOC" "$ISSUE_DIR/toc.json"
     echo "  Volume $VOL, Issue $ISS → $ISSUE_DIR"
@@ -255,7 +265,7 @@ for i in range(min(3, len(doc))):
             print(1); sys.exit()
 print(0)
 " "$PDF_ABS")
-    ISSUE_DIR="$OUTPUT_DIR/${VOL}.${ISS}"
+    ISSUE_DIR="$OUTPUT_DIR/$(issue_dir_name "$VOL" "$ISS")"
   fi
 
   TOC_JSON="$ISSUE_DIR/toc.json"

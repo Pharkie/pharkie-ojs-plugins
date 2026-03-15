@@ -98,13 +98,15 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/
 
 - [x] Audit all source PDFs (`backfill/audit.py`)
 - [x] OCR 6 scanned PDFs (6.1, 13.1, 13.2, 14.1, 14.2, 29.2)
-- [x] Manual TOC sidecars for 4 unparseable issues (2, 6.2, 16.1, 16.2)
+- [x] Manual TOC sidecars for 5 unparseable issues (2, 6.1, 6.2, 16.1, 16.2)
 - [x] Download live WP archive (`securepdfs/`), compare all three sources
 - [x] Fix mislabelled PDFs: 34.1 and 35.1 (archive had wrong issue content)
 - [x] Replace truncated 6.2 (22pp) with full 204-page version from live server
 - [x] Obtain missing PDFs: 34.1, 35.1, 36.2 (from live WP), 37.1 (provided manually)
 - [x] Rebuild 6.2.toc.json for full 204-page issue
 - [x] Human review of all prepared PDFs
+- [x] Verified all 1298 articles against Google Sheet — parse_toc.py produces correct output
+- [x] parse_toc.py code review & refactoring (constants, regex, decomposition, docs)
 
 ### Next
 
@@ -114,6 +116,9 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/
 
 ## Future improvements
 
+- [ ] **Cross-issue browsing** — let readers browse articles by type (e.g., Book Reviews) across issue boundaries. Two things to investigate:
+  - [ ] **Browse by Section plugin** (`pkp/browseBySection`) — install from Plugin Gallery, enable per-section. Works with existing section assignments, no extra metadata. Easiest win.
+  - [ ] **OJS categories** — decide taxonomy/topology (hierarchical, one level of nesting supported). Categories are independent of sections and require assigning articles (could be done during backfill import). Decide what categories to create and whether they add value beyond section browsing.
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 
 Dropped (not worth the complexity):

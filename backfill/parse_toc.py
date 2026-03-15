@@ -30,10 +30,103 @@ SECTION_BOOK_REVIEWS = 'Book Reviews'
 # "--- Contents ---" with dashes/spaces
 CONTENTS_RE = re.compile(r'^[-\s]*Contents[-\s]*$', re.IGNORECASE | re.MULTILINE)
 
-# Section headers in TOC that should not be treated as article titles
-SECTION_HEADERS = {
+# Section headers in TOC — Format A uses these to skip section dividers
+# in dot-leader TOCs (e.g. "Articles", "Conference Papers" headings)
+_FORMAT_A_SKIP_HEADERS = frozenset({
     'conference papers', 'articles', 'reports', 'poem', 'poems',
-}
+})
+
+# Title conjunctions/prepositions — shared across Format A and book review
+# parsing to detect title continuations split at line breaks
+_TITLE_CONJUNCTIONS = frozenset({
+    'and', 'of', 'the', 'in', 'for', 'on', 'to',
+    'a', 'an', 'as', 'at', 'or', 'with', 'by',
+})
+
+# Known academic publisher cities and publishers — used to strip
+# publisher info from book_author fields and build pub_split regex
+_KNOWN_CITIES = frozenset({
+    'Princeton', 'Oxford', 'Cambridge', 'London', 'New York',
+    'Edinburgh', 'Bristol', 'Chichester', 'Hove', 'Basingstoke',
+    'Buckingham', 'Maidenhead', 'Milton Keynes', 'Philadelphia',
+    'Boston', 'Chicago', 'San Francisco', 'Los Angeles', 'Berkeley',
+    'Durham', 'Harlow', 'Harmondsworth', 'Thousand Oaks', 'Palo Alto',
+    'Lanham',
+})
+
+_KNOWN_PUBLISHERS = frozenset({
+    'Sage', 'Routledge', 'Penguin', 'Vintage', 'Karnac', 'PCCS',
+})
+
+# Backmatter markers — stop parsing book reviews at these boundaries
+# Heuristic thresholds for name/title detection
+_MAX_NAME_LENGTH = 80
+_MAX_NAME_WORDS = 8
+_BODY_TEXT_MIN_LENGTH = 50
+
+_BACKMATTER_RE = re.compile(
+    r'(Advertising|Subscription)\s+Rates|Information for Contributors'
+    r'|Membership of the|Publications and films received'
+)
+
+# Reviewer name pattern — standalone name at end of review
+_REVIEWER_NAME_RE = re.compile(
+    r'^[A-Z][a-z]+(?:\s+(?:[A-Z]\.?\s*)?[A-Z]?[a-z\'\-]*){1,4}$'
+)
+
+# Publisher/city split — strips publisher info from book_author field
+_PUB_SPLIT_RE = re.compile(
+    r'^(.+?)\.\s+((?:'
+    + '|'.join(re.escape(c) for c in sorted(_KNOWN_CITIES, key=len, reverse=True))
+    + '|'
+    + '|'.join(re.escape(p) for p in sorted(_KNOWN_PUBLISHERS))
+    + r'|[A-Z][a-z]+\s+University\s+Press|University\s+of).*)$'
+)
+
+# Book review publication line patterns — compiled once, used by
+# _parse_book_reviews_by_regex() and _match_pub_line()
+# Standard: Author. (2024). City: Publisher.
+_PUB_STANDARD_RE = re.compile(
+    r'^(.+?(?:\(eds?\))?)[.,]\s*\(?(\d{4})\)?\.\s*(.+?):\s*(.+?)\.?\s*$'
+)
+# Partial: publisher on next line
+_PUB_PARTIAL_RE = re.compile(
+    r'^(.+?(?:\(eds?\))?)[.,]\s*\(?(\d{4})\)?\.\s*(.+?):\s*$'
+)
+# Year-first: "2024. Author. City: Publisher."
+_PUB_YEAR_FIRST_RE = re.compile(
+    r'^\(?(\d{4})\)?\.\s*(.+?)\.\s*(.+?):\s*(.+?)\.?\s*$'
+)
+_PUB_YEAR_FIRST_PARTIAL_RE = re.compile(
+    r'^\(?(\d{4})\)?\.\s*(.+?)\.\s*(.+?):\s*$'
+)
+# Relaxed: "Author (Year). City: Publisher"
+_PUB_RELAXED_RE = re.compile(
+    r'^(.+?)\s+\((\d{4})\)\.?\s+(.+?):\s*(.+?)\.?\s*$'
+)
+_PUB_RELAXED_PARTIAL_RE = re.compile(
+    r'^(.+?)\s+\((\d{4})\)\.?\s+(.+?):\s*$'
+)
+# No city: "Author (Year) Publisher"
+_PUB_NOCITY_RE = re.compile(
+    r'^(.+?)\s+\((\d{4})\)\.?\s+([A-Z][A-Za-z &]+?)(?:\s+[\d£€$].+)?\.?\s*$'
+)
+# 1990s inverted: "Title by Author, Publisher (Year)."
+_PUB_INVERTED_A_RE = re.compile(
+    r'^\*?\s*(.+?)[\s.]+[Bb]y\s+(.+?),\s*(.+?)\s*[\(,]\s*(\d{4})\)?[.,]'
+)
+# Inverted B: "Title by Author. Year. Publisher."
+_PUB_INVERTED_B_RE = re.compile(
+    r'^\*?\s*(.+?)[\s.]+[Bb]y\s+(.+?)\.\s*(\d{4})[.,]\s*(.+?)\.?'
+)
+# Inverted C: "Title by Author. Publisher, City, Year."
+_PUB_INVERTED_C_RE = re.compile(
+    r'^\*?\s*(.+?)[\s.]+[Bb]y\s+(.+?)\.\s*(.+?),\s*(\d{4})[.,]'
+)
+
+# Star review patterns
+_STAR_LINE_RE = re.compile(r'^\s*★\s*(.+)$')
+_YEAR_SPLIT_RE = re.compile(r'[.,]\s*(\d{4})[¹²³⁴⁵⁶⁷⁸⁹⁰]*[.,\s]\s*(.+)$')
 
 
 def find_toc_page(doc):
@@ -45,42 +138,57 @@ def find_toc_page(doc):
     return None
 
 
+def _extract_printed_page(text):
+    """Extract printed page number from a page's text.
+
+    Looks for standalone numbers in headers (first line) or footers
+    (last line), or tab-separated numbers.  Returns int or None.
+    """
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    if not lines:
+        return None
+    # Header: bare number as first line, or "number\t"
+    m = re.match(r'^(\d+)\s*$', lines[0])
+    if m:
+        return int(m.group(1))
+    m = re.match(r'^(\d+)\t', lines[0])
+    if m:
+        return int(m.group(1))
+    # Footer: bare number as last line
+    m = re.match(r'^(\d+)$', lines[-1])
+    if m:
+        return int(m.group(1))
+    # After journal header: "Existential Analysis...\n215\n"
+    for line in lines[:3]:
+        if re.match(r'^\d+$', line):
+            return int(line)
+    return None
+
+
 def find_page_offset(doc, toc_page_idx):
     """Determine offset: pdf_index = journal_page + offset.
 
-    Looks for the EDITORIAL page (journal page 3) and computes
-    the offset from there. Also checks for printed page numbers
-    in headers/footers as a cross-check.
+    Finds the printed page number on a known page and computes
+    offset = pdf_index - printed_page.  Works for both .1 issues
+    (printed pages starting at ~3) and .2 issues (pages continuing
+    from previous issue, e.g. starting at 215).
     """
-    # Strategy 1: find a page with "EDITORIAL" near the top
+    # Strategy 1: find a page with "EDITORIAL" near the top,
+    # then read its printed page number
     for test_idx in range(toc_page_idx, min(toc_page_idx + 6, len(doc))):
         text = doc[test_idx].get_text()
-        # Check if EDITORIAL appears in first ~500 chars
         if re.search(r'^EDITORIAL\b', text[:500], re.MULTILINE):
+            printed = _extract_printed_page(text)
+            if printed is not None:
+                return test_idx - printed
+            # Fallback: assume editorial is on printed page 3
             return test_idx - 3
 
-    # Strategy 2: look for printed page numbers in headers
-    # Pages often start with "journal_page\t" or "Existential Analysis...\t\npage_num"
+    # Strategy 2: look for printed page numbers on pages near TOC
     for test_idx in range(toc_page_idx + 1, min(toc_page_idx + 10, len(doc))):
-        text = doc[test_idx].get_text()
-        m = re.match(r'^(\d{1,3})\t', text)
-        if m:
-            printed_page = int(m.group(1))
-            return test_idx - printed_page
-
-    # Strategy 3: look for printed page numbers in footers
-    # Many issues have a bare number as the last line of each page
-    for test_idx in range(toc_page_idx + 1, min(toc_page_idx + 10, len(doc))):
-        text = doc[test_idx].get_text().strip()
-        lines = text.split('\n')
-        if lines:
-            last_line = lines[-1].strip()
-            m = re.match(r'^(\d{1,3})$', last_line)
-            if m:
-                printed_page = int(m.group(1))
-                candidate = test_idx - printed_page
-                if candidate >= 0:
-                    return candidate
+        printed = _extract_printed_page(doc[test_idx].get_text())
+        if printed is not None:
+            return test_idx - printed
 
     return None
 
@@ -139,7 +247,7 @@ def _is_name_like(text):
     if not text:
         return False
     # Quick rejections
-    if len(text) > 80:
+    if len(text) > _MAX_NAME_LENGTH:
         return False
     if not re.match(r'^[A-Z]', text):
         return False
@@ -151,7 +259,7 @@ def _is_name_like(text):
         return False
     # Names are short (2-8 words)
     words = text.split()
-    if len(words) > 8 or len(words) < 1:
+    if len(words) > _MAX_NAME_WORDS or len(words) < 1:
         return False
     # Names don't start with common title words
     first_lower = text.lower()
@@ -162,8 +270,10 @@ def _is_name_like(text):
     )
     if any(first_lower.startswith(s) for s in title_starters):
         return False
-    # Reject if it looks like a publication/journal name
+    # Reject if it looks like a publication/journal name or section header
     if text.startswith('Existential') or text.startswith('Journal'):
+        return False
+    if text.lower() in _FORMAT_B_SECTION_HEADERS | {'references', 'bibliography'}:
         return False
     # Reject if there are too many lowercase words (titles have articles/prepositions)
     lowercase_words = [w for w in words if w[0].islower() and len(w) > 3]
@@ -196,15 +306,15 @@ def _parse_toc_format_a(toc_text):
         stripped = line.strip()
         if not stripped:
             continue
-        # Clean dot-leader line: text....page
-        m = re.match(r'^(.+?)\.{3,}\s*(\d{1,3})\s*$', stripped)
+        # Clean dot-leader line: text....page (dots or Unicode ellipsis …)
+        m = re.match(r'^(.+?)[.\u2026]{3,}\s*(\d{1,3})\s*$', stripped)
         if m:
             text = m.group(1).strip()
             page = int(m.group(2))
             classified.append(('dot', text, page))
             continue
         # OCR'd dot-leader: text..noise..page (dots mixed with OCR garbage)
-        m = re.match(r'^(.+?)(?:\s*\.{2,}).+?(\d{1,3})\s*$', stripped)
+        m = re.match(r'^(.+?)(?:\s*[.\u2026]{2,}).+?(\d{1,3})\s*$', stripped)
         if m and len(stripped) > 40:
             text = m.group(1).strip()
             page = int(m.group(2))
@@ -217,17 +327,30 @@ def _parse_toc_format_a(toc_text):
     for kind, text, page in classified:
         if kind == 'text':
             # Skip known section headers
-            if text.lower().strip() in SECTION_HEADERS:
+            if text.lower().strip() in _FORMAT_A_SKIP_HEADERS:
                 continue
             # Skip journal header lines
-            if text.startswith('Journal of the Society'):
+            if text.lower().startswith('journal of the society'):
                 continue
-            pending_texts.append(text)
+            # If no pending texts and previous entry has no author,
+            # this text may be the author of the previous entry
+            if (not pending_texts and entries and
+                    entries[-1].get('author') is None and
+                    _is_name_like(text)):
+                entries[-1]['author'] = text
+            else:
+                pending_texts.append(text)
         elif kind == 'dot':
             if pending_texts:
                 # Preceding text lines = title, dot-line text = author
                 title = ' '.join(pending_texts)
-                author = text if _is_name_like(text) else None
+                # If the pending title ends with a conjunction/preposition,
+                # the dot-leader text is a title continuation, not an author
+                last_word = title.rsplit(None, 1)[-1].lower() if title else ''
+                if last_word in _TITLE_CONJUNCTIONS:
+                    author = None
+                else:
+                    author = text if _is_name_like(text) else None
                 if not author:
                     # Dot-line text is part of title, not author
                     title = title + ' ' + text if text else title
@@ -272,10 +395,19 @@ def _parse_toc_format_b_newline(toc_text):
             continue
         if re.match(r'^\d{1,3}$', stripped):
             classified.append(('page', int(stripped)))
-        elif stripped.startswith('Journal of the Society'):
+        elif stripped.lower().startswith('journal of the society'):
             continue
         else:
-            classified.append(('text', stripped))
+            # Detect inline page numbers with large whitespace gap
+            # e.g. "All the lonely people...                    168"
+            m_inline = re.match(r'^(.+?)\s{3,}(\d{1,3})\s*$', stripped)
+            if m_inline:
+                title_text = m_inline.group(1).strip()
+                if title_text:
+                    classified.append(('text', title_text))
+                classified.append(('page', int(m_inline.group(2))))
+            else:
+                classified.append(('text', stripped))
 
     # Check if page numbers are all grouped at the end (separated/columnar style)
     last_non_blank = [c for c in classified if c[0] != 'blank']
@@ -300,33 +432,82 @@ def _parse_toc_format_b_newline(toc_text):
         return _parse_b_newline_tap(classified)
 
 
+def _is_strong_name(text):
+    """Stricter name check for ordering detection — must look like a person name.
+
+    Unlike _is_name_like (which permits ambiguous cases), this checks for
+    structures that are clearly person names: first+last pattern, initials,
+    hyphenated surnames, etc.  Used for ordering detection and author assignment
+    where false positives cause cascading errors.
+    """
+    if not _is_name_like(text):
+        return False
+    text = text.strip()
+    words = text.split()
+    if len(words) < 2 or len(words) > 5:
+        return False
+    if len(text) > 40:
+        return False
+    # Must not contain punctuation typical of titles
+    if any(c in text for c in ':?!;"\u2013\u2014'):
+        return False
+    # Reject if any word is a common English noun/adjective (title words)
+    _title_words = {
+        'analysis', 'approach', 'attachment', 'being', 'clinical', 'comments',
+        'consciousness', 'crisis', 'death', 'dialogue', 'dream', 'essay',
+        'essentials', 'ethics', 'evil', 'existential', 'experience', 'heresy',
+        'history', 'ideas', 'identity', 'imaginative', 'intersubjectivity',
+        'introduction', 'it', 'meaning', 'meeting', 'migration', 'model',
+        'new', 'other', 'overview', 'perspectives', 'phenomenological',
+        'philosophy', 'practice', 'psychotherapy', 'radical', 'relationship',
+        'review', 'sexuality', 'society', 'some', 'therapeutic', 'therapy',
+        'three', 'time', 'towards', 'transference', 'unconscious',
+        'variations', 'world',
+    }
+    for w in words:
+        if w.lower() in _title_words:
+            return False
+    # At least one word should look like a first name or initial pattern
+    # (single letter + period, or not in common words)
+    has_name_pattern = any(
+        re.match(r'^[A-Z]\.$', w) or  # Initial: "R.", "J."
+        re.match(r'^[A-Z][a-z]{2,}$', w)  # Capitalized word ≥3 chars
+        for w in words
+    )
+    return has_name_pattern
+
+
 def _detect_b_newline_ordering(classified):
-    """Detect whether B-newline uses title→author→page or title→page→author."""
+    """Detect whether B-newline uses title→author→page or title→page→author.
+
+    Strategy: count how often strong name-like text appears BEFORE vs AFTER
+    page numbers. Uses stricter name detection to avoid false positives from
+    short title strings that pass the regular _is_name_like check.
+    """
     non_blank = [c for c in classified if c[0] != 'blank']
-    # Skip initial Editorial+page pair
-    i = 0
-    while i < len(non_blank) and non_blank[i][0] == 'text':
-        i += 1
-    if i < len(non_blank) and non_blank[i][0] == 'page':
-        i += 1  # skip past first page
 
-    # Now look at the next sequence: text(s), then page or name
-    texts_seen = 0
-    for j in range(i, min(i + 6, len(non_blank))):
-        kind, val = non_blank[j]
-        if kind == 'text':
-            texts_seen += 1
-        elif kind == 'page':
-            # If we saw text then hit page quickly (1-2 texts), and the next
-            # item is a name, it's title→page→author
-            if texts_seen <= 2 and j + 1 < len(non_blank):
-                next_kind, next_val = non_blank[j + 1]
-                if next_kind == 'text' and _is_name_like(next_val):
-                    return 'title-page-author'
-            # Otherwise title→author→page (accumulated more text before page)
-            return 'title-author-page'
+    # Count name-before-page vs name-after-page across all entries
+    name_before = 0
+    name_after = 0
+    for j, (kind, val) in enumerate(non_blank):
+        if kind != 'page':
+            continue
+        # Check if text immediately before page is name-like
+        if j > 0 and non_blank[j - 1][0] == 'text' and _is_strong_name(non_blank[j - 1][1]):
+            name_before += 1
+        # Check if text immediately after page is name-like
+        if j + 1 < len(non_blank) and non_blank[j + 1][0] == 'text' and _is_strong_name(non_blank[j + 1][1]):
+            name_after += 1
 
-    return 'title-author-page'  # default
+    if name_after > name_before:
+        return 'title-page-author'
+    return 'title-author-page'
+
+
+_FORMAT_B_SECTION_HEADERS = {
+    'book reviews', 'book review', 'editorial', 'obituary', 'obituaries',
+    'correspondence', 'letters', 'contributors', 'notes on contributors',
+}
 
 
 def _parse_b_newline_tap(classified):
@@ -341,15 +522,64 @@ def _parse_b_newline_tap(classified):
         elif kind == 'page':
             if not pending_texts:
                 continue
-            # Last text line before page = author (if it looks like a name)
-            author = None
-            title_parts = pending_texts[:]
-            if len(pending_texts) >= 2 and _is_name_like(pending_texts[-1]):
-                author = pending_texts[-1]
-                title_parts = pending_texts[:-1]
 
-            title = ' '.join(title_parts)
-            entries.append({'title': title, 'author': author, 'page': val})
+            # Check if any pending text is a section header (e.g. "Book Reviews").
+            # If so, split: text before it becomes author of previous entry,
+            # the header becomes its own entry with this page number.
+            split_idx = None
+            for si, pt in enumerate(pending_texts):
+                if pt.lower().strip() in _FORMAT_B_SECTION_HEADERS:
+                    split_idx = si
+                    break
+
+            if split_idx is not None and split_idx > 0:
+                # Text before the section header = author of previous entry
+                pre_header = pending_texts[:split_idx]
+                if entries and entries[-1].get('author') is None and len(pre_header) == 1 and _is_name_like(pre_header[0]):
+                    entries[-1]['author'] = pre_header[0]
+                else:
+                    # Multiple pre-header lines or no previous entry — treat as separate entry
+                    title = ' '.join(pre_header)
+                    entries.append({'title': title, 'author': None, 'page': val})
+                # Section header becomes its own entry
+                header_title = pending_texts[split_idx]
+                # Any text after the header in pending_texts becomes part of header entry
+                remaining = pending_texts[split_idx + 1:]
+                author = None
+                if remaining and _is_name_like(remaining[-1]):
+                    author = remaining[-1]
+                entries.append({'title': header_title, 'author': author, 'page': val})
+            else:
+                # Normal case: no section header in pending texts
+                if split_idx == 0:
+                    # Section header is the first/only text — just use it as title
+                    title = pending_texts[0]
+                    author = None
+                    if len(pending_texts) >= 2 and _is_name_like(pending_texts[-1]):
+                        author = pending_texts[-1]
+                    entries.append({'title': title, 'author': author, 'page': val})
+                else:
+                    # Find the author among pending texts.
+                    # Prefer the last strong-name; fall back to last name-like.
+                    # When multiple name-like texts exist, use the last one that
+                    # passes the stricter _is_strong_name check (2-4 word name
+                    # with all-caps initials) to avoid misidentifying short titles.
+                    author = None
+                    author_idx = None
+                    if len(pending_texts) >= 2:
+                        # Try strong name first (last match wins)
+                        for si in range(len(pending_texts) - 1, 0, -1):
+                            if _is_strong_name(pending_texts[si]):
+                                author = pending_texts[si]
+                                author_idx = si
+                                break
+                        # Fall back to regular name-like (last text only)
+                        if author is None and _is_name_like(pending_texts[-1]):
+                            author = pending_texts[-1]
+                            author_idx = len(pending_texts) - 1
+                    title_parts = pending_texts[:author_idx] if author_idx is not None else pending_texts[:]
+                    title = ' '.join(title_parts)
+                    entries.append({'title': title, 'author': author, 'page': val})
             pending_texts = []
 
     return entries
@@ -373,6 +603,18 @@ def _parse_b_newline_tpa(classified):
         title_parts = carry_title[:]
         carry_title = []
         while i < len(items) and items[i][0] == 'text':
+            # If this text is a section header and we already have title parts,
+            # the preceding text may be the author of the previous entry
+            if items[i][1].lower().strip() in _FORMAT_B_SECTION_HEADERS and title_parts:
+                # Assign preceding name-like text as author of previous entry
+                if (entries and entries[-1].get('author') is None
+                        and len(title_parts) == 1 and _is_name_like(title_parts[0])):
+                    entries[-1]['author'] = title_parts[0]
+                elif title_parts:
+                    # Not a single name — keep as carry for a title-only entry
+                    # (will be flushed as a separate entry)
+                    pass
+                title_parts = []  # reset — section header starts fresh
             title_parts.append(items[i][1])
             i += 1
 
@@ -382,11 +624,16 @@ def _parse_b_newline_tpa(classified):
         page = items[i][1]
         i += 1
 
-        # Collect subtitle continuations and author after the page
+        # Collect subtitle continuations and author after the page.
+        # Use _is_strong_name for the first candidate after the page to
+        # avoid misidentifying short titles as authors.
         subtitle_parts = []
         author = None
         while i < len(items) and items[i][0] == 'text':
-            if _is_name_like(items[i][1]) and author is None:
+            # First text after page: use stricter check to avoid false positives.
+            # Subsequent texts: use regular _is_name_like (less ambiguous by position).
+            name_check = _is_strong_name if not subtitle_parts else _is_name_like
+            if name_check(items[i][1]) and author is None:
                 author = items[i][1]
                 i += 1
                 break  # author found — next text is next entry's title
@@ -465,12 +712,13 @@ def _parse_toc_format_b_separated(classified, page_count):
 def _parse_toc_format_b_spaced(toc_text):
     """Parse Format B-spaced: inline page numbers with spaces (Vol 15.1–23.1, 27.2–28.2).
 
-    Handles two sub-formats:
-    - Original PDFs: blank lines separate entries (group-based parsing)
-    - Re-OCR'd PDFs: no blank lines, entries run together continuously
+    Two sub-formats based on PDF source:
+    - Original PDFs: blank lines separate entries → _parse_spaced_groups()
+    - Re-OCR'd PDFs: no blank lines, entries run together → _parse_spaced_no_blanks()
 
-    For re-OCR'd text, detects whether page numbers appear on title lines
-    (format A: 14.1, 14.2) or on author lines (format B: 13.1).
+    Re-OCR'd sub-format further splits into:
+    - Format A (14.1, 14.2): page numbers on title lines, authors on separate lines
+    - Format B (13.1): page numbers on author lines, titles on separate lines
     """
     entries = []
     lines = toc_text.split('\n')
@@ -490,7 +738,7 @@ def _parse_toc_format_b_spaced(toc_text):
                 current_group = []
                 has_blank_separators = True
         else:
-            if stripped.startswith('Journal of the Society'):
+            if stripped.lower().startswith('journal of the society'):
                 continue
             if stripped.startswith('Existential Analysis'):
                 continue
@@ -729,13 +977,32 @@ def _parse_toc_format_c(toc_text):
         return entries
 
     # First pass: classify each line
-    classified = []  # (type, content) where type is 'title', 'page', 'text'
+    content_lines = []  # (raw_line, stripped) — non-blank lines after CONTENTS
     for line in lines[start_idx:]:
         stripped = line.strip()
-        if not stripped:
-            continue
+        if stripped:
+            content_lines.append((line, stripped))
+
+    classified = []  # (type, content) where type is 'title', 'page', 'text'
+    for li, (line, stripped) in enumerate(content_lines):
         if '\t' in line:
-            classified.append(('title', stripped.rstrip('\t').strip()))
+            clean = stripped.rstrip('\t').strip()
+            # A tab-line immediately after a page number might be a title
+            # continuation or author name (trailing tab is a PyMuPDF
+            # extraction artifact), not a new entry.  Only reclassify
+            # if the NEXT line is not a page number (real new entries
+            # have tab-title followed by page number).
+            if classified and classified[-1][0] == 'page':
+                next_stripped = content_lines[li + 1][1] if li + 1 < len(content_lines) else ''
+                next_is_page = bool(re.match(r'^\d{1,3}$', next_stripped))
+                if not next_is_page:
+                    # Next line isn't a page number, so this tab-line is
+                    # probably not a new entry.  Treat as text if it's
+                    # name-like or short (title continuation).
+                    if _is_name_like(clean) or len(clean) < 60:
+                        classified.append(('text', clean))
+                        continue
+            classified.append(('title', clean))
         elif re.match(r'^\d{1,3}$', stripped):
             classified.append(('page', int(stripped)))
         else:
@@ -825,11 +1092,112 @@ def parse_toc_text(toc_text):
         return _parse_toc_format_c(toc_text)
 
 
+def normalize_title_case(title):
+    """Convert ALL CAPS titles to title case.
+
+    Only triggers when the title has a high proportion of ALL CAPS words.
+    Each word is individually title-cased; small words (a, the, of, etc.)
+    are lowercased unless they start the title or follow a colon.
+    Non-ALL-CAPS words are left untouched (preserves mixed-case subtitles).
+    Hyphenated words like SELF-ANALYSIS are handled part-by-part.
+    """
+    if not title:
+        return title
+
+    words = title.split()
+
+    # Count ALL CAPS words (3+ alpha chars, fully uppercase) to decide
+    # if this is an ALL CAPS title
+    def _is_caps_word(w):
+        alpha = re.sub(r'[^A-Za-z]', '', w)
+        return len(alpha) >= 3 and alpha == alpha.upper() and alpha.isalpha()
+
+    caps_count = sum(1 for w in words if _is_caps_word(w))
+    if caps_count < 2:
+        return title  # Not an ALL CAPS title
+
+    SMALL_WORDS = {'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for',
+                   'in', 'on', 'at', 'to', 'of', 'by', 'is', 'as', 'not',
+                   'we', 'do', 'it'}
+
+    result = []
+    capitalize_next = True  # First word or after colon
+
+    for word in words:
+        # Check if this word is ALL CAPS (any length)
+        alpha_only = re.sub(r'[^A-Za-z]', '', word)
+        is_upper = (alpha_only and alpha_only == alpha_only.upper()
+                    and alpha_only.isalpha())
+
+        if not is_upper:
+            # Not ALL CAPS — leave as-is (mixed-case subtitle, abbreviation)
+            result.append(word)
+            capitalize_next = word.endswith(':')
+            continue
+
+        # Abbreviation-like words with dots (T.S.SZASZ, U.S.A.) — leave as-is
+        if '.' in word and re.match(r'^([A-Z]\.)+', word):
+            result.append(word)
+            capitalize_next = word.endswith(':')
+            continue
+
+        # Handle hyphenated words (SELF-ANALYSIS → Self-Analysis)
+        if '-' in word:
+            parts = word.split('-')
+            converted = '-'.join(p[0].upper() + p[1:].lower() if p else p
+                                for p in parts)
+            result.append(converted)
+            capitalize_next = word.endswith(':')
+            continue
+
+        # Strip leading/trailing punctuation for case logic
+        prefix_punc = ''
+        core = word
+        while core and not core[0].isalpha():
+            prefix_punc += core[0]
+            core = core[1:]
+        suffix_punc = ''
+        while core and not core[-1].isalpha():
+            suffix_punc = core[-1] + suffix_punc
+            core = core[:-1]
+
+        if not core:
+            result.append(word)
+        elif capitalize_next or core.lower() not in SMALL_WORDS:
+            result.append(prefix_punc + core[0].upper() + core[1:].lower() + suffix_punc)
+        else:
+            result.append(prefix_punc + core.lower() + suffix_punc)
+
+        capitalize_next = word.endswith(':')
+
+    return ' '.join(result)
+
+
+def collapse_letter_spacing(title):
+    """Collapse letter-spaced OCR artifacts like 'S e x u a l' → 'Sexual'."""
+    if not title:
+        return title
+    # Detect pattern: 5+ single chars separated by spaces
+    if not re.search(r'(\w ){5,}', title):
+        return title
+    # Collapse single-char space sequences (char + space before another char)
+    result = re.sub(r'(\w) (?=\w(?:\s|$))', r'\1', title)
+    # Collapse remaining multiple spaces to single
+    result = re.sub(r'  +', ' ', result)
+    # Fix space before punctuation introduced by collapsing
+    result = re.sub(r' ([:.;,!?])', r'\1', result)
+    return result
+
+
 def classify_entry(title):
     """Classify a TOC entry into an OJS section.
 
     Returns a (section, skip) tuple where skip=True means the entry
     should be omitted from output (e.g. 'Notes on Contributors').
+
+    Note: this uses hardcoded section names, not _FORMAT_A_SKIP_HEADERS
+    or _FORMAT_B_SECTION_HEADERS — those constants control TOC parsing
+    boundaries, not OJS section assignment.
     """
     title_lower = title.lower().strip()
     if title_lower == 'editorial':
@@ -858,7 +1226,14 @@ def classify_entry(title):
 
 
 def extract_article_metadata(doc, pdf_start_idx, pdf_end_idx):
-    """Extract abstract and keywords from article's first page(s)."""
+    """Extract abstract and keywords from article's first page(s).
+
+    Abstract formats: "Abstract\\n text..." or "Abstract: text..." (inline).
+    Terminates at Key Words/Keywords/Introduction or any capitalized heading.
+
+    Keyword delimiters: semicolons preferred when present, else commas.
+    Handles "Key Words", "Keywords", "Key Word" headings with optional colon.
+    """
     if pdf_start_idx >= len(doc):
         return {}
 
@@ -917,122 +1292,722 @@ def extract_article_metadata(doc, pdf_start_idx, pdf_end_idx):
     return metadata
 
 
+def _parse_book_reviews_by_font(doc, br_start_pdf, br_end_pdf):
+    """Parse book reviews using font formatting (Arial Bold ~12pt = title).
+
+    Returns list of reviews, or None if font detection isn't viable
+    (e.g. scanned PDFs or pre-2003 issues with different formatting).
+
+    Viability checks: requires both title-font (Arial Bold) and pub-font
+    (Arial non-bold) lines present. Pub lines must parse into author/year/publisher
+    with author having at least 2 words (filters out inverted-format issues
+    where city/publisher fragments appear in pub-font).
+    """
+    reviews = []
+    # Collect lines with font classification across the BR pages.
+    # Each entry: (page_idx, full_text, line_type, size)
+    # line_type: 'title' (all Arial Bold), 'pub' (all Arial non-bold),
+    #            'body' (Times/other), 'mixed'
+    classified_lines = []
+
+    for page_idx in range(br_start_pdf, min(br_end_pdf + 1, len(doc))):
+        page = doc[page_idx]
+
+        # get_text("dict") returns structured font info; if the doc doesn't
+        # support it (e.g. mock objects in tests), fall back to regex
+        try:
+            text_dict = page.get_text("dict")
+            blocks = text_dict["blocks"]
+        except (TypeError, KeyError, AttributeError):
+            return None
+
+        # Stop at backmatter
+        page_text = page.get_text()
+        if _BACKMATTER_RE.search(page_text):
+            if reviews:
+                reviews[-1]['pdf_page_end'] = page_idx - 1
+            break
+
+        for block in blocks:
+            if "lines" not in block:
+                continue
+            for line_obj in block["lines"]:
+                spans = line_obj["spans"]
+                # Join all span text for this line
+                parts = []
+                has_title_font = False
+                has_pub_font = False
+                has_body_font = False
+                max_size = 0
+
+                for span in spans:
+                    text = span["text"]
+                    if not text.strip():
+                        continue
+                    parts.append(text)
+                    font = span["font"]
+                    size = span["size"]
+                    flags = span["flags"]
+                    bold = bool(flags & (1 << 4))
+                    max_size = max(max_size, size)
+
+                    is_arial = 'Arial' in font or 'Helvetica' in font
+                    if is_arial and bold and size >= 9.0:
+                        has_title_font = True
+                    elif is_arial and not bold and size >= 9.0:
+                        has_pub_font = True
+                    else:
+                        has_body_font = True
+
+                full_text = ''.join(parts).strip()
+                if not full_text:
+                    continue
+
+                # Classify line by dominant font
+                if has_title_font and not has_pub_font and not has_body_font:
+                    line_type = 'title'
+                elif has_pub_font and not has_title_font:
+                    line_type = 'pub'
+                elif has_title_font and has_pub_font:
+                    line_type = 'mixed'
+                else:
+                    line_type = 'body'
+
+                classified_lines.append((page_idx, full_text, line_type, max_size))
+
+    if not classified_lines:
+        return None
+
+    # Check if we found both title-font AND pub-font lines — if either is
+    # missing, font detection isn't viable (scanned PDF, inverted format, etc.)
+    title_line_count = sum(1 for _, _, lt, _ in classified_lines if lt == 'title')
+    pub_line_count = sum(1 for _, _, lt, _ in classified_lines if lt == 'pub')
+    if title_line_count == 0 or pub_line_count == 0:
+        return None
+
+    # Check that pub lines actually parse into author/year/publisher AND that
+    # the author field looks like a real person name (not a city/publisher
+    # fragment from inverted-format issues). Require at least 2 words in author.
+    parseable_pub_count = 0
+    for _, text, lt, _ in classified_lines:
+        if lt == 'pub':
+            author, year, _ = _parse_pub_line(text)
+            if year and author and len(author.split()) >= 2:
+                parseable_pub_count += 1
+    if parseable_pub_count == 0:
+        return None
+
+    # State machine: find title lines (Arial Bold) followed by pub lines
+    # (Arial non-bold that parse into author/year/publisher)
+    current_title_parts = []
+    current_title_page = None
+    state = 'seeking_title'
+
+    for page_idx, text, line_type, size in classified_lines:
+        # Skip headers, page numbers, section headings
+        if text.lower() in ('book reviews', 'book review'):
+            continue
+        if text.lower().startswith('existential analysis'):
+            continue
+        if re.match(r'^\d+$', text):
+            continue
+        if size >= 20.0 and line_type == 'title':
+            continue
+        if text.upper() in ('ERRATUM', 'ERRATA', 'REFERENCES', 'BIBLIOGRAPHY',
+                            'WORKS CITED'):
+            continue
+
+        if state == 'seeking_title':
+            if line_type == 'title':
+                current_title_parts = [text]
+                current_title_page = page_idx
+                state = 'in_title'
+        elif state == 'in_title':
+            if line_type == 'title':
+                current_title_parts.append(text)
+            elif line_type in ('pub', 'mixed'):
+                # Found Arial non-bold line after title — parse as pub line
+                book_author, book_year, publisher = _parse_pub_line(text)
+                if book_year:
+                    book_title = ' '.join(current_title_parts)
+                    if reviews:
+                        reviews[-1]['pdf_page_end'] = current_title_page - 1
+                    reviews.append({
+                        'title': f"Book Review: {book_title}",
+                        'book_title': book_title,
+                        'book_author': book_author,
+                        'book_year': book_year,
+                        'publisher': publisher,
+                        'pdf_page_start': current_title_page,
+                        'section': SECTION_BOOK_REVIEWS,
+                    })
+                    state = 'seeking_title'
+                else:
+                    # Pub line didn't parse (inverted format, etc.) — reset
+                    state = 'seeking_title'
+            else:
+                # Body text after title — try parsing as pub line anyway
+                # (some issues use body font for pub lines)
+                book_author, book_year, publisher = _parse_pub_line(text)
+                if book_year:
+                    book_title = ' '.join(current_title_parts)
+                    if reviews:
+                        reviews[-1]['pdf_page_end'] = current_title_page - 1
+                    reviews.append({
+                        'title': f"Book Review: {book_title}",
+                        'book_title': book_title,
+                        'book_author': book_author,
+                        'book_year': book_year,
+                        'publisher': publisher,
+                        'pdf_page_start': current_title_page,
+                        'section': SECTION_BOOK_REVIEWS,
+                    })
+                state = 'seeking_title'
+
+    # If font detection found very few reviews relative to title lines,
+    # it's probably not working well for this issue. Fall back to None so
+    # the caller uses regex instead.
+    if len(reviews) < 2 and title_line_count > 4:
+        return None
+
+    # Close final review
+    if reviews and 'pdf_page_end' not in reviews[-1]:
+        reviews[-1]['pdf_page_end'] = min(br_end_pdf, len(doc) - 1)
+
+    # Deduplicate reviews with the same book title
+    reviews = _dedup_reviews(reviews)
+
+    # Extract reviewer names
+    for review in reviews:
+        reviewer = extract_reviewer_name(doc, review['pdf_page_start'], review['pdf_page_end'])
+        if reviewer:
+            review['reviewer'] = reviewer
+            review['authors'] = reviewer
+
+    return reviews
+
+
+def _dedup_reviews(reviews):
+    """Remove duplicate reviews by normalized title.
+
+    Catches exact duplicates and also cases where one title is a prefix
+    of another (e.g. truncated vs full title).
+    """
+    seen_keys = []
+    result = []
+    for review in reviews:
+        raw = review.get('book_title', '')
+        key = re.sub(r'\W+', '', raw.lower())
+        # Check if this key matches or is a prefix/suffix of any seen key
+        is_dup = False
+        for sk in seen_keys:
+            if key == sk or key.startswith(sk) or sk.startswith(key):
+                is_dup = True
+                break
+        if is_dup:
+            continue
+        seen_keys.append(key)
+        result.append(review)
+    return result
+
+
+def _parse_pub_line(text):
+    """Parse a publication line into (author, year, publisher).
+
+    Handles: "Author. (Year). City: Publisher." and common variants.
+    Returns (author, year, publisher) or (None, 0, '') if no match.
+    """
+    # Standard: Author. (Year). City: Publisher.
+    m = re.match(r'^(.+?(?:\(eds?\))?)[.,]\s*\(?(\d{4})\)?\.\s*(.+)', text)
+    if m:
+        return m.group(1).strip(), int(m.group(2)), m.group(3).strip().rstrip('.')
+
+    # Relaxed: Author (Year). City: Publisher
+    m = re.match(r'^(.+?)\s+\((\d{4})\)\.?\s+(.+)', text)
+    if m:
+        return m.group(1).strip(), int(m.group(2)), m.group(3).strip().rstrip('.')
+
+    # Relaxed no-parens: Author, Year. City: Publisher
+    m = re.match(r'^(.+?),\s*(\d{4})\.\s*(.+)', text)
+    if m:
+        return m.group(1).strip(), int(m.group(2)), m.group(3).strip().rstrip('.')
+
+    # Year-first: (Year). Author. City: Publisher  or  Year. Author. City: Publisher
+    m = re.match(r'^\(?(\d{4})\)?\.\s*(.+?)\.\s*(.+)', text)
+    if m:
+        return m.group(2).strip(), int(m.group(1)), m.group(3).strip().rstrip('.')
+
+    return None, 0, ''
+
+
+def _clamp_review_page_ranges(reviews):
+    """Clamp backwards page ranges on book reviews (end < start → end = start)."""
+    for review in reviews:
+        s = review.get('pdf_page_start', 0)
+        e = review.get('pdf_page_end', 0)
+        if e < s:
+            review['pdf_page_end'] = s
+    return reviews
+
+
 def parse_book_reviews(doc, br_start_pdf, br_end_pdf):
     """Parse individual book reviews from the Book Reviews section.
 
-    Each review starts near the top of a page with:
-        Book Title (possibly multi-line)
-        Author. (Year). City: Publisher.
+    Tries font-based detection first (reliable for standard-format issues,
+    vol 14+/2003+). Falls back to regex-based detection for scanned/older PDFs.
+    """
+    # Try font-based detection first (standard format, vol 14+)
+    font_reviews = _parse_book_reviews_by_font(doc, br_start_pdf, br_end_pdf)
+    if font_reviews is not None and len(font_reviews) > 0:
+        reviews = _clamp_review_page_ranges(font_reviews)
+    else:
+        # Try ★-prefixed format (vol 13.1)
+        star_reviews = _parse_star_reviews(doc, br_start_pdf, br_end_pdf)
+        if star_reviews is not None and len(star_reviews) > 0:
+            reviews = _clamp_review_page_ranges(star_reviews)
+        else:
+            # Fall back to regex-based detection for older/scanned issues
+            reviews = _clamp_review_page_ranges(
+                _parse_book_reviews_by_regex(doc, br_start_pdf, br_end_pdf))
 
-    We only match publication lines that appear in the first ~8 lines of a page
-    to avoid matching bibliography/reference entries within review text.
-    For older issues where reviews don't start on new pages, this catches most
-    and it's OK to include a bit of extra text.
+    # Post-process book_author for ALL review sources
+    for review in reviews:
+        ba = review.get('book_author', '')
+        if not ba:
+            continue
+        # Strip "Edited by", "Directed by", "Adapted by", "Translated by"
+        prefix_match = re.match(
+            r'^(?:Edited|Directed|Adapted|Translated)\s+by\s+(.+)$',
+            ba, re.IGNORECASE)
+        if prefix_match:
+            review['book_author'] = prefix_match.group(1).strip()
+            continue
+        # Strip "with a foreword by ..." suffix
+        foreword_match = re.match(
+            r'^(.+?),?\s+with\s+a\s+(?:foreword|preface|introduction)\s+by\s+.+$',
+            ba, re.IGNORECASE)
+        if foreword_match:
+            review['book_author'] = foreword_match.group(1).strip()
+
+    return reviews
+
+
+def _parse_star_reviews(doc, br_start_pdf, br_end_pdf):
+    """Parse ★-prefixed book reviews (vol 13.1 "star" format).
+
+    Format: ★ *Title*, by Author. Year. City: Publisher.
+    or:     ★ Title, Author (Eds.). Year. City: Publisher.
+
+    Returns list of reviews if ★ lines are found, else None.
     """
     reviews = []
-    # Match publication lines in multiple formats:
-    # 1. Author. (2024). City: Publisher.     (parenthesised year, one line)
-    # 2. Author. 2024. City: Publisher.       (bare year, one line)
-    # 3. Author. 2024. City:                  (city at end, publisher on next line)
-    # Also handles (ed). or (eds). before the year
-    pub_pattern = re.compile(
-        r'^(.+?(?:\(eds?\))?)\.\s*\(?(\d{4})\)?\.\s*(.+?):\s*(.+?)\.?\s*$'
-    )
-    # Fallback: publication line where publisher is on the next line
-    pub_pattern_partial = re.compile(
-        r'^(.+?(?:\(eds?\))?)\.\s*\(?(\d{4})\)?\.\s*(.+?):\s*$'
-    )
+    for page_idx in range(br_start_pdf, min(br_end_pdf + 1, len(doc))):
+        text = doc[page_idx].get_text()
+        lines = text.split('\n')
+        for li, line in enumerate(lines):
+            stripped = line.strip()
+            sl = _STAR_LINE_RE.match(stripped)
+            if not sl:
+                continue
+            citation = sl.group(1).strip()
 
-    # Track which pages we've already identified as mid-review
-    # to avoid matching bibliography entries at page tops
-    skip_until = br_start_pdf  # don't skip anything initially
+            # If no year on this line, join with next 1-2 lines
+            ym = _YEAR_SPLIT_RE.search(citation)
+            if not ym:
+                for k in range(li + 1, min(li + 3, len(lines))):
+                    nxt = lines[k].strip()
+                    if not nxt:
+                        break
+                    citation += ' ' + nxt
+                    ym = _YEAR_SPLIT_RE.search(citation)
+                    if ym:
+                        break
+            if not ym:
+                continue
+            book_year = int(ym.group(1))
+            publisher = ym.group(2).strip().rstrip('.')
+            pre_year = citation[:ym.start()].strip()
+
+            # Parse pre-year part into title and author
+            # Format A: *Title*, by Author  (has "by" keyword)
+            by_match = re.match(r'^\*?(.+?)\*?,?\s+(?<!edited )(?<!translated )by\s+(.+)$', pre_year)
+            if by_match:
+                book_title = by_match.group(1).strip().strip('*').strip()
+                book_author = by_match.group(2).strip().rstrip('.')
+                # Strip "edited by..." and "translated by..." from author
+                book_author = re.sub(
+                    r',?\s*(?:edited|translated)\s+by\s+.+$', '',
+                    book_author)
+            else:
+                # Format B: Title, Author (Eds.)  or  Author, Title. Subtitle
+                # Use comma as separator; if second part has (Eds/Ed), it's author
+                parts = pre_year.split(',', 1)
+                if len(parts) == 2:
+                    p1 = parts[0].strip().strip('*').strip()
+                    p2 = parts[1].strip().rstrip('.')
+                    # If p2 contains (Ed) or (Eds), it's the author
+                    if re.search(r'\(Eds?\.\)', p2):
+                        book_title = p1
+                        book_author = p2
+                    else:
+                        # Assume: first part is title, second is author+rest
+                        # But check if first part looks like a person name
+                        # (2-3 capitalized words, no colon)
+                        words = p1.split()
+                        if (len(words) <= 3 and ':' not in p1
+                                and all(w[0].isupper() for w in words)):
+                            # Author first: Author, Title. Subtitle
+                            book_author = p1
+                            book_title = p2.strip()
+                            # Clean up title: remove trailing editor info
+                            book_title = re.sub(
+                                r',?\s*(?:edited|translated)\s+by\s+.+$',
+                                '', book_title)
+                        else:
+                            book_title = p1
+                            book_author = p2
+                else:
+                    # No comma — whole thing is the title
+                    book_title = pre_year.strip('*').strip()
+                    book_author = ''
+
+            if reviews:
+                reviews[-1]['pdf_page_end'] = page_idx - 1
+
+            reviews.append({
+                'title': f"Book Review: {book_title}",
+                'book_title': book_title,
+                'book_author': book_author,
+                'book_year': book_year,
+                'publisher': publisher,
+                'pdf_page_start': page_idx,
+                'section': SECTION_BOOK_REVIEWS,
+            })
+
+    if not reviews:
+        return None
+
+    # Close final review
+    if 'pdf_page_end' not in reviews[-1]:
+        reviews[-1]['pdf_page_end'] = min(br_end_pdf, len(doc) - 1)
+
+    # Extract reviewer names
+    for review in reviews:
+        reviewer = extract_reviewer_name(doc, review['pdf_page_start'],
+                                         review['pdf_page_end'])
+        if reviewer:
+            review['reviewer'] = reviewer
+            review['authors'] = reviewer
+
+    return reviews
+
+
+def _match_pub_line(stripped, *, try_inverted=False, lines=None, line_idx=0):
+    """Try all publication-line patterns against a stripped line.
+
+    Returns (match, match_type) where match_type is one of:
+    'standard', 'partial', 'year_first', 'year_first_partial',
+    'relaxed', 'relaxed_partial', 'nocity', 'inverted', or None.
+    """
+    m = _PUB_STANDARD_RE.match(stripped)
+    if m:
+        return m, 'standard'
+    mp = _PUB_PARTIAL_RE.match(stripped)
+    if mp:
+        return mp, 'partial'
+    myf = _PUB_YEAR_FIRST_RE.match(stripped)
+    if myf:
+        return myf, 'year_first'
+    myfp = _PUB_YEAR_FIRST_PARTIAL_RE.match(stripped)
+    if myfp:
+        return myfp, 'year_first_partial'
+    mrl = _PUB_RELAXED_RE.match(stripped)
+    if mrl:
+        return mrl, 'relaxed'
+    mrlp = _PUB_RELAXED_PARTIAL_RE.match(stripped)
+    if mrlp:
+        return mrlp, 'relaxed_partial'
+    mnc = _PUB_NOCITY_RE.match(stripped)
+    if mnc:
+        return mnc, 'nocity'
+
+    if try_inverted:
+        minv = (_PUB_INVERTED_A_RE.match(stripped)
+                or _PUB_INVERTED_B_RE.match(stripped)
+                or _PUB_INVERTED_C_RE.match(stripped))
+        if minv:
+            return minv, 'inverted'
+
+        # Multi-line inverted: join 2-3 consecutive non-blank lines
+        # Only for lines starting with * (1990s review marker)
+        if stripped.startswith('*') and lines is not None:
+            joined_lines = [stripped]
+            for k in range(line_idx + 1, min(line_idx + 3, len(lines))):
+                nxt = lines[k].strip()
+                if not nxt:
+                    break
+                joined_lines.append(nxt)
+            if len(joined_lines) > 1:
+                joined = ' '.join(joined_lines)
+                minv = (_PUB_INVERTED_A_RE.match(joined)
+                        or _PUB_INVERTED_B_RE.match(joined)
+                        or _PUB_INVERTED_C_RE.match(joined))
+                if minv:
+                    return minv, 'inverted'
+
+    return None, None
+
+
+def _extract_backward_title(lines, pub_line_idx):
+    """Scan backward from a pub line to extract title lines above it.
+
+    Returns list of title lines (in forward order), or empty list if
+    no valid title found. Stops at blank lines (after finding text),
+    page headers, page numbers, section headings, bibliography entries,
+    and lines ending with periods.
+    """
+    title_lines = []
+    found_text = False
+    for j in range(pub_line_idx - 1, max(pub_line_idx - 8, -1), -1):
+        prev = lines[j].strip()
+        if not prev:
+            if found_text:
+                break
+            continue
+        if prev.lower().startswith('existential analysis'):
+            break
+        if prev.lower() in ('book reviews', 'book review',
+                            'references', 'bibliography'):
+            break
+        if re.match(r'^\d+$', prev):
+            break
+        # Stop at lines that look like bibliography/reference entries
+        if (_PUB_STANDARD_RE.match(prev) or _PUB_PARTIAL_RE.match(prev)
+                or _PUB_YEAR_FIRST_RE.match(prev)
+                or _PUB_RELAXED_RE.match(prev)
+                or _PUB_INVERTED_A_RE.match(prev)
+                or _PUB_INVERTED_B_RE.match(prev)):
+            break
+        # Stop at lines ending with period — end of paragraph
+        if prev.endswith('.'):
+            break
+        title_lines.insert(0, prev)
+        found_text = True
+    return title_lines
+
+
+_MAX_BOOK_TITLE_LENGTH = 120
+
+
+def _validate_review_titles(reviews):
+    """Filter out reviews where the title looks like body text rather than
+    a book title heading (too long, lowercase start, sentence patterns,
+    publisher/city strings, bibliography-style author format).
+    """
+    validated = []
+    for review in reviews:
+        bt = review.get('book_title', '')
+        if (bt and bt[0].islower()
+                or len(bt) > _MAX_BOOK_TITLE_LENGTH
+                or re.match(r'^(Finally|However|Indeed|Moreover|Also|And|But|The author)', bt)
+                or 'Journal of the Society' in bt
+                or re.search(r'https?://', bt)
+                or re.search(r'www\.', bt)
+                or re.search(r'University\s+(of\s+\w+\s+)?Press|: University|Publishers?\b', bt)):
+            continue
+        # Author in "Last, First" format is bibliography-style, not a review
+        ba = review.get('book_author', '')
+        if ba and re.match(r'^[A-Z][a-z]+,\s+[A-Z][\.\-]', ba):
+            continue
+        validated.append(review)
+    return validated
+
+
+def _strip_publisher_from_author(reviews):
+    """Remove city/publisher info from book_author fields.
+
+    Handles "Author. City: Publisher" and "Author City" patterns.
+    """
+    for review in reviews:
+        ba = review.get('book_author', '')
+        if not ba:
+            continue
+        # Split at ". City" or ". Publisher" patterns
+        pub_split = _PUB_SPLIT_RE.match(ba)
+        if pub_split:
+            review['book_author'] = pub_split.group(1).strip()
+            if not review.get('publisher'):
+                review['publisher'] = pub_split.group(2).strip().rstrip('.')
+            continue
+        # Fallback: "Name City" without period separator
+        words = ba.split()
+        if len(words) >= 3 and words[-1] in _KNOWN_CITIES:
+            candidate_name = ' '.join(words[:-1])
+            if _is_name_like(candidate_name):
+                review['book_author'] = candidate_name
+
+
+def _fix_truncated_titles(reviews):
+    """Fix titles split at conjunctions where book_author contains " by ".
+
+    E.g. book_title="Title of", book_author="Psychoanalysis by Author"
+    → book_title="Title of Psychoanalysis", book_author="Author"
+    """
+    for review in reviews:
+        ba = review.get('book_author', '')
+        by_match = re.match(r'^(.+?)\s+by\s+(.+)$', ba, re.IGNORECASE)
+        if by_match:
+            title_tail = by_match.group(1)
+            real_author = by_match.group(2)
+            bt = review.get('book_title', '')
+            last_word = bt.rsplit(None, 1)[-1].lower() if bt else ''
+            if last_word in _TITLE_CONJUNCTIONS:
+                review['book_title'] = f"{bt} {title_tail}"
+                review['title'] = f"Book Review: {review['book_title']}"
+                review['book_author'] = real_author
+
+
+def _parse_book_reviews_by_regex(doc, br_start_pdf, br_end_pdf):
+    """Parse book reviews using text pattern matching (regex fallback).
+
+    Used for pre-2003 issues with inverted citation format, scanned PDFs,
+    and any issues where font detection isn't viable.
+    """
+    reviews = []
 
     for page_idx in range(br_start_pdf, min(br_end_pdf + 1, len(doc))):
         text = doc[page_idx].get_text()
 
         # Stop at backmatter / publications received / ads
-        if re.search(
-            r'(Advertising|Subscription)\s+Rates|Information for Contributors'
-            r'|Membership of the|Publications and films received',
-            text
-        ):
+        if _BACKMATTER_RE.search(text):
             if reviews:
                 reviews[-1]['pdf_page_end'] = page_idx - 1
             break
 
         lines = text.split('\n')
 
-        # Only check first ~8 non-empty content lines for book review start.
-        # This avoids matching bibliography entries deeper in review text.
-        non_empty_count = 0
+        # Scan all lines for publication-line patterns that signal a new
+        # book review.  To distinguish real review starts from bibliography
+        # entries deeper in review text, we require the title line(s) above
+        # the pub line to look like a heading: preceded by a blank line (or
+        # page header / "Book Reviews" / page number / reviewer name).
+        # Track content lines to limit inverted pattern to near-start
+        content_line_count = 0
+        prev_was_blank = True  # treat start of page as after blank
+
         for i, line in enumerate(lines):
             stripped = line.strip()
             if not stripped:
+                prev_was_blank = True
+                content_line_count = 0
                 continue
-            # Skip page headers — only the exact journal header line
-            if stripped.startswith('Existential Analysis: Journal of The Society'):
+            # Skip page headers (don't count as content)
+            if stripped.lower().startswith('existential analysis'):
                 continue
-            if stripped == 'Book Reviews':
+            if stripped.lower() in ('book reviews', 'book review'):
+                prev_was_blank = True
+                content_line_count = 0
                 continue
             if re.match(r'^\d+$', stripped):
                 continue
-            non_empty_count += 1
-            if non_empty_count > 8:
-                break
 
-            m = pub_pattern.match(stripped)
-            mp = pub_pattern_partial.match(stripped) if not m else None
-            if m or mp:
-                match = m or mp
-                title_lines = []
-                for j in range(i - 1, max(i - 5, -1), -1):
-                    prev = lines[j].strip()
-                    if not prev:
-                        break
-                    if prev.startswith('Existential Analysis: Journal of The Society'):
-                        break
-                    if prev == 'Book Reviews':
-                        break
-                    if re.match(r'^\d+$', prev):
-                        break
-                    title_lines.insert(0, prev)
+            content_line_count += 1
 
-                # Validate: title lines should look like a book title heading,
-                # not a bibliography reference entry. Key differences:
-                # - Book titles in headings don't end with periods
-                # - Bibliography entries are often followed by page ranges
-                # - Real titles are short lines, not paragraph text
+            try_inverted = (content_line_count <= 3 or stripped.startswith('*'))
+            match, match_type = _match_pub_line(
+                stripped, try_inverted=try_inverted,
+                lines=lines, line_idx=i)
+
+            prev_was_blank = False
+
+            if match:
+                is_inverted = (match_type == 'inverted')
+                year_first = match_type in ('year_first', 'year_first_partial')
+                is_nocity = (match_type == 'nocity')
+                has_full_pub = match_type in ('standard', 'year_first', 'relaxed')
+
+                # Inverted format: title+author+publisher all on pub line
+                if is_inverted:
+                    book_title = match.group(1).lstrip('* ').strip()
+                    book_author = match.group(2).strip()
+                    # Pattern B has (title, author, year, publisher)
+                    # Patterns A and C have (title, author, publisher, year)
+                    g3 = match.group(3)
+                    g4 = match.group(4) or ''
+                    if g3 and re.match(r'^\d{4}$', g3):
+                        book_year = int(g3)
+                        publisher = g4.strip()
+                    else:
+                        book_year = int(g4) if re.match(r'^\d{4}$', g4) else 0
+                        publisher = g3.strip() if g3 else ''
+                    if reviews:
+                        reviews[-1]['pdf_page_end'] = page_idx - 1
+                    reviews.append({
+                        'title': f"Book Review: {book_title}",
+                        'book_title': book_title,
+                        'book_author': book_author,
+                        'book_year': book_year,
+                        'publisher': publisher,
+                        'pdf_page_start': page_idx,
+                        'section': SECTION_BOOK_REVIEWS,
+                    })
+                    continue
+
+                title_lines = _extract_backward_title(lines, i)
                 last_title = title_lines[-1] if title_lines else ''
+
                 title_looks_valid = (
                     title_lines and
                     all(len(t) < 70 for t in title_lines) and
                     not any(t.endswith(',') for t in title_lines) and
-                    not last_title.endswith('.')  # bibliography titles end with period
+                    not last_title.endswith('.')
                 )
 
                 if title_looks_valid:
+                    # Strip leading reviewer name
+                    if len(title_lines) > 1:
+                        first = title_lines[0]
+                        fw = first.split()
+                        if (2 <= len(fw) <= 4 and ':' not in first
+                                and fw[0].lower() not in ('the', 'a', 'an')
+                                and all(w[0].isupper() or w in ('de', 'van', 'von', 'du', 'di', 'and', '&')
+                                        for w in fw)):
+                            title_lines = title_lines[1:]
+
                     book_title = ' '.join(title_lines)
                     if reviews:
                         reviews[-1]['pdf_page_end'] = page_idx - 1
 
-                    publisher_city = match.group(3)
-                    if m:
-                        publisher = f"{publisher_city}: {m.group(4)}"
+                    if year_first:
+                        book_author = match.group(2)
+                        book_year = int(match.group(1))
+                    elif is_nocity:
+                        book_author = match.group(1)
+                        book_year = int(match.group(2))
+                        publisher = match.group(3)
                     else:
-                        # Publisher is on the next line
-                        next_pub = ''
-                        for k in range(i + 1, min(i + 3, len(lines))):
-                            nl = lines[k].strip()
-                            if nl:
-                                next_pub = nl.rstrip('.')
-                                break
-                        publisher = f"{publisher_city}: {next_pub}"
+                        book_author = match.group(1)
+                        book_year = int(match.group(2))
+
+                    if not is_nocity:
+                        publisher_city = match.group(3)
+                        if has_full_pub:
+                            publisher = f"{publisher_city}: {match.group(4)}"
+                        else:
+                            # Publisher is on the next line
+                            next_pub = ''
+                            for k in range(i + 1, min(i + 3, len(lines))):
+                                nl = lines[k].strip()
+                                if nl:
+                                    next_pub = nl.rstrip('.')
+                                    break
+                            publisher = f"{publisher_city}: {next_pub}"
 
                     reviews.append({
                         'title': f"Book Review: {book_title}",
                         'book_title': book_title,
-                        'book_author': match.group(1),
-                        'book_year': int(match.group(2)),
+                        'book_author': book_author,
+                        'book_year': book_year,
                         'publisher': publisher,
                         'pdf_page_start': page_idx,
                         'section': SECTION_BOOK_REVIEWS,
@@ -1042,12 +2017,17 @@ def parse_book_reviews(doc, br_start_pdf, br_end_pdf):
     if reviews and 'pdf_page_end' not in reviews[-1]:
         for page_idx in range(reviews[-1]['pdf_page_start'], min(br_end_pdf + 1, len(doc))):
             text = doc[page_idx].get_text()
-            if re.search(r'(Advertising|Subscription)\s+Rates|Information for Contributors|^Membership of the',
-                          text, re.MULTILINE):
+            if _BACKMATTER_RE.search(text):
                 reviews[-1]['pdf_page_end'] = page_idx - 1
                 break
         else:
             reviews[-1]['pdf_page_end'] = min(br_end_pdf, len(doc) - 1)
+
+    # Deduplicate reviews with the same book title
+    reviews = _dedup_reviews(reviews)
+    reviews = _validate_review_titles(reviews)
+    _strip_publisher_from_author(reviews)
+    _fix_truncated_titles(reviews)
 
     # Extract reviewer names
     for review in reviews:
@@ -1084,12 +2064,47 @@ def extract_reviewer_name(doc, start_pdf, end_pdf):
             if re.search(r'Vol\.\s*\d+', line):  # journal ref
                 continue
             # Check for standalone name
-            if re.match(r'^[A-Z][a-z]+(?:\s+(?:[A-Z]\.?\s*)?[A-Z]?[a-z\'\-]*){1,4}$', line):
+            if _REVIEWER_NAME_RE.match(line):
                 return line
             # If we hit regular body text, stop searching this page
-            if len(line) > 50:
+            if len(line) > _BODY_TEXT_MIN_LENGTH:
                 break
     return None
+
+
+def _detect_vol_issue_date(doc):
+    """Detect volume, issue, and date from the first few pages of a PDF.
+
+    Tries two-issue format (e.g. "10.2") first on all pages, then falls
+    back to single-issue (e.g. "Analysis 10"). Returns (vol, iss, date)
+    where any value may be None.
+    """
+    vol, iss, date = None, None, None
+    for i in range(min(3, len(doc))):
+        text = doc[i].get_text()
+        if vol is None:
+            m = re.search(r'(\d{1,2})\.(\d{1,2})', text)
+            if m:
+                v, s = int(m.group(1)), int(m.group(2))
+                if 1 <= v <= 50 and 1 <= s <= 4:
+                    vol, iss = v, s
+    if vol is None:
+        for i in range(min(3, len(doc))):
+            text = doc[i].get_text()
+            m = re.search(r'Analysis\s+(\d{1,2})\s', text, re.IGNORECASE)
+            if m:
+                v = int(m.group(1))
+                if 1 <= v <= 50:
+                    vol, iss = v, 1
+                    break
+    for i in range(min(3, len(doc))):
+        text = doc[i].get_text()
+        if date is None:
+            months = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)'
+            m = re.search(rf'({months})\s+(\d{{4}})', text)
+            if m:
+                date = f"{m.group(1)} {m.group(2)}"
+    return vol, iss, date
 
 
 def main():
@@ -1138,34 +2153,7 @@ def main():
         sys.exit(1)
     print(f"Found {len(raw_entries)} TOC entries", file=sys.stderr)
 
-    # Volume/issue/date from cover
-    # Try two-issue format on all pages first, then single-issue fallback.
-    # This avoids "ANALYSIS 1 0 .2" (garbled OCR) matching single-issue "1".
-    vol, iss, date = None, None, None
-    for i in range(min(3, len(doc))):
-        text = doc[i].get_text()
-        if vol is None:
-            m = re.search(r'(\d{1,2})\.(\d{1,2})', text)
-            if m:
-                v, s = int(m.group(1)), int(m.group(2))
-                if 1 <= v <= 50 and 1 <= s <= 4:
-                    vol, iss = v, s
-    if vol is None:
-        for i in range(min(3, len(doc))):
-            text = doc[i].get_text()
-            m = re.search(r'Analysis\s+(\d{1,2})\s', text, re.IGNORECASE)
-            if m:
-                v = int(m.group(1))
-                if 1 <= v <= 50:
-                    vol, iss = v, 1
-                    break
-    for i in range(min(3, len(doc))):
-        text = doc[i].get_text()
-        if date is None:
-            months = r'(?:January|February|March|April|May|June|July|August|September|October|November|December)'
-            m = re.search(rf'({months})\s+(\d{{4}})', text)
-            if m:
-                date = f"{m.group(1)} {m.group(2)}"
+    vol, iss, date = _detect_vol_issue_date(doc)
 
     # Build article list
     articles = []
@@ -1183,7 +2171,7 @@ def main():
             continue
 
         article = {
-            'title': entry['title'],
+            'title': collapse_letter_spacing(normalize_title_case(entry['title'])),
             'authors': entry.get('author'),
             'section': section,
             'journal_page_start': entry['page'],
@@ -1232,15 +2220,15 @@ def main():
 
             individual_reviews = parse_book_reviews(doc, br_start, br_end)
             if individual_reviews:
-                article['pdf_page_end'] = individual_reviews[0]['pdf_page_start'] - 1
+                new_end = individual_reviews[0]['pdf_page_start'] - 1
+                # Clamp to at least the start page (avoid backwards ranges)
+                article['pdf_page_end'] = max(new_end, article['pdf_page_start'])
                 article['journal_page_end'] = article['pdf_page_end'] - offset
 
             # Extract book review editorial author — a standalone name line
             # Scan forward, find last name-like line before ERRATUM/end
             if not article.get('authors'):
-                name_pattern = re.compile(
-                    r'^[A-Z][a-z]+(?:\s+(?:[A-Z]\.?\s*)?[A-Z]?[a-z\'\-]*){1,4}$'
-                )
+                name_pattern = _REVIEWER_NAME_RE
                 for pi in range(article['pdf_page_start'],
                                 min(article['pdf_page_end'] + 1, len(doc))):
                     page_text = doc[pi].get_text()
@@ -1257,6 +2245,12 @@ def main():
                 final_articles.append(review)
         else:
             final_articles.append(article)
+
+    # Post-process: collapse letter-spaced OCR artifacts in all titles
+    for article in final_articles:
+        for key in ('title', 'book_title'):
+            if key in article and article[key]:
+                article[key] = collapse_letter_spacing(article[key])
 
     output = {
         'source_pdf': os.path.abspath(args.pdf),

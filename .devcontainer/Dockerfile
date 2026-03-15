@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils socat poppler-utils sox \
       ocrmypdf tesseract-ocr \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --break-system-packages pyyaml grip pymupdf
+    && pip install --break-system-packages pyyaml grip pymupdf gspread
 
 # Hetzner Cloud CLI (for managing staging/prod VPS)
 RUN curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz \
