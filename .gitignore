@@ -41,8 +41,19 @@ docker/snapshots/
 # Rebuild logs
 logs/
 
-# Backfill pipeline output (split PDFs, generated XML — large files)
-backfill/output/
+# Backfill pipeline output — large binary files (split PDFs, XML)
+backfill/output/*
+!backfill/output/*/
+backfill/output/*/*.pdf
+backfill/output/*/*.xml
+backfill/output/*/*.csv
+backfill/output/audit-report.*
+backfill/output/review-all.csv
+backfill/output/*.png
+# toc.json is tracked in git — it's the irreplaceable human-reviewed metadata
+!backfill/output/*/toc.json
+
+# Backfill source PDFs (large)
 backfill/prepared/
 
 # Python bytecode
