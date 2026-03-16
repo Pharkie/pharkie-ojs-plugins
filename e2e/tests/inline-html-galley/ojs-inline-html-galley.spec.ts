@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ojsQuery } from '../helpers/ojs';
+import { ojsQuery } from '../../helpers/ojs';
 
 const OJS_BASE = 'http://localhost:8081';
 

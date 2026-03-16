@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { dockerExec } from '../helpers/docker';
-import { ojsApiCall } from '../helpers/ojs';
-import { wpEval } from '../helpers/wp';
+import { dockerExec } from '../../helpers/docker';
+import { ojsApiCall } from '../../helpers/ojs';
+import { wpEval } from '../../helpers/wp';
 
 /**
  * OJS API authentication: verify that the OJS plugin enforces auth correctly.

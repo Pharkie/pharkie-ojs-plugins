@@ -14,7 +14,7 @@ import {
   pruneQueueExcept,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   hasActiveSubscription,
@@ -28,7 +28,7 @@ import {
   ojsApiCall,
   findAndVerifyOjsUser,
   cleanupOjsUsers,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 

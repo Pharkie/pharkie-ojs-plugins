@@ -3,8 +3,9 @@
 /**
  * Inline HTML Galley Plugin
  *
- * Renders HTML galley content inline on article pages for open-access articles
- * (e.g. editorials), replacing the separate full-text viewer link.
+ * Renders HTML galley content inline on article pages when the user has access
+ * (open-access, active subscription, or completed purchase). Replaces the
+ * separate full-text viewer link with inline content — no extra click needed.
  *
  * Deploy to: plugins/generic/inlineHtmlGalley/ in OJS installation.
  * Requires OJS 3.5+.
@@ -34,7 +35,12 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 
     /**
      * Render HTML galley content inline on the article page.
-     * Only for open-access articles that have an HTML galley labeled "Full Text".
+     * Shows for any article the user has access to (open-access, subscription,
+     * or purchased) that has an HTML galley labeled "Full Text".
+     *
+     * Uses OJS's own $hasAccess template var — already computed by
+     * ArticleHandler with the full access logic (subscription, purchase,
+     * open-access, domain-based access).
      */
     public function renderInlineHtmlGalley(string $hookName, array $params): bool
     {
@@ -54,8 +60,10 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
-        // Only show for open-access articles (access_status = 1)
-        if ((int) $publication->getData('accessStatus') !== 1) {
+        // Only render inline if the user has access to this article.
+        // $hasAccess is set by ArticleHandler — covers open-access,
+        // active subscription, domain-based access, and completed purchases.
+        if (!$templateMgr->getTemplateVars('hasAccess')) {
             return Hook::CONTINUE;
         }
 
@@ -106,10 +114,15 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
     }
 
     /**
-     * Hide "Full Text" galley links site-wide (article page sidebar + issue TOC).
-     * The HTML content is rendered inline on article pages, so the separate
-     * "Full Text" link is redundant. Uses JS to target by link text rather
-     * than a generic CSS class (which would hide non-HTML galleys too).
+     * Hide redundant "Full Text" galley links and add inline HTML styling.
+     *
+     * On article pages: only hides the link if inline content was rendered
+     * (detected by the presence of .inline-html-galley on the page). This
+     * means users without access still see the link with purchase price.
+     *
+     * On issue TOC / archive pages: always hides "Full Text" links. The
+     * TOC shows article titles which link to the landing page where inline
+     * content is rendered — the separate galley link is just clutter.
      */
     public function hideHtmlGalleyLink(string $hookName, array $args): bool
     {
@@ -130,8 +143,16 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    var isArticlePage = !!document.querySelector(".obj_article_details");
+    var hasInlineContent = !!document.querySelector(".inline-html-galley");
     document.querySelectorAll(".obj_galley_link").forEach(function(el) {
-        if (el.textContent.trim() === "Full Text") el.style.display = "none";
+        if (el.textContent.trim() === "Full Text") {
+            // On article pages: only hide if inline content was rendered
+            // On issue/archive pages: always hide (TOC title links to landing page)
+            if (!isArticlePage || hasInlineContent) {
+                el.style.display = "none";
+            }
+        }
     });
 });
 </script>');

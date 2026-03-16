@@ -1,6 +1,6 @@
 # Inline HTML Galley Plugin for OJS
 
-Renders HTML galley content directly on article landing pages for open-access articles, replacing the separate "Full Text" viewer link with inline content.
+Renders HTML galley content directly on article landing pages when the user has access, replacing the separate "Full Text" viewer link with inline content. No extra click needed to read the article.
 
 ## Requirements
 
@@ -14,12 +14,12 @@ Renders HTML galley content directly on article landing pages for open-access ar
 ## How it works
 
 For any article where:
-- The publication's access status is **Open Access** (`accessStatus = 1`), and
+- The user **has access** (open-access, active subscription, domain-based access, or completed purchase), and
 - A galley labeled **"Full Text"** exists (HTML file)
 
 The plugin:
 1. Reads the HTML file and extracts the `<body>` content.
 2. Renders it inline on the article page in a `<section class="inline-html-galley">` block.
-3. Hides the redundant "Full Text" galley download link on article pages, issue TOCs, and the archive page (PDF and other galley links remain visible).
+3. Hides the redundant "Full Text" galley link on article pages (only when inline content is shown), issue TOCs, and the archive page. PDF and other galley links remain visible.
 
-This is designed for editorials and other open-access content where the full text should be immediately readable without clicking through to a separate viewer.
+Users without access still see the "Full Text" link with the purchase price — the inline rendering only activates when OJS confirms access.

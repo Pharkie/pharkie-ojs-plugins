@@ -9,8 +9,8 @@ import {
   wpLogin,
   clearTestSyncData,
   cleanupWpUser,
-} from '../helpers/wp';
-import { deleteOjsUser, waitForSync } from '../helpers/ojs';
+} from '../../helpers/wp';
+import { deleteOjsUser, waitForSync } from '../../helpers/ojs';
 
 const WP_PASSWORD = 'TestPass123!';
 

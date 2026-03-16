@@ -19,7 +19,7 @@ import {
   pruneQueueExcept,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   hasActiveSubscription,
@@ -27,7 +27,7 @@ import {
   waitForSync,
   ojsQuery,
   findAndVerifyOjsUser,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 const SETTINGS_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync';

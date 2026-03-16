@@ -12,7 +12,7 @@ import {
   wpEval,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   getOjsUsername,
@@ -21,7 +21,7 @@ import {
   deleteOjsUser,
   hasActiveSubscription,
   waitForSync,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 const WP_PASSWORD = 'TestMember123!';

@@ -15,4 +15,4 @@ msgid "plugins.generic.inlineHtmlGalley.displayName"
 msgstr "Inline HTML Galley"
 
 msgid "plugins.generic.inlineHtmlGalley.description"
-msgstr "Renders HTML galley content inline on article pages for open-access articles, replacing the separate full-text viewer link."
+msgstr "Renders HTML galley content inline on article pages when the user has access (open-access, subscription, or purchase), replacing the separate full-text viewer link."

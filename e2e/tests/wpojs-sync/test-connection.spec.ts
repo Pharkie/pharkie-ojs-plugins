@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { wpLogin, WP_ADMIN_USER, getAdminPassword } from '../helpers/wp';
+import { wpLogin, WP_ADMIN_USER, getAdminPassword } from '../../helpers/wp';
 
 const SETTINGS_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync';
 

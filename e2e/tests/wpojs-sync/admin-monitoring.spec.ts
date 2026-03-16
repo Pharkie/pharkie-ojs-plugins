@@ -9,7 +9,7 @@ import {
   clearTestSyncData,
   WP_ADMIN_USER,
   getAdminPassword,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 const LOG_PAGE = '/wp/wp-admin/admin.php?page=wpojs-sync-log';
 
 test.describe('Admin monitoring: Sync Log page', () => {

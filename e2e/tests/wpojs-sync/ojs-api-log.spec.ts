@@ -8,7 +8,7 @@ import {
   clearTestSyncData,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   deleteOjsUser,
@@ -17,7 +17,7 @@ import {
   getOjsUserSetting,
   clearOjsApiLog,
   ojsQuery,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 const EMAIL = `e2e_apilog_${TS}@test.invalid`;

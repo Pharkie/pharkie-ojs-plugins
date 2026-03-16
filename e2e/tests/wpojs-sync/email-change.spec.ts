@@ -9,7 +9,7 @@ import {
   clearTestSyncData,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   hasActiveSubscription,
@@ -17,7 +17,7 @@ import {
   deleteOjsUser,
   waitForSync,
   cleanupOjsUsers,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 const ORIGINAL_EMAIL = `e2e_emailchg_${TS}@test.invalid`;

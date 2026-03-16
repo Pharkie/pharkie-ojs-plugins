@@ -8,7 +8,7 @@ import {
   clearTestSyncData,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   hasActiveSubscription,
@@ -17,7 +17,7 @@ import {
   getSubscriptionStatus,
   deleteOjsUserById,
   waitForSync,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 const EMAIL = `e2e_delete_${TS}@test.invalid`;

@@ -9,14 +9,14 @@ import {
   clearTestSyncData,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   getOjsUsername,
   setOjsPassword,
   deleteOjsUser,
   waitForSync,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const OJS_BASE = 'http://localhost:8081';
 

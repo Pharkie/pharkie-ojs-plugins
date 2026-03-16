@@ -8,14 +8,14 @@ import {
   clearTestSyncData,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   getOjsUsername,
   setOjsPassword,
   deleteOjsUser,
   waitForSync,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const EMAIL = `e2e_ojslogin_${Date.now()}@test.invalid`;
 const LOGIN = `e2e_ojslogin_${Date.now()}`;

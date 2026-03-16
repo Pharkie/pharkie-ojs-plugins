@@ -9,14 +9,14 @@ import {
   wpCli,
   createUserWithSubscription,
   cleanupWpUser,
-} from '../helpers/wp';
+} from '../../helpers/wp';
 import {
   findOjsUser,
   hasActiveSubscription,
   findAndVerifyOjsUser,
   deleteOjsUser,
   waitForSync,
-} from '../helpers/ojs';
+} from '../../helpers/ojs';
 
 const TS = Date.now();
 
