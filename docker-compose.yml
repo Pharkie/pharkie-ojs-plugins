@@ -106,6 +106,7 @@ services:
       - ojs_files:/var/www/files
       - ./plugins/wpojs-subscription-api:/var/www/html/plugins/generic/wpojsSubscriptionApi
       - ./plugins/wpojs-subscription-api/api/v1/wpojs:/var/www/html/api/v1/wpojs:ro
+      - ./plugins/ojs-inline-html-galley:/var/www/html/plugins/generic/inlineHtmlGalley
       - ./docker/ojs/entrypoint.sh:/etc/ojs/entrypoint.sh:ro
       - ./docker/ojs/config.inc.php.tmpl:/etc/ojs/config.inc.php.tmpl:ro
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro

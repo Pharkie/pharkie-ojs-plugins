@@ -663,6 +663,15 @@ $MARIADB <<SQL
   VALUES ('wpojssubscriptionapiplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
 SQL
 
+# --- Enable Inline HTML Galley plugin ---
+echo "[OJS] Enabling inline-html-galley plugin for journal $JOURNAL_ID..."
+$MARIADB <<SQL
+  INSERT IGNORE INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('inlinehtmlgalleyplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
+  INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
+  VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'inlineHtmlGalley', 'InlineHtmlGalleyPlugin', 1, 0);
+SQL
+
 # --- UI messages (stored in plugin_settings, not config.inc.php) ---
 # PHP INI files corrupt values containing " and {} (HTML with href="..." and
 # {placeholder}), so we write instance-specific messages directly to the DB.
@@ -898,6 +907,15 @@ if [ "$PLUGIN_OK" = "1" ]; then
   echo "[OJS] [ok] wpojs-subscription-api plugin enabled."
 else
   echo "[OJS] [FAIL] wpojs-subscription-api plugin not enabled in DB."
+  HEALTH_FAIL=1
+fi
+
+# Inline HTML Galley plugin enabled in DB
+INLINE_OK=$($MARIADB -N -e "SELECT COUNT(*) FROM plugin_settings WHERE plugin_name='inlinehtmlgalleyplugin' AND setting_name='enabled' AND setting_value='1'" 2>/dev/null) || true
+if [ "$INLINE_OK" = "1" ]; then
+  echo "[OJS] [ok] inline-html-galley plugin enabled."
+else
+  echo "[OJS] [FAIL] inline-html-galley plugin not enabled in DB."
   HEALTH_FAIL=1
 fi
 
