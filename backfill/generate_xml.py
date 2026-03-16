@@ -27,6 +27,11 @@ from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 from datetime import datetime
 
+try:
+    import fitz  # PyMuPDF — optional, needed for HTML galley generation
+except ImportError:
+    fitz = None
+
 
 # Section config: ref, title, abbreviation, access_status, seq
 SECTIONS = {
@@ -94,8 +99,17 @@ def split_author_name(full_name):
     if not full_name:
         return [('', '')]
 
+    # Normalize separators: commas, " and ", " & " all become "&"
+    # Handle trailing period (e.g., "Alice Smith and Bob Jones.")
+    normalized = full_name.rstrip('. ')
+    # Replace ", and " / " and " with "&" (order matters: longest first)
+    normalized = re.sub(r',\s+and\s+', ' & ', normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r'\s+and\s+', ' & ', normalized, flags=re.IGNORECASE)
+    # Replace remaining commas (between authors) with "&"
+    normalized = re.sub(r',\s+', ' & ', normalized)
+
     # Split on & for multiple authors
-    parts = [a.strip() for a in full_name.split('&')]
+    parts = [a.strip() for a in normalized.split('&')]
     authors = []
 
     for name in parts:
@@ -233,6 +247,99 @@ def encode_pdf(pdf_path):
         return base64.b64encode(f.read()).decode('ascii')
 
 
+def generate_cover_image(toc_json_path, vol, iss):
+    """Extract first page of the issue PDF as a JPEG for the cover image.
+
+    Returns (filename, base64_data) or (None, None) if not available.
+    """
+    if fitz is None or not toc_json_path:
+        return None, None
+
+    # Look for the source issue PDF in backfill/prepared/
+    issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
+    project_root = os.path.dirname(os.path.dirname(issue_dir))
+    vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
+    prepared_pdf = os.path.join(project_root, 'prepared', f'{vol_iss}.pdf')
+
+    if not os.path.exists(prepared_pdf):
+        # Try integer-only name for single-issue volumes
+        prepared_pdf = os.path.join(project_root, 'prepared', f'{vol}.pdf')
+    if not os.path.exists(prepared_pdf):
+        return None, None
+
+    doc = fitz.open(prepared_pdf)
+    page = doc[0]
+    # Render at 2x resolution for good quality thumbnails
+    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+    img_bytes = pix.tobytes('jpeg', jpg_quality=85)
+    doc.close()
+
+    filename = f'cover-{vol}-{iss}.jpg'
+    b64_data = base64.b64encode(img_bytes).decode('ascii')
+    return filename, b64_data
+
+
+# Sections that get inline HTML galleys (open-access / unpaywalled)
+HTML_GALLEY_SECTIONS = {'Editorial', 'Book Review Editorial'}
+
+
+def generate_html_from_pdf(pdf_path):
+    """Extract text from PDF and wrap in minimal HTML.
+
+    Returns HTML string or None if extraction fails.
+    Only used for editorials and book review editorials (short, single-column text).
+    """
+    if fitz is None:
+        return None
+    if not pdf_path or not os.path.exists(pdf_path):
+        return None
+
+    doc = fitz.open(pdf_path)
+    paragraphs = []
+
+    for page in doc:
+        text = page.get_text()
+        if not text.strip():
+            continue
+        # Split into paragraphs on double newlines or single newlines followed by uppercase
+        # Simple approach: split on blank lines
+        raw_paragraphs = re.split(r'\n\s*\n', text.strip())
+        for para in raw_paragraphs:
+            # Clean up: collapse internal newlines (word-wrapped lines)
+            cleaned = re.sub(r'\s*\n\s*', ' ', para.strip())
+            if cleaned:
+                paragraphs.append(cleaned)
+
+    doc.close()
+
+    if not paragraphs:
+        return None
+
+    # Skip header lines that are just the journal name or page numbers
+    filtered = []
+    for p in paragraphs:
+        # Skip standalone page numbers
+        if re.match(r'^\d{1,3}$', p.strip()):
+            continue
+        # Skip journal header/footer lines
+        if p.strip().startswith('Existential Analysis: Journal of'):
+            continue
+        filtered.append(p)
+
+    if not filtered:
+        return None
+
+    body = '\n'.join(f'<p>{escape(p)}</p>' for p in filtered)
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Full Text</title></head>
+<body>
+{body}
+</body>
+</html>"""
+    return html
+
+
 def generate_article_xml(article, article_idx, date_published, indent='      ', doi=None, enrichment=None):
     """Generate XML for a single article."""
     i = indent
@@ -263,6 +370,8 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     file_id = 1000 + article_idx
     submission_file_id = 2000 + article_idx
     pub_id = 3000 + article_idx
+    html_file_id = 6000 + article_idx
+    html_submission_file_id = 7000 + article_idx
 
     lines = []
 
@@ -288,6 +397,26 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
         lines.append(f'{i3}<name locale="en">{pdf_name}</name>')
         lines.append(f'{i3}<file id="{file_id}" filesize="{pdf_size}" extension="pdf">')
         lines.append(f'{i4}<embed encoding="base64">{pdf_b64}</embed>')
+        lines.append(f'{i3}</file>')
+        lines.append(f'{i2}</submission_file>')
+
+    # HTML galley for open-access sections (editorials)
+    html_content = None
+    if article['section'] in HTML_GALLEY_SECTIONS and has_pdf:
+        html_content = generate_html_from_pdf(pdf_path)
+    if html_content:
+        html_bytes = html_content.encode('utf-8')
+        html_b64 = base64.b64encode(html_bytes).decode('ascii')
+        html_filename = os.path.splitext(os.path.basename(pdf_path))[0] + '.html'
+        lines.append(f'{i2}<submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+                     f' id="{html_submission_file_id}" created_at="{date_published}"'
+                     f' file_id="{html_file_id}" stage="proof"'
+                     f' updated_at="{date_published}" viewable="false"'
+                     f' genre="Article Text" uploader="admin"'
+                     f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
+        lines.append(f'{i3}<name locale="en">{escape(html_filename)}</name>')
+        lines.append(f'{i3}<file id="{html_file_id}" filesize="{len(html_bytes)}" extension="html">')
+        lines.append(f'{i4}<embed encoding="base64">{html_b64}</embed>')
         lines.append(f'{i3}</file>')
         lines.append(f'{i2}</submission_file>')
 
@@ -378,6 +507,11 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
             else:
                 email = f'{_ascii(family)}@placeholder.invalid'
             email = re.sub(r'[^a-z0-9.@_-]', '', email)
+            # OJS authors.email is varchar(90) — truncate local part if needed
+            if len(email) > 90:
+                local, domain = email.rsplit('@', 1)
+                max_local = 90 - len(domain) - 1  # -1 for @
+                email = f'{local[:max_local]}@{domain}'
             lines.append(f'{i4}  <email>{email}</email>')
             lines.append(f'{i4}</author>')
         lines.append(f'{i3}</authors>')
@@ -402,6 +536,17 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
         lines.append(f'{i4}<name locale="en">PDF</name>')
         lines.append(f'{i4}<seq>0</seq>')
         lines.append(f'{i4}<submission_file_ref id="{submission_file_id}"/>')
+        lines.append(f'{i3}</article_galley>')
+
+    # HTML galley (for inline rendering of open-access articles)
+    if html_content:
+        lines.append(f'{i3}<article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+                     f' locale="en" approved="false"'
+                     f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
+        lines.append(f'{i4}<id type="internal" advice="ignore">{pub_id + 9000}</id>')
+        lines.append(f'{i4}<name locale="en">Full Text</name>')
+        lines.append(f'{i4}<seq>1</seq>')
+        lines.append(f'{i4}<submission_file_ref id="{html_submission_file_id}"/>')
         lines.append(f'{i3}</article_galley>')
 
     lines.append(f'{i2}</publication>')
@@ -476,6 +621,17 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
             lines.append(f'        <title locale="en">{config["title"]}</title>')
             lines.append(f'      </section>')
     lines.append(f'    </sections>')
+
+    # Cover image (first page of issue PDF)
+    cover_filename, cover_b64 = generate_cover_image(toc_json_path, vol, iss)
+    if cover_filename and cover_b64:
+        lines.append(f'    <covers>')
+        lines.append(f'      <cover locale="en">')
+        lines.append(f'        <cover_image>{cover_filename}</cover_image>')
+        lines.append(f'        <cover_image_alt_text>Vol. {vol} No. {iss} ({year})</cover_image_alt_text>')
+        lines.append(f'        <embed encoding="base64">{cover_b64}</embed>')
+        lines.append(f'      </cover>')
+        lines.append(f'    </covers>')
 
     # Articles
     lines.append(f'    <articles>')

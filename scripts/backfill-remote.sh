@@ -97,7 +97,13 @@ if ! $SSH_CMD "docker ps --format '{{.Names}}' | grep -qE '\-ojs-?1?\$'"; then
   exit 1
 fi
 
-$SSH_CMD "cd $REMOTE_DIR && bash backfill/import.sh backfill/output/* $FORCE"
+# Full backfill always starts clean (wipes existing issues/articles) unless --force is used
+# --force implies adding to existing data; without --force, --clean ensures a fresh start
+CLEAN_FLAG=""
+if [ -z "$FORCE" ]; then
+  CLEAN_FLAG="--clean"
+fi
+$SSH_CMD "cd $REMOTE_DIR && bash backfill/import.sh backfill/output/* $FORCE $CLEAN_FLAG"
 
 echo ""
 echo "$(phase_time) === Backfill complete ==="

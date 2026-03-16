@@ -26,12 +26,14 @@ CONTAINER=""
 JOURNAL_PATH="ea"
 ADMIN_USER="admin"
 FORCE=0
+CLEAN=0
 for arg in "$@"; do
   case "$arg" in
     --container=*) CONTAINER="${arg#--container=}" ;;
     --journal=*) JOURNAL_PATH="${arg#--journal=}" ;;
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
     --force) FORCE=1 ;;
+    --clean) CLEAN=1 ;;
     --help|-h)
       sed -n '2,/^set -eo/p' "$0" | head -n -1 | sed 's/^# \?//'
       exit 0
@@ -58,6 +60,7 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --journal=<path>    Journal URL path (default: ea)"
   echo "  --admin=<user>      Admin username (default: admin)"
   echo "  --force             Reimport issues that already exist in OJS"
+  echo "  --clean             Wipe all existing issues/articles before importing"
   echo
   echo "Example: backfill/import.sh backfill/output/37.1"
   echo "         backfill/import.sh backfill/output/*"
@@ -93,6 +96,31 @@ if [ -n "$DB_CONTAINER" ]; then
 fi
 
 echo
+
+# --- Clean existing data if requested ---
+if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
+  echo "--- Cleaning existing issues, articles, and sections ---"
+  docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "
+    SET FOREIGN_KEY_CHECKS=0;
+    DELETE FROM submission_file_settings;
+    DELETE FROM submission_files;
+    DELETE FROM publication_galley_settings;
+    DELETE FROM publication_galleys;
+    DELETE FROM publication_settings;
+    DELETE FROM publications;
+    DELETE FROM submission_settings;
+    DELETE FROM submissions;
+    DELETE FROM issue_galley_settings;
+    DELETE FROM issue_galleys;
+    DELETE FROM issue_settings;
+    DELETE FROM issues;
+    DELETE FROM section_settings;
+    DELETE FROM sections WHERE journal_id = 1;
+    SET FOREIGN_KEY_CHECKS=1;
+  " 2>/dev/null
+  echo "  OK: All existing issues and articles removed."
+  echo
+fi
 
 FAILED=0
 SUCCEEDED=0
@@ -204,6 +232,19 @@ if [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ]; then
     SELECT ROW_COUNT();
   ")
   echo "  OK: $ORDERED issues ordered (newest first by date_published)"
+
+  # Set the newest issue as "current" (stored on journals.current_issue_id in OJS 3.5)
+  ojs_db_query "
+    SET @jid = (SELECT journal_id FROM journals WHERE path = '${JOURNAL_PATH}' LIMIT 1);
+    SET @newest = (SELECT issue_id FROM issues WHERE journal_id = @jid ORDER BY date_published DESC LIMIT 1);
+    UPDATE journals SET current_issue_id = @newest WHERE journal_id = @jid;
+  " > /dev/null 2>&1
+  CURRENT_ISSUE=$(ojs_db_query "
+    SELECT CONCAT('Vol ', i.volume, '.', i.number) FROM issues i
+    JOIN journals j ON j.current_issue_id = i.issue_id
+    WHERE j.path = '${JOURNAL_PATH}' LIMIT 1;
+  ")
+  echo "  OK: $CURRENT_ISSUE set as current issue"
 fi
 
 [ $FAILED -eq 0 ] || exit 1
