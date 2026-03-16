@@ -73,6 +73,25 @@ if [ -z "$CONTAINER" ]; then
   fi
 fi
 echo "OJS container: $CONTAINER"
+
+# --- Find OJS DB container ---
+DB_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '\-ojs-db-?1?$' | head -1)
+if [ -z "$DB_CONTAINER" ]; then
+  echo "WARNING: No OJS DB container found. Idempotency checks and ordering will be skipped."
+fi
+
+# Helper: run a MySQL query and return the result (requires DB_CONTAINER)
+ojs_db_query() {
+  local query="$1"
+  docker exec "$DB_CONTAINER" mysql -N -u ojs -p"$OJS_DB_PASSWORD" ojs -e "$query" 2>/dev/null
+}
+
+# Read DB password from OJS container's environment
+OJS_DB_PASSWORD=""
+if [ -n "$DB_CONTAINER" ]; then
+  OJS_DB_PASSWORD=$(docker exec "$CONTAINER" printenv OJS_DB_PASSWORD 2>/dev/null || true)
+fi
+
 echo
 
 FAILED=0
@@ -122,19 +141,15 @@ for DIR in "${SORTED_DIRS[@]}"; do
     ISSUE_NUM=""
   fi
 
-  if [ -n "$ISSUE_VOL" ] && [ -n "$ISSUE_NUM" ]; then
+  if [ -n "$ISSUE_VOL" ] && [ -n "$ISSUE_NUM" ] && [ -n "$DB_CONTAINER" ]; then
     # Query OJS database to check if this issue already exists
-    EXISTING=$(docker exec "$CONTAINER" php -r "
-      require('tools/bootstrap.php');
-      \$conn = \Illuminate\Database\Capsule\Manager::connection();
-      \$count = \$conn->table('issues')
-        ->join('journals', 'issues.journal_id', '=', 'journals.journal_id')
-        ->where('journals.path', '${JOURNAL_PATH}')
-        ->where('issues.volume', ${ISSUE_VOL})
-        ->where('issues.number', '${ISSUE_NUM}')
-        ->count();
-      echo \$count;
-    " 2>/dev/null || echo "0")
+    EXISTING=$(ojs_db_query "
+      SELECT COUNT(*) FROM issues i
+      JOIN journals j ON i.journal_id = j.journal_id
+      WHERE j.path = '${JOURNAL_PATH}'
+        AND i.volume = ${ISSUE_VOL}
+        AND i.number = '${ISSUE_NUM}'
+    " || echo "0")
 
     if [ "$EXISTING" -gt 0 ] 2>/dev/null; then
       if [ "$FORCE" -eq 0 ]; then
@@ -171,5 +186,24 @@ done
 echo "=========================================="
 echo "Complete: $SUCCEEDED imported, $SKIPPED skipped, $FAILED failed out of ${#SORTED_DIRS[@]}"
 echo "=========================================="
+
+# --- Fix archive ordering ---
+# OJS archive page sorts by custom_issue_orders.seq first. Without entries,
+# order is undefined. Populate with newest-first by date_published.
+if [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ]; then
+  echo ""
+  echo "--- Fixing archive ordering ---"
+  ORDERED=$(ojs_db_query "
+    SET @jid = (SELECT journal_id FROM journals WHERE path = '${JOURNAL_PATH}' LIMIT 1);
+    DELETE FROM custom_issue_orders WHERE journal_id = @jid;
+    INSERT INTO custom_issue_orders (issue_id, journal_id, seq)
+    SELECT issue_id, @jid, @seq := @seq + 1
+    FROM issues, (SELECT @seq := 0) s
+    WHERE journal_id = @jid
+    ORDER BY date_published DESC;
+    SELECT ROW_COUNT();
+  ")
+  echo "  OK: $ORDERED issues ordered (newest first by date_published)"
+fi
 
 [ $FAILED -eq 0 ] || exit 1

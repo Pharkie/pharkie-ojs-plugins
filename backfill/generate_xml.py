@@ -69,7 +69,7 @@ MONTH_MAP = {
 
 
 def parse_date(date_str):
-    """Convert 'January 2026' to '2026-01-01'."""
+    """Convert 'January 2026' to '2026-01-01', or '1991' to '1991-07-01'."""
     if not date_str:
         return datetime.now().strftime('%Y-%m-%d')
     parts = date_str.split()
@@ -77,6 +77,9 @@ def parse_date(date_str):
         month = MONTH_MAP.get(parts[0], '01')
         year = parts[1]
         return f'{year}-{month}-01'
+    if len(parts) == 1 and parts[0].isdigit():
+        # Year-only date — use mid-year as default
+        return f'{parts[0]}-07-01'
     return datetime.now().strftime('%Y-%m-%d')
 
 
