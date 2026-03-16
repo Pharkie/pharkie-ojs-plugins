@@ -76,7 +76,7 @@ Move WP from Krystal to Hetzner. Both WP + OJS on same VPS.
 
 ## Playwright E2E browser tests (`e2e/`)
 
-All passing (61/61):
+All passing (66/66):
 
 - [x] Sync lifecycle — WCS activate/expire → OJS subscription status
 - [x] OJS login — synced user logs in with WP password (no password setup needed)
@@ -89,6 +89,7 @@ All passing (61/61):
 - [x] Test connection — settings page AJAX test reports success
 - [x] Error recovery — sync fails when OJS unreachable, succeeds on retry
 - [x] Manual roles, settings behaviour, WP-CLI commands, API auth
+- [x] Inline HTML galley — editorial inline content, hidden "Full Text" links, PDF visible, paywall excluded
 
 ## Backfill: journal archive (30 years of back-issues)
 
@@ -122,7 +123,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/
 
 ## Future improvements
 
-- [ ] **Inline HTML for editorials** — render editorial/book review editorial content inline on the OJS article page (no download click). Plan: new standalone OJS plugin (`inlineHtmlGalley`), generate HTML galleys from PyMuPDF text extraction for unpaywalled sections only (~133 articles). See saved plan: `.claude/plans/composed-herding-koala.md`. Reference: [ulsdevteam/inlineHtmlGalley](https://github.com/ulsdevteam/inlineHtmlGalley) (OJS 3.4 only, not porting — writing simpler purpose-built version for 3.5).
+- [x] **Inline HTML for editorials** — standalone OJS plugin (`inlineHtmlGalley`) renders editorial HTML galley content inline on article pages for open-access articles, hides redundant "Full Text" galley links. Extracted from `wpojsSubscriptionApi` into independently publishable plugin. 5 Playwright tests. HTML galley generation in `generate_xml.py` already handles this during backfill import.
 - [ ] **Cross-issue browsing** — let readers browse articles by type (e.g., Book Reviews) across issue boundaries. Two things to investigate:
   - [ ] **Browse by Section plugin** (`pkp/browseBySection`) — install from Plugin Gallery, enable per-section. Works with existing section assignments, no extra metadata. Easiest win.
   - [ ] **OJS categories** — decide taxonomy/topology (hierarchical, one level of nesting supported). Categories are independent of sections and require assigning articles (could be done during backfill import). Decide what categories to create and whether they add value beyond section browsing.
