@@ -118,12 +118,8 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/
 ### Next
 
 - [ ] Re-run `backfill/audit.py` on `backfill/prepared/`, all 68 PDFs should pass
-- [ ] **HTML galley generation via Haiku API** — clean formatted HTML from article PDFs (PyMuPDF is garbage for multi-column layouts). Phased rollout to control API costs:
-  - [ ] Test 1 article — eyeball quality
-  - [ ] Test 10 articles — mix of types (editorial, research, book review)
-  - [ ] Test 1 full issue — pipeline + import + inline rendering verification
-  - [ ] Roll out to all 68 issues (~1356 articles)
-- [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`)
+- [x] **HTML galley generation via Haiku API** — 1356 articles processed (~$57 API cost). 1318 Haiku-generated, 38 PyMuPDF fallback (content-filtered, platform-level — Sonnet also blocked). Report: `backfill/output/htmlgen-report.json`. All `.html` files tracked in git.
+- [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`) — HTML galleys will be picked up automatically by `generate_xml.py`
 - toc.json files are auto-discovered by `split-issue.sh` — no flags needed
 
 ## Future improvements
