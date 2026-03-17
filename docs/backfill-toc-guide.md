@@ -160,6 +160,17 @@ The CONTENTS page is the primary source for titles and authors. However:
 }
 ```
 
+### Book review pitfalls
+
+When setting page boundaries for book reviews, watch for:
+
+1. **Dual reviews of the same book** — some issues have two reviewers for one book (the Book Review Editorial intro says so). Each needs its own toc.json entry with separate page ranges.
+2. **Reviewer byline is at the END** — not the start. Read the last page of each review to find the actual reviewer name.
+3. **Trailing boilerplate** — "Publications received for review" and "The Society for Existential Analysis" pages are NOT article content. Don't include them in the last article's `pdf_page_end`.
+4. **Reviews share pages** — one review ends and the next begins mid-page. Include the full page in whichever article starts on it (the split tool can't cut mid-page).
+5. **Errors cascade** — when one boundary is wrong, check ALL neighbouring articles. A wrong `pdf_page_end` on one review means the next review's `pdf_page_start` may also be wrong.
+6. **HTML bleed on shared pages** — when two reviews share a page, the HTML galley for each will include the tail/head of the adjacent review (Haiku extracts full pages). This is a known cosmetic issue. Future improvement: post-process HTML to trim content outside the article's actual boundaries.
+
 ### Editorial
 ```json
 {
