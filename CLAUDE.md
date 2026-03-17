@@ -116,8 +116,8 @@ HTML galley generation (step 2.5, between split and import):
 - `generate_xml.py` reads `.html` files via `load_html_galley()` — if present, wraps in DOCTYPE/body and embeds as "Full Text" galley. No `.html` = no HTML galley (PDF only).
 
 Standalone utilities:
-- `backfill/audit.py` — audit all source PDFs in `backfill/prepared/` for completeness
-- `backfill/compare_archive.py` — compare PDF sources (prepared/, live WP securepdfs/, etc.)
+- `backfill/audit.py` — audit all source PDFs in `backfill/input/` for completeness
+- `backfill/compare_archive.py` — compare PDF sources (input/, live WP securepdfs/, etc.)
 - `backfill/export_review.py` — export toc.json entries to spreadsheet-compatible format
 - `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
 - `backfill/sheets_export.py` — publish all toc.json data to Google Sheet for review
@@ -127,7 +127,7 @@ All 68 existing issues have toc.json files in `backfill/output/`. Large binaries
 ### Fixing a bad split or HTML galley
 
 1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/output/<vol>.<iss>/toc.json`
-2. Re-split: `backfill/split-issue.sh backfill/prepared/<vol>.<iss>.pdf`
+2. Re-split: `backfill/split-issue.sh backfill/input/<vol>.<iss>.pdf`
 3. Delete the affected `.html` file(s): `rm backfill/output/<vol>.<iss>/<seq>-<slug>.html`
 4. Re-generate HTML: `python3 backfill/htmlgen.py backfill/output/<vol>.<iss>/toc.json --yes`
    (skips all existing `.html`, only regenerates deleted ones — costs pennies)

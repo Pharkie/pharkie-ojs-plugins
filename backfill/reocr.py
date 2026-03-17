@@ -6,7 +6,7 @@ Renders each page as an image, sends to Claude for OCR, then replaces
 the text layer in the PDF. Original image content is preserved.
 
 Usage:
-    python backfill/reocr.py backfill/prepared/6.1.pdf [--dry-run] [--model haiku]
+    python backfill/reocr.py backfill/input/6.1.pdf [--dry-run] [--model haiku]
     python backfill/reocr.py --all [--dry-run]
 
 Requires ANTHROPIC_API_KEY environment variable.
@@ -399,7 +399,7 @@ def main():
     args = parser.parse_args()
 
     if args.all:
-        pdf_paths = [f'backfill/prepared/{f}' for f in SCANNED_PDFS]
+        pdf_paths = [f'backfill/input/{f}' for f in SCANNED_PDFS]
     elif args.pdfs:
         pdf_paths = args.pdfs
     else:

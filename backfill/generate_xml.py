@@ -255,15 +255,15 @@ def generate_cover_image(toc_json_path, vol, iss):
     if fitz is None or not toc_json_path:
         return None, None
 
-    # Look for the source issue PDF in backfill/prepared/
+    # Look for the source issue PDF in backfill/input/
     issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
     project_root = os.path.dirname(os.path.dirname(issue_dir))
     vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
-    prepared_pdf = os.path.join(project_root, 'prepared', f'{vol_iss}.pdf')
+    prepared_pdf = os.path.join(project_root, 'input', f'{vol_iss}.pdf')
 
     if not os.path.exists(prepared_pdf):
         # Try integer-only name for single-issue volumes
-        prepared_pdf = os.path.join(project_root, 'prepared', f'{vol}.pdf')
+        prepared_pdf = os.path.join(project_root, 'input', f'{vol}.pdf')
     if not os.path.exists(prepared_pdf):
         return None, None
 

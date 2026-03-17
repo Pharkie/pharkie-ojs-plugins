@@ -1,6 +1,6 @@
 # Issues that need better source PDFs
 
-If original digital files or higher-quality scans can be obtained, these should be replaced in `backfill/prepared/`.
+If original digital files or higher-quality scans can be obtained, these should be replaced in `backfill/input/`.
 
 | Issue | Problem with current copy |
 |-------|--------------------------|

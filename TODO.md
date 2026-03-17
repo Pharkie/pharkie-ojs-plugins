@@ -93,7 +93,7 @@ All passing (66/66):
 
 ## Backfill: journal archive (30 years of back-issues)
 
-All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/`. See `docs/backfill-issue-inventory.md` for full inventory with page counts, TOC status, and article counts.
+All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. See `docs/backfill-issue-inventory.md` for full inventory with page counts, TOC status, and article counts.
 
 ### Done
 
@@ -117,7 +117,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/prepared/
 
 ### Next
 
-- [ ] Re-run `backfill/audit.py` on `backfill/prepared/`, all 68 PDFs should pass
+- [ ] Re-run `backfill/audit.py` on `backfill/input/`, all 68 PDFs should pass
 - [x] **HTML galley generation via Haiku API** — 1356 articles processed (~$57 API cost). 1318 Haiku-generated, 38 PyMuPDF fallback (content-filtered, platform-level — Sonnet also blocked). Report: `backfill/output/htmlgen-report.json`. All `.html` files tracked in git.
 - [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`) — HTML galleys will be picked up automatically by `generate_xml.py`
 - toc.json files are auto-discovered by `split-issue.sh` — no flags needed

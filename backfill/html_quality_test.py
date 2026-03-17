@@ -18,7 +18,7 @@ OUTPUT_DIR = "/tmp/html-quality-test"
 SAMPLES = [
     {
         "label": "v01-editorial",
-        "pdf": "/workspaces/wp-ojs-sync/backfill/prepared/1.pdf",
+        "pdf": "/workspaces/wp-ojs-sync/backfill/input/1.pdf",
         "pages": (4, 4),  # 0-based
         "desc": "Vol 1 Editorial (1994, early, short)",
     },

@@ -57,7 +57,7 @@ backfill/output/*.png
 !backfill/output/htmlgen-report.json
 
 # Backfill source PDFs (large)
-backfill/prepared/
+backfill/input/
 
 # Python bytecode
 __pycache__/

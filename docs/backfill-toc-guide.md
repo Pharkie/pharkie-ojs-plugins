@@ -4,7 +4,7 @@ How to create `toc.json` files for the backfill pipeline. Each issue PDF needs a
 
 ## Quick version
 
-Ask Claude: "Read `backfill/prepared/<vol>.pdf` and create `backfill/output/<vol>/toc.json` following the schema in `docs/backfill-toc-guide.md`."
+Ask Claude: "Read `backfill/input/<vol>.pdf` and create `backfill/output/<vol>/toc.json` following the schema in `docs/backfill-toc-guide.md`."
 
 ## toc.json schema
 
@@ -74,7 +74,7 @@ Open the PDF with PyMuPDF and find the CONTENTS/TOC page (usually within the fir
 
 ```python
 import fitz
-doc = fitz.open('backfill/prepared/23.1.pdf')
+doc = fitz.open('backfill/input/23.1.pdf')
 for i in range(min(10, len(doc))):
     text = doc[i].get_text()
     if 'CONTENTS' in text.upper():

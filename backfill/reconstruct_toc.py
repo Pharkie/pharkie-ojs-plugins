@@ -4,7 +4,7 @@
 Reads the backfill review spreadsheet and recreates toc.json files in
 backfill/output/<vol>.<iss>/ with all available metadata.
 
-Also derives source_pdf and total_pdf_pages from backfill/prepared/ PDFs.
+Also derives source_pdf and total_pdf_pages from backfill/input/ PDFs.
 
 Usage:
     python3 backfill/reconstruct_toc.py --dry-run    # Preview without writing
@@ -20,7 +20,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 OUTPUT_DIR = SCRIPT_DIR / 'output'
-PREPARED_DIR = SCRIPT_DIR / 'prepared'
+PREPARED_DIR = SCRIPT_DIR / 'input'
 CREDS_FILE = SCRIPT_DIR.parent / 'data export' / 'sea-journal-87a19feadadd.json'
 SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
 
@@ -137,7 +137,7 @@ def reconstruct_tocs(headers, rows):
             articles.append(article)
 
         toc = {
-            'source_pdf': pdf_path or f'backfill/prepared/{issue_dir_name(vol, iss)}.pdf',
+            'source_pdf': pdf_path or f'backfill/input/{issue_dir_name(vol, iss)}.pdf',
             'volume': vol,
             'issue': iss,
             'date': date,

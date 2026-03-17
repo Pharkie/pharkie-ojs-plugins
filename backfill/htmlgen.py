@@ -80,7 +80,14 @@ Content rules:
 - Rejoin hyphenated line breaks (e.g. "existen-\\ntial" → "existential")
 - Preserve foreign terms in their original language (German, French, Greek)
 - Include ALL content through to the very last reference/footnote — do not
-  stop early"""
+  stop early
+
+For book reviews: The PDF pages may contain the end of a previous review
+before this one, and/or the start of the next review after this one.
+Look for the book title header and reviewer byline to identify THIS
+review's boundaries. Only include content from THIS review — stop at
+the reviewer's name/byline near the end, do not continue into text
+about a different book."""
 
 
 def load_env():

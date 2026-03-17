@@ -15,7 +15,7 @@ Every issue of Existential Analysis (Vol 1–37), tracking PDF availability, TOC
 
 ### TOC formats
 
-TOC page = PDF page number where CONTENTS heading was found. Manual TOC = sidecar `.toc.json` file in `backfill/prepared/`, auto-discovered by `split-issue.sh`.
+TOC page = PDF page number where CONTENTS heading was found. Manual TOC = sidecar `.toc.json` file in `backfill/input/`, auto-discovered by `split-issue.sh`.
 
 | dot-leader | stacked | spaced | tabbed |
 |:----------:|:-------:|:------:|:------:|
