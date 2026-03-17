@@ -216,10 +216,13 @@ def strip_code_fences(html):
     return html
 
 
-def build_prompt(is_book_review=False, has_shared_pages=False):
+def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None):
     """Select the right prompt for this article type."""
     if is_book_review:
-        return BOOK_REVIEW_PROMPT
+        prompt = BOOK_REVIEW_PROMPT
+        if book_title:
+            prompt += f'\n\nThe book being reviewed is: "{book_title}"\nExtract ONLY the review of THIS specific book. Ignore content reviewing any other book.'
+        return prompt
     elif has_shared_pages:
         return ARTICLE_SHARED_PAGE_PROMPT
     else:
@@ -227,7 +230,7 @@ def build_prompt(is_book_review=False, has_shared_pages=False):
 
 
 def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8,
-                               is_book_review=False, has_shared_pages=False):
+                               is_book_review=False, has_shared_pages=False, book_title=None):
     """Send all pages of a split PDF to Claude, return (html, input_tokens, output_tokens, num_pages, truncated).
 
     All pages sent in a single message for full article context.
@@ -253,7 +256,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
 
     content.append({
         'type': 'text',
-        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages),
+        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages, book_title=book_title),
     })
 
     for attempt in range(max_retries):
@@ -452,7 +455,8 @@ def main():
             html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(
                 client, split_pdf, model_name,
                 is_book_review=article.get('_is_book_review', False),
-                has_shared_pages=article.get('_has_shared_pages', False))
+                has_shared_pages=article.get('_has_shared_pages', False),
+                book_title=article.get('book_title', '') if article.get('_is_book_review') else None)
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback
