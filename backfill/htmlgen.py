@@ -54,8 +54,7 @@ MODEL_PRICING = {
 EST_INPUT_TOKENS_PER_PAGE = 1600
 EST_OUTPUT_TOKENS_PER_PAGE = 600
 
-HTML_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
-Return ONLY the content for inside <body> tags — no DOCTYPE, html, head,
+FORMATTING_RULES = """Return ONLY the content for inside <body> tags — no DOCTYPE, html, head,
 or body tags. Do NOT wrap output in markdown code fences.
 
 Formatting:
@@ -65,29 +64,60 @@ Formatting:
 - <h2> for section headings (e.g. "Introduction", "Method", "Discussion")
 - <blockquote> for block quotes
 - <ol>/<ul> for lists if present
-
-Content rules:
-- SKIP: page numbers, running headers ("Existential Analysis: Journal of..."),
-  running footers, volume/issue identifiers
-- SKIP: the article title and author byline on the first page (already in OJS
-  metadata) — start from the first paragraph of body text or abstract
-- SKIP: section-level headings like "EDITORIAL", "ARTICLES", "BOOK REVIEWS",
-  "Book Review Editorial" — these are OJS section names, not part of the article
-- KEEP: Abstract (wrap in <h2>Abstract</h2> then the text)
-- KEEP: Keywords if present (wrap in <p><strong>Keywords:</strong> ...)</p>)
-- KEEP: Footnotes/endnotes (as numbered <p> at the end)
-- KEEP: References/bibliography (each as a separate <p>)
 - Rejoin hyphenated line breaks (e.g. "existen-\\ntial" → "existential")
 - Preserve foreign terms in their original language (German, French, Greek)
-- Include ALL content through to the very last reference/footnote — do not
-  stop early
 
-For book reviews: The PDF pages may contain the end of a previous review
-before this one, and/or the start of the next review after this one.
-Look for the book title header and reviewer byline to identify THIS
-review's boundaries. Only include content from THIS review — stop at
-the reviewer's name/byline near the end, do not continue into text
-about a different book."""
+Always SKIP: page numbers, running headers ("Existential Analysis: Journal
+of..."), running footers, volume/issue identifiers, section-level headings
+like "EDITORIAL", "ARTICLES", "BOOK REVIEWS", "Book Review Editorial"."""
+
+ARTICLE_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
+
+""" + FORMATTING_RULES + """
+
+SKIP the article title and author name at the TOP of the first page (already
+in OJS metadata). Start from the first paragraph of body text or abstract.
+
+KEEP: Abstract, Keywords, all body text, footnotes/endnotes, References.
+Include ALL content through to the very last reference/footnote — do not
+stop early."""
+
+ARTICLE_SHARED_PAGE_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
+The first and/or last page may contain content from an adjacent article
+(articles run continuously without page breaks). Only extract THIS article.
+
+""" + FORMATTING_RULES + """
+
+SKIP the article title and author name at the TOP of the first page (already
+in OJS metadata). Start from the first paragraph of body text or abstract.
+
+If the first page starts with the END of a previous article, skip that
+content and start from THIS article's body text.
+
+KEEP: Abstract, Keywords, all body text, footnotes/endnotes, References.
+Include ALL content through to the very last reference/footnote. If the last
+page contains the START of the next article, stop before it."""
+
+BOOK_REVIEW_PROMPT = """Convert this book review PDF into clean, well-structured HTML.
+The PDF pages may contain multiple reviews — extract ONLY this one.
+
+""" + FORMATTING_RULES + """
+
+A book review has this structure:
+  1. Book publication line (title, author, publisher, year) — SKIP this,
+     it is already in OJS metadata
+  2. Review body paragraphs — INCLUDE all of these
+  3. Reviewer's name on its own line (e.g. "Simon Du Plock") — INCLUDE
+     this, output as <p><strong>Name</strong></p>
+  4. References section (if present) — INCLUDE these
+
+IMPORTANT BOUNDARIES:
+- If the first page starts with text from a PREVIOUS review, skip it.
+  Look for this review's book title to know where to start.
+- The reviewer's name marks the end of the review. After the name (and
+  any References), STOP IMMEDIATELY. Do not include anything after that.
+  A new book title/publisher line after the reviewer name is the NEXT
+  review — do not include it."""
 
 
 def load_env():
@@ -179,7 +209,18 @@ def strip_code_fences(html):
     return html
 
 
-def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8):
+def build_prompt(is_book_review=False, has_shared_pages=False):
+    """Select the right prompt for this article type."""
+    if is_book_review:
+        return BOOK_REVIEW_PROMPT
+    elif has_shared_pages:
+        return ARTICLE_SHARED_PAGE_PROMPT
+    else:
+        return ARTICLE_PROMPT
+
+
+def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8,
+                               is_book_review=False, has_shared_pages=False):
     """Send all pages of a split PDF to Claude, return (html, input_tokens, output_tokens, num_pages, truncated).
 
     All pages sent in a single message for full article context.
@@ -205,7 +246,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
 
     content.append({
         'type': 'text',
-        'text': HTML_PROMPT,
+        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages),
     })
 
     for attempt in range(max_retries):
@@ -255,12 +296,27 @@ def collect_articles(toc_paths, article_filter=None):
             toc = json.load(f)
         vol = toc.get('volume', '?')
         iss = toc.get('issue', '?')
-        for idx, article in enumerate(toc['articles']):
+        all_articles = toc['articles']
+        for idx, article in enumerate(all_articles):
             split_pdf = article.get('split_pdf')
             if not split_pdf or not os.path.exists(split_pdf):
                 continue
             if article_filter is not None and (idx + 1) != article_filter:
                 continue
+            # Detect shared pages with neighbors
+            has_shared = False
+            if idx > 0:
+                prev = all_articles[idx - 1]
+                if prev.get('pdf_page_end') is not None and article.get('pdf_page_start') is not None:
+                    if prev['pdf_page_end'] >= article['pdf_page_start']:
+                        has_shared = True
+            if idx < len(all_articles) - 1:
+                nxt = all_articles[idx + 1]
+                if article.get('pdf_page_end') is not None and nxt.get('pdf_page_start') is not None:
+                    if article['pdf_page_end'] >= nxt['pdf_page_start']:
+                        has_shared = True
+            article['_has_shared_pages'] = has_shared
+            article['_is_book_review'] = article.get('section', '') in ('Book Reviews', 'Book Review')
             articles.append((toc_path, vol, iss, idx, article))
     return articles
 
@@ -386,7 +442,10 @@ def main():
         label = f"Vol {vol}.{iss} #{idx+1}"
 
         try:
-            html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(client, split_pdf, model_name)
+            html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(
+                client, split_pdf, model_name,
+                is_book_review=article.get('_is_book_review', False),
+                has_shared_pages=article.get('_has_shared_pages', False))
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback

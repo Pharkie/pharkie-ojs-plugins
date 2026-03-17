@@ -88,8 +88,8 @@ class TestSectionAccessStatus:
     def test_book_review_editorial_is_free(self):
         assert SECTIONS['Book Review Editorial']['access_status'] == '1'
 
-    def test_book_reviews_are_paywalled(self):
-        assert SECTIONS['Book Reviews']['access_status'] == '0'
+    def test_book_reviews_are_free(self):
+        assert SECTIONS['Book Reviews']['access_status'] == '1'
 
 
 class TestGenerateXmlStructure:

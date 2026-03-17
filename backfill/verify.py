@@ -191,7 +191,7 @@ def verify_issue(toc_data, container=None, journal_path='ea', **db_opts):
                       f'expected={exp_section}, got={ojs_section}')
 
             # Check access status
-            exp_access = '0' if exp_section in ('Articles', 'Book Reviews') else '1'
+            exp_access = '0' if exp_section == 'Articles' else '1'
             ojs_access = ojs_row[3]
             if str(ojs_access) != exp_access:
                 check(f'Access: {expected["title"][:50]}', False,

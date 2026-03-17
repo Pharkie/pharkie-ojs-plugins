@@ -166,7 +166,7 @@ class TestFullXmlGeneration:
         articles = self.root.findall('.//pkp:article', NS)
         br_pub = articles[4].find('.//pkp:publication', NS)
         assert br_pub.get('section_ref') == 'BR'
-        assert br_pub.get('access_status') == '0'
+        assert br_pub.get('access_status') == '1'
 
     def test_book_review_editorial_is_open(self):
         articles = self.root.findall('.//pkp:article', NS)

@@ -58,7 +58,7 @@ SECTIONS = {
     },
     'Book Reviews': {
         'ref': 'BR', 'title': 'Book Reviews', 'abbrev': 'BR',
-        'access_status': '0',  # subscription (paywalled)
+        'access_status': '1',  # open (free) — book reviews are not paywalled
         'seq': 3,
         'abstracts_not_required': '1',
         'meta_reviewed': '0',

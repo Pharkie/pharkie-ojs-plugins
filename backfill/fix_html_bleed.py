@@ -280,6 +280,20 @@ def classify_review(review):
                 'has_refs': refs is not None,
             }
 
+    # Alternative end-bleed detection: next review's book title found in this HTML
+    # (catches cases where reviewer byline is missing)
+    if not result['has_end_bleed'] and next_review and next_review.get('book_title'):
+        next_title_pos = find_book_title_position(html, next_review['book_title'])
+        if next_title_pos and next_title_pos[0] > len(html) * 0.3:
+            tail = html[next_title_pos[0]:].strip()
+            if len(tail) > 50:
+                result['has_end_bleed'] = True
+                result['end_bleed_chars'] = len(tail)
+                result['next_title_in_tail'] = True
+                result['trim_info'] = result.get('trim_info') or {}
+                result['trim_info']['next_title_start'] = next_title_pos[0]
+                result['trim_info']['tail_length'] = len(tail)
+
     # Check for start-bleed: content before book title that belongs to previous review
     if result['has_book_title'] and book_title:
         title_pos = find_book_title_position(html, book_title)
@@ -302,6 +316,24 @@ def classify_review(review):
                     result['trim_info']['title_start'] = title_pos[0]
                     result['trim_info']['preamble_length'] = len(preamble)
                     result['trim_info']['prev_reviewer_found'] = prev_reviewer_in_preamble
+
+    # Alternative start-bleed detection: previous reviewer's byline near the start
+    # (catches cases where book title isn't found in HTML)
+    if not result['has_start_bleed']:
+        prev_review = review.get('prev_review')
+        if prev_review and prev_review.get('reviewer'):
+            prev_byline_positions = find_reviewer_byline_positions(html, prev_review['reviewer'])
+            if prev_byline_positions:
+                first_prev_byline_start, first_prev_byline_end = prev_byline_positions[0]
+                # Only if the previous reviewer's byline is near the start (first 30%)
+                if first_prev_byline_start < len(html) * 0.3:
+                    preamble = html[:first_prev_byline_end].strip()
+                    if len(preamble) > 20:
+                        result['has_start_bleed'] = True
+                        result['trim_info'] = result.get('trim_info') or {}
+                        result['trim_info']['prev_byline_end'] = first_prev_byline_end
+                        result['trim_info']['preamble_length'] = len(preamble)
+                        result['trim_info']['prev_reviewer_found'] = True
 
     # Determine category
     if not result['has_book_title'] and not result['has_reviewer']:
@@ -427,7 +459,14 @@ def trim_review(review, classification, dry_run=False):
 
     # Trim start-bleed
     cat = classification['category']
-    if cat in ('start-bleed', 'both-bleed') and 'title_start' in trim_info:
+    if cat in ('start-bleed', 'both-bleed') and 'prev_byline_end' in trim_info:
+        # Trim using previous reviewer's byline position
+        prev_byline_end = trim_info['prev_byline_end']
+        preamble = modified_html[:prev_byline_end].strip()
+        if preamble:
+            modified_html = modified_html[prev_byline_end:].lstrip()
+            changes.append(f"trimmed {len(preamble)} chars of start-bleed (prev reviewer byline)")
+    elif cat in ('start-bleed', 'both-bleed') and 'title_start' in trim_info:
         title_start = trim_info['title_start']
         # Find the start of the element containing the book title
         # Keep everything from the title element onward
@@ -437,7 +476,19 @@ def trim_review(review, classification, dry_run=False):
             changes.append(f"trimmed {len(preamble)} chars of start-bleed")
 
     # Trim end-bleed
-    if cat in ('end-bleed', 'both-bleed') and 'keep_end' in trim_info:
+    if cat in ('end-bleed', 'both-bleed') and 'next_title_start' in trim_info:
+        # Trim using next review's book title position
+        cut_pos = trim_info['next_title_start']
+        # Adjust for any start-trim offset
+        if 'title_start' in trim_info:
+            cut_pos -= trim_info.get('title_start', 0)
+        elif 'prev_byline_end' in trim_info:
+            cut_pos -= trim_info.get('prev_byline_end', 0)
+        if cut_pos > 0 and cut_pos < len(modified_html):
+            tail = modified_html[cut_pos:].strip()
+            modified_html = modified_html[:cut_pos].rstrip()
+            changes.append(f"trimmed {len(tail)} chars of end-bleed (next review title)")
+    elif cat in ('end-bleed', 'both-bleed') and 'keep_end' in trim_info:
         keep_end = trim_info['keep_end']
         # Adjust for any start-trim offset
         if 'title_start' in trim_info and cat == 'both-bleed':

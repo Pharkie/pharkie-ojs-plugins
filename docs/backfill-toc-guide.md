@@ -167,9 +167,87 @@ When setting page boundaries for book reviews, watch for:
 1. **Dual reviews of the same book** — some issues have two reviewers for one book (the Book Review Editorial intro says so). Each needs its own toc.json entry with separate page ranges.
 2. **Reviewer byline is at the END** — not the start. Read the last page of each review to find the actual reviewer name.
 3. **Trailing boilerplate** — "Publications received for review" and "The Society for Existential Analysis" pages are NOT article content. Don't include them in the last article's `pdf_page_end`.
-4. **Reviews share pages** — one review ends and the next begins mid-page. Include the full page in whichever article starts on it (the split tool can't cut mid-page).
+4. **Reviews share pages** — one review ends and the next begins mid-page. Both the ending review AND the starting review should include the shared page in their range.
 5. **Errors cascade** — when one boundary is wrong, check ALL neighbouring articles. A wrong `pdf_page_end` on one review means the next review's `pdf_page_start` may also be wrong.
-6. **HTML bleed on shared pages** — when two reviews share a page, the HTML galley for each will include the tail/head of the adjacent review (Haiku extracts full pages). This is a known cosmetic issue. Future improvement: post-process HTML to trim content outside the article's actual boundaries.
+6. **HTML bleed on shared pages** — when two articles share a page, the HTML galley for each will include the tail/head of the adjacent article. The `fix_html_bleed.py` tool trims book review bleed automatically. For non-book-review articles, `htmlgen.py` uses a shared-page prompt addendum to tell Haiku to extract only the right article's content.
+
+## Lessons learned from auditing all 68 issues
+
+These patterns were discovered by verifying every volume's book reviews against source PDFs. Read this before creating or auditing any toc.json.
+
+### Systematic errors found across all early volumes (1-12)
+
+1. **`pdf_page_end` consistently too short** — the single most common error. The end page stops 1-2 pages before the reviewer's actual byline. Every early volume had this. Always read the PDF to find the reviewer byline — don't guess.
+
+2. **Missing reviews** — every early volume had 1-5 book reviews completely absent from toc.json. They exist in the PDF between listed reviews but were never catalogued. Gaps in page ranges (where one review ends at page X and the next starts at page X+3) almost always mean there's a missing review in between.
+
+3. **Combined multi-book reviews** — when one reviewer reviews 2-4 books together in a single continuous essay, keep all book entries but give them identical page ranges. They share the same split PDF and HTML. Common reviewers for combined reviews: Ernesto Spinelli, Simon du Plock, Hans W. Cohn.
+
+4. **Wrong reviewer attribution** — reviewer names swapped between adjacent reviews. Always verify the byline in the PDF, not the CONTENTS page.
+
+### Red flags that indicate problems
+
+- **Page gaps of 2+** between consecutive reviews — almost always means a missing review
+- **Single-page reviews** (`split_pages: 1`) — suspicious unless very short. Usually means `pdf_page_end` is wrong.
+- **Identical page ranges** for two entries — could be correct (combined review) or an error
+- **Reviews > 10 pages** — suspicious for a book review. Check if there are multiple reviews inside that range.
+- **Consistent 2-page gaps** — systematic error where every review's end page is too short by the same amount
+- **Last article ending at `total_pdf_pages - 1`** — check that the last page isn't an ISSN back cover or "Publications received" page
+
+### Back matter that must NOT be included
+
+The last article in an issue must NOT include these pages:
+- ISSN back cover (often just "ISSN 0958-0476" or "ISSN 1752-5616")
+- "The Society for Existential Analysis" blurb page
+- "Publications and films received for review" listings
+- Advertising rates / membership forms / subscription info
+- Table of contents page at the back
+
+If the last PDF page contains only ISSN or a Society blurb, reduce `pdf_page_end` by 1.
+
+### Reviewer byline + references
+
+A book review's content includes:
+1. Book metadata header (title, author, publisher, year)
+2. Review body text
+3. Reviewer byline (standalone bold name)
+4. References section (if present — comes AFTER the byline)
+
+The `pdf_page_end` must include the References page. The HTML trim tool (`fix_html_bleed.py`) preserves references after the byline when trimming end-bleed.
+
+### Articles sharing pages (continuous layout)
+
+In many issues (especially early volumes), articles run continuously without page breaks. When article A ends mid-page and article B starts on the same page:
+- Both A and B should include that shared page in their range
+- The split PDFs will each contain the shared page (with content from both articles)
+- `htmlgen.py` detects shared pages and adds a prompt addendum telling Haiku to extract only the correct article's content
+- `fix_html_bleed.py` trims residual bleed from book review HTML as a safety net
+- For non-book-review articles, shared-page bleed is handled by the prompt, not post-processing
+
+### Offset calculation
+
+toc.json uses 0-based PDF page indices. Printed page numbers in the PDF differ by a fixed offset (varies per issue, typically +1 to +5):
+- To find the offset: compare a known toc.json entry's `pdf_page_start` with the printed page number visible on that PDF page
+- Formula: `0_based_index = printed_page + offset`
+- The offset can vary if the issue has unnumbered front matter pages
+
+### Verification checklist
+
+After creating or modifying a toc.json:
+
+1. **Split PDFs exist** — run `split-issue.sh` and check all PDFs were created
+2. **Title on first page** — each split PDF's first page should contain the article's title (or book title for reviews)
+3. **No back matter** — last article's split PDF should not end with ISSN/Society blurb pages
+4. **No gaps** — consecutive articles' page ranges should be contiguous or share a page (gaps = missing content)
+5. **Reviewer bylines** — each book review's last page should contain the reviewer's name
+6. **References included** — if a review has references after the byline, those pages are included in the range
+
+### Tools
+
+- **`backfill/fix_html_bleed.py --report`** — audit all book review HTML for bleed issues
+- **`backfill/fix_html_bleed.py --trim`** — automatically trim detected bleed from book review HTML
+- **`backfill/output/split-verification.json`** — tracks which volumes have been human-verified
+- **`toc-confirmed.json`** — locked copy of toc.json after human approval (do not modify without asking)
 
 ### Editorial
 ```json
