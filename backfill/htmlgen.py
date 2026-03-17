@@ -41,10 +41,14 @@ except ImportError:
     print("ERROR: anthropic required. Install with: pip install anthropic", file=sys.stderr)
     sys.exit(1)
 
-MODEL_NAME = 'claude-haiku-4-5-20251001'
+DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
 # Pricing per million tokens (docs.anthropic.com/en/docs/about-claude/pricing)
-PRICING = {'input': 1.00, 'output': 5.00}
+MODEL_PRICING = {
+    'claude-haiku-4-5-20251001': {'input': 1.00, 'output': 5.00},
+    'claude-sonnet-4-5-20250929': {'input': 3.00, 'output': 15.00},
+    'claude-sonnet-4-6': {'input': 3.00, 'output': 15.00},
+}
 
 # Estimated tokens per page (image input ~1600, HTML output ~600)
 EST_INPUT_TOKENS_PER_PAGE = 1600
@@ -168,8 +172,8 @@ def strip_code_fences(html):
     return html
 
 
-def generate_html_for_article(client, split_pdf_path, max_retries=8):
-    """Send all pages of a split PDF to Haiku, return (html, input_tokens, output_tokens, num_pages, truncated).
+def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8):
+    """Send all pages of a split PDF to Claude, return (html, input_tokens, output_tokens, num_pages, truncated).
 
     All pages sent in a single message for full article context.
     Retries with exponential backoff on rate limit errors.
@@ -199,27 +203,37 @@ def generate_html_for_article(client, split_pdf_path, max_retries=8):
 
     for attempt in range(max_retries):
         try:
-            response = client.messages.create(
-                model=MODEL_NAME,
-                max_tokens=16384,
+            # Use streaming to avoid 10-minute timeout on long responses
+            html_parts = []
+            input_tokens = 0
+            output_tokens = 0
+            stop_reason = None
+            with client.messages.stream(
+                model=model_name,
+                max_tokens=50000,
                 messages=[{
                     'role': 'user',
                     'content': content,
                 }]
-            )
-            html = response.content[0].text
+            ) as stream:
+                for text in stream.text_stream:
+                    html_parts.append(text)
+                response = stream.get_final_message()
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+                stop_reason = response.stop_reason
+            html = ''.join(html_parts)
             html = strip_code_fences(html)
             html = dedup_paragraphs(html)
-            truncated = response.stop_reason == 'max_tokens'
-            usage = response.usage
-            return html, usage.input_tokens, usage.output_tokens, num_pages, truncated
+            truncated = stop_reason == 'max_tokens'
+            return html, input_tokens, output_tokens, num_pages, truncated
         except anthropic.RateLimitError:
             if attempt < max_retries - 1:
                 wait = 2 ** attempt + 1 + random.uniform(0, 1)
                 time.sleep(wait)
             else:
                 raise
-        except anthropic.BadRequestError as e:
+        except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
             if 'content filtering' in str(e).lower():
                 print(f"  FILTERED: {os.path.basename(split_pdf_path)}", file=sys.stderr)
                 return None, 0, 0, num_pages, False
@@ -244,8 +258,9 @@ def collect_articles(toc_paths, article_filter=None):
     return articles
 
 
-def estimate_cost(articles):
+def estimate_cost(articles, model_name=DEFAULT_MODEL):
     """Estimate API cost for generating HTML for the given articles."""
+    pricing = MODEL_PRICING.get(model_name, MODEL_PRICING[DEFAULT_MODEL])
     total_pages = 0
     skip_count = 0
     for _, _, _, _, article in articles:
@@ -257,8 +272,8 @@ def estimate_cost(articles):
         total_pages += len(doc)
         doc.close()
 
-    input_cost = (total_pages * EST_INPUT_TOKENS_PER_PAGE / 1_000_000) * PRICING['input']
-    output_cost = (total_pages * EST_OUTPUT_TOKENS_PER_PAGE / 1_000_000) * PRICING['output']
+    input_cost = (total_pages * EST_INPUT_TOKENS_PER_PAGE / 1_000_000) * pricing['input']
+    output_cost = (total_pages * EST_OUTPUT_TOKENS_PER_PAGE / 1_000_000) * pricing['output']
     return {
         'total_articles': len(articles),
         'skip_existing': skip_count,
@@ -273,11 +288,13 @@ def estimate_cost(articles):
 def main():
     load_env()
 
-    parser = argparse.ArgumentParser(description='Generate HTML galleys using Claude Haiku API')
+    parser = argparse.ArgumentParser(description='Generate HTML galleys using Claude API')
     parser.add_argument('toc_json', nargs='+', help='toc.json file(s)')
     parser.add_argument('--dry-run', action='store_true', help='Estimate cost without calling API')
     parser.add_argument('--article', type=int, default=None,
                         help='Process only this article (1-indexed)')
+    parser.add_argument('--model', default=DEFAULT_MODEL,
+                        help=f'Claude model (default: {DEFAULT_MODEL})')
     parser.add_argument('--workers', type=int, default=8,
                         help='Max concurrent API workers (default: 8)')
     parser.add_argument('--yes', '-y', action='store_true', help='Skip cost confirmation prompt')
@@ -294,7 +311,9 @@ def main():
         print("No articles with split PDFs found.")
         return
 
-    est = estimate_cost(articles)
+    model_name = args.model
+    pricing = MODEL_PRICING.get(model_name, MODEL_PRICING[DEFAULT_MODEL])
+    est = estimate_cost(articles, model_name)
     print(f"\nHTML generation estimate:")
     print(f"  toc.json files:    {len(args.toc_json)}")
     print(f"  Total articles:    {est['total_articles']}")
@@ -302,7 +321,7 @@ def main():
         print(f"  Already done:      {est['skip_existing']}")
     print(f"  Articles to do:    {est['articles_to_process']}")
     print(f"  Total pages:       {est['total_pages']}")
-    print(f"  Model:             {MODEL_NAME}")
+    print(f"  Model:             {model_name}")
     print(f"  Est. tokens:       {est['est_input_tokens'] + est['est_output_tokens']:,}")
     print(f"  Est. cost:         ${est['est_cost_usd']:.2f}")
     print()
@@ -360,7 +379,7 @@ def main():
         label = f"Vol {vol}.{iss} #{idx+1}"
 
         try:
-            html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(client, split_pdf)
+            html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(client, split_pdf, model_name)
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback
@@ -389,8 +408,8 @@ def main():
                 total_output += out_tok
                 total_pages += num_pages
                 completed += 1
-                cost_so_far = (total_input / 1_000_000 * PRICING['input'] +
-                               total_output / 1_000_000 * PRICING['output'])
+                cost_so_far = (total_input / 1_000_000 * pricing['input'] +
+                               total_output / 1_000_000 * pricing['output'])
                 trunc_flag = ' TRUNCATED' if truncated else ''
                 print(f"  [{completed}/{total_to_do}] {label} ({basename}) "
                       f"{num_pages}pp ${cost_so_far:.3f}{trunc_flag}", flush=True)
@@ -413,8 +432,8 @@ def main():
         concurrent.futures.wait(futures)
 
     elapsed = time.time() - start_time
-    actual_cost = (total_input / 1_000_000 * PRICING['input'] +
-                   total_output / 1_000_000 * PRICING['output'])
+    actual_cost = (total_input / 1_000_000 * pricing['input'] +
+                   total_output / 1_000_000 * pricing['output'])
 
     print(f"\n{'='*50}")
     print(f"Complete!")
