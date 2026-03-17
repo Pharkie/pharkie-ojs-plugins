@@ -225,6 +225,9 @@ def classify_review(review):
     reviewer = review.get('reviewer', '')
     next_review = review.get('next_review')
 
+    # Count running headers
+    _, header_count = strip_running_headers(html)
+
     result = {
         'category': 'clean',
         'details': '',
@@ -235,6 +238,7 @@ def classify_review(review):
         'has_start_bleed': False,
         'end_bleed_chars': 0,
         'next_title_in_tail': False,
+        'running_headers': header_count,
     }
 
     # Check if book title is in the HTML
@@ -440,6 +444,36 @@ def run_report(toc_paths):
     print(f"\nDetailed report: {report_path}")
 
 
+# Patterns for PDF running headers/footers that Haiku may extract
+RUNNING_HEADER_PATTERNS = [
+    # "Journal of the Society for Existential Analysis" or variants
+    re.compile(r'<p[^>]*>\s*Journal\s+of\s+the\s+Society\s+for\s+Existential\s+Analysis\s*</p>', re.IGNORECASE),
+    # "Existential Analysis: Journal of The Society for Existential Analysis"
+    re.compile(r'<p[^>]*>\s*Existential\s+Analysis:?\s+Journal\s+of\s+[Tt]he\s+Society\s+for\s+Existential\s+Analysis\s*</p>', re.IGNORECASE),
+    # "Existential Analysis" alone as a paragraph (common running header)
+    re.compile(r'<p[^>]*>\s*Existential\s+Analysis\s*</p>', re.IGNORECASE),
+    # "Book Reviews" as a standalone section header from the PDF
+    re.compile(r'<p[^>]*>\s*Book\s+Reviews?\s*</p>', re.IGNORECASE),
+    # Bare page numbers as paragraphs
+    re.compile(r'<p[^>]*>\s*\d{1,3}\s*</p>'),
+]
+
+
+def strip_running_headers(html):
+    """Remove PDF running headers/footers that Haiku may have extracted.
+
+    Returns (cleaned_html, count_removed).
+    """
+    count = 0
+    for pattern in RUNNING_HEADER_PATTERNS:
+        html, n = pattern.subn('', html)
+        count += n
+    # Clean up any resulting empty lines
+    if count:
+        html = re.sub(r'\n{3,}', '\n\n', html)
+    return html, count
+
+
 def trim_review(review, classification, dry_run=False):
     """Trim bleed from a single review's HTML.
 
@@ -450,12 +484,15 @@ def trim_review(review, classification, dry_run=False):
         html = f.read()
 
     original_len = len(html)
-    trim_info = classification.get('trim_info')
-    if not trim_info:
-        return False, 'no trim info'
+    trim_info = classification.get('trim_info') or {}
 
     modified_html = html
     changes = []
+
+    # Strip running headers (always, regardless of bleed category)
+    modified_html, header_count = strip_running_headers(modified_html)
+    if header_count:
+        changes.append(f"removed {header_count} running header(s)")
 
     # Trim start-bleed
     cat = classification['category']
@@ -536,8 +573,8 @@ def run_trim(toc_paths, dry_run=False):
         classification = classify_review(rev)
         cat = classification['category']
 
-        # Only trim categories we can handle
-        if cat not in ('end-bleed', 'start-bleed', 'both-bleed'):
+        # Process bleed categories and also clean reviews (for header stripping)
+        if cat not in ('end-bleed', 'start-bleed', 'both-bleed', 'clean', 'no-byline', 'no-title'):
             continue
 
         label = f"Vol {rev['vol']}.{rev['iss']} #{rev['idx']+1}"
@@ -567,6 +604,48 @@ def run_trim(toc_paths, dry_run=False):
     print(f"{'=' * 50}")
 
 
+def run_clean_headers(toc_paths, dry_run=False):
+    """Strip running headers from ALL HTML galleys (not just book reviews)."""
+    cleaned = 0
+    checked = 0
+
+    for toc_path in toc_paths:
+        with open(toc_path) as f:
+            toc_data = json.load(f)
+        issue_dir = os.path.dirname(toc_path)
+
+        for article in toc_data.get('articles', []):
+            split_pdf = article.get('split_pdf', '')
+            if not split_pdf:
+                continue
+            html_path = os.path.splitext(split_pdf)[0] + '.html'
+            if not os.path.exists(html_path):
+                continue
+
+            checked += 1
+            with open(html_path, encoding='utf-8') as f:
+                html = f.read()
+
+            cleaned_html, count = strip_running_headers(html)
+            if count:
+                vol = toc_data.get('volume', '?')
+                iss = toc_data.get('issue', '?')
+                title = article.get('title', '?')[:50]
+                prefix = "[DRY RUN] " if dry_run else ""
+                print(f"  {prefix}Vol {vol}.{iss} '{title}': removed {count} header(s)")
+
+                if not dry_run:
+                    bak_path = html_path + '.bak'
+                    if not os.path.exists(bak_path):
+                        shutil.copy2(html_path, bak_path)
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(cleaned_html)
+                cleaned += 1
+
+    action = "Would clean" if dry_run else "Cleaned"
+    print(f"\n{action} {cleaned}/{checked} HTML files")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Detect and fix HTML bleed in book review galleys')
@@ -577,6 +656,8 @@ def main():
                       help='Audit book reviews and generate bleed report')
     mode.add_argument('--trim', action='store_true',
                       help='Trim detected bleed from HTML galleys')
+    mode.add_argument('--clean-headers', action='store_true',
+                      help='Strip running headers from ALL HTML galleys (not just book reviews)')
 
     parser.add_argument('--dry-run', action='store_true',
                         help='Show what would be trimmed without modifying files')
@@ -599,6 +680,8 @@ def main():
         run_report(valid_paths)
     elif args.trim:
         run_trim(valid_paths, dry_run=args.dry_run)
+    elif args.clean_headers:
+        run_clean_headers(valid_paths, dry_run=args.dry_run)
 
 
 if __name__ == '__main__':
