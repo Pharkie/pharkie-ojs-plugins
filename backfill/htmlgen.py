@@ -103,21 +103,28 @@ The PDF pages may contain multiple reviews — extract ONLY this one.
 
 """ + FORMATTING_RULES + """
 
-A book review has this structure:
-  1. Book publication line (title, author, publisher, year) — SKIP this,
-     it is already in OJS metadata
-  2. Review body paragraphs — INCLUDE all of these
-  3. Reviewer's name on its own line (e.g. "Simon Du Plock") — INCLUDE
-     this, output as <p><strong>Name</strong></p>
-  4. References section (if present) — INCLUDE these
+This is a BOOK REVIEW, not a regular article. The rules are different:
 
-IMPORTANT BOUNDARIES:
-- If the first page starts with text from a PREVIOUS review, skip it.
-  Look for this review's book title to know where to start.
-- The reviewer's name marks the end of the review. After the name (and
-  any References), STOP IMMEDIATELY. Do not include anything after that.
-  A new book title/publisher line after the reviewer name is the NEXT
-  review — do not include it."""
+DO NOT skip any standalone person's name in the text. In book reviews,
+a person's name on its own line near the end is the REVIEWER — it is
+critical content that MUST appear in the output as
+<p><strong>Name</strong></p>. This is NOT an "author byline" to skip.
+
+What to SKIP: only the book's publication details at the very top (title,
+author, publisher, year — these are already in OJS metadata).
+
+What to INCLUDE (in order):
+  1. All review body paragraphs
+  2. The reviewer's name (standalone name near the end)
+  3. References section if present after the reviewer's name
+
+BOUNDARIES — the PDF may have multiple reviews on the same pages:
+- STARTING: if the top of the first page has text that ends with a
+  different person's name followed by this review's book title, skip
+  everything before the book title.
+- ENDING: after the reviewer's name and any References, STOP. If you
+  see another book title/publisher line, that is the NEXT review.
+  Do not include it."""
 
 
 def load_env():
