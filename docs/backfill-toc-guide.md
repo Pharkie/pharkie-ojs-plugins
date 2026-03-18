@@ -183,15 +183,18 @@ These patterns were discovered by verifying every volume's book reviews against 
 
 2. **Missing reviews** — every early volume had 1-5 book reviews completely absent from toc.json. They exist in the PDF between listed reviews but were never catalogued. Gaps in page ranges (where one review ends at page X and the next starts at page X+3) almost always mean there's a missing review in between.
 
-3. **Combined multi-book reviews** — when one reviewer reviews 2-4 books together in a single continuous essay, keep all book entries but give them identical page ranges. They share the same split PDF and HTML. Common reviewers for combined reviews: Ernesto Spinelli, Simon du Plock, Hans W. Cohn.
+3. **Combined multi-book reviews** — when one reviewer reviews 2-4 books together in a single continuous essay, keep all book entries but give them **identical page ranges**. They share the same split PDF and HTML. Common reviewers for combined reviews: Ernesto Spinelli, Simon du Plock, Hans W. Cohn, Diana Pringle, Martin Adams.
 
-4. **Wrong reviewer attribution** — reviewer names swapped between adjacent reviews. Always verify the byline in the PDF, not the CONTENTS page.
+   **Critical:** Both entries MUST have the same `pdf_page_start` and `pdf_page_end`. A common error is giving the first book a single-page range (just the shared start page) while the second book gets the full range — this produces a truncated 1-page split PDF for the first book. If you see a single-page book review followed by a multi-page review with the same reviewer and same start page, they are a combined review and both need the full range.
+
+4. **Wrong reviewer attribution** — a systematic error where article authors from the same issue are assigned as book reviewers. The last few book reviews in an issue are most vulnerable. Always verify the reviewer byline in the actual PDF pages, not the CONTENTS page. If the listed reviewer's name doesn't appear anywhere in the review's PDF pages, it's almost certainly wrong.
 
 ### Red flags that indicate problems
 
 - **Page gaps of 2+** between consecutive reviews — almost always means a missing review
-- **Single-page reviews** (`split_pages: 1`) — suspicious unless very short. Usually means `pdf_page_end` is wrong.
-- **Identical page ranges** for two entries — could be correct (combined review) or an error
+- **Single-page reviews** (`split_pages: 1`) — suspicious unless very short. Usually means `pdf_page_end` is wrong. If the next review has the same reviewer and same start page, it's a combined review and both need the full range.
+- **Identical page ranges** for two entries — correct if combined review (same reviewer). Error if different reviewers.
+- **Single-page review followed by multi-page review, same reviewer, same start page** — combined review where the first entry's range was not extended. Give both entries identical ranges.
 - **Reviews > 10 pages** — suspicious for a book review. Check if there are multiple reviews inside that range.
 - **Consistent 2-page gaps** — systematic error where every review's end page is too short by the same amount
 - **Last article ending at `total_pdf_pages - 1`** — check that the last page isn't an ISSN back cover or "Publications received" page
