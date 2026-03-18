@@ -97,20 +97,36 @@ def check_back_matter(toc_data, doc):
         # Strip running headers (e.g., "Existential Analysis: Journal of...")
         lines = [l.strip() for l in text.split('\n') if l.strip()
                  and not l.strip().startswith('Existential Analysis:')
+                 and not l.strip().startswith('Journal of the Society')
                  and not l.strip().isdigit()]
         content = ' '.join(lines)
 
         is_back = False
+        is_blank = len([l for l in lines if len(l) > 5]) < 3
         matched_pattern = None
-        for pattern in BACK_MATTER_PATTERNS:
-            if pattern.search(content):
-                # Don't flag if the page has substantial article content
-                # (a Society blurb footer on a content page is not back matter)
-                non_header_lines = [l for l in lines if len(l) > 10]
-                if len(non_header_lines) < 8:
-                    is_back = True
-                    matched_pattern = pattern.pattern[:50]
-                break
+
+        if is_blank:
+            is_back = True
+            matched_pattern = 'blank/near-empty page'
+        else:
+            for pattern in BACK_MATTER_PATTERNS:
+                if pattern.search(content):
+                    # Check if the pattern appears near the START of the page
+                    # (primary content) vs at the bottom (footer on content page).
+                    # If the first significant line matches, it's a back matter page.
+                    first_lines = ' '.join(lines[:5]).lower()
+                    if pattern.search(first_lines):
+                        # Pattern is in the first few lines — this page IS back matter
+                        is_back = True
+                        matched_pattern = pattern.pattern[:50]
+                    else:
+                        # Pattern only in later lines — likely a footer on a content page.
+                        # Only flag if page has very little content (< 8 lines)
+                        non_header_lines = [l for l in lines if len(l) > 10]
+                        if len(non_header_lines) < 8:
+                            is_back = True
+                            matched_pattern = pattern.pattern[:50]
+                    break
 
         if is_back:
             earliest_back_matter = (page_idx, matched_pattern)
