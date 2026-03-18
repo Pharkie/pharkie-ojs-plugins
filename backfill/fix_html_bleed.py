@@ -40,13 +40,52 @@ MIN_TAIL_FOR_BLEED = 50
 # Safety: don't trim more than this fraction of content
 MAX_TRIM_FRACTION = 0.7
 
-# PDF running headers that Haiku may extract into HTML
+# PDF running headers that Haiku may extract into HTML (standalone <p> tags)
 RUNNING_HEADER_PATTERNS = [
     re.compile(r'<p[^>]*>\s*Journal\s+of\s+the\s+Society\s+for\s+Existential\s+Analysis\s*</p>', re.IGNORECASE),
     re.compile(r'<p[^>]*>\s*Existential\s+Analysis:?\s+Journal\s+of\s+[Tt]he\s+Society\s+for\s+Existential\s+Analysis\s*</p>', re.IGNORECASE),
     re.compile(r'<p[^>]*>\s*Existential\s+Analysis\s*</p>', re.IGNORECASE),
     re.compile(r'<p[^>]*>\s*Book\s+Reviews?\s*</p>', re.IGNORECASE),
     re.compile(r'<p[^>]*>\s*\d{1,3}\s*</p>'),  # Bare page numbers
+]
+
+# Embedded running headers — (pattern, replacement) tuples for headers mixed into content
+EMBEDDED_HEADER_PATTERNS = [
+    # Start of <p>: page number + journal header → keep just <p>
+    (re.compile(
+        r'(<p[^>]*>)\s*\d{1,3}\s+(?:Existential Analysis:?\s*)?'
+        r'Journal of [Tt]he Society for Existential Analysis\s+',
+        re.IGNORECASE
+    ), r'\1'),
+    # Start of <p>: journal header without page number → keep just <p>
+    (re.compile(
+        r'(<p[^>]*>)\s*(?:Existential Analysis:?\s*)?'
+        r'Journal of [Tt]he Society for Existential Analysis\s+',
+        re.IGNORECASE
+    ), r'\1'),
+    # Start of <p>: "Book Reviews" followed by content → keep just <p>
+    (re.compile(r'(<p[^>]*>)\s*Book Reviews\s+(?=[A-Z])'), r'\1'),
+    # Mid-paragraph: journal header inline → single space
+    (re.compile(
+        r'\s+(?:Existential Analysis:?\s*)?'
+        r'Journal of [Tt]he Society for Existential Analysis\s+',
+        re.IGNORECASE
+    ), ' '),
+    # Mid-paragraph: "Book Reviews" followed by content → single space
+    (re.compile(r'\s+Book Reviews\s+(?=[A-Z])'), ' '),
+    # Trailing page numbers: "text 47</p>" → "text</p>"
+    (re.compile(r'\s+\d{1,3}\s*</p>'), '</p>'),
+    # Leading page numbers: "<p>48 text" → "<p>text"
+    (re.compile(r'(<p[^>]*>)\s*\d{1,3}\s+'), r'\1'),
+]
+
+# Back matter headings that indicate end of article content
+BACK_MATTER_HTML_PATTERNS = [
+    re.compile(r'<h[1-6][^>]*>\s*Publications?\s+(and\s+films?\s+)?[Rr]eceived\s+for\s+[Rr]eview\s*</h[1-6]>', re.I),
+    re.compile(r'<p[^>]*>\s*<strong>\s*Publications?\s+(and\s+films?\s+)?[Rr]eceived.*?</strong>\s*</p>', re.I),
+    re.compile(r'<h[1-6][^>]*>\s*Advertising\s+Rates\s*</h[1-6]>', re.I),
+    re.compile(r'<h[1-6][^>]*>\s*Back\s+Issues\s+and\s+Publications\s*</h[1-6]>', re.I),
+    re.compile(r'<h[1-6][^>]*>\s*Information\s+for\s+Contributors\s*</h[1-6]>', re.I),
 ]
 
 
@@ -83,11 +122,19 @@ def text_contains(haystack_norm, needle_norm, min_len=3):
 def strip_running_headers(html):
     """Remove PDF running headers/footers from HTML.
 
+    Handles both standalone header paragraphs (removed entirely) and
+    headers embedded within content paragraphs (prefix/inline stripped).
+
     Returns (cleaned_html, count_removed).
     """
     count = 0
+    # Phase 1: Remove standalone header paragraphs
     for pattern in RUNNING_HEADER_PATTERNS:
         html, n = pattern.subn('', html)
+        count += n
+    # Phase 2: Strip embedded headers within content paragraphs
+    for pattern, replacement in EMBEDDED_HEADER_PATTERNS:
+        html, n = pattern.subn(replacement, html)
         count += n
     if count:
         html = re.sub(r'\n{3,}', '\n\n', html)
@@ -522,15 +569,79 @@ def run_report(toc_paths):
     print(f"\nDetailed report: {report_path}")
 
 
+def trim_back_matter(toc_paths, dry_run=False):
+    """Trim back matter (publications received, advertising, etc.) from non-editorial HTML.
+
+    Returns (trimmed_count, checked_count).
+    """
+    trimmed = 0
+    checked = 0
+    editorial_sections = {'editorial', 'book review editorial'}
+
+    for toc_path in toc_paths:
+        with open(toc_path) as f:
+            toc_data = json.load(f)
+
+        vol = toc_data.get('volume', '?')
+        iss = toc_data.get('issue', '?')
+
+        for article in toc_data.get('articles', []):
+            section = (article.get('section') or '').lower()
+            if section in editorial_sections:
+                continue
+
+            split_pdf = article.get('split_pdf', '')
+            if not split_pdf:
+                continue
+            html_path = os.path.splitext(split_pdf)[0] + '.html'
+            if not os.path.exists(html_path):
+                continue
+
+            checked += 1
+            with open(html_path, encoding='utf-8') as f:
+                html = f.read()
+
+            # Find earliest back matter match
+            earliest_pos = None
+            matched_desc = None
+            for pattern in BACK_MATTER_HTML_PATTERNS:
+                m = pattern.search(html)
+                if m and (earliest_pos is None or m.start() < earliest_pos):
+                    earliest_pos = m.start()
+                    matched_desc = m.group(0)[:60]
+
+            if earliest_pos is None:
+                continue
+
+            trimmed_html = html[:earliest_pos].rstrip()
+
+            # Safety check
+            if len(trimmed_html) < len(html) * (1 - MAX_TRIM_FRACTION):
+                title = article.get('title', '?')[:50]
+                print(f"  SKIP Vol {vol}.{iss} '{title}': back matter trim would remove "
+                      f"{100 - len(trimmed_html) * 100 // len(html)}% of content")
+                continue
+
+            removed = len(html) - len(trimmed_html)
+            title = article.get('title', '?')[:50]
+            prefix = "[DRY RUN] " if dry_run else ""
+            print(f"  {prefix}Vol {vol}.{iss} '{title}': trimmed {removed} chars of back matter")
+
+            if not dry_run:
+                _write_html_with_backup(html_path, trimmed_html)
+            trimmed += 1
+
+    return trimmed, checked
+
+
 def run_trim(toc_paths, dry_run=False):
-    """Trim bleed from book reviews where we can reliably detect it."""
+    """Trim bleed from book reviews and back matter from all articles."""
     reviews = collect_book_reviews(toc_paths)
 
     if not reviews:
         print("No book reviews with HTML galleys found.")
-        return
-
-    print(f"\n{'DRY RUN — ' if dry_run else ''}Trimming bleed from {len(reviews)} book reviews...\n")
+    else:
+        print(f"\n{'DRY RUN — ' if dry_run else ''}Trimming bleed from {len(reviews)} book reviews...\n")
 
     trimmed = 0
     skipped = 0
@@ -560,12 +671,17 @@ def run_trim(toc_paths, dry_run=False):
             errors += 1
             print(f"  ERROR {label}: {e}", file=sys.stderr)
 
+    # Back matter trimming pass (all non-editorial articles)
+    print(f"\n{'DRY RUN — ' if dry_run else ''}Scanning for back matter...\n")
+    bm_trimmed, bm_checked = trim_back_matter(toc_paths, dry_run=dry_run)
+
     print(f"\n{'=' * 50}")
-    print(f"{'Would trim' if dry_run else 'Trimmed'}: {trimmed}")
+    print(f"{'Would trim' if dry_run else 'Trimmed'} bleed: {trimmed}")
+    print(f"{'Would trim' if dry_run else 'Trimmed'} back matter: {bm_trimmed}/{bm_checked} articles")
     print(f"Skipped: {skipped}")
     if errors:
         print(f"Errors: {errors}")
-    if not dry_run and trimmed:
+    if not dry_run and (trimmed or bm_trimmed):
         print(f"\nBackups saved as .html.bak files")
     print(f"{'=' * 50}")
 
