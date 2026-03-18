@@ -53,11 +53,18 @@ def find_html_byline(html):
     search_start = int(len(html) * 0.7)
     tail = html[search_start:]
 
-    # <p><strong>Name</strong></p> or <p><b>Name</b></p>
+    # <p><strong>Name</strong></p> or with trailing affiliation/bio text
+    # Use [^<]* instead of .*? to avoid matching across tags with DOTALL
     matches = list(re.finditer(
-        r'<p[^>]*>\s*<(?:strong|b)[^>]*>(.*?)</(?:strong|b)>\s*</p>',
+        r'<p[^>]*>\s*<(?:strong|b)[^>]*>([^<]*)</(?:strong|b)>\s*(?:<br\s*/?>.*?)?</p>',
         tail, re.IGNORECASE | re.DOTALL
     ))
+    if not matches:
+        # Also check for <p><strong>Name</strong> trailing text...</p>
+        matches = list(re.finditer(
+            r'<p[^>]*>\s*<(?:strong|b)[^>]*>([^<]*)</(?:strong|b)>[^<]{0,80}</p>',
+            tail, re.IGNORECASE
+        ))
     if not matches:
         return None
 
