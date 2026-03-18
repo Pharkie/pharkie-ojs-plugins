@@ -127,11 +127,13 @@ def check_article(html, article, vol, iss):
                 break
 
     # Content per page ratio (for articles > 2 pages)
+    # Skip book reviews — shared pages mean the page range often includes
+    # editorial or adjacent review content that isn't in this HTML
     page_start = article.get('pdf_page_start', 0)
     page_end = article.get('pdf_page_end', 0)
     page_count = page_end - page_start + 1 if page_end > page_start else 1
     content_len = len(re.sub(r'<[^>]+>', '', html))
-    if page_count > 2 and content_len < MIN_CHARS_PER_PAGE * page_count:
+    if not is_book_review and page_count > 2 and content_len < MIN_CHARS_PER_PAGE * page_count:
         issues.append(('MEDIUM', 'short-content',
                        f'{content_len} chars for {page_count} pages '
                        f'({content_len // page_count} chars/page)'))
