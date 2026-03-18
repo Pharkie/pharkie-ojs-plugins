@@ -2,11 +2,11 @@
 """
 Audit all toc.json files against source PDFs for known error patterns.
 
-Checks learned from Vol 1-3 manual review:
+Checks learned from auditing all 68 issues:
   - Back matter (ISSN, Publications Received) included in last article
   - Page gaps between consecutive articles (missing content)
   - Single-page book reviews (often wrong pdf_page_end)
-  - Book reviews > 10 pages (may contain multiple reviews)
+  - Long book reviews (> threshold, may contain multiple reviews)
   - Missing book review fields (reviewer, book_title, book_author)
   - Identical page ranges (combined reviews — may be correct)
   - Page coverage gaps or overlaps
@@ -25,7 +25,6 @@ import os
 import re
 import json
 import argparse
-import glob
 
 try:
     import fitz  # PyMuPDF
@@ -34,7 +33,27 @@ except ImportError:
     sys.exit(1)
 
 
+# --- Constants ---
+
 VALID_SECTIONS = {"Editorial", "Articles", "Book Reviews", "Book Review Editorial"}
+
+# How far back from pdf_page_end to scan for back matter
+BACK_MATTER_SCAN_DEPTH = 15
+# A page with fewer than this many content lines (>5 chars) is considered blank
+BLANK_PAGE_THRESHOLD = 3
+# A page with fewer than this many substantial lines (>10 chars) and a back matter
+# pattern only in the footer is still flagged as back matter
+FOOTER_ONLY_LINE_THRESHOLD = 8
+# Gaps of this many pages or more between consecutive articles are flagged
+PAGE_GAP_THRESHOLD = 3
+# Book reviews longer than this are flagged as suspicious
+LONG_REVIEW_THRESHOLD = 10
+# First article should start within this many pages of the PDF start
+FIRST_ARTICLE_MAX_START = 10
+# Last article should end within this many pages of the PDF end
+LAST_ARTICLE_MAX_GAP = 3
+# Title word match threshold (fraction of significant words that must appear)
+TITLE_MATCH_THRESHOLD = 0.6
 
 BACK_MATTER_PATTERNS = [
     re.compile(r'ISSN\s+\d{4}[- ]?\d{3}[\dXx]', re.IGNORECASE),
@@ -48,6 +67,48 @@ BACK_MATTER_PATTERNS = [
     re.compile(r'information\s+for\s+contributors', re.IGNORECASE),
     re.compile(r'notes\s+for\s+contributors', re.IGNORECASE),
 ]
+
+
+# --- Helpers ---
+
+def _is_header_line(line):
+    """True if the line is a running header/footer, not article content."""
+    s = line.strip()
+    return (s.startswith('Existential Analysis:')
+            or s.startswith('Journal of the Society')
+            or s.isdigit())
+
+
+def _strip_headers(text):
+    """Return content lines from a PDF page, stripping running headers."""
+    return [l.strip() for l in text.split('\n')
+            if l.strip() and not _is_header_line(l)]
+
+
+def _is_back_matter_page(lines):
+    """Determine if a page (given as stripped content lines) is back matter.
+
+    Returns (is_back_matter, matched_pattern_description) or (False, None).
+    """
+    substantial = [l for l in lines if len(l) > 5]
+    if len(substantial) < BLANK_PAGE_THRESHOLD:
+        return True, 'blank/near-empty page'
+
+    content = ' '.join(lines)
+    first_lines = ' '.join(lines[:5]).lower()
+
+    for pattern in BACK_MATTER_PATTERNS:
+        if pattern.search(content):
+            # Pattern in the first few lines = page IS back matter
+            if pattern.search(first_lines):
+                return True, pattern.pattern[:50]
+            # Pattern only later = likely a footer on a content page
+            non_header = [l for l in lines if len(l) > 10]
+            if len(non_header) < FOOTER_ONLY_LINE_THRESHOLD:
+                return True, pattern.pattern[:50]
+            break
+
+    return False, None
 
 
 def load_toc(issue_dir):
@@ -68,10 +129,7 @@ def get_issue_label(toc_data):
     return f"Vol {v}.{i}"
 
 
-def get_pdf_path(toc_data):
-    """Get the source PDF path."""
-    return toc_data.get('source_pdf', '')
-
+# --- Check functions ---
 
 def check_back_matter(toc_data, doc):
     """Check if the last article includes back matter pages.
@@ -88,51 +146,18 @@ def check_back_matter(toc_data, doc):
     last_start = last.get('pdf_page_start', 0)
     last_end = last.get('pdf_page_end', 0)
 
-    # Scan backwards from last_end to find earliest back matter page
     earliest_back_matter = None
-    for page_idx in range(last_end, max(last_start - 1, last_end - 15), -1):
+    for page_idx in range(last_end, max(last_start - 1, last_end - BACK_MATTER_SCAN_DEPTH), -1):
         if page_idx >= len(doc) or page_idx < 0:
             continue
-        text = doc[page_idx].get_text()
-        # Strip running headers (e.g., "Existential Analysis: Journal of...")
-        lines = [l.strip() for l in text.split('\n') if l.strip()
-                 and not l.strip().startswith('Existential Analysis:')
-                 and not l.strip().startswith('Journal of the Society')
-                 and not l.strip().isdigit()]
-        content = ' '.join(lines)
 
-        is_back = False
-        is_blank = len([l for l in lines if len(l) > 5]) < 3
-        matched_pattern = None
-
-        if is_blank:
-            is_back = True
-            matched_pattern = 'blank/near-empty page'
-        else:
-            for pattern in BACK_MATTER_PATTERNS:
-                if pattern.search(content):
-                    # Check if the pattern appears near the START of the page
-                    # (primary content) vs at the bottom (footer on content page).
-                    # If the first significant line matches, it's a back matter page.
-                    first_lines = ' '.join(lines[:5]).lower()
-                    if pattern.search(first_lines):
-                        # Pattern is in the first few lines — this page IS back matter
-                        is_back = True
-                        matched_pattern = pattern.pattern[:50]
-                    else:
-                        # Pattern only in later lines — likely a footer on a content page.
-                        # Only flag if page has very little content (< 8 lines)
-                        non_header_lines = [l for l in lines if len(l) > 10]
-                        if len(non_header_lines) < 8:
-                            is_back = True
-                            matched_pattern = pattern.pattern[:50]
-                    break
+        lines = _strip_headers(doc[page_idx].get_text())
+        is_back, matched = _is_back_matter_page(lines)
 
         if is_back:
-            earliest_back_matter = (page_idx, matched_pattern)
+            earliest_back_matter = (page_idx, matched)
         else:
-            # Found a content page — stop scanning backwards
-            break
+            break  # Found a content page — stop scanning backwards
 
     if earliest_back_matter:
         bm_page, bm_pattern = earliest_back_matter
@@ -153,7 +178,7 @@ def check_back_matter(toc_data, doc):
 
 
 def check_page_gaps(toc_data):
-    """Check for page gaps between consecutive articles."""
+    """Check for page gaps and overlaps between consecutive articles."""
     issues = []
     articles = toc_data.get('articles', [])
 
@@ -164,8 +189,7 @@ def check_page_gaps(toc_data):
         nxt_start = nxt.get('pdf_page_start', 0)
         gap = nxt_start - curr_end
 
-        # Gap of 2+ pages means there's content between articles that's not catalogued
-        if gap >= 3:
+        if gap >= PAGE_GAP_THRESHOLD:
             issues.append({
                 'type': 'page_gap',
                 'severity': 'warning',
@@ -177,17 +201,17 @@ def check_page_gaps(toc_data):
                 'next_start': nxt_start,
                 'detail': f"Gap of {gap - 1} pages between #{i + 1} '{curr.get('title', '')[:40]}' (ends {curr_end}) and #{i + 2} '{nxt.get('title', '')[:40]}' (starts {nxt_start})"
             })
-        # Overlap of more than 1 page (shared page = gap of 0, which is normal)
         elif gap < 0:
+            # Overlap of more than 1 page (shared page = gap of 0, which is normal)
             issues.append({
-                    'type': 'page_overlap',
-                    'severity': 'warning',
-                    'article_idx': i,
-                    'article_title': curr.get('title', ''),
-                    'next_title': nxt.get('title', ''),
-                    'overlap_pages': abs(gap),
-                    'detail': f"Overlap of {abs(gap)} pages between #{i + 1} and #{i + 2}"
-                })
+                'type': 'page_overlap',
+                'severity': 'warning',
+                'article_idx': i,
+                'article_title': curr.get('title', ''),
+                'next_title': nxt.get('title', ''),
+                'overlap_pages': abs(gap),
+                'detail': f"Overlap of {abs(gap)} pages between #{i + 1} and #{i + 2}"
+            })
 
     return issues
 
@@ -201,7 +225,6 @@ def check_book_reviews(toc_data):
     for review_idx, (i, review) in enumerate(reviews):
         pages = review.get('pdf_page_end', 0) - review.get('pdf_page_start', 0) + 1
 
-        # Single-page review
         if pages == 1:
             issues.append({
                 'type': 'single_page_review',
@@ -211,8 +234,7 @@ def check_book_reviews(toc_data):
                 'detail': f"Single-page book review #{i + 1}: '{review.get('title', '')[:50]}'"
             })
 
-        # Very long review (> 10 pages)
-        if pages > 10:
+        if pages > LONG_REVIEW_THRESHOLD:
             issues.append({
                 'type': 'long_review',
                 'severity': 'warning',
@@ -222,7 +244,6 @@ def check_book_reviews(toc_data):
                 'detail': f"Book review #{i + 1} is {pages} pages: '{review.get('title', '')[:50]}'"
             })
 
-        # Missing fields
         for field in ('reviewer', 'book_title', 'book_author'):
             if not review.get(field):
                 issues.append({
@@ -236,9 +257,9 @@ def check_book_reviews(toc_data):
 
         # Gaps between consecutive book reviews
         if review_idx < len(reviews) - 1:
-            next_i, next_review = reviews[idx + 1]
+            next_i, next_review = reviews[review_idx + 1]
             gap = next_review.get('pdf_page_start', 0) - review.get('pdf_page_end', 0)
-            if gap >= 3:
+            if gap >= PAGE_GAP_THRESHOLD:
                 issues.append({
                     'type': 'review_gap',
                     'severity': 'warning',
@@ -249,7 +270,7 @@ def check_book_reviews(toc_data):
                     'detail': f"Gap of {gap - 1} pages between reviews #{i + 1} and #{next_i + 1} — possible missing review"
                 })
 
-    # Identical page ranges
+    # Identical page ranges (combined reviews)
     range_map = {}
     for i, review in reviews:
         key = (review.get('pdf_page_start'), review.get('pdf_page_end'))
@@ -331,18 +352,16 @@ def check_coverage(toc_data):
     first_start = articles[0].get('pdf_page_start', 0)
     last_end = articles[-1].get('pdf_page_end', 0)
 
-    # First article should start within first 10 pages
-    if first_start > 10:
+    if first_start > FIRST_ARTICLE_MAX_START:
         issues.append({
             'type': 'late_start',
             'severity': 'warning',
-            'detail': f"First article starts at page {first_start} (expected < 10)"
+            'detail': f"First article starts at page {first_start} (expected < {FIRST_ARTICLE_MAX_START})"
         })
 
-    # Last article should end within 3 pages of total
     # Both are 0-indexed; total-1 is the last valid page index
     gap_to_end = (total - 1) - last_end
-    if gap_to_end > 3:
+    if gap_to_end > LAST_ARTICLE_MAX_GAP:
         issues.append({
             'type': 'early_end',
             'severity': 'warning',
@@ -353,15 +372,13 @@ def check_coverage(toc_data):
 
 
 def check_reviewer_in_pdf(toc_data, doc):
-    """Check if reviewer names appear on the review's pages in the PDF.
+    """Check if reviewer names appear in the review's PDF pages.
 
-    Searches ALL pages in the review's range plus 2 pages past the end
-    (to catch cases where pdf_page_end is slightly too short).
+    Searches all pages in the review's range plus 2 pages past the end
+    (to catch shared-page bylines just past pdf_page_end).
     """
     issues = []
-    articles = toc_data.get('articles', [])
-
-    for i, article in enumerate(articles):
+    for i, article in enumerate(toc_data.get('articles', [])):
         if article.get('section') != 'Book Reviews':
             continue
         reviewer = article.get('reviewer', '')
@@ -370,20 +387,14 @@ def check_reviewer_in_pdf(toc_data, doc):
 
         start = article.get('pdf_page_start', 0)
         end = article.get('pdf_page_end', 0)
-
-        found = False
-        # Try exact surname match
         surname = reviewer.split()[-1].lower() if reviewer.split() else ''
-        # Normalize apostrophes for matching
         surname_norm = surname.replace('\u2019', "'").replace('\u2018', "'")
 
-        # Search all pages in range + 2 pages past end
+        found = False
         for page_idx in range(start, min(end + 3, len(doc))):
-            if page_idx >= len(doc):
-                continue
             text = doc[page_idx].get_text().lower()
             text_norm = text.replace('\u2019', "'").replace('\u2018', "'")
-            if surname_norm and (surname_norm in text_norm):
+            if surname_norm and surname_norm in text_norm:
                 found = True
                 break
 
@@ -402,11 +413,9 @@ def check_reviewer_in_pdf(toc_data, doc):
 
 
 def check_book_title_in_pdf(toc_data, doc):
-    """Check if book titles appear on the review's first page."""
+    """Check if book titles appear on the review's first 2 pages."""
     issues = []
-    articles = toc_data.get('articles', [])
-
-    for i, article in enumerate(articles):
+    for i, article in enumerate(toc_data.get('articles', [])):
         if article.get('section') != 'Book Reviews':
             continue
         book_title = article.get('book_title', '')
@@ -417,18 +426,15 @@ def check_book_title_in_pdf(toc_data, doc):
         if start >= len(doc):
             continue
 
-        # Get text from first 2 pages
-        found = False
-        # Extract significant words from title (skip short words)
         title_words = [w.lower() for w in re.findall(r'\w+', book_title) if len(w) > 3]
         if not title_words:
             continue
 
+        found = False
         for page_idx in range(start, min(start + 2, len(doc))):
             text = doc[page_idx].get_text().lower()
-            # Check if majority of significant title words appear
             matches = sum(1 for w in title_words if w in text)
-            if matches >= len(title_words) * 0.6:
+            if matches >= len(title_words) * TITLE_MATCH_THRESHOLD:
                 found = True
                 break
 
@@ -446,6 +452,8 @@ def check_book_title_in_pdf(toc_data, doc):
     return issues
 
 
+# --- Main audit ---
+
 def audit_issue(issue_dir, fix=False):
     """Run all checks on a single issue. Returns dict of results."""
     toc_data, toc_path = load_toc(issue_dir)
@@ -453,7 +461,7 @@ def audit_issue(issue_dir, fix=False):
         return {'error': f'No toc.json in {issue_dir}', 'issues': []}
 
     label = get_issue_label(toc_data)
-    pdf_path = get_pdf_path(toc_data)
+    pdf_path = toc_data.get('source_pdf', '')
 
     result = {
         'label': label,
@@ -466,7 +474,7 @@ def audit_issue(issue_dir, fix=False):
         'fixes_applied': [],
     }
 
-    # Non-PDF checks first
+    # Non-PDF checks
     result['issues'].extend(check_sections(toc_data))
     result['issues'].extend(check_page_arithmetic(toc_data))
     result['issues'].extend(check_page_gaps(toc_data))
@@ -474,73 +482,70 @@ def audit_issue(issue_dir, fix=False):
     result['issues'].extend(check_coverage(toc_data))
 
     # PDF-dependent checks
-    if os.path.exists(pdf_path):
-        try:
-            doc = fitz.open(pdf_path)
-
-            # Verify total_pdf_pages
-            if len(doc) != toc_data.get('total_pdf_pages', 0):
-                result['issues'].append({
-                    'type': 'wrong_total_pages',
-                    'severity': 'error',
-                    'detail': f"toc.json says {toc_data.get('total_pdf_pages')} pages but PDF has {len(doc)}"
-                })
-
-            back_matter = check_back_matter(toc_data, doc)
-            result['issues'].extend(back_matter)
-
-            result['issues'].extend(check_reviewer_in_pdf(toc_data, doc))
-            result['issues'].extend(check_book_title_in_pdf(toc_data, doc))
-
-            # Auto-fix back matter if requested
-            if fix and back_matter:
-                for bm in back_matter:
-                    if bm['severity'] == 'auto_fixable':
-                        articles = toc_data['articles']
-                        old_end = articles[-1]['pdf_page_end']
-                        new_end = bm['suggested_end']
-                        articles[-1]['pdf_page_end'] = new_end
-                        articles[-1]['split_pages'] = new_end - articles[-1]['pdf_page_start'] + 1
-                        result['fixes_applied'].append(
-                            f"Fixed last article pdf_page_end: {old_end} → {new_end} (removed back matter)"
-                        )
-
-                if result['fixes_applied']:
-                    with open(toc_path, 'w') as f:
-                        json.dump(toc_data, f, indent=2, ensure_ascii=False)
-                        f.write('\n')
-
-            doc.close()
-        except Exception as e:
-            result['issues'].append({
-                'type': 'pdf_error',
-                'severity': 'error',
-                'detail': f"Could not open PDF: {e}"
-            })
-    else:
+    if not os.path.exists(pdf_path):
         result['issues'].append({
             'type': 'no_pdf',
             'severity': 'error',
             'detail': f"Source PDF not found: {pdf_path}"
         })
+        return result
 
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        result['issues'].append({
+            'type': 'pdf_error',
+            'severity': 'error',
+            'detail': f"Could not open PDF {pdf_path}: {e}"
+        })
+        return result
+
+    if len(doc) != toc_data.get('total_pdf_pages', 0):
+        result['issues'].append({
+            'type': 'wrong_total_pages',
+            'severity': 'error',
+            'detail': f"toc.json says {toc_data.get('total_pdf_pages')} pages but PDF has {len(doc)}"
+        })
+
+    back_matter = check_back_matter(toc_data, doc)
+    result['issues'].extend(back_matter)
+    result['issues'].extend(check_reviewer_in_pdf(toc_data, doc))
+    result['issues'].extend(check_book_title_in_pdf(toc_data, doc))
+
+    # Auto-fix back matter if requested
+    if fix and back_matter:
+        for bm in back_matter:
+            if bm['severity'] == 'auto_fixable':
+                articles = toc_data['articles']
+                old_end = articles[-1]['pdf_page_end']
+                new_end = bm['suggested_end']
+                articles[-1]['pdf_page_end'] = new_end
+                articles[-1]['split_pages'] = new_end - articles[-1]['pdf_page_start'] + 1
+                result['fixes_applied'].append(
+                    f"Fixed last article pdf_page_end: {old_end} → {new_end} (removed back matter)"
+                )
+
+        if result['fixes_applied']:
+            with open(toc_path, 'w') as f:
+                json.dump(toc_data, f, indent=2, ensure_ascii=False)
+                f.write('\n')
+
+    doc.close()
     return result
 
 
 def find_all_issue_dirs():
-    """Find all issue directories with toc.json files."""
-    dirs = []
+    """Find all issue directories with toc.json files, sorted by volume.issue."""
     output_dir = os.path.join(os.path.dirname(__file__), 'output')
+    dirs = [
+        os.path.join(output_dir, name)
+        for name in os.listdir(output_dir)
+        if os.path.isdir(os.path.join(output_dir, name))
+        and os.path.exists(os.path.join(output_dir, name, 'toc.json'))
+    ]
 
-    for name in sorted(os.listdir(output_dir)):
-        issue_dir = os.path.join(output_dir, name)
-        if os.path.isdir(issue_dir) and os.path.exists(os.path.join(issue_dir, 'toc.json')):
-            dirs.append(issue_dir)
-
-    # Sort by volume.issue numerically
     def sort_key(d):
-        name = os.path.basename(d)
-        parts = name.split('.')
+        parts = os.path.basename(d).split('.')
         try:
             return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
         except ValueError:
@@ -548,6 +553,8 @@ def find_all_issue_dirs():
 
     return sorted(dirs, key=sort_key)
 
+
+# --- Reporting ---
 
 def print_report(results, verbose=False):
     """Print human-readable audit report."""
@@ -569,18 +576,16 @@ def print_report(results, verbose=False):
             clean_volumes.append(r['label'])
             continue
 
-        real_issues = [i for i in issues if i['severity'] != 'info']
-        if real_issues or fixes:
+        if any(i['severity'] != 'info' for i in issues) or fixes:
             problem_volumes.append(r['label'])
 
         for issue in issues:
             total_issues += 1
             sev = issue['severity']
-            by_severity[sev] = by_severity.get(sev, 0) + 1
+            by_severity[sev] += 1
             itype = issue['type']
             by_type[itype] = by_type.get(itype, 0) + 1
 
-    # Summary
     print("\n" + "=" * 70)
     print("AUDIT SUMMARY")
     print("=" * 70)
@@ -601,7 +606,6 @@ def print_report(results, verbose=False):
         for itype, count in sorted(by_type.items(), key=lambda x: -x[1]):
             print(f"  {itype}: {count}")
 
-    # Fixes applied
     all_fixes = [f for r in results for f in r.get('fixes_applied', [])]
     if all_fixes:
         print(f"\nFixes applied: {len(all_fixes)}")
@@ -609,10 +613,11 @@ def print_report(results, verbose=False):
             for fix in r.get('fixes_applied', []):
                 print(f"  {r['label']}: {fix}")
 
-    # Detail per volume
     print("\n" + "-" * 70)
     print("DETAIL BY VOLUME")
     print("-" * 70)
+
+    sev_marker = {'error': 'ERROR', 'warning': 'WARN', 'info': 'INFO', 'auto_fixable': 'FIX'}
 
     for r in results:
         if r.get('error'):
@@ -627,9 +632,7 @@ def print_report(results, verbose=False):
 
         for fix in fixes:
             print(f"  FIXED: {fix}")
-
         for issue in issues:
-            sev_marker = {'error': 'ERROR', 'warning': 'WARN', 'info': 'INFO', 'auto_fixable': 'FIX'}
             marker = sev_marker.get(issue['severity'], '???')
             print(f"  [{marker}] {issue['detail']}")
 
@@ -638,7 +641,7 @@ def print_report(results, verbose=False):
 
 
 def save_report(results, output_path):
-    """Save machine-readable report."""
+    """Save machine-readable JSON report."""
     report = {
         'total_volumes': len(results),
         'clean': sum(1 for r in results if not r.get('issues') and not r.get('error')),
@@ -677,10 +680,7 @@ def main():
     parser.add_argument('--json', '-j', metavar='PATH', help='Save JSON report to file')
     args = parser.parse_args()
 
-    if args.dirs:
-        issue_dirs = args.dirs
-    else:
-        issue_dirs = find_all_issue_dirs()
+    issue_dirs = args.dirs or find_all_issue_dirs()
 
     if not issue_dirs:
         print("No issue directories found.")
@@ -709,7 +709,6 @@ def main():
     report_path = args.json or os.path.join(os.path.dirname(__file__), 'output', 'audit-report.json')
     save_report(results, report_path)
 
-    # Exit code: 1 if any errors found
     has_errors = any(
         any(i['severity'] == 'error' for i in r.get('issues', []))
         for r in results
