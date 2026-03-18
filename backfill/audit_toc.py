@@ -63,7 +63,7 @@ def get_issue_label(toc_data):
     """Get human-readable label like 'Vol 4' or 'Vol 23.1'."""
     v = toc_data.get('volume', '?')
     i = toc_data.get('issue', 1)
-    if v in (1, 2, 3, 4, 5) or i == 1 and v <= 5:
+    if v in (1, 2, 3, 4, 5):  # Single-issue volumes
         return f"Vol {v}"
     return f"Vol {v}.{i}"
 
@@ -177,11 +177,9 @@ def check_page_gaps(toc_data):
                 'next_start': nxt_start,
                 'detail': f"Gap of {gap - 1} pages between #{i + 1} '{curr.get('title', '')[:40]}' (ends {curr_end}) and #{i + 2} '{nxt.get('title', '')[:40]}' (starts {nxt_start})"
             })
-        # Overlap (not shared page) — where next starts BEFORE current ends
+        # Overlap of more than 1 page (shared page = gap of 0, which is normal)
         elif gap < 0:
-            # Shared page (gap == 0) is normal. But gap < 0 means overlap of more than 1 page
-            if gap < 0:
-                issues.append({
+            issues.append({
                     'type': 'page_overlap',
                     'severity': 'warning',
                     'article_idx': i,
@@ -200,7 +198,7 @@ def check_book_reviews(toc_data):
     articles = toc_data.get('articles', [])
     reviews = [(i, a) for i, a in enumerate(articles) if a.get('section') == 'Book Reviews']
 
-    for idx, (i, review) in enumerate(reviews):
+    for review_idx, (i, review) in enumerate(reviews):
         pages = review.get('pdf_page_end', 0) - review.get('pdf_page_start', 0) + 1
 
         # Single-page review
@@ -237,7 +235,7 @@ def check_book_reviews(toc_data):
                 })
 
         # Gaps between consecutive book reviews
-        if idx < len(reviews) - 1:
+        if review_idx < len(reviews) - 1:
             next_i, next_review = reviews[idx + 1]
             gap = next_review.get('pdf_page_start', 0) - review.get('pdf_page_end', 0)
             if gap >= 3:
@@ -342,6 +340,7 @@ def check_coverage(toc_data):
         })
 
     # Last article should end within 3 pages of total
+    # Both are 0-indexed; total-1 is the last valid page index
     gap_to_end = (total - 1) - last_end
     if gap_to_end > 3:
         issues.append({

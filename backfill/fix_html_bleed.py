@@ -573,8 +573,8 @@ def run_trim(toc_paths, dry_run=False):
         classification = classify_review(rev)
         cat = classification['category']
 
-        # Process bleed categories and also clean reviews (for header stripping)
-        if cat not in ('end-bleed', 'start-bleed', 'both-bleed', 'clean', 'no-byline', 'no-title'):
+        # Process bleed categories and clean reviews (header stripping only)
+        if cat not in ('end-bleed', 'start-bleed', 'both-bleed', 'clean'):
             continue
 
         label = f"Vol {rev['vol']}.{rev['iss']} #{rev['idx']+1}"
