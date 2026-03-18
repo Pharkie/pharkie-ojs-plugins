@@ -132,7 +132,9 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 ### Next
 
 - [x] **HTML galley regeneration** — all 1398 articles have HTML galleys. 42 PyMuPDF fallback (content-filtered). Report: `backfill/output/htmlgen-report.json`.
-- [x] **HTML galley QA & consistency pass** — enhanced `fix_html_bleed.py` with embedded running header stripping (page numbers + journal title mixed into paragraph text), back matter detection patterns, trailing/leading page number removal. Cleaned 89/1398 HTML files across all 68 volumes. Remaining journal title references (176 files) are all legitimate bibliography citations.
+- [x] **HTML galley QA & consistency pass** — `audit_html.py` + `fix_html_bleed.py` enhancements. Fixed 168 issues (running headers, reviewer mismatches, missing bylines, page boundaries). Broader spot-check (109 reviews across 41 volumes): 89/109 pass (82%), then fixed all 20 failures (truncations, merged reviews, wrong reviewers). Final audit: 1398 files, 0 issues.
+- [ ] **Archive quality notice** — add a footer notice on OJS for recently digitized back-issue content. Something like "This archive has been digitally restored from print. If you spot any issues, please email [editor] to help us get the archive right." Not a banner — a subtle footer box.
+- [ ] **Broader shared-page book review check** — spot-checks found shared-page bleed in ~10% of sampled reviews. Run a systematic check of ALL shared-page book reviews (where pdf_page_start == prev article's pdf_page_end) to catch remaining cases.
 - [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`) — HTML galleys will be picked up automatically by `generate_xml.py`
 - toc.json files are auto-discovered by `split-issue.sh` — no flags needed
 
