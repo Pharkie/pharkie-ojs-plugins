@@ -107,18 +107,28 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [x] Rebuild 6.2.toc.json for full 204-page issue
 - [x] Human review of all prepared PDFs
 - [x] Pivot: delete automated TOC parser, adopt Claude-reviewed toc.json as primary
-- [x] All 68 toc.json files created and verified (1356 articles/reviews)
+- [x] All 68 toc.json files created and verified (1394 articles/reviews)
 - [x] Phase 1: Add ~60 missing book review entries across 16 early issues (vols 2–17.1)
 - [x] Phase 2: Fix PAGE_OFF_BY_1 (~120 entries), page range bugs, honorifics, gaps, missing entries
 - [x] Full verification pass (7 agents across all 68 volumes) — all findings resolved
 - [x] Data quality clean: zero honorifics, zero malformed metadata, all book_years filled
-- [x] Google Sheet published (1356 rows): `backfill/sheets_export.py`
+- [x] Google Sheet published (1394 rows): `backfill/sheets_export.py`
 - [x] Enrichment data imported from spreadsheet review (`backfill/import_review.py`)
+- [x] Automated toc.json audit tool (`backfill/audit_toc.py`) — checks page boundaries, back matter, reviewer attribution, book review metadata against source PDFs
+- [x] Back matter removal — 60+ pages of ISSN, Publications Received, ads, membership forms, contributor guidelines removed from last articles across 40+ volumes
+- [x] 105 articles extended to include missing last page (author bios, references, final paragraphs)
+- [x] 91 book reviews extended to include reviewer byline page
+- [x] 19 wrong reviewer attributions corrected (article authors misassigned as reviewers)
+- [x] 7 combined multi-book reviews fixed (identical page ranges for all entries)
+- [x] 3 missing articles/reviews added (Vol 7.1 Jennifer Hay, Vol 11.2 Milton letter, Vol 31.2 Living Your Own Life)
+- [x] Vol 6.1 all 7 book review page ranges corrected (shifted ~3 pages)
+- [x] HTML bleed detection + trimming tool (`backfill/fix_html_bleed.py`) with running header stripping
+- [x] Separate Haiku prompts per section type (article, shared-page article, book review) with book_title disambiguation
 
 ### Next
 
-- [ ] Re-run `backfill/audit.py` on `backfill/input/`, all 68 PDFs should pass
-- [x] **HTML galley generation via Haiku API** — 1356 articles processed (~$57 API cost). 1318 Haiku-generated, 38 PyMuPDF fallback (content-filtered, platform-level — Sonnet also blocked). Report: `backfill/output/htmlgen-report.json`. All `.html` files tracked in git.
+- [ ] **HTML galley regeneration** — 155 articles across 25 volumes need HTML generated (~$1.08 Haiku cost). Uses improved prompts (separate book review prompt + book_title). Then run `fix_html_bleed.py --trim` + `--clean-headers` as safety net.
+- [x] **HTML galley generation via Haiku API** — 1238 articles processed. 38 PyMuPDF fallback (content-filtered). Report: `backfill/output/htmlgen-report.json`. All `.html` files tracked in git.
 - [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`) — HTML galleys will be picked up automatically by `generate_xml.py`
 - toc.json files are auto-discovered by `split-issue.sh` — no flags needed
 
