@@ -39,11 +39,16 @@ if [ "$NEEDS_INSTALL" = false ]; then
 else
   echo "[OJS] Fresh install — config templated (installed = Off)."
 fi
-# If base_url uses HTTPS, enable force_ssl so OJS generates HTTPS asset URLs
-# even when behind a reverse proxy that terminates SSL (e.g. Caddy).
+# Behind a reverse proxy (Caddy) that terminates SSL, Apache sees HTTP.
+# OJS checks $_SERVER['HTTPS'] to decide protocol for asset URLs.
+# Set HTTPS=on in Apache when X-Forwarded-Proto says https.
 if echo "$OJS_BASE_URL" | grep -q '^https://'; then
-  sed -i 's/^force_ssl = Off/force_ssl = On/' "$CONFIG"
-  sed -i 's/^force_login_ssl = Off/force_login_ssl = On/' "$CONFIG"
+  cat > /etc/apache2/conf-enabled/sea-https-proxy.conf <<'APACHE'
+# Trust X-Forwarded-Proto from reverse proxy (Caddy).
+# Sets HTTPS env var so PHP's $_SERVER['HTTPS'] = 'on'.
+SetEnvIf X-Forwarded-Proto "https" HTTPS=on
+APACHE
+  echo "[OJS] Reverse proxy HTTPS detection enabled."
 fi
 chown www-data:www-data "$CONFIG" 2>/dev/null || true
 chmod 640 "$CONFIG"
