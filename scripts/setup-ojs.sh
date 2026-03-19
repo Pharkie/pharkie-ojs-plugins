@@ -229,8 +229,7 @@ echo "[OJS] Journal metadata configured."
 # The live site has two columns of nav links + the SEA logo on the right.
 # Hide the OJS brand image (ojs_brand.png) via CSS — can't modify core templates.
 JPATH="${OJS_JOURNAL_PATH:-ea}"
-CONTACT_EMAIL="${OJS_CONTACT_EMAIL:-journal@existentialanalysis.org.uk}"
-FOOTER_HTML="<style>.pkp_brand_footer{display:none}</style><div style=\"display:flex;justify-content:space-between;align-items:flex-start;gap:40px;\"><div style=\"display:flex;gap:40px;\"><div><a href=\"/$JPATH/issue/current\">Current</a><br><a href=\"/$JPATH/issue/archive\">Archives</a><br><a href=\"/$JPATH/about\">About</a><br><a href=\"/$JPATH/about/submissions\">Submissions</a></div><div><a href=\"/$JPATH/about/editorialMasthead\">Editorial Masthead</a><br><a href=\"/$JPATH/about/contact\">Contact</a><br><a href=\"/$JPATH/about/privacy\">Privacy Statement</a></div></div><div><img style=\"max-height:80px\" src=\"/public/site/images/sea-logo-footer.png\" alt=\"Society for Existential Analysis\" width=\"200\" height=\"87\"></div></div><div style=\"margin-top:20px;padding:12px 16px;background:#f8f5f0;border:1px solid #e0d8cc;border-radius:4px;font-size:13px;color:#555;line-height:1.5;\">Our archive has been digitally restored from 30 years of print issues. If you spot any errors or formatting issues, please let us know at <a href=\"mailto:$CONTACT_EMAIL\">$CONTACT_EMAIL</a> &mdash; your feedback helps us get the archive right.</div>"
+FOOTER_HTML="<style>.pkp_brand_footer{display:none}</style><div style=\"display:flex;justify-content:space-between;align-items:flex-start;gap:40px;\"><div style=\"display:flex;gap:40px;\"><div><a href=\"/$JPATH/issue/current\">Current</a><br><a href=\"/$JPATH/issue/archive\">Archives</a><br><a href=\"/$JPATH/about\">About</a><br><a href=\"/$JPATH/about/submissions\">Submissions</a></div><div><a href=\"/$JPATH/about/editorialMasthead\">Editorial Masthead</a><br><a href=\"/$JPATH/about/contact\">Contact</a><br><a href=\"/$JPATH/about/privacy\">Privacy Statement</a></div></div><div><img style=\"max-height:80px\" src=\"/public/site/images/sea-logo-footer.png\" alt=\"Society for Existential Analysis\" width=\"200\" height=\"87\"></div></div>"
 $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
   VALUES ($JOURNAL_ID_META, 'en', 'pageFooter', '$(echo "$FOOTER_HTML" | sed "s/'/''/g")')
   ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
@@ -874,6 +873,30 @@ if [ "$SAMPLE_DATA" = true ]; then
     UPDATE sections SET seq=3 WHERE section_id=(SELECT section_id FROM (SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Book Reviews') t);
   "
   echo "[OJS] Section order fixed."
+
+  # Set archive display order: newest first (by date_published DESC).
+  # OJS archive page sorts by custom_issue_orders.seq, not by date_published.
+  # Without this, issues display in import/insertion order (random).
+  EXISTING_ORDER=$($MARIADB -N -e "SELECT COUNT(*) FROM custom_issue_orders WHERE journal_id=$JOURNAL_ID")
+  if [ "$EXISTING_ORDER" = "0" ]; then
+    echo "[OJS] Setting archive order (newest first)..."
+    $MARIADB -e "
+      INSERT INTO custom_issue_orders (issue_id, journal_id, seq)
+      SELECT issue_id, journal_id, @row := @row + 1 as seq
+      FROM issues, (SELECT @row := 0) r
+      WHERE journal_id=$JOURNAL_ID AND published = 1
+      ORDER BY date_published DESC;"
+    echo "[OJS] Archive order set."
+  fi
+
+  # Set current issue to the newest (highest date_published).
+  CURRENT_ISSUE_ID=$($MARIADB -N -e "SELECT issue_id FROM issues WHERE journal_id=$JOURNAL_ID AND published=1 ORDER BY date_published DESC LIMIT 1")
+  if [ -n "$CURRENT_ISSUE_ID" ]; then
+    $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID, '', 'current_issue_id', '$CURRENT_ISSUE_ID')
+      ON DUPLICATE KEY UPDATE setting_value='$CURRENT_ISSUE_ID';"
+    echo "[OJS] Current issue set (issue_id=$CURRENT_ISSUE_ID)."
+  fi
   fi
 fi
 

@@ -105,8 +105,17 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
+        // Archive quality notice — shown above inline content for digitised back-issues
+        $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
+            . 'border:1px solid #e0d8cc;border-radius:4px;font-size:13px;color:#666;line-height:1.5;">'
+            . 'This article has been digitally restored from print. If you spot any errors '
+            . 'or formatting issues, please email '
+            . '<a href="mailto:journal@existentialanalysis.org.uk">journal@existentialanalysis.org.uk</a>.'
+            . '</div>';
+
         $output .= '<section class="item inline-html-galley">'
             . '<h2 class="label">Full Text</h2>'
+            . $archiveNotice
             . '<div class="value">' . $bodyContent . '</div>'
             . '</section>';
 
