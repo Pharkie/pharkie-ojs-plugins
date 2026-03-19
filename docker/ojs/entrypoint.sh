@@ -23,14 +23,14 @@ VARS="$VARS "'$WPOJS_WP_MEMBER_URL $WPOJS_SUPPORT_EMAIL'
 
 NEEDS_INSTALL=false
 
-# Generate config from template if missing, empty, or not yet installed
+# Always re-template config from environment (picks up SMTP, API key, URL changes on restart)
 if [ ! -s "$CONFIG" ] || grep -q "installed = Off" "$CONFIG"; then
-  echo "[OJS] Generating config.inc.php from template..."
-  envsubst "$VARS" < "$TEMPLATE" > "$CONFIG"
-  chown www-data:www-data "$CONFIG" 2>/dev/null || true
-  chmod 640 "$CONFIG"
   NEEDS_INSTALL=true
 fi
+echo "[OJS] Generating config.inc.php from template..."
+envsubst "$VARS" < "$TEMPLATE" > "$CONFIG"
+chown www-data:www-data "$CONFIG" 2>/dev/null || true
+chmod 640 "$CONFIG"
 
 # Auto-install in background (after Apache starts)
 if [ "$NEEDS_INSTALL" = true ]; then
