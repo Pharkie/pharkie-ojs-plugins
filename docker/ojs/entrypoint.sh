@@ -21,19 +21,21 @@ VARS="$VARS "'$WPOJS_WP_MEMBER_URL $WPOJS_SUPPORT_EMAIL'
 # UI messages are stored in plugin_settings (DB), not config.inc.php.
 # See setup-ojs.sh for how instance-specific defaults are written.
 
-NEEDS_INSTALL=false
+# Check the DATABASE to determine if OJS is already installed.
+# Don't trust the config file — it gets overwritten by the template on every start.
+NEEDS_INSTALL=true
+if mysql --skip-ssl -h "$OJS_DB_HOST" -u "$OJS_DB_USER" -p"$OJS_DB_PASSWORD" "$OJS_DB_NAME" \
+    -e "SELECT 1 FROM journals LIMIT 1" &>/dev/null; then
+  NEEDS_INSTALL=false
+fi
 
 # Always re-template config from environment (picks up SMTP, API key, URL changes on restart)
-if [ ! -s "$CONFIG" ] || grep -q "installed = Off" "$CONFIG"; then
-  NEEDS_INSTALL=true
-fi
 echo "[OJS] Generating config.inc.php from template..."
 envsubst "$VARS" < "$TEMPLATE" > "$CONFIG"
-# Template always has "installed = Off". If OJS is already installed (DB exists),
-# flip it to On so OJS doesn't redirect to the install wizard on restart.
+# Template has "installed = Off". If DB says OJS is installed, flip it to On.
 if [ "$NEEDS_INSTALL" = false ]; then
   sed -i 's/^installed = Off/installed = On/' "$CONFIG"
-  echo "[OJS] Config re-templated (installed = On, preserving existing DB)."
+  echo "[OJS] Config re-templated (installed = On, DB already has data)."
 else
   echo "[OJS] Fresh install — config templated (installed = Off)."
 fi
