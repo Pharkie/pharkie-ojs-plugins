@@ -399,9 +399,12 @@ create_editorial_user() {
     $MARIADB -e "INSERT INTO user_settings (user_id, setting_name, setting_value, locale) VALUES
       ($USER_ID, 'givenName', '$GIVEN', 'en'),
       ($USER_ID, 'familyName', '$FAMILY', 'en');"
-    $MARIADB -e "INSERT INTO user_user_groups (user_group_id, user_id) VALUES ($GROUP_ID, $USER_ID);"
+    $MARIADB -e "INSERT INTO user_user_groups (user_group_id, user_id, masthead) VALUES ($GROUP_ID, $USER_ID, 1);"
     echo "[OJS]   Created $USERNAME ($GIVEN $FAMILY) → group $GROUP_ID"
   else
+    # Ensure masthead flag is set (OJS 3.5 requires masthead=1 for Editorial Masthead page)
+    local USER_ID=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$USERNAME'")
+    $MARIADB -e "UPDATE user_user_groups SET masthead = 1 WHERE user_id = $USER_ID AND user_group_id = $GROUP_ID;"
     echo "[OJS]   $USERNAME already exists, skipping."
   fi
 }

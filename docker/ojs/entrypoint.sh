@@ -39,6 +39,12 @@ if [ "$NEEDS_INSTALL" = false ]; then
 else
   echo "[OJS] Fresh install — config templated (installed = Off)."
 fi
+# If base_url uses HTTPS, enable force_ssl so OJS generates HTTPS asset URLs
+# even when behind a reverse proxy that terminates SSL (e.g. Caddy).
+if echo "$OJS_BASE_URL" | grep -q '^https://'; then
+  sed -i 's/^force_ssl = Off/force_ssl = On/' "$CONFIG"
+  sed -i 's/^force_login_ssl = Off/force_login_ssl = On/' "$CONFIG"
+fi
 chown www-data:www-data "$CONFIG" 2>/dev/null || true
 chmod 640 "$CONFIG"
 
