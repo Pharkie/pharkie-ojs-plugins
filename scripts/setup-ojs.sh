@@ -890,11 +890,10 @@ if [ "$SAMPLE_DATA" = true ]; then
   fi
 
   # Set current issue to the newest (highest date_published).
+  # OJS stores this in journals.current_issue_id, NOT journal_settings.
   CURRENT_ISSUE_ID=$($MARIADB -N -e "SELECT issue_id FROM issues WHERE journal_id=$JOURNAL_ID AND published=1 ORDER BY date_published DESC LIMIT 1")
   if [ -n "$CURRENT_ISSUE_ID" ]; then
-    $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
-      VALUES ($JOURNAL_ID, '', 'current_issue_id', '$CURRENT_ISSUE_ID')
-      ON DUPLICATE KEY UPDATE setting_value='$CURRENT_ISSUE_ID';"
+    $MARIADB -e "UPDATE journals SET current_issue_id=$CURRENT_ISSUE_ID WHERE journal_id=$JOURNAL_ID;"
     echo "[OJS] Current issue set (issue_id=$CURRENT_ISSUE_ID)."
   fi
   fi
