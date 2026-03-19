@@ -10,6 +10,7 @@ docs/private/
 # Environment
 .env
 .env.staging
+.env.live
 .env.production
 
 # WordPress (Bedrock) — all Composer-managed

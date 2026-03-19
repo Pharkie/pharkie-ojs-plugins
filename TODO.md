@@ -28,14 +28,14 @@
 
 ## Next: OJS live on Hetzner
 
-OJS is ready to go live. Branding matches the PKP-hosted live site. Deploy to Hetzner, point `journal.existentialanalysis.org.uk` at it.
+Server: `sea-live` (was `sea-staging`, promoted 2026-03-19). SSH: `ssh sea-live`. Deploy: `scripts/deploy.sh --host=sea-live --ssl --env-file=.env.live`.
 
-- [x] ~~Set up SEA Hetzner VPS (staging)~~ — `scripts/init-vps.sh`, deployed and verified 2026-03-10
-- [ ] Deploy OJS to Hetzner staging — `deploy.sh --host=sea-staging --env-file=.env.staging`
-- [ ] Smoke tests + manual review of staging OJS
-- [x] ~~DNS cutover~~ — `journal.existentialanalysis.org.uk` pointed to Hetzner `46.225.173.209` (2026-03-19, via cPanel UAPI over SSH, see DNS management section below)
-- [ ] Deploy live with SSL — `scripts/init-vps.sh --name=sea-live --ssl` then `scripts/deploy.sh --host=sea-live --provision --ssl --env-file=.env.live`. Requires `CADDY_OJS_DOMAIN=journal.existentialanalysis.org.uk` in `.env.live`. Caddy handles Let's Encrypt automatically (ports 80/443 must be open). Staging stays IP-only HTTP.
-- [ ] Set up transactional email (Resend) — domain verification, SPF/DKIM/DMARC, OJS SMTP config
+- [x] ~~Set up SEA Hetzner VPS~~ — `scripts/init-vps.sh`, deployed and verified 2026-03-10
+- [x] ~~Deploy OJS + WP~~ — 68 issues imported, 22/22 smoke tests pass
+- [x] ~~DNS cutover~~ — `journal.existentialanalysis.org.uk` → `46.225.173.209` (2026-03-19, via cPanel UAPI)
+- [x] ~~Caddy + firewall~~ — ports 80/443 open, Caddy deployed with `--ssl`, auto-provisioning Let's Encrypt cert
+- [ ] SSL cert provisioned — waiting on DNS propagation (check: `dig +short journal.existentialanalysis.org.uk @8.8.8.8` should return `46.225.173.209`)
+- [ ] Resend email — SMTP configured in `.env.live`, but SPF/DKIM DNS records not yet added to cPanel. Need records from Resend dashboard.
 - [ ] Monitor 24-48h
 - [ ] Decommission PKP hosting
 
@@ -155,16 +155,16 @@ Last verified 2026-03-19:
 - [x] Dev containers running, test-connection passes
 - [x] 66/66 Playwright e2e tests pass (inline HTML galley TOC test fixed — was incorrectly checking paywalled articles' Full Text links)
 
-## Staging rebuild
+## Future staging rebuild
 
-After dev is verified, grave-and-repave staging to confirm the same setup works on Hetzner:
+When a staging server is needed for testing changes before live:
 
-1. `hcloud server delete sea-staging && hcloud firewall delete sea-staging-fw`
-2. `scripts/init-vps.sh --name=sea-staging`
-3. `scripts/deploy.sh --host=sea-staging --provision --clean --env-file=.env.staging`
-4. `scripts/backfill-remote.sh --host=sea-staging` — syncs + imports all 68 issues
-5. `scripts/smoke-test.sh --host=sea-staging`
-6. Verify banner links point to `WPOJS_WP_MEMBER_URL` from `.env.staging`
+1. `scripts/init-vps.sh --name=sea-staging`
+2. `scripts/deploy.sh --host=sea-staging --provision --env-file=.env.staging`
+3. `scripts/backfill-remote.sh --host=sea-staging` — syncs + imports all 68 issues
+4. `scripts/smoke-test.sh --host=sea-staging`
+
+No staging server currently exists. Live is `sea-live`.
 
 ## Staging test results (2026-03-10, sea-michal account)
 
