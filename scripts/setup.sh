@@ -32,32 +32,13 @@ if [ -z "$ENV" ]; then
 fi
 
 # --- Environment-specific compose command and defaults ---
-COMPOSE_FILES="-f docker-compose.yml -f docker-compose.staging.yml"
+source "$(dirname "$0")/lib/dc.sh"
+init_dc --env="$ENV"
 
 case "$ENV" in
-  dev)
-    # Docker-in-Docker: volume mounts resolve against the HOST filesystem.
-    # --project-directory must be the host path; -f and --env-file are container paths.
-    DC="docker compose --project-directory /Users/adamknowles/dev/SEA/wp-ojs-sync -f /workspaces/wp-ojs-sync/docker-compose.yml --env-file /workspaces/wp-ojs-sync/.env"
-    ;;
   staging)
-    # Detect Caddy overlay: if caddy service is running, include its compose file
-    if docker compose $COMPOSE_FILES -f docker-compose.caddy.yml ps --status running 2>/dev/null | grep -q caddy; then
-      COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.caddy.yml"
-    fi
-    DC="docker compose $COMPOSE_FILES"
     # Staging gets sample data by default (for testing)
     [ -z "$SAMPLE_DATA" ] && SAMPLE_DATA="--with-sample-data"
-    ;;
-  prod)
-    if docker compose $COMPOSE_FILES -f docker-compose.caddy.yml ps --status running 2>/dev/null | grep -q caddy; then
-      COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.caddy.yml"
-    fi
-    DC="docker compose $COMPOSE_FILES"
-    ;;
-  *)
-    echo "ERROR: Unknown environment '$ENV'. Use dev, staging, or prod."
-    exit 1
     ;;
 esac
 

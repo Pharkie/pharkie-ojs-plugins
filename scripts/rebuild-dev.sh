@@ -11,11 +11,12 @@
 #
 # Output is always tee'd to logs/rebuild-<timestamp>.log so it's recoverable.
 #
-# This script is devcontainer-specific (hardcoded host path for DinD).
+# Requires HOST_PROJECT_DIR env var (set automatically by devcontainer.json).
 # For portable setup (containers already running), use scripts/setup.sh --env=dev.
 set -eo pipefail
 
-DC="docker compose --project-directory /Users/adamknowles/dev/SEA/wp-ojs-sync -f /workspaces/wp-ojs-sync/docker-compose.yml --env-file /workspaces/wp-ojs-sync/.env"
+source "$(dirname "$0")/lib/dc.sh"
+init_dc --env=dev
 
 SAMPLE_DATA=""
 SKIP_TESTS=false

@@ -29,6 +29,14 @@ if [ ! -s "$CONFIG" ] || grep -q "installed = Off" "$CONFIG"; then
 fi
 echo "[OJS] Generating config.inc.php from template..."
 envsubst "$VARS" < "$TEMPLATE" > "$CONFIG"
+# Template always has "installed = Off". If OJS is already installed (DB exists),
+# flip it to On so OJS doesn't redirect to the install wizard on restart.
+if [ "$NEEDS_INSTALL" = false ]; then
+  sed -i 's/^installed = Off/installed = On/' "$CONFIG"
+  echo "[OJS] Config re-templated (installed = On, preserving existing DB)."
+else
+  echo "[OJS] Fresh install — config templated (installed = Off)."
+fi
 chown www-data:www-data "$CONFIG" 2>/dev/null || true
 chmod 640 "$CONFIG"
 

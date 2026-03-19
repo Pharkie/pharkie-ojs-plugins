@@ -90,7 +90,8 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
   - **For quick dev cycle:** `rebuild-dev.sh --with-sample-data` gives 2 sample issues + test users — enough for sync testing without the 10-min backfill wait.
 - **`scripts/setup.sh`** — unified setup for all environments. Assumes containers are already running. Flags: `--env=dev|staging|prod`, `--with-sample-data`. Staging defaults to `--with-sample-data`.
 - **`scripts/setup-dev.sh`** — thin shim, runs `setup.sh --env=dev`. Kept for backwards compatibility.
-- **Why two scripts?** Docker-in-Docker in the devcontainer requires a hardcoded host path for `--project-directory`. `rebuild-dev.sh` bakes this in. `setup.sh --env=dev` is the portable inner script. Staging/prod use plain `docker compose` on the VPS.
+- **Why two scripts?** Docker-in-Docker in the devcontainer requires the host path for `--project-directory` (volume mounts resolve against the host filesystem). `rebuild-dev.sh` is the outer script (tear down + build + setup). `setup.sh --env=dev` is the portable inner script. Staging/prod use plain `docker compose` on the VPS.
+- **DinD abstraction:** `scripts/lib/dc.sh` provides `init_dc` which auto-detects DinD via `HOST_PROJECT_DIR` env var (set in `devcontainer.json` from `${localWorkspaceFolder}`). All scripts source it and use `$DC`. No hardcoded host paths anywhere.
 - **`scripts/init-vps.sh`** — one-time VPS setup (Hetzner): creates server, firewall, SSH config. Run once per server.
 - **`scripts/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`, `--env-file`.
 - **`scripts/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). No Node/Playwright needed on VPS.

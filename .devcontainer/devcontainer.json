@@ -23,7 +23,10 @@
     "source=wpojs-playwright,target=/home/vscode/.cache/ms-playwright,type=volume"
   ],
   "containerEnv": {
-    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    // Host-side workspace path for DinD: docker compose --project-directory
+    // needs this because volume mounts resolve against the HOST filesystem.
+    "HOST_PROJECT_DIR": "${localWorkspaceFolder}"
   },
 
   "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && sudo chown vscode:vscode node_modules /home/vscode/.cache/ms-playwright && npm install && npx playwright install chromium && bash setup-hooks.sh",
