@@ -12,7 +12,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      CADDY_WP_DOMAIN: ${CADDY_WP_DOMAIN:?Set CADDY_WP_DOMAIN in .env}
+      CADDY_WP_DOMAIN: ${CADDY_WP_DOMAIN:-:8080}
       CADDY_OJS_DOMAIN: ${CADDY_OJS_DOMAIN:?Set CADDY_OJS_DOMAIN in .env}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
