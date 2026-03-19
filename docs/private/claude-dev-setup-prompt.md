@@ -32,11 +32,13 @@ If step 1 fails, check:
 - Ports 8080/8081 are free
 - Both setup scripts end with health checks — look for `[FAIL]` lines
 
-After the rebuild, set up hcloud contexts for Hetzner (two accounts — personal and Michal's org):
+After the rebuild, set up hcloud contexts for Hetzner (two accounts — personal and Michal's org).
+**NEVER put API tokens in this file or any committed file.** Get tokens from the Hetzner Cloud Console
+(console.hetzner.cloud → Security → API Tokens) and run:
 
 ```
-HCLOUD_TOKEN="REDACTED_TOKEN_ROTATED" hcloud context create sea-personal --token-from-env
-HCLOUD_TOKEN="REDACTED_TOKEN_ROTATED" hcloud context create sea-michal --token-from-env
+HCLOUD_TOKEN="<paste-sea-personal-token>" hcloud context create sea-personal --token-from-env
+HCLOUD_TOKEN="<paste-sea-michal-token>" hcloud context create sea-michal --token-from-env
 ```
 
 This only needs to happen once — the contexts are stored in `~/.config/hcloud/cli.toml`

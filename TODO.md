@@ -32,9 +32,9 @@ OJS is ready to go live. Branding matches the PKP-hosted live site. Deploy to He
 
 - [x] ~~Set up SEA Hetzner VPS (staging)~~ — `scripts/init-vps.sh`, deployed and verified 2026-03-10
 - [ ] Deploy OJS to Hetzner staging — `deploy.sh --host=sea-staging --env-file=.env.staging`
-- [ ] SSL certificate (Let's Encrypt) for `journal.existentialanalysis.org.uk`
 - [ ] Smoke tests + manual review of staging OJS
-- [ ] DNS cutover — point `journal.existentialanalysis.org.uk` to Hetzner (via cPanel UAPI over SSH, see below)
+- [x] ~~DNS cutover~~ — `journal.existentialanalysis.org.uk` pointed to Hetzner `46.225.173.209` (2026-03-19, via cPanel UAPI over SSH, see DNS management section below)
+- [ ] Deploy live with SSL — `scripts/init-vps.sh --name=sea-live --ssl` then `scripts/deploy.sh --host=sea-live --provision --ssl --env-file=.env.live`. Requires `CADDY_OJS_DOMAIN=journal.existentialanalysis.org.uk` in `.env.live`. Caddy handles Let's Encrypt automatically (ports 80/443 must be open). Staging stays IP-only HTTP.
 - [ ] Set up transactional email (Resend) — domain verification, SPF/DKIM/DMARC, OJS SMTP config
 - [ ] Monitor 24-48h
 - [ ] Decommission PKP hosting

@@ -72,6 +72,32 @@ check_secrets() {
                 ((errors++))
             fi
         fi
+
+        # Pattern 6: Hetzner API tokens (64-char alphanumeric, often in HCLOUD_TOKEN= or hcloud context)
+        if echo "$content" | grep -qE 'HCLOUD_TOKEN="[A-Za-z0-9]{60,}"' 2>/dev/null; then
+            local match
+            match=$(echo "$content" | grep -oE 'HCLOUD_TOKEN="[A-Za-z0-9]{60,}"')
+            if ! echo "$match" | grep -qiE '(paste|your|placeholder|REDACTED)'; then
+                echo "    ERROR: Hetzner API token detected in $file"
+                ((errors++))
+            fi
+        fi
+    done
+
+    # Also scan .md files for API tokens (not covered by main loop which skips .md)
+    local md_files
+    md_files=$(echo "$files_to_check" | grep '\.md$' || true)
+    for file in $md_files; do
+        local content
+        content=$(read_file_content "$file") || continue
+        if echo "$content" | grep -qE 'HCLOUD_TOKEN="[A-Za-z0-9]{60,}"' 2>/dev/null; then
+            local match
+            match=$(echo "$content" | grep -oE 'HCLOUD_TOKEN="[A-Za-z0-9]{60,}"')
+            if ! echo "$match" | grep -qiE '(paste|your|placeholder|REDACTED)'; then
+                echo "    ERROR: Hetzner API token detected in $file"
+                ((errors++))
+            fi
+        fi
     done
 
     return $errors

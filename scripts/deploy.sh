@@ -11,6 +11,7 @@
 #   scripts/deploy.sh --ref=some-branch        # Deploy a specific git ref
 #   scripts/deploy.sh --clean                  # Tear down volumes first (fresh DB)
 #   scripts/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
+#   scripts/deploy.sh --ssl                    # Enable Caddy reverse proxy with automatic Let's Encrypt SSL
 #
 # Prerequisites:
 #   - hcloud CLI with active context (resolves server IP automatically)
@@ -23,6 +24,7 @@ PROVISION=""
 SKIP_SETUP=""
 SKIP_BUILD=""
 CLEAN=""
+SSL=""
 GIT_REF="main"
 ENV_FILE=""
 for arg in "$@"; do
@@ -32,6 +34,7 @@ for arg in "$@"; do
     --skip-setup) SKIP_SETUP=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     --clean) CLEAN=1 ;;
+    --ssl) SSL=1 ;;
     --ref=*) GIT_REF="${arg#--ref=}" ;;
     --env-file=*) ENV_FILE="${arg#--env-file=}" ;;
   esac
@@ -40,6 +43,9 @@ done
 REMOTE_DIR="/opt/wp-ojs-sync"
 REPO_URL="https://github.com/Pharkie/wp-ojs-sync.git"
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+if [ -n "$SSL" ]; then
+  COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.caddy.yml"
+fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
