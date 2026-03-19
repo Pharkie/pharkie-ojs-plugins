@@ -97,13 +97,15 @@ test.describe('Inline HTML Galley plugin', () => {
     );
     await page.waitForLoadState('domcontentloaded');
 
-    // "Full Text" galley links should be hidden on issue page too
-    const fullTextLinks = page.locator('.obj_galley_link').filter({
-      hasText: 'Full Text',
-    });
-    const count = await fullTextLinks.count();
+    // Only check the editorial's own "Full Text" link — paywalled articles
+    // on the same issue page correctly keep their "Full Text" links visible.
+    // Galley links have id="article-{subId}-galley-{galleyId}", so scope by that.
+    const fullTextLink = page.locator(
+      `[id^="article-${editorial!.submissionId}-galley"]`,
+    ).filter({ hasText: 'Full Text' });
+    const count = await fullTextLink.count();
     for (let i = 0; i < count; i++) {
-      await expect(fullTextLinks.nth(i)).toBeHidden();
+      await expect(fullTextLink.nth(i)).toBeHidden();
     }
   });
 

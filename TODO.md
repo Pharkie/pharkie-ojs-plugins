@@ -115,11 +115,31 @@ Investigated 2026-03-19. The membership site is on Krystal at `~/community.exist
 - **WP cron** via page loads (no system cron for WP). Action Scheduler runs every minute.
 - Plugin dir writable, no existing `WPOJS_API_KEY` in wp-config.php
 
-## Dev environment verification (2026-03-19)
+## Dev environment rebuild + verify
 
+Full dev rebuild is a two-step process:
+
+1. **Rebuild + sample data** (~3–5 min): `scripts/rebuild-dev.sh --with-sample-data --skip-tests`
+   Seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. Includes branding, plugin config, subscription types.
+2. **Full backfill import** (~10 min): `backfill/import.sh backfill/output/*`
+   Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). Overwrites sample issues, keeps WP test users.
+3. **Run e2e tests**: `npx playwright test` — 66 tests, all should pass.
+4. **Verify banner links**: sidebar "BOOK NOW" banners should link to `WPOJS_WP_MEMBER_URL` (not localhost).
+
+Last verified 2026-03-19:
 - [x] Dev containers running, test-connection passes
-- [x] 65/66 Playwright e2e tests pass (1 failure in inline HTML galley plugin — unrelated to sync)
-- [x] All 64 sync-related tests pass: lifecycle, login, dashboard, CLI, settings, GDPR, password sync, error recovery
+- [x] 66/66 Playwright e2e tests pass (inline HTML galley TOC test fixed — was incorrectly checking paywalled articles' Full Text links)
+
+## Staging rebuild
+
+After dev is verified, grave-and-repave staging to confirm the same setup works on Hetzner:
+
+1. `hcloud server delete sea-staging && hcloud firewall delete sea-staging-fw`
+2. `scripts/init-vps.sh --name=sea-staging`
+3. `scripts/deploy.sh --host=sea-staging --provision --clean --env-file=.env.staging`
+4. `scripts/backfill-remote.sh --host=sea-staging` — syncs + imports all 68 issues
+5. `scripts/smoke-test.sh --host=sea-staging`
+6. Verify banner links point to `WPOJS_WP_MEMBER_URL` from `.env.staging`
 
 ## Staging test results (2026-03-10, sea-michal account)
 
