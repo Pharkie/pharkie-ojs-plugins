@@ -154,6 +154,19 @@ class WPOJS_CLI {
 	 * @param bool $resume
 	 */
 	private function sync_bulk( $dry_run, $batch_size = 50, $skip_confirm = false, $resume = false ) {
+		// Pre-flight: verify type mapping config before doing any work.
+		if ( ! $dry_run ) {
+			$type_mapping = get_option( 'wpojs_type_mapping', array() );
+			$default_type = (int) get_option( 'wpojs_default_type_id', 0 );
+			if ( empty( $type_mapping ) && ! $default_type ) {
+				WP_CLI::error(
+					"No product-to-subscription-type mappings configured and no default type set.\n" .
+					"Bulk sync would create OJS user accounts but fail on every subscription.\n" .
+					"Configure mappings in Settings > OJS Sync before running bulk sync."
+				);
+			}
+		}
+
 		WP_CLI::log( 'Resolving active members (this may take a few minutes)...' );
 		$members = $this->resolver->get_all_active_members();
 		$total   = count( $members );

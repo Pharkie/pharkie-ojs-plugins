@@ -161,15 +161,28 @@ class WPOJS_Resolver {
         global $wpdb;
         $user_ids = array();
 
-        // WCS subscribers — direct HPOS query for user IDs only (avoids hydrating
+        // WCS subscribers — direct query for user IDs only (avoids hydrating
         // full WC_Subscription objects which is extremely slow at scale).
-        $wcs_ids = $wpdb->get_col(
-            "SELECT DISTINCT customer_id
-            FROM {$wpdb->prefix}wc_orders
-            WHERE type = 'shop_subscription'
-            AND status = 'wc-active'
-            AND customer_id > 0"
-        );
+        // Supports both HPOS (wc_orders) and legacy (wp_posts + wp_postmeta).
+        $hpos_enabled = 'yes' === get_option( 'woocommerce_custom_orders_table_enabled', 'no' );
+        if ( $hpos_enabled ) {
+            $wcs_ids = $wpdb->get_col(
+                "SELECT DISTINCT customer_id
+                FROM {$wpdb->prefix}wc_orders
+                WHERE type = 'shop_subscription'
+                AND status = 'wc-active'
+                AND customer_id > 0"
+            );
+        } else {
+            $wcs_ids = $wpdb->get_col(
+                "SELECT DISTINCT pm.meta_value
+                FROM {$wpdb->prefix}posts p
+                JOIN {$wpdb->prefix}postmeta pm ON p.ID = pm.post_id AND pm.meta_key = '_customer_user'
+                WHERE p.post_type = 'shop_subscription'
+                AND p.post_status = 'wc-active'
+                AND pm.meta_value > 0"
+            );
+        }
         if ( $wcs_ids ) {
             $user_ids = array_map( 'intval', $wcs_ids );
         }

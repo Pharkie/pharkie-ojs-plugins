@@ -57,10 +57,22 @@ class WPOJS_Sync {
 		}
 
 		$email      = strtolower( $user->user_email );
+		// Step 1: Resolve subscription data BEFORE creating OJS user.
+		// Avoids orphaned OJS accounts when type mapping is misconfigured.
+		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
+		if ( ! $sub_data || ! $sub_data['type_id'] ) {
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', 0, 'Could not resolve subscription type. Check type mapping settings.' );
+			$this->send_admin_alert(
+				'OJS Sync: No Subscription Type',
+				sprintf( "Action: activate\nEmail: %s\nWP User ID: %d\nNo subscription type resolved. Check type mapping settings.", $email, $wp_user_id )
+			);
+			return; // Don't retry -- config issue, not transient.
+		}
+
 		$first_name = $user->first_name ?: $user->display_name;
 		$last_name  = $user->last_name ?: '';
 
-		// Step 1: Find or create OJS user (with WP password hash so they
+		// Step 2: Find or create OJS user (with WP password hash so they
 		// can log into OJS with their existing WP password).
 		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $user->user_pass );
 		if ( ! $result['success'] ) {
@@ -90,18 +102,6 @@ class WPOJS_Sync {
 		// Log user creation if new.
 		if ( ! empty( $result['body']['created'] ) ) {
 			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
-		}
-
-		// Step 2: Resolve subscription data and create subscription.
-		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
-		if ( ! $sub_data || ! $sub_data['type_id'] ) {
-			// User is a member but we can't resolve a type -- log and complete (user was created).
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', 0, 'Could not resolve subscription type. Check type mapping settings.' );
-			$this->send_admin_alert(
-				'OJS Sync: No Subscription Type',
-				sprintf( "Action: activate\nEmail: %s\nWP User ID: %d\nNo subscription type resolved. Check type mapping settings.", $email, $wp_user_id )
-			);
-			return; // Don't retry -- config issue, not transient.
 		}
 
 		$sub_result = $this->api->create_subscription(
@@ -417,6 +417,11 @@ class WPOJS_Sync {
 					$sub_data['date_end'] ?? 'non-expiring'
 				),
 			);
+		}
+
+		// Bail before creating OJS user if type mapping is misconfigured.
+		if ( ! $sub_data['type_id'] ) {
+			return array( 'success' => false, 'code' => 0, 'message' => 'No subscription type resolved. Check type mapping settings.' );
 		}
 
 		$email      = strtolower( $user->user_email );
