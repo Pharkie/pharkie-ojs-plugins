@@ -34,7 +34,7 @@ OJS is ready to go live. Branding matches the PKP-hosted live site. Deploy to He
 - [ ] Deploy OJS to Hetzner staging — `deploy.sh --host=sea-staging --env-file=.env.staging`
 - [ ] SSL certificate (Let's Encrypt) for `journal.existentialanalysis.org.uk`
 - [ ] Smoke tests + manual review of staging OJS
-- [ ] DNS cutover — point `journal.existentialanalysis.org.uk` to Hetzner
+- [ ] DNS cutover — point `journal.existentialanalysis.org.uk` to Hetzner (via cPanel UAPI over SSH, see below)
 - [ ] Set up transactional email (Resend) — domain verification, SPF/DKIM/DMARC, OJS SMTP config
 - [ ] Monitor 24-48h
 - [ ] Decommission PKP hosting
@@ -114,6 +114,31 @@ Investigated 2026-03-19. The membership site is on Krystal at `~/community.exist
 - **`proc_open` disabled** — `wp db query` won't work, use `wp eval` with `$wpdb` instead. Does not affect sync plugin.
 - **WP cron** via page loads (no system cron for WP). Action Scheduler runs every minute.
 - Plugin dir writable, no existing `WPOJS_API_KEY` in wp-config.php
+- **HPOS disabled** — subscriptions in `wp_posts`, not `wc_orders`. Sync plugin handles both. Don't enable on Krystal; enable at Phase 3 (WP→Hetzner).
+
+## DNS management
+
+Nameservers are Krystal's (`ns1.krystal.uk`, `ns2.krystal.uk`). All DNS for `existentialanalysis.org.uk` is managed via cPanel on the Krystal account — no registrar or third-party access needed.
+
+**Backup:** `docs/private/dns-backup-2026-03-19.txt` — full zone snapshot before changes.
+
+**Read zone:** `ssh sea-wp-live "uapi DNS parse_zone zone=existentialanalysis.org.uk"`
+
+**Update A record** (two-step: get serial, then edit):
+```bash
+# 1. Get current serial from parse_zone SOA record
+ssh sea-wp-live "uapi DNS parse_zone zone=existentialanalysis.org.uk --output=json" | python3 -c "..."
+# 2. Edit with matching serial and line_index
+ssh sea-wp-live 'uapi DNS mass_edit_zone zone=existentialanalysis.org.uk serial=<SERIAL> edit="{\"line_index\":<LINE>,\"dname\":\"journal\",\"record_type\":\"A\",\"data\":[\"<IP>\"],\"ttl\":300}"'
+```
+Get `<LINE>` from `parse_zone` output (`line_index` field). Get `<SERIAL>` from SOA record.
+
+**Current records of interest:**
+| Subdomain | Type | Value | What |
+|---|---|---|---|
+| `journal` | A | `46.225.173.209` | Hetzner staging OJS (changed 2026-03-19) |
+| `community` | A | `77.72.2.79` | Krystal WP (membership site) |
+| (root) | A | `77.72.2.79` | Krystal WP (brochure site) |
 
 ## Dev environment rebuild + verify
 
@@ -223,6 +248,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [ ] **Cross-issue browsing** — let readers browse articles by type (e.g., Book Reviews) across issue boundaries. Two things to investigate:
   - [ ] **Browse by Section plugin** (`pkp/browseBySection`) — install from Plugin Gallery, enable per-section. Works with existing section assignments, no extra metadata. Easiest win.
   - [ ] **OJS categories** — decide taxonomy/topology (hierarchical, one level of nesting supported). Categories are independent of sections and require assigning articles (could be done during backfill import). Decide what categories to create and whether they add value beyond section browsing.
+- [ ] **Non-member payment UX flow** — OJS redirects anonymous users to login when they click a paywalled article, with no "this is paywalled / subscribe / purchase" interstitial. Just a bare login form. This is how the OJS code works (`Validation::redirectLogin()` in `ArticleHandler.php` fires for anonymous users on restricted galleys; purchase flow requires `$user->getId()`). Need to work out the best achievable flow for non-members who want to buy individual articles/issues — may need a custom interstitial or template override. Related: registration is currently disabled (`disableUserReg=1` in `setup-ojs.sh`) because members are created via sync — but non-member purchasers need to register. May need to re-enable registration with appropriate guardrails.
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 
 Dropped (not worth the complexity):
