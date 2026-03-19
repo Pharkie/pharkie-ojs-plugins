@@ -126,11 +126,12 @@ FAILED=0
 SUCCEEDED=0
 SKIPPED=0
 
-# Sort directories by volume.issue numerically
+# Sort directories by volume.issue numerically (skip non-issue names like reports, Pro, etc.)
 IFS=$'\n' SORTED_DIRS=($(for d in "${DIRS[@]}"; do
   base="$(basename "$d")"
-  # Extract vol and issue for numeric sorting (e.g., "25.1" → "025.1", "3" → "003.0")
   vol="${base%%.*}"
+  # Skip entries where the volume part isn't numeric (e.g., "audit-report.json", "Pro")
+  [[ "$vol" =~ ^[0-9]+$ ]] || continue
   if [[ "$base" == *.* ]]; then iss="${base#*.}"; else iss="0"; fi
   printf "%03d.%s\t%s\n" "$vol" "$iss" "$d"
 done | sort -t. -k1,1n -k2,2n | cut -f2))
