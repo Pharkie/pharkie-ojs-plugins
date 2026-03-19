@@ -35,8 +35,11 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/rebuild-$(date '+%Y%m%d-%H%M%S').log"
 
 # Tee all stdout+stderr to the log file while still showing on terminal.
-# Use a file descriptor so we can report the log path on exit.
 exec > >(tee "$LOG_FILE") 2>&1
+
+# Trap errors so failures are always visible — even when output is piped through
+# grep or tail. Without this, a mid-script failure just looks like the output stopped.
+trap 'echo ""; echo "=== REBUILD FAILED (exit code $?) ===" >&2; echo "  Log: $LOG_FILE" >&2' ERR
 
 # --- Auto-generate .env if missing ---
 if [ ! -f /workspaces/wp-ojs-sync/.env ]; then

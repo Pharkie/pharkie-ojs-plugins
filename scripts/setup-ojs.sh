@@ -830,10 +830,10 @@ echo "[OJS] Caches cleared, Apache reloaded."
 
 # --- Sample data (dev/staging only) ---
 if [ "$SAMPLE_DATA" = true ]; then
-  IMPORT_XML="/data/ojs-import-clean.xml"
-  if [ ! -f "$IMPORT_XML" ]; then
-    echo "[OJS] WARNING: Import XML not found at $IMPORT_XML — skipping content import."
-    echo "[OJS] To import: scp the file to the VPS 'data export/' directory and re-run setup."
+  IMPORT_DIR="/data/sample-issues"
+  if [ ! -d "$IMPORT_DIR" ] || [ -z "$(ls "$IMPORT_DIR"/*.xml 2>/dev/null)" ]; then
+    echo "[OJS] WARNING: No sample issue XMLs found in $IMPORT_DIR — skipping content import."
+    echo "[OJS] To import: mount backfill/output/*/import.xml files and re-run setup."
   else
 
   # Idempotent check: see if articles already exist
@@ -841,21 +841,31 @@ if [ "$SAMPLE_DATA" = true ]; then
   if [ "$ARTICLE_COUNT" -gt "0" ]; then
     echo "[OJS] Articles already imported ($ARTICLE_COUNT publications), skipping."
   else
-    echo "[OJS] Importing OJS content (2 issues, 43 articles)..."
-    IMPORT_OUTPUT=$(php /var/www/html/tools/importExport.php NativeImportExportPlugin import "$IMPORT_XML" "$JOURNAL_PATH" 2>&1)
-    IMPORT_EXIT=$?
-    # Show the import summary (skip PHP Notices which are harmless tempnam warnings)
-    echo "$IMPORT_OUTPUT" | grep -v "PHP Notice" | tail -10
-    if [ "$IMPORT_EXIT" != "0" ]; then
-      echo "[OJS] ERROR: Import exited with code $IMPORT_EXIT"
+    IMPORT_COUNT=0
+    IMPORT_ERRORS=0
+    for IMPORT_XML in "$IMPORT_DIR"/*.xml; do
+      ISSUE_NAME=$(basename "$IMPORT_XML" .xml)
+      echo "[OJS] Importing $ISSUE_NAME..."
+      IMPORT_OUTPUT=$(php -d memory_limit=512M /var/www/html/tools/importExport.php NativeImportExportPlugin import "$IMPORT_XML" "$JOURNAL_PATH" 2>&1)
+      IMPORT_EXIT=$?
+      if [ "$IMPORT_EXIT" != "0" ]; then
+        echo "[OJS] ERROR: Import of $ISSUE_NAME failed (exit $IMPORT_EXIT)"
+        echo "$IMPORT_OUTPUT" | grep -v "PHP Notice" | tail -5
+        IMPORT_ERRORS=$((IMPORT_ERRORS + 1))
+      else
+        IMPORT_COUNT=$((IMPORT_COUNT + 1))
+      fi
+    done
+    if [ "$IMPORT_ERRORS" -gt "0" ]; then
+      echo "[OJS] ERROR: $IMPORT_ERRORS import(s) failed out of $((IMPORT_COUNT + IMPORT_ERRORS))."
       exit 1
     fi
     NEW_COUNT=$($MARIADB -N -e "SELECT COUNT(*) FROM publications WHERE submission_id > 0")
     if [ "$NEW_COUNT" = "0" ]; then
-      echo "[OJS] ERROR: Import reported success but no publications found in DB."
+      echo "[OJS] ERROR: Imports completed but no publications found in DB."
       exit 1
     fi
-    echo "[OJS] [ok] Import complete. Publications: $NEW_COUNT"
+    echo "[OJS] [ok] Import complete. $IMPORT_COUNT issue(s), $NEW_COUNT publications."
   fi
 
   # Set issues to require subscription (access_status: 1 = open, 2 = subscription).

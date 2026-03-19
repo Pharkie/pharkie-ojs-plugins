@@ -146,14 +146,23 @@ else
   echo "[skip] No custom themes found locally."
 fi
 
-IMPORT_XML="$PROJECT_DIR/data export/ojs-import-clean.xml"
-if [ -f "$IMPORT_XML" ]; then
-  $SSH_CMD "mkdir -p '$REMOTE_DIR/data export'"
-  rsync -az -e "$RSYNC_SSH" \
-    "$IMPORT_XML" "$SCP_HOST:$REMOTE_DIR/data export/ojs-import-clean.xml"
-  echo "[ok] OJS import XML synced."
+# Sync sample issue XMLs for staging (backfill-generated, with correct per-article galleys)
+SAMPLE_ISSUES=("$PROJECT_DIR/backfill/output/35.2/import.xml" "$PROJECT_DIR/backfill/output/36.1/import.xml")
+HAVE_SAMPLES=false
+for f in "${SAMPLE_ISSUES[@]}"; do
+  [ -f "$f" ] && HAVE_SAMPLES=true
+done
+if [ "$HAVE_SAMPLES" = true ]; then
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/backfill/output/35.2' '$REMOTE_DIR/backfill/output/36.1'"
+  for f in "${SAMPLE_ISSUES[@]}"; do
+    if [ -f "$f" ]; then
+      RELPATH="${f#$PROJECT_DIR/}"
+      rsync -az -e "$RSYNC_SSH" "$f" "$SCP_HOST:$REMOTE_DIR/$RELPATH"
+    fi
+  done
+  echo "[ok] Sample issue XMLs synced."
 else
-  echo "[skip] No OJS import XML found locally."
+  echo "[skip] No sample issue XMLs found locally."
 fi
 
 # --- Clean (optional: tear down volumes for fresh DB) ---

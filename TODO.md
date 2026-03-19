@@ -34,10 +34,10 @@ Server: `sea-live` (was `sea-staging`, promoted 2026-03-19). SSH: `ssh sea-live`
 - [x] ~~Deploy OJS + WP~~ — 68 issues imported, 22/22 smoke tests pass
 - [x] ~~DNS cutover~~ — `journal.existentialanalysis.org.uk` → `46.225.173.209` (2026-03-19, via cPanel UAPI)
 - [x] ~~Caddy + firewall~~ — ports 80/443 open, Caddy deployed with `--ssl`, auto-provisioning Let's Encrypt cert
-- [ ] SSL cert provisioned — waiting on DNS propagation (check: `dig +short journal.existentialanalysis.org.uk @8.8.8.8` should return `46.225.173.209`)
-- [ ] Resend email — SMTP configured in `.env.live`, but SPF/DKIM DNS records not yet added to cPanel. Need records from Resend dashboard.
+- [x] ~~SSL cert provisioned~~ — HTTPS working, Caddy auto-provisioned Let's Encrypt cert (verified 2026-03-19)
+- [x] ~~Resend email~~ — SMTP + SPF/DKIM working (confirmed 2026-03-19)
 - [ ] Monitor 24-48h
-- [ ] Decommission PKP hosting
+- [x] ~~Decommission PKP hosting~~ — cancelled, runs until ~September 2026
 
 ## Next after OJS: WP sync (Phase 2)
 
