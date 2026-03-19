@@ -39,15 +39,54 @@ OJS is ready to go live. Branding matches the PKP-hosted live site. Deploy to He
 - [ ] Monitor 24-48h
 - [ ] Decommission PKP hosting
 
-## Later: WP sync (Phase 2)
+## Next after OJS: WP sync (Phase 2)
 
-Connect Krystal WP to the new Hetzner OJS via the sync plugins. WP stays on Krystal for now.
+Connect Krystal WP (`community.existentialanalysis.org.uk`) to Hetzner OJS via the sync plugins. WP stays on Krystal for now. The membership site is on the `community` subdomain, not `public_html` — see "Live WP environment" below for details.
 
-- [ ] Deploy wpojs-sync plugin to Krystal WP (non-Docker install per `docs/non-docker-setup.md`)
-- [ ] Configure WP settings: type mapping for all 6 WC products, manual roles, OJS URL
-- [ ] Configure OJS: API key, allowed IPs (Krystal's outbound IP), subscription types
-- [ ] `wp ojs-sync test-connection` → `sync --dry-run` → `sync`
-- [ ] Verify: new member flow, cancellation/expiry, on-hold/failed payment, OJS login with WP password
+### OJS-side prep
+
+- [ ] Configure `config.inc.php` `[wpojs]` section: `api_key_secret`, `allowed_ips` (Krystal's outbound IP), `wp_member_url`, `support_email`
+- [ ] Create OJS subscription type(s) — at minimum one "Individual Membership" type
+- [ ] Verify OJS ping endpoint reachable from Krystal: `curl https://<ojs-domain>/index.php/ea/api/v1/wpojs/ping`
+
+### WP-side deployment
+
+- [ ] Upload plugin: `scp -r plugins/wpojs-sync/ sea-wp-live:community.existentialanalysis.org.uk/wp-content/plugins/wpojs-sync/`
+- [ ] Add `define('WPOJS_API_KEY', '...')` to `wp-config.php` (must match OJS `api_key_secret`)
+- [ ] Activate: `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp plugin activate wpojs-sync"`
+- [ ] Configure settings (WP Admin → OJS Sync):
+  - OJS Base URL (HTTPS, includes journal path)
+  - Product mappings — all 6 WC subscription products:
+    | WC Product ID | Product name | OJS Type ID |
+    |---|---|---|
+    | 1892 | UK Membership (no directory listing) | TBD |
+    | 1924 | International Membership (no directory listing) | TBD |
+    | 1927 | Student Membership (no directory listing) | TBD |
+    | 23040 | Student Membership (with directory listing) | TBD |
+    | 23041 | International Membership (with directory listing) | TBD |
+    | 23042 | UK Membership (with directory listing) | TBD |
+  - Manual roles: `um_custom_role_7` (Exco/life UK), `um_custom_role_8` (Exco/life international), `um_custom_role_9` (Exco/life student) — currently 1 user total
+- [ ] Check Wordfence isn't blocking outbound HTTPS to OJS domain
+
+### Verify and launch
+
+- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync test-connection"`
+- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync sync --bulk --dry-run"` — expect ~699 members
+- [ ] Review dry run output, confirm member count matches expectations
+- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync sync --bulk --yes"` — run real bulk sync
+- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync status"` — verify counts
+- [ ] Spot-check 2-3 members can log into OJS with WP password
+- [ ] Test new member flow (create WCS subscription → verify OJS access created)
+- [ ] Test cancellation flow (cancel → verify OJS access removed)
+- [ ] Test on-hold / failed payment scenario
+- [ ] Verify non-member OJS purchase flow still works (paywall → buy article)
+
+### Post-launch monitoring
+
+- [ ] Check WP Admin → OJS Sync → Sync Log for failures
+- [ ] Verify Action Scheduler processing jobs (WP Admin → Tools → Scheduled Actions)
+- [ ] Monitor daily digest emails for sync failures
+- [ ] Run `wp ojs-sync reconcile` manually after 24h to check for drift
 
 ## Later: WP migration to Hetzner (Phase 3)
 
@@ -61,6 +100,26 @@ Move WP from Krystal to Hetzner. Both WP + OJS on same VPS.
 - [ ] DNS cutover for `community.existentialanalysis.org.uk`
 - [ ] Update OJS allowed_ips (now Docker network)
 - [ ] Cancel Krystal hosting
+
+## Live WP environment (community.existentialanalysis.org.uk)
+
+Investigated 2026-03-19. The membership site is on Krystal at `~/community.existentialanalysis.org.uk/` (NOT `~/public_html/`, which is a separate brochure site). SSH: `sea-wp-live` (port 722, user `existent`).
+
+- **WP 6.9.4**, **PHP 8.3.30** — exceeds plugin requirements
+- **WooCommerce** 10.6.1, **WCS** 8.5.0, **Ultimate Member** 2.11.2, **Stripe** 10.5.2, **Action Scheduler** (bundled, running)
+- **1,419 users**, 12 admins, **699 active subscriptions** with 6 membership products
+- **6 subscription products** (all annual): UK £50, International £60, Student £35 — each in "with listing" and "no listing" variants
+- **9 UM roles** including 3 manual Exco/life member roles (1 user total)
+- **Wordfence** active — check outbound rules before connecting to OJS
+- **`proc_open` disabled** — `wp db query` won't work, use `wp eval` with `$wpdb` instead. Does not affect sync plugin.
+- **WP cron** via page loads (no system cron for WP). Action Scheduler runs every minute.
+- Plugin dir writable, no existing `WPOJS_API_KEY` in wp-config.php
+
+## Dev environment verification (2026-03-19)
+
+- [x] Dev containers running, test-connection passes
+- [x] 65/66 Playwright e2e tests pass (1 failure in inline HTML galley plugin — unrelated to sync)
+- [x] All 64 sync-related tests pass: lifecycle, login, dashboard, CLI, settings, GDPR, password sync, error recovery
 
 ## Staging test results (2026-03-10, sea-michal account)
 

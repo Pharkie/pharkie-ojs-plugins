@@ -132,16 +132,23 @@ def get_issue_label(toc_data):
 # --- Check functions ---
 
 def check_back_matter(toc_data, doc):
-    """Check if the last article includes back matter pages.
+    """Check ALL articles for back matter pages.
 
-    Scans backwards from the last article's pdf_page_end looking for
-    back matter (ISSN, Publications Received, Society blurb, ads, etc.).
+    Two checks per article:
+    1. Scan backwards from pdf_page_end for pure back matter pages (last article).
+    2. Scan forward through every article's pages for back matter flags
+       ('Publications received', 'Advertising Rates', etc.) — if a flag
+       appears as primary content on a page, no article should include
+       pages beyond it. If the flag shares a page with review content
+       (e.g. byline + 'Publications received'), that page is OK but
+       pages after it are not.
     """
     issues = []
     articles = toc_data.get('articles', [])
     if not articles:
         return issues
 
+    # Check 1: Last article — scan backwards for pure back matter
     last = articles[-1]
     last_start = last.get('pdf_page_start', 0)
     last_end = last.get('pdf_page_end', 0)
@@ -173,6 +180,59 @@ def check_back_matter(toc_data, doc):
                 'suggested_end': bm_page - 1,
                 'detail': f"Pages {bm_page}-{last_end} are back matter (pattern: {bm_pattern})"
             })
+
+    # Check 2: Every article — no pages past a back matter flag
+    for idx, article in enumerate(articles):
+        section = article.get('section', '')
+        if section == 'Editorial':
+            continue
+        start = article.get('pdf_page_start', 0)
+        end = article.get('pdf_page_end', 0)
+
+        for p in range(start, min(end + 1, len(doc))):
+            lines = _strip_headers(doc[p].get_text())
+            is_back, matched = _is_back_matter_page(lines)
+            if is_back and p < end:
+                # Pure back matter page with pages after it still included
+                issues.append({
+                    'type': 'back_matter_in_article',
+                    'severity': 'error',
+                    'article_idx': idx,
+                    'article_title': article.get('title', ''),
+                    'page': p,
+                    'pattern': matched,
+                    'current_end': end,
+                    'suggested_end': p - 1,
+                    'detail': f"Back matter on page {p} but article extends to {end} (pattern: {matched})"
+                })
+                break
+            elif not is_back:
+                # Content page — check if it contains a back matter flag
+                # (shared page). If so, pages AFTER this one should not exist.
+                text_lower = doc[p].get_text().lower()
+                for pattern in BACK_MATTER_PATTERNS:
+                    if pattern.search(text_lower) and p < end:
+                        # Flag found on a content page — check if pages after
+                        # are pure back matter
+                        pages_after_ok = True
+                        for p2 in range(p + 1, min(end + 1, len(doc))):
+                            lines2 = _strip_headers(doc[p2].get_text())
+                            is_back2, _ = _is_back_matter_page(lines2)
+                            if is_back2:
+                                pages_after_ok = False
+                                issues.append({
+                                    'type': 'back_matter_in_article',
+                                    'severity': 'error',
+                                    'article_idx': idx,
+                                    'article_title': article.get('title', ''),
+                                    'page': p2,
+                                    'pattern': matched,
+                                    'current_end': end,
+                                    'suggested_end': p,
+                                    'detail': f"Page {p2} is back matter after shared flag page {p}, but article extends to {end}"
+                                })
+                                break
+                        break
 
     return issues
 
@@ -514,15 +574,23 @@ def audit_issue(issue_dir, fix=False):
 
     # Auto-fix back matter if requested
     if fix and back_matter:
+        articles = toc_data['articles']
         for bm in back_matter:
             if bm['severity'] == 'auto_fixable':
-                articles = toc_data['articles']
-                old_end = articles[-1]['pdf_page_end']
+                idx = bm['article_idx']
+                old_end = articles[idx]['pdf_page_end']
                 new_end = bm['suggested_end']
-                articles[-1]['pdf_page_end'] = new_end
-                articles[-1]['split_pages'] = new_end - articles[-1]['pdf_page_start'] + 1
+                articles[idx]['pdf_page_end'] = new_end
                 result['fixes_applied'].append(
                     f"Fixed last article pdf_page_end: {old_end} → {new_end} (removed back matter)"
+                )
+            elif bm['severity'] == 'error' and bm['type'] == 'back_matter_in_article':
+                idx = bm['article_idx']
+                old_end = articles[idx]['pdf_page_end']
+                new_end = bm['suggested_end']
+                articles[idx]['pdf_page_end'] = new_end
+                result['fixes_applied'].append(
+                    f"Fixed #{idx+1} pdf_page_end: {old_end} → {new_end} (back matter in article)"
                 )
 
         if result['fixes_applied']:

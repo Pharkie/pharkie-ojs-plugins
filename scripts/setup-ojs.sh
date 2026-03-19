@@ -480,14 +480,17 @@ done
 chown -R www-data:www-data "$SITE_IMG_DIR" 2>/dev/null || true
 
 # Create block settings using PHP for correct JSON encoding
+# Banner links point to WP community site (env-driven, not hardcoded)
+WP_BANNER_URL="${WPOJS_WP_MEMBER_URL:-http://localhost:8080}"
 php -r '
 $pdo = new PDO("mysql:host='"$OJS_DB_HOST"';dbname='"$OJS_DB_NAME"'", "'"$OJS_DB_USER"'", "'"$OJS_DB_PASSWORD"'", [PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false]);
 $ctx = '"$JOURNAL_ID_META"';
+$wpUrl = "'"$WP_BANNER_URL"'";
 
 $blocks = [
   "advertisers-link" => "<ul style=\"list-style:none;padding:0;margin:0\"><li><a href=\"/ea/advertisers\">For Advertisers</a></li></ul>",
-  "banner" => "<a href=\"http://localhost:8080\"><img src=\"/public/site/images/sea-events-1.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
-  "sea-events-banner" => "<a href=\"http://localhost:8080\"><img src=\"/public/site/images/sea-events-2.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
+  "banner" => "<a href=\"" . $wpUrl . "\"><img src=\"/public/site/images/sea-events-1.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
+  "sea-events-banner" => "<a href=\"" . $wpUrl . "\"><img src=\"/public/site/images/sea-events-2.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
 ];
 
 $stmt = $pdo->prepare("INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)

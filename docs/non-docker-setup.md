@@ -165,6 +165,9 @@ curl https://your-ojs-site.example.org/index.php/journalpath/api/v1/wpojs/ping
 
 ```bash
 cp -r plugins/wpojs-sync/ /path/to/wordpress/wp-content/plugins/wpojs-sync/
+
+# For Krystal (SEA live site):
+scp -r plugins/wpojs-sync/ sea-wp-live:community.existentialanalysis.org.uk/wp-content/plugins/wpojs-sync/
 ```
 
 ### 2. Set the API key
