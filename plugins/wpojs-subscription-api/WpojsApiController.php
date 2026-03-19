@@ -833,8 +833,13 @@ class WpojsApiController extends PKPBaseController
             ])
             ->delete();
 
-        // Remove access_keys (password reset tokens tied to this user)
-        DB::table('access_keys')->where('user_id', $userId)->delete();
+        // Remove access_keys (password reset tokens tied to this user).
+        // Table was removed in OJS 3.5 — skip if it doesn't exist.
+        try {
+            DB::table('access_keys')->where('user_id', $userId)->delete();
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Table doesn't exist (OJS 3.5+) — nothing to clean up.
+        }
 
         return $this->jsonResponse($request, [
             'deleted' => true,
