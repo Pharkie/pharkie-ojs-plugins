@@ -89,7 +89,7 @@ test.describe('Inline HTML Galley plugin', () => {
     }
   });
 
-  test('"Full Text" link hidden on issue TOC', async ({ page }) => {
+  test('all galley links hidden on issue TOC', async ({ page }) => {
     test.skip(!editorial, 'No open-access editorial with HTML galley found');
 
     await page.goto(
@@ -97,15 +97,12 @@ test.describe('Inline HTML Galley plugin', () => {
     );
     await page.waitForLoadState('domcontentloaded');
 
-    // Only check the editorial's own "Full Text" link — paywalled articles
-    // on the same issue page correctly keep their "Full Text" links visible.
-    // Galley links have id="article-{subId}-galley-{galleyId}", so scope by that.
-    const fullTextLink = page.locator(
-      `[id^="article-${editorial!.submissionId}-galley"]`,
-    ).filter({ hasText: 'Full Text' });
-    const count = await fullTextLink.count();
+    // All galley links (PDF, HTML, Full Text) should be hidden on the TOC.
+    // Readers click the article title to reach the landing page instead.
+    const allGalleyLinks = page.locator('.obj_galley_link');
+    const count = await allGalleyLinks.count();
     for (let i = 0; i < count; i++) {
-      await expect(fullTextLink.nth(i)).toBeHidden();
+      await expect(allGalleyLinks.nth(i)).toBeHidden();
     }
   });
 

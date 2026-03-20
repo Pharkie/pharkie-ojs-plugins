@@ -123,15 +123,16 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
     }
 
     /**
-     * Hide redundant "Full Text" galley links and add inline HTML styling.
+     * Hide galley links and add inline HTML styling.
      *
-     * On article pages: only hides the link if inline content was rendered
-     * (detected by the presence of .inline-html-galley on the page). This
-     * means users without access still see the link with purchase price.
+     * On article pages: only hides "Full Text" link if inline content was
+     * rendered (detected by .inline-html-galley on the page). Users without
+     * access still see galley links with purchase prices.
      *
-     * On issue TOC / archive pages: always hides "Full Text" links. The
-     * TOC shows article titles which link to the landing page where inline
-     * content is rendered — the separate galley link is just clutter.
+     * On issue TOC / archive pages: hides ALL galley links (PDF, HTML,
+     * Full Text). The article title links to the landing page where access
+     * logic determines what the reader sees (inline HTML + PDF download
+     * for subscribers, purchase prompt for non-subscribers).
      */
     public function hideHtmlGalleyLink(string $hookName, array $args): bool
     {
@@ -155,12 +156,15 @@ document.addEventListener("DOMContentLoaded", function() {
     var isArticlePage = !!document.querySelector(".obj_article_details");
     var hasInlineContent = !!document.querySelector(".inline-html-galley");
     document.querySelectorAll(".obj_galley_link").forEach(function(el) {
-        if (el.textContent.trim() === "Full Text") {
-            // On article pages: only hide if inline content was rendered
-            // On issue/archive pages: always hide (TOC title links to landing page)
-            if (!isArticlePage || hasInlineContent) {
-                el.style.display = "none";
-            }
+        var label = el.textContent.trim();
+        if (!isArticlePage) {
+            // Issue TOC / archive: hide all galley links (PDF, HTML, Full Text).
+            // Readers click the article title to reach the landing page where
+            // access logic shows inline HTML + PDF download (or purchase prompt).
+            el.style.display = "none";
+        } else if (label === "Full Text" && hasInlineContent) {
+            // Article page: hide "Full Text" link only when inline content rendered
+            el.style.display = "none";
         }
     });
 });
