@@ -155,7 +155,20 @@ This makes role planning confusing: you'd expect manager > editor > section edit
 
 - **Not reported upstream** — by-design OJS architecture, unlikely to change.
 
-### 13. Empty "References" section renders on every article page (OJS 3.5)
+### 13. API/DB field names don't match UI labels
+
+Several OJS settings use different names in the API/database versus the admin UI:
+
+| UI label | API/DB field | Notes |
+|---|---|---|
+| Journal Initials | `acronym` | Locale-aware (`{en: "EA"}`) |
+| Journal Abbreviation | `abbreviation` | Locale-aware (`{en: "Existential Analysis"}`) |
+
+This causes confusion when configuring via API or setup scripts — you write `acronym` expecting it to be the abbreviation.
+
+- **Not reported upstream** — cosmetic inconsistency, unlikely to change.
+
+### 14. Empty "References" section renders on every article page (OJS 3.5)
 
 The article details template (`article_details.tpl`) has `{if $parsedCitations || (string) $publication->getData('citationsRaw')}` to conditionally show the References section. In OJS 3.5, `$parsedCitations` is always set to a `LazyCollection` object (from `CitationDAO::getByPublicationId()`), which is truthy in Smarty even when empty. Similarly, `citationsRaw` is now a `Stringable` proxy object, also truthy. The `$parsedCitations` check short-circuits, so the `(string)` cast on citationsRaw never runs.
 
