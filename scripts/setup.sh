@@ -35,12 +35,7 @@ fi
 source "$(dirname "$0")/lib/dc.sh"
 init_dc --env="$ENV"
 
-case "$ENV" in
-  staging)
-    # Staging gets sample data by default (for testing)
-    [ -z "$SAMPLE_DATA" ] && SAMPLE_DATA="--with-sample-data"
-    ;;
-esac
+## Sample data is always opt-in — pass --with-sample-data explicitly.
 
 # --- Auto-generate .env if missing (dev only) ---
 if [ "$ENV" = "dev" ] && [ ! -f /workspaces/wp-ojs-sync/.env ]; then
