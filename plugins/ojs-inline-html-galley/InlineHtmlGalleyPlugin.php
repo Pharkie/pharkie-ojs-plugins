@@ -139,10 +139,11 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         $templateMgr = $args[0];
         $template = $args[1] ?? '';
 
-        // Only inject on article, issue, or archive pages
+        // Only inject on article, issue, archive, or homepage (current issue)
         if (!str_contains($template, 'article.tpl')
             && !str_contains($template, 'issue.tpl')
-            && !str_contains($template, 'issueArchive.tpl')) {
+            && !str_contains($template, 'issueArchive.tpl')
+            && !str_contains($template, 'index.tpl')) {
             return Hook::CONTINUE;
         }
 
