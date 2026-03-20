@@ -25,13 +25,25 @@ class WPOJS_Stats {
 		$count = 0;
 
 		// Count active WCS subscribers via direct DB query (avoid loading full objects).
-		// Uses HPOS table (wc_orders) where customer_id is a direct column.
-		$count += (int) $wpdb->get_var(
-			"SELECT COUNT(DISTINCT customer_id)
-			FROM {$wpdb->prefix}wc_orders
-			WHERE type = 'shop_subscription'
-			AND status = 'wc-active'"
-		);
+		// Supports both HPOS (wc_orders) and legacy (wp_posts + wp_postmeta).
+		$hpos_enabled = 'yes' === get_option( 'woocommerce_custom_orders_table_enabled', 'no' );
+		if ( $hpos_enabled ) {
+			$count += (int) $wpdb->get_var(
+				"SELECT COUNT(DISTINCT customer_id)
+				FROM {$wpdb->prefix}wc_orders
+				WHERE type = 'shop_subscription'
+				AND status = 'wc-active'"
+			);
+		} else {
+			$count += (int) $wpdb->get_var(
+				"SELECT COUNT(DISTINCT pm.meta_value)
+				FROM {$wpdb->prefix}posts p
+				JOIN {$wpdb->prefix}postmeta pm ON p.ID = pm.post_id AND pm.meta_key = '_customer_user'
+				WHERE p.post_type = 'shop_subscription'
+				AND p.post_status = 'wc-active'
+				AND pm.meta_value > 0"
+			);
+		}
 
 		// Count manual role members.
 		$manual_roles = get_option( 'wpojs_manual_roles', array() );
