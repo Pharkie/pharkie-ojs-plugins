@@ -155,3 +155,15 @@ This makes role planning confusing: you'd expect manager > editor > section edit
 
 - **Not reported upstream** — by-design OJS architecture, unlikely to change.
 
+### 13. Empty "References" section renders on every article page (OJS 3.5)
+
+The article details template (`article_details.tpl`) has `{if $parsedCitations || (string) $publication->getData('citationsRaw')}` to conditionally show the References section. In OJS 3.5, `$parsedCitations` is always set to a `LazyCollection` object (from `CitationDAO::getByPublicationId()`), which is truthy in Smarty even when empty. Similarly, `citationsRaw` is now a `Stringable` proxy object, also truthy. The `$parsedCitations` check short-circuits, so the `(string)` cast on citationsRaw never runs.
+
+Result: every article renders an empty `<section class="item references">` with just the "References" heading and no content — even when no citations exist.
+
+Root cause: `Publication\DAO.php` line 180 (`$citations = $citationDao->getByPublicationId(...)`) returns a Collection object, not a plain array. The Smarty template predates the Laravel migration and assumes falsy-when-empty.
+
+**Workaround:** Hide via CSS in the inline HTML galley plugin when inline content is present.
+
+- **Not yet reported upstream** — should be filed as a template bug.
+
