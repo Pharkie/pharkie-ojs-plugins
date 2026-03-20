@@ -143,7 +143,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         if (!str_contains($template, 'article.tpl')
             && !str_contains($template, 'issue.tpl')
             && !str_contains($template, 'issueArchive.tpl')
-            && !str_contains($template, 'index.tpl')) {
+            && !str_contains($template, 'indexJournal.tpl')) {
             return Hook::CONTINUE;
         }
 
