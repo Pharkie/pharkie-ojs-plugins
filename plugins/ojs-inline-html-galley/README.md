@@ -20,6 +20,5 @@ For any article where:
 The plugin:
 1. Reads the HTML file and extracts the `<body>` content.
 2. Renders it inline on the article page in a `<section class="inline-html-galley">` block.
-3. Hides the redundant "Full Text" galley link on article pages (only when inline content is shown), issue TOCs, and the archive page. PDF and other galley links remain visible.
-
-Users without access still see the "Full Text" link with the purchase price — the inline rendering only activates when OJS confirms access.
+3. On **article pages**: hides the "Full Text" galley link when inline content is shown. PDF and other galley links remain visible. Users without access still see the "Full Text" link with the purchase price.
+4. On **issue TOC / archive pages**: hides **all** galley links (PDF, HTML, Full Text). Readers click the article title to reach the landing page, where access logic determines what they see.
