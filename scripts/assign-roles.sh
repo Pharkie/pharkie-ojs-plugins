@@ -70,16 +70,16 @@ for i in $(seq 0 $((COUNT - 1))); do
       ($USER_ID, 'familyName', '$LAST', 'en')
       ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
 
-    # Assign Reader role (baseline, like the sync plugin does)
-    READER_GROUP=$($MARIADB -N -e "SELECT user_group_id FROM user_group_settings WHERE setting_name='name' AND setting_value='Reader' AND locale='en' LIMIT 1")
-    if [ -n "$READER_GROUP" ]; then
-      $MARIADB -e "INSERT IGNORE INTO user_user_groups (user_group_id, user_id) VALUES ($READER_GROUP, $USER_ID);"
-    fi
-
     echo "[Roles]   Created $EMAIL ($FIRST $LAST) as $USERNAME (user_id=$USER_ID, must_change_password=1)"
   else
     echo "[Roles]   Found $EMAIL (user_id=$USER_ID)"
   fi
+
+  # Remove all existing journal-level roles — the JSON file is the single source of truth.
+  # This prevents stale roles (e.g. Reader from sync) accumulating alongside editorial roles.
+  $MARIADB -e "DELETE uug FROM user_user_groups uug
+    JOIN user_groups ug ON ug.user_group_id = uug.user_group_id
+    WHERE uug.user_id = $USER_ID AND ug.context_id = $JOURNAL_ID;"
 
   # Assign each role
   for j in $(seq 0 $((ROLE_COUNT - 1))); do
