@@ -133,6 +133,7 @@ ojs_api() {
 JOURNAL_PATH="${OJS_JOURNAL_PATH:?OJS_JOURNAL_PATH not set}"
 JOURNAL_NAME="${OJS_JOURNAL_NAME:?OJS_JOURNAL_NAME not set}"
 JOURNAL_ACRONYM="${OJS_JOURNAL_ACRONYM:-}"
+JOURNAL_ABBREVIATION="${OJS_JOURNAL_ABBREVIATION:-}"
 JOURNAL_CONTACT_NAME="${OJS_JOURNAL_CONTACT_NAME:?OJS_JOURNAL_CONTACT_NAME not set}"
 JOURNAL_CONTACT_EMAIL="${OJS_JOURNAL_CONTACT_EMAIL:?OJS_JOURNAL_CONTACT_EMAIL not set}"
 JOURNAL_PUBLISHER="${OJS_JOURNAL_PUBLISHER:-}"
@@ -183,6 +184,7 @@ JOURNAL_SUBSCRIPTION_INFO="${OJS_JOURNAL_SUBSCRIPTION_INFO:-}"
 META_JSON=$(jq -n \
   --arg name "$JOURNAL_NAME" \
   --arg acronym "$JOURNAL_ACRONYM" \
+  --arg abbreviation "$JOURNAL_ABBREVIATION" \
   --arg desc "$JOURNAL_DESCRIPTION" \
   --arg about "$JOURNAL_ABOUT" \
   --arg contactName "$JOURNAL_CONTACT_NAME" \
@@ -213,6 +215,7 @@ META_JSON=$(jq -n \
   + if $country != "" then {country: $country} else {} end
   + if $printIssn != "" then {printIssn: $printIssn} else {} end
   + if $onlineIssn != "" then {onlineIssn: $onlineIssn} else {} end
+  + if $abbreviation != "" then {abbreviation: {en: $abbreviation}} else {} end
   ')
 META_RESULT=$(ojs_api PUT "/$JOURNAL_PATH/api/v1/contexts/$JOURNAL_ID_META" "$META_JSON")
 
@@ -863,6 +866,19 @@ if [ "$SAMPLE_DATA" = true ]; then
     UPDATE sections SET seq=3 WHERE section_id=(SELECT section_id FROM (SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Book Reviews') t);
   "
   echo "[OJS] Section order fixed."
+
+  # Remove "Conference Papers" section if it exists (not used)
+  CONF_SECTION=$($MARIADB -N -e "SELECT s.section_id FROM sections s JOIN section_settings ss ON s.section_id=ss.section_id WHERE ss.setting_name='title' AND ss.setting_value='Conference Papers' AND s.journal_id=$JOURNAL_ID LIMIT 1")
+  if [ -n "$CONF_SECTION" ]; then
+    # Only delete if no articles are assigned to it
+    CONF_COUNT=$($MARIADB -N -e "SELECT COUNT(*) FROM publications WHERE section_id=$CONF_SECTION")
+    if [ "$CONF_COUNT" = "0" ]; then
+      $MARIADB -e "DELETE FROM section_settings WHERE section_id=$CONF_SECTION; DELETE FROM sections WHERE section_id=$CONF_SECTION;"
+      echo "[OJS] Removed empty 'Conference Papers' section."
+    else
+      echo "[OJS] WARNING: 'Conference Papers' section has $CONF_COUNT articles — not removing."
+    fi
+  fi
 
   # Set archive display order: newest first (by date_published DESC).
   # OJS archive page sorts by custom_issue_orders.seq, not by date_published.
