@@ -165,5 +165,6 @@ Root cause: `Publication\DAO.php` line 180 (`$citations = $citationDao->getByPub
 
 **Workaround:** Hide via CSS in the inline HTML galley plugin when inline content is present.
 
-- **Not yet reported upstream** — should be filed as a template bug.
+- **Known issue:** [pkp/pkp-lib#12184](https://github.com/pkp/pkp-lib/issues/12184), fixed in [pkp/ojs#5249](https://github.com/pkp/ojs/pull/5249) (merged 2026-01-06, `stable-3_5_0` branch). Fix: `{if count($parsedCitations)}` instead of `{if $parsedCitations}`. Not yet in the `3_5_0-3` Docker image we use.
+- **Our workaround:** JS in inline HTML galley plugin hides the section when `.value` has no text content.
 
