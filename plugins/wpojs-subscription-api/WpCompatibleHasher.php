@@ -19,7 +19,7 @@ use Illuminate\Contracts\Hashing\Hasher;
  */
 class WpCompatibleHasher implements Hasher
 {
-    private const WP_PREFIX = '$wp$';
+    private const WP_PREFIX = '$wp';
     private const BCRYPT_COST = 12;
 
     /**
@@ -57,8 +57,9 @@ class WpCompatibleHasher implements Hasher
             // Strip the $wp prefix to get the inner bcrypt hash.
             $innerHash = substr($hashedValue, strlen(self::WP_PREFIX));
 
-            // WP prehashes: SHA-384 of plaintext, base64-encoded.
-            $prehash = base64_encode(hash('sha384', $value, true));
+            // WP prehashes: HMAC-SHA384 with 'wp-sha384' key, base64-encoded.
+            // See wp-includes/pluggable.php wp_hash_password().
+            $prehash = base64_encode(hash_hmac('sha384', $value, 'wp-sha384', true));
 
             return password_verify($prehash, $innerHash);
         }
