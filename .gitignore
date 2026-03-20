@@ -36,8 +36,9 @@ docker/snapshots/
 # Pre-launch deliverables (welcome email copy, member FAQ, support runbook)
 /launch-comms/
 
-# Discovery-phase screenshots (WP admin pages, plugin configs)
+# Screenshots (churn on every test run with minor pixel diffs)
 /discovery-screenshots/
+e2e/screenshots/
 
 # Rebuild logs
 logs/

@@ -148,6 +148,21 @@ document.addEventListener("DOMContentLoaded", function() {
         div.innerHTML = "' . $jsEscapedHtml . '";
         h1.insertAdjacentElement("afterend", div);
     }
+    // Relabel "Username or Email" to just "Email" — members only have email, not OJS usernames
+    var usernameLabel = document.querySelector(".page_login .username .label");
+    if (usernameLabel) {
+        usernameLabel.childNodes[0].textContent = "Email ";
+    }
+    var usernameInput = document.getElementById("username");
+    if (usernameInput) {
+        usernameInput.setAttribute("type", "email");
+        usernameInput.setAttribute("autocomplete", "email");
+    }
+    // Simplify "Remember username and password" to "Remember me"
+    var rememberLabel = document.querySelector(".page_login .remember .label");
+    if (rememberLabel) {
+        rememberLabel.textContent = "Remember me";
+    }
 });
 </script>');
         }
