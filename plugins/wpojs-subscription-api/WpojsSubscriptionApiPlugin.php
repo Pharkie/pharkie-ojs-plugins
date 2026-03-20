@@ -232,6 +232,12 @@ document.addEventListener("DOMContentLoaded", function() {
             return Hook::CONTINUE;
         }
 
+        // Don't show if user already has access (open-access, subscription, purchase)
+        $templateMgr = \APP\template\TemplateManager::getManager(Application::get()->getRequest());
+        if ($templateMgr->getTemplateVars('hasAccess')) {
+            return Hook::CONTINUE;
+        }
+
         $context = Application::get()->getRequest()->getContext();
         if (!$context) {
             return Hook::CONTINUE;
