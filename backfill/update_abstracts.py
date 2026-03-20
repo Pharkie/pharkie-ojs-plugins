@@ -178,6 +178,7 @@ def main():
         'abstracts_skipped_too_long': 0,
         'abstracts_skipped_too_many_paras': 0,
         'keywords_added': 0,
+        'keywords_fixed': 0,
         'keywords_updated': 0,
         'toc_files_modified': set(),
     }
@@ -207,33 +208,44 @@ def main():
             # --- Abstract update ---
             if abstract_text:
                 para_count = count_paragraphs(abstract_text)
+                skip_abstract = False
                 if len(abstract_text) > MAX_ABSTRACT_LENGTH:
                     stats['abstracts_skipped_too_long'] += 1
                     if args.dry_run:
-                        print(f"  SKIP {issue_name}/{html_basename}: abstract too long ({len(abstract_text)} chars)")
-                    continue
-                if para_count > MAX_ABSTRACT_PARAGRAPHS:
+                        print(f"  SKIP abstract {issue_name}/{html_basename}: too long ({len(abstract_text)} chars)")
+                    skip_abstract = True
+                elif para_count > MAX_ABSTRACT_PARAGRAPHS:
                     stats['abstracts_skipped_too_many_paras'] += 1
                     if args.dry_run:
-                        print(f"  SKIP {issue_name}/{html_basename}: too many paragraphs ({para_count})")
-                    continue
+                        print(f"  SKIP abstract {issue_name}/{html_basename}: too many paragraphs ({para_count})")
+                    skip_abstract = True
 
-                existing = article.get('abstract', '')
-                if normalize_for_comparison(abstract_text) != normalize_for_comparison(existing):
-                    stats['abstracts_updated'] += 1
-                    if args.dry_run:
-                        print(f"\n  UPDATE abstract: {issue_name}/{html_basename}")
-                        if existing:
-                            print(f"    OLD: {existing[:120]}...")
+                if not skip_abstract:
+                    existing = article.get('abstract', '')
+                    if normalize_for_comparison(abstract_text) != normalize_for_comparison(existing):
+                        stats['abstracts_updated'] += 1
+                        if args.dry_run:
+                            print(f"\n  UPDATE abstract: {issue_name}/{html_basename}")
+                            if existing:
+                                print(f"    OLD: {existing[:120]}...")
+                            else:
+                                print(f"    OLD: (none)")
+                            print(f"    NEW: {abstract_text[:120]}...")
                         else:
-                            print(f"    OLD: (none)")
-                        print(f"    NEW: {abstract_text[:120]}...")
-                    else:
-                        article['abstract'] = abstract_text
-                        modified = True
+                            article['abstract'] = abstract_text
+                            modified = True
 
             # --- Keywords update ---
             if keywords:
+                # Dedupe keywords (preserve order)
+                seen = set()
+                deduped = []
+                for k in keywords:
+                    if k not in seen:
+                        seen.add(k)
+                        deduped.append(k)
+                keywords = deduped
+
                 existing_kw = article.get('keywords', [])
                 if not existing_kw:
                     stats['keywords_added'] += 1
@@ -242,12 +254,26 @@ def main():
                     else:
                         article['keywords'] = keywords
                         modified = True
-                elif set(normalize_for_comparison(k) for k in existing_kw) != set(normalize_for_comparison(k) for k in keywords):
-                    stats['keywords_updated'] += 1
-                    if args.dry_run:
-                        print(f"  UPDATE keywords: {issue_name}/{html_basename}")
-                        print(f"    OLD: {existing_kw}")
-                        print(f"    NEW: {keywords}")
+                elif existing_kw != keywords:
+                    # Fix bad keywords: overwrite if existing has entries > 80 chars
+                    # (body text leaked into keywords) or has duplicates
+                    has_bad = any(len(k) > 80 for k in existing_kw)
+                    has_dupes = len(existing_kw) != len(set(existing_kw))
+                    if has_bad or has_dupes:
+                        stats['keywords_fixed'] += 1
+                        if args.dry_run:
+                            print(f"  FIX keywords: {issue_name}/{html_basename}")
+                            print(f"    OLD: {[k[:60]+'...' if len(k)>60 else k for k in existing_kw]}")
+                            print(f"    NEW: {keywords}")
+                        else:
+                            article['keywords'] = keywords
+                            modified = True
+                    elif set(normalize_for_comparison(k) for k in existing_kw) != set(normalize_for_comparison(k) for k in keywords):
+                        stats['keywords_updated'] += 1
+                        if args.dry_run:
+                            print(f"  UPDATE keywords: {issue_name}/{html_basename}")
+                            print(f"    OLD: {existing_kw}")
+                            print(f"    NEW: {keywords}")
 
         if modified:
             stats['toc_files_modified'].add(toc_path)
@@ -263,6 +289,7 @@ def main():
     print(f"  Abstracts skipped (long): {stats['abstracts_skipped_too_long']}")
     print(f"  Abstracts skipped (paras):{stats['abstracts_skipped_too_many_paras']}")
     print(f"  Keywords added:           {stats['keywords_added']}")
+    print(f"  Keywords fixed (bad):     {stats['keywords_fixed']}")
     print(f"  Keywords updated:         {stats['keywords_updated']}")
     print(f"  toc.json files modified:  {len(stats['toc_files_modified'])}")
 
