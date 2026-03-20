@@ -329,6 +329,16 @@ if [ "$SYNC_OK" = true ]; then
   done
   if [ "$CLEANUP_OK" = true ]; then
     pass "OJS user anonymised after WP deletion"
+    # Hard-delete the anonymised shell — smoke test users shouldn't persist
+    if [ -n "$OJS_USER_ID" ]; then
+      remote "$COMPOSE exec -T ojs-db mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -e \"
+        DELETE FROM subscriptions WHERE user_id = $OJS_USER_ID;
+        DELETE FROM event_log WHERE user_id = $OJS_USER_ID;
+        DELETE FROM user_settings WHERE user_id = $OJS_USER_ID;
+        DELETE FROM user_user_groups WHERE user_id = $OJS_USER_ID;
+        DELETE FROM users WHERE user_id = $OJS_USER_ID;
+      \"" > /dev/null 2>&1 && pass "Smoke test user hard-deleted from OJS" || warn "Could not hard-delete smoke test user from OJS"
+    fi
   else
     fail "OJS user not properly cleaned up after WP deletion" "$OJS_DELETED_USER"
   fi
