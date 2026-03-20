@@ -26,7 +26,7 @@ CONTAINER=""
 JOURNAL_PATH="ea"
 ADMIN_USER="admin"
 FORCE=0
-CLEAN=0
+CLEAN=1
 for arg in "$@"; do
   case "$arg" in
     --container=*) CONTAINER="${arg#--container=}" ;;
@@ -34,6 +34,7 @@ for arg in "$@"; do
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
     --force) FORCE=1 ;;
     --clean) CLEAN=1 ;;
+    --no-clean) CLEAN=0 ;;
     --help|-h)
       sed -n '2,/^set -eo/p' "$0" | head -n -1 | sed 's/^# \?//'
       exit 0
@@ -60,7 +61,8 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --journal=<path>    Journal URL path (default: ea)"
   echo "  --admin=<user>      Admin username (default: admin)"
   echo "  --force             Reimport issues that already exist in OJS"
-  echo "  --clean             Wipe all existing issues/articles before importing"
+  echo "  --clean             Wipe all existing issues/articles before importing (default)"
+  echo "  --no-clean          Skip the DB wipe (import on top of existing data)"
   echo
   echo "Example: backfill/import.sh backfill/output/37.1"
   echo "         backfill/import.sh backfill/output/*"
@@ -97,7 +99,7 @@ fi
 
 echo
 
-# --- Clean existing data if requested ---
+# --- Clean existing data (default: on, use --no-clean to skip) ---
 if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
   echo "--- Cleaning existing issues, articles, and sections ---"
   docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "
