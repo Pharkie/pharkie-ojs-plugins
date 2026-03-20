@@ -114,6 +114,7 @@ services:
       - ./scripts:/scripts:ro
       - "./backfill/output/35.2/import.xml:/data/sample-issues/35.2.xml:ro"
       - "./backfill/output/36.1/import.xml:/data/sample-issues/36.1.xml:ro"
+      - "./data export/editorial-roles.json:/data/editorial-roles.json:ro"
     depends_on:
       ojs-db:
         condition: service_healthy

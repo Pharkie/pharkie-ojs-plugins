@@ -85,6 +85,11 @@ echo ""
 echo "=== OJS setup ==="
 $DC exec -T ojs bash /scripts/setup-ojs.sh $SAMPLE_DATA
 
+# --- Assign editorial roles ---
+echo ""
+echo "=== Editorial roles ==="
+$DC exec -T ojs bash /scripts/assign-roles.sh
+
 # --- Run WP setup ---
 echo ""
 echo "=== WP setup ==="

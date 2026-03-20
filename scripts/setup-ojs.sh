@@ -384,38 +384,10 @@ $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, set
   ON DUPLICATE KEY UPDATE setting_value='0';"
 echo "[OJS] User registration enabled."
 
-# --- Editorial team users (for OJS 3.5 masthead page) ---
-# OJS 3.5 auto-generates the masthead from user accounts assigned to editorial groups.
-# Live OJS 3.4 uses a static HTML `editorialTeam` setting instead.
-# We create both: user accounts for 3.5 masthead + static HTML fallback for the setting.
+# --- Editorial team metadata ---
+# User accounts + roles are assigned by scripts/assign-roles.sh (reads data/editorial-roles.json).
+# This section only configures journal-level metadata: masthead setting, static HTML, contact info.
 echo "[OJS] Setting up editorial team..."
-
-# Create editorial team users (idempotent — skips if username exists)
-create_editorial_user() {
-  local USERNAME=$1 GIVEN=$2 FAMILY=$3 EMAIL=$4 GROUP_ID=$5
-  local EXISTS=$($MARIADB -N -e "SELECT COUNT(*) FROM users WHERE username='$USERNAME'")
-  if [ "$EXISTS" = "0" ]; then
-    $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled)
-      VALUES ('$USERNAME', '\$2y\$10\$placeholder', '$EMAIL', NOW(), 0, 0);"
-    local USER_ID=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$USERNAME'")
-    $MARIADB -e "INSERT INTO user_settings (user_id, setting_name, setting_value, locale) VALUES
-      ($USER_ID, 'givenName', '$GIVEN', 'en'),
-      ($USER_ID, 'familyName', '$FAMILY', 'en');"
-    $MARIADB -e "INSERT INTO user_user_groups (user_group_id, user_id, masthead) VALUES ($GROUP_ID, $USER_ID, 1);"
-    echo "[OJS]   Created $USERNAME ($GIVEN $FAMILY) → group $GROUP_ID"
-  else
-    # Ensure masthead flag is set (OJS 3.5 requires masthead=1 for Editorial Masthead page)
-    local USER_ID=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$USERNAME'")
-    $MARIADB -e "UPDATE user_user_groups SET masthead = 1 WHERE user_id = $USER_ID AND user_group_id = $GROUP_ID;"
-    echo "[OJS]   $USERNAME already exists, skipping."
-  fi
-}
-
-# Group 3 = Journal editor, Group 5 = Section editor
-create_editorial_user "martin.adams" "Martin" "Adams" "journal@existentialanalysis.org.uk" 3
-create_editorial_user "simon.duplock" "Simon" "du Plock" "sduplock@existentialanalysis.org.uk" 3
-create_editorial_user "ondine.smulders" "Ondine" "Smulders" "smuldersea@outlook.com" 5
-create_editorial_user "richard.swann" "Richard" "Swann" "rswann@existentialanalysis.org.uk" 5
 
 # Enable masthead page
 $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
