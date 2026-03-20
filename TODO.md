@@ -39,54 +39,49 @@ Server: `sea-live` (was `sea-staging`, promoted 2026-03-19). SSH: `ssh sea-live`
 - [ ] Monitor 24-48h
 - [x] ~~Decommission PKP hosting~~ — cancelled, runs until ~September 2026
 
-## Next after OJS: WP sync (Phase 2)
+## WP sync (Phase 2) — LIVE
 
-Connect Krystal WP (`community.existentialanalysis.org.uk`) to Hetzner OJS via the sync plugins. WP stays on Krystal for now. The membership site is on the `community` subdomain, not `public_html` — see "Live WP environment" below for details.
+WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existentialanalysis.org.uk` on Hetzner).
 
-### OJS-side prep
+### OJS-side prep — DONE
 
-- [ ] Configure `config.inc.php` `[wpojs]` section: `api_key_secret`, `allowed_ips` (Krystal's outbound IP), `wp_member_url`, `support_email`
-- [ ] Create OJS subscription type(s) — at minimum one "Individual Membership" type
-- [ ] Verify OJS ping endpoint reachable from Krystal: `curl https://<ojs-domain>/index.php/ea/api/v1/wpojs/ping`
+- [x] ~~`config.inc.php` `[wpojs]` section~~ — `api_key_secret`, `allowed_ips` (77.72.2.79 Krystal + 172.0.0.0/8 Docker), `wp_member_url`, `support_email`
+- [x] ~~Subscription type created~~ — "Membership (all tiers)" (type_id=1, £0)
+- [x] ~~OJS ping reachable from Krystal~~ — verified
 
-### WP-side deployment
+### WP-side deployment — DONE
 
-- [ ] Upload plugin: `scp -r plugins/wpojs-sync/ sea-wp-live:community.existentialanalysis.org.uk/wp-content/plugins/wpojs-sync/`
-- [ ] Add `define('WPOJS_API_KEY', '...')` to `wp-config.php` (must match OJS `api_key_secret`)
-- [ ] Activate: `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp plugin activate wpojs-sync"`
-- [ ] Configure settings (WP Admin → OJS Sync):
-  - OJS Base URL (HTTPS, includes journal path)
-  - Product mappings — all 6 WC subscription products:
+- [x] ~~Plugin uploaded and activated~~ — `wpojs-sync` active on Krystal WP
+- [x] ~~API key in wp-config.php~~ — `WPOJS_API_KEY=QDGwNVJpIQDjvQ8U3dCIMSLrCef57YLA`
+- [x] ~~OJS Base URL configured~~ — `https://journal.existentialanalysis.org.uk/index.php/ea`
+- [x] ~~Product mappings~~ — all 6 products → OJS type 1:
     | WC Product ID | Product name | OJS Type ID |
     |---|---|---|
-    | 1892 | UK Membership (no directory listing) | TBD |
-    | 1924 | International Membership (no directory listing) | TBD |
-    | 1927 | Student Membership (no directory listing) | TBD |
-    | 23040 | Student Membership (with directory listing) | TBD |
-    | 23041 | International Membership (with directory listing) | TBD |
-    | 23042 | UK Membership (with directory listing) | TBD |
-  - Manual roles: `um_custom_role_7` (Exco/life UK), `um_custom_role_8` (Exco/life international), `um_custom_role_9` (Exco/life student) — currently 1 user total
-- [ ] Check Wordfence isn't blocking outbound HTTPS to OJS domain
+    | 1892 | UK Membership (no directory listing) | 1 |
+    | 1924 | International Membership (no directory listing) | 1 |
+    | 1927 | Student Membership (no directory listing) | 1 |
+    | 23040 | Student Membership (with directory listing) | 1 |
+    | 23041 | International Membership (with directory listing) | 1 |
+    | 23042 | UK Membership (with directory listing) | 1 |
 
-### Verify and launch
+### Bulk sync — DONE (2026-03-20)
 
-- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync test-connection"`
-- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync sync --bulk --dry-run"` — expect ~699 members
-- [ ] Review dry run output, confirm member count matches expectations
-- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync sync --bulk --yes"` — run real bulk sync
-- [ ] `ssh sea-wp-live "cd community.existentialanalysis.org.uk && wp ojs-sync status"` — verify counts
+- [x] ~~Dry run~~ — 677 members, 0 failures
+- [x] ~~Bulk sync~~ — 677 synced, 0 skipped, 0 failed (226s, adaptive throttle)
+- [x] ~~3 pre-sync failures retried~~ — events that fired before type mappings were configured
+- [x] ~~Post-sync smoke test~~ — 22/22 passed
+- OJS: 1370 users, 1366 subscriptions (includes 692 from March 19 test sync + 678 from March 20 production sync)
+
+### Post-launch — IN PROGRESS
+
 - [ ] Spot-check 2-3 members can log into OJS with WP password
 - [ ] Test new member flow (create WCS subscription → verify OJS access created)
 - [ ] Test cancellation flow (cancel → verify OJS access removed)
 - [ ] Test on-hold / failed payment scenario
 - [ ] Verify non-member OJS purchase flow still works (paywall → buy article)
-
-### Post-launch monitoring
-
-- [ ] Check WP Admin → OJS Sync → Sync Log for failures
-- [ ] Verify Action Scheduler processing jobs (WP Admin → Tools → Scheduled Actions)
-- [ ] Monitor daily digest emails for sync failures
+- [ ] Monitor 24-48h — check sync log for failures
 - [ ] Run `wp ojs-sync reconcile` manually after 24h to check for drift
+- [ ] Investigate "Active WP members: 0" in `wp ojs-sync status` (display bug — bulk sync found 677 correctly)
 
 ## Later: WP migration to Hetzner (Phase 3)
 
