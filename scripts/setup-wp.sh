@@ -79,7 +79,7 @@ if ! wp core is-installed --allow-root 2>/dev/null; then
     --title="${WP_SITE_TITLE:-My Community}" \
     --admin_user=admin \
     --admin_password="${WP_ADMIN_PASSWORD}" \
-    --admin_email=admin@example.com \
+    --admin_email=${WP_ADMIN_EMAIL:-admin@existentialanalysis.org.uk} \
     --skip-email \
     --allow-root
 fi

@@ -63,7 +63,7 @@ services:
       OJS_TIMEZONE: ${OJS_TIMEZONE:-Europe/London}
       OJS_ADMIN_USER: ${OJS_ADMIN_USER:-admin}
       OJS_ADMIN_PASSWORD: ${OJS_ADMIN_PASSWORD:?OJS_ADMIN_PASSWORD not set in .env}
-      OJS_ADMIN_EMAIL: ${OJS_ADMIN_EMAIL:-admin@example.com}
+      OJS_ADMIN_EMAIL: ${OJS_ADMIN_EMAIL:-admin@existentialanalysis.org.uk}
       WPOJS_API_KEY_SECRET: ${WPOJS_API_KEY_SECRET:?WPOJS_API_KEY_SECRET not set in .env}
       WPOJS_ALLOWED_IPS: ${WPOJS_ALLOWED_IPS:-172.0.0.0/8}
       WPOJS_WP_MEMBER_URL: ${WPOJS_WP_MEMBER_URL:-http://localhost:8080}
