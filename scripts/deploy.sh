@@ -12,6 +12,7 @@
 #   scripts/deploy.sh --clean                  # Tear down volumes first (fresh DB)
 #   scripts/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
 #   scripts/deploy.sh --ssl                    # Enable Caddy reverse proxy with automatic Let's Encrypt SSL
+#   scripts/deploy.sh --with-sample-data       # Include test users/subscriptions in setup (dev/staging only!)
 #
 # Prerequisites:
 #   - hcloud CLI with active context (resolves server IP automatically)
@@ -27,6 +28,7 @@ CLEAN=""
 SSL=""
 GIT_REF="main"
 ENV_FILE=""
+SAMPLE_DATA=""
 for arg in "$@"; do
   case "$arg" in
     --host=*) SSH_HOST="${arg#--host=}" ;;
@@ -37,6 +39,7 @@ for arg in "$@"; do
     --ssl) SSL=1 ;;
     --ref=*) GIT_REF="${arg#--ref=}" ;;
     --env-file=*) ENV_FILE="${arg#--env-file=}" ;;
+    --with-sample-data) SAMPLE_DATA="--with-sample-data" ;;
   esac
 done
 
@@ -201,7 +204,7 @@ echo "$(phase_time) Stack is up."
 # --- Run setup ---
 if [ -z "$SKIP_SETUP" ]; then
   echo "--- Running setup ---"
-  $SSH_CMD "cd $REMOTE_DIR && bash scripts/setup.sh --env=staging"
+  $SSH_CMD "cd $REMOTE_DIR && bash scripts/setup.sh --env=staging $SAMPLE_DATA"
   echo "$(phase_time) Setup complete."
 fi
 
