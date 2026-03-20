@@ -156,6 +156,14 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 document.addEventListener("DOMContentLoaded", function() {
     var isArticlePage = !!document.querySelector(".obj_article_details");
     var hasInlineContent = !!document.querySelector(".inline-html-galley");
+    // Hide empty References section (OJS 3.5 bug: template renders it even with no citations)
+    var refsSection = document.querySelector(".item.references");
+    if (refsSection) {
+        var refsValue = refsSection.querySelector(".value");
+        if (refsValue && !refsValue.textContent.trim()) {
+            refsSection.style.display = "none";
+        }
+    }
     document.querySelectorAll(".obj_galley_link").forEach(function(el) {
         var label = el.textContent.trim();
         if (!isArticlePage) {
