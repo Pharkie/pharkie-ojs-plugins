@@ -376,11 +376,13 @@ else
   echo "[OJS] Nav menu: primary nav not found, skipping."
 fi
 
-# --- Disable user registration (members are created via sync) ---
+# --- Enable user registration (non-members need it for paywall purchases) ---
+# Members are created via WP sync, but non-members must be able to register
+# on OJS to buy individual articles/issues through the paywall.
 $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
-  VALUES ($JOURNAL_ID_META, '', 'disableUserReg', '1')
-  ON DUPLICATE KEY UPDATE setting_value='1';"
-echo "[OJS] User registration disabled."
+  VALUES ($JOURNAL_ID_META, '', 'disableUserReg', '0')
+  ON DUPLICATE KEY UPDATE setting_value='0';"
+echo "[OJS] User registration enabled."
 
 # --- Editorial team users (for OJS 3.5 masthead page) ---
 # OJS 3.5 auto-generates the masthead from user accounts assigned to editorial groups.
