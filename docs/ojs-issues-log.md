@@ -144,3 +144,14 @@ NEON
   php /tmp/phpstan.phar analyse --configuration=/tmp/phpstan.neon --no-progress --memory-limit=1G
 "
 ```
+
+## Role model
+
+### 12. "Journal manager" and "Journal editor" share the same role_id
+
+Both `Journal manager` (user_group_id 2) and `Journal editor` (user_group_id 3) map to `role_id = 16` in the `user_groups` table. They are functionally the same permission level — the distinction is purely a workflow label. There is no role hierarchy; manager does not supersede editor. A user assigned to both gains nothing over having just one.
+
+This makes role planning confusing: you'd expect manager > editor > section editor, but the first two are identical under the hood. OJS uses `user_group_id` for UI filtering (who sees what dashboard tabs) but `role_id` for actual permission checks.
+
+- **Not reported upstream** — by-design OJS architecture, unlikely to change.
+
