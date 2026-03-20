@@ -2,6 +2,7 @@ import { createConnection } from 'net';
 import { execSync, spawn } from 'child_process';
 import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { getDCCommand } from './helpers/docker';
 
 const LOCKFILE = resolve(__dirname, '..', '.playwright-lock');
 
@@ -91,14 +92,15 @@ async function ensureForward(
 }
 
 function ensureOjsUrl(): void {
+  const dc = getDCCommand();
   const result = execSync(
-    "docker compose exec -T wp wp option get wpojs_url --allow-root 2>/dev/null || true",
+    `${dc} exec -T wp wp option get wpojs_url --allow-root 2>/dev/null || true`,
     { encoding: 'utf-8', timeout: 10_000 },
   ).trim();
 
   if (!result || result === 'http://localhost:19999') {
     execSync(
-      "docker compose exec -T wp wp option update wpojs_url 'http://ojs:80/index.php/ea' --allow-root 2>/dev/null",
+      `${dc} exec -T wp wp option update wpojs_url 'http://ojs:80/index.php/ea' --allow-root 2>/dev/null`,
       { timeout: 10_000 },
     );
   }

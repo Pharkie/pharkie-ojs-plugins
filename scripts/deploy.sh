@@ -165,6 +165,16 @@ else
   echo "[skip] No sample issue XMLs found locally."
 fi
 
+# Sync editorial roles mapping
+ROLES_FILE="$PROJECT_DIR/data export/editorial-roles.json"
+if [ -f "$ROLES_FILE" ]; then
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/data export'"
+  rsync -az -e "$RSYNC_SSH" "$ROLES_FILE" "$SCP_HOST:$REMOTE_DIR/data export/editorial-roles.json"
+  echo "[ok] Editorial roles synced."
+else
+  echo "[skip] No editorial-roles.json found locally."
+fi
+
 # --- Clean (optional: tear down volumes for fresh DB) ---
 if [ -n "$CLEAN" ]; then
   echo "--- Cleaning: removing containers + volumes ---"
