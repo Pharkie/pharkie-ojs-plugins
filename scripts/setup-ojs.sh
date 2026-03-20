@@ -228,6 +228,13 @@ fi
 
 echo "[OJS] Journal metadata configured."
 
+# OJS API doesn't reliably set abbreviation — fall back to direct SQL
+if [ -n "$JOURNAL_ABBREVIATION" ]; then
+  $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID_META, 'en', 'abbreviation', '$JOURNAL_ABBREVIATION')
+    ON DUPLICATE KEY UPDATE setting_value='$JOURNAL_ABBREVIATION';"
+fi
+
 # --- Footer (links + SEA logo, matching live site) ---
 # The live site has two columns of nav links + the SEA logo on the right.
 # Hide the OJS brand image (ojs_brand.png) via CSS — can't modify core templates.
@@ -405,6 +412,16 @@ if [ -f "/opt/ojs-branding/editorialTeam.html" ]; then
     VALUES ($JOURNAL_ID_META, 'en', 'editorialTeam', '$EDITORIAL_SQL')
     ON DUPLICATE KEY UPDATE setting_value='$EDITORIAL_SQL';"
   echo "[OJS]   editorialTeam HTML set."
+fi
+
+# Editorial history (masthead page)
+if [ -f "/opt/ojs-branding/editorialHistory.html" ]; then
+  HISTORY_HTML=$(cat /opt/ojs-branding/editorialHistory.html)
+  HISTORY_SQL=$(printf '%s' "$HISTORY_HTML" | sed "s/'/''/g")
+  $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID_META, 'en', 'editorialHistory', '$HISTORY_SQL')
+    ON DUPLICATE KEY UPDATE setting_value='$HISTORY_SQL';"
+  echo "[OJS]   editorialHistory set."
 fi
 
 # Author guidelines (submissions page content from live site)
