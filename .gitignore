@@ -9,6 +9,7 @@ docs/private/
 
 # Environment
 .env
+.env.dev
 .env.staging
 .env.live
 .env.production

@@ -14,8 +14,17 @@ check_secrets() {
         return 0
     fi
 
+    # FAIL FAST: .env files should NEVER be committed (they contain secrets).
+    # .env.example and .env.staging.example are templates (no secrets) — allow those.
     for file in $files_to_check; do
-        # Skip binary files, env files, and check scripts themselves
+        case "$file" in
+            .env.example|.env.staging.example) ;; # templates are OK
+            .env*) echo "    ERROR: Environment file '$file' is staged for commit. These files contain secrets and must be gitignored."; ((errors++)) ;;
+        esac
+    done
+
+    for file in $files_to_check; do
+        # Skip binary files, env example files, and check scripts themselves
         case "$file" in
             *.png|*.jpg|*.gif|*.ico|*.woff|*.woff2|*.ttf|*.eot|*.svg) continue ;;
             .env*) continue ;;
