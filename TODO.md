@@ -74,14 +74,14 @@ WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existen
 
 ### Post-launch — IN PROGRESS
 
-- [ ] Spot-check 2-3 members can log into OJS with WP password
+- [x] ~~Spot-check 2-3 members can log into OJS with WP password~~ — 2 members tested successfully (2026-03-21)
 - [ ] Test new member flow (create WCS subscription → verify OJS access created)
 - [ ] Test cancellation flow (cancel → verify OJS access removed)
 - [ ] Test on-hold / failed payment scenario
 - [ ] Verify non-member OJS purchase flow still works (paywall → buy article)
-- [ ] Monitor 24-48h — check sync log for failures
-- [ ] Run `wp ojs-sync reconcile` manually after 24h to check for drift
-- [ ] Investigate "Active WP members: 0" in `wp ojs-sync status` (display bug — bulk sync found 677 correctly)
+- [x] ~~Monitor 24-48h — check sync log for failures~~ — 0 sync failures, 678/678 reconciliation clean (2026-03-21)
+- [x] ~~Run `wp ojs-sync reconcile` manually after 24h to check for drift~~ — 678 OK, 0 drift (2026-03-21)
+- [x] ~~Investigate "Active WP members: 0" in `wp ojs-sync status`~~ — fixed, now shows 678 correctly
 
 ## Later: WP migration to Hetzner (Phase 3)
 
@@ -141,8 +141,8 @@ Full dev rebuild is a two-step process:
 
 1. **Rebuild + sample data** (~3–5 min): `scripts/rebuild-dev.sh --with-sample-data --skip-tests`
    Seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. Includes branding, plugin config, subscription types.
-2. **Full backfill import** (~10 min): `backfill/import.sh backfill/output/*`
-   Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). Overwrites sample issues, keeps WP test users.
+2. **Full backfill import** (~15 min): `backfill/import.sh backfill/output/*`
+   Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). Cleans DB first (default), then imports fresh.
 3. **Run e2e tests**: `npx playwright test` — 66 tests, all should pass.
 4. **Verify banner links**: sidebar "BOOK NOW" banners should link to `WPOJS_WP_MEMBER_URL` (not localhost).
 
@@ -233,9 +233,8 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [x] **HTML galley regeneration** — all 1398 articles have HTML galleys. 42 PyMuPDF fallback (content-filtered). Report: `backfill/output/htmlgen-report.json`.
 - [x] **HTML galley QA & consistency pass** — `audit_html.py` + `fix_html_bleed.py` enhancements. Fixed 168 issues (running headers, reviewer mismatches, missing bylines, page boundaries). Broader spot-check (109 reviews across 41 volumes): 89/109 pass (82%), then fixed all 20 failures (truncations, merged reviews, wrong reviewers). Final audit: 1398 files, 0 issues.
 - [x] **Archive quality notice** — subtle footer box on all OJS pages: "Our archive has been digitally restored from 30 years of print issues. If you spot any errors or formatting issues, please let us know at [email]." Contact email configurable via `OJS_CONTACT_EMAIL`.
+- [x] **Fix duplicate abstracts** — article pages showed abstract twice (once in OJS metadata, once in HTML galley). Phase 1: updated 312 toc.json abstracts + 103 keywords from cleaner HTML galley text, fixed 24 bad keyword arrays. Phase 2: stripped abstract sections from all 520 HTML galley files. Scripts: `backfill/update_abstracts.py`, `backfill/strip_abstract.py`. Deployed to live 2026-03-21.
 - [ ] **Broader shared-page book review check** — spot-checks found shared-page bleed in ~10% of sampled reviews. Run a systematic check of ALL shared-page book reviews (where pdf_page_start == prev article's pdf_page_end) to catch remaining cases.
-- [ ] Run all 68 PDFs through backfill pipeline (`split-issue.sh` → `import.sh`) — HTML galleys will be picked up automatically by `generate_xml.py`
-- toc.json files are auto-discovered by `split-issue.sh` — no flags needed
 
 ## Future improvements
 
