@@ -124,7 +124,7 @@ echo ""
 # ==========================================
 echo -e "${BLUE}7. Running ggshield secret scan...${NC}"
 if ! command -v ggshield &>/dev/null; then
-    echo -e "    ${BLUE}SKIP${NC}: ggshield not installed"
+    echo -e "    ${RED}WARNING${NC}: ggshield not installed (install: pipx install ggshield)"
 elif ! ggshield secret scan pre-commit 2>/dev/null; then
     echo -e "    ${RED}FAIL${NC}: ggshield detected secrets"
     ((ERRORS++))

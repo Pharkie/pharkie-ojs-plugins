@@ -82,7 +82,13 @@ check_secrets() {
             fi
         fi
 
-        # Pattern 6: Hetzner API tokens (64-char alphanumeric, often in HCLOUD_TOKEN= or hcloud context)
+        # Pattern 6: Stripe live keys (sk_live_, rk_live_, whsec_)
+        if echo "$content" | grep -qE '(sk_live_|rk_live_|whsec_)[A-Za-z0-9]{20,}' 2>/dev/null; then
+            echo "    ERROR: Stripe live key detected in $file"
+            ((errors++))
+        fi
+
+        # Pattern 7: Hetzner API tokens (64-char alphanumeric, often in HCLOUD_TOKEN= or hcloud context)
         if echo "$content" | grep -qE 'HCLOUD_TOKEN="[A-Za-z0-9]{60,}"' 2>/dev/null; then
             local match
             match=$(echo "$content" | grep -oE 'HCLOUD_TOKEN="[A-Za-z0-9]{60,}"')
