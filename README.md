@@ -4,7 +4,7 @@
 
 **The problem:** An organisation runs its membership and payments through [WordPress](https://wordpress.org/) (using WooCommerce Subscriptions), and publishes an academic journal on [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems). Members should get journal access automatically when they pay, and lose it when they cancel — but these are two separate systems with no built-in connection. OJS has no subscription API, so there's no obvious way to bridge them.
 
-**What this repo does:** A pair of plugins — the **WP plugin** and the **OJS plugin** — that keep the two systems in sync. At launch, a bulk sync creates OJS accounts for all existing members (with their WordPress password hashes, so they can log in immediately). After that, the WP plugin automatically pushes changes to OJS whenever a member signs up, renews, cancels, or expires. Non-members can still buy individual articles through OJS's built-in paywall.
+**What this repo does:** A set of plugins — two for WordPress, three for OJS — that keep the two systems in sync and improve the journal reading experience. At launch, a bulk sync creates OJS accounts for all existing members (with their WordPress password hashes, so they can log in immediately). After that, the WP plugin automatically pushes changes to OJS whenever a member signs up, renews, cancels, or expires. Non-members can buy individual articles via Stripe checkout.
 
 </td><td width="45%">
 
@@ -32,6 +32,15 @@ flowchart LR
     I --> C
     C -->|update password hash| J[OJS accepts new password]
 ```
+
+## Plugins
+
+| Plugin | Platform | Directory | Purpose |
+|---|---|---|---|
+| **WP-OJS Sync** | WordPress | `plugins/wpojs-sync` | Hooks into WooCommerce Subscription events, pushes user + subscription changes to OJS. Admin UI, WP-CLI commands, Action Scheduler queue. |
+| **WP-OJS Subscription API** | OJS | `plugins/wpojs-subscription-api` | REST API for user and subscription CRUD (OJS has none natively). WP password hash verification at login. Configurable UI messages. [README](plugins/wpojs-subscription-api/README.md) · [API reference](docs/ojs-sync-plugin-api.md) |
+| **Stripe Payment** | OJS | `plugins/stripe-payment` | Stripe Checkout for non-member article/issue purchases. Redirect flow with webhook confirmation. Replaces PayPal. [README](plugins/stripe-payment/README.md) |
+| **Inline HTML Galley** | OJS | `plugins/ojs-inline-html-galley` | Renders HTML article content inline on the landing page. Access messages for members, purchasers, and non-subscribers. [README](plugins/ojs-inline-html-galley/README.md) |
 
 ## Documentation
 
