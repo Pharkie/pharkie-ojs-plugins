@@ -22,10 +22,10 @@ if [ ! -f "$ROLES_FILE" ]; then
 fi
 
 # DB connection (same pattern as setup-ojs.sh)
-DB_HOST="${OJS_DB_HOST:-ojs-db}"
-DB_USER="${OJS_DB_USER:-ojs}"
-DB_PASS="${OJS_DB_PASSWORD:-ojs}"
-DB_NAME="${OJS_DB_NAME:-ojs}"
+DB_HOST="${OJS_DB_HOST:?ERROR: OJS_DB_HOST is not set}"
+DB_USER="${OJS_DB_USER:?ERROR: OJS_DB_USER is not set}"
+DB_PASS="${OJS_DB_PASSWORD:?ERROR: OJS_DB_PASSWORD is not set}"
+DB_NAME="${OJS_DB_NAME:?ERROR: OJS_DB_NAME is not set}"
 MARIADB="mysql --skip-ssl -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME"
 
 JOURNAL_ID=$($MARIADB -N -e "SELECT journal_id FROM journals LIMIT 1")

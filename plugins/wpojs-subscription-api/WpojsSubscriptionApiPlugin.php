@@ -216,6 +216,37 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>');
         }
 
+        // Profile page: warn synced members that password changes here will be overwritten
+        if (str_contains($template, 'user/profile.tpl')) {
+            $wpSiteUrl = Config::getVar('wpojs', 'wp_member_url', '');
+            if (empty($wpSiteUrl)) {
+                return Hook::CONTINUE;
+            }
+            $wpResetUrl = htmlspecialchars(rtrim($wpSiteUrl, '/') . '/wp-login.php?action=lostpassword', ENT_QUOTES, 'UTF-8');
+
+            $templateMgr->addHeader('wpojs-profile-pw-hint', '<style>
+.wpojs-profile-pw-hint { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px; line-height: 1.5; }
+.wpojs-profile-pw-hint a { color: #856404; text-decoration: underline; font-weight: 600; }
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Inject warning into the Change Password tab when it loads (AJAX tab)
+    var tabs = document.getElementById("profileTabs");
+    if (!tabs) return;
+    var observer = new MutationObserver(function() {
+        var pwForm = document.getElementById("changePasswordForm");
+        if (pwForm && !document.querySelector(".wpojs-profile-pw-hint")) {
+            var div = document.createElement("div");
+            div.className = "wpojs-profile-pw-hint";
+            div.innerHTML = "SEA members: <a href=\"' . $wpResetUrl . '\">change your password on the membership website</a> instead. Passwords set here will be overwritten by your membership password.";
+            pwForm.insertBefore(div, pwForm.firstChild);
+        }
+    });
+    observer.observe(tabs, { childList: true, subtree: true });
+});
+</script>');
+        }
+
         return Hook::CONTINUE;
     }
 

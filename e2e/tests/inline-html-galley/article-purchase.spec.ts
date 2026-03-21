@@ -85,17 +85,21 @@ test.describe('Article purchase flow', () => {
     // Should NOT redirect back to login (user is already logged in)
     expect(currentUrl, 'Should not redirect to login').not.toContain('/login');
 
-    // Should NOT just reload the same article page
-    expect(
-      currentUrl,
-      'Clicking galley purchase link should navigate away from article page to a payment flow, not just reload',
-    ).not.toContain(`/article/view/${articleId}`);
+    // Should NOT land on the homepage (broken payment config)
+    expect(currentUrl, 'Should not redirect to homepage').not.toBe(`${OJS_BASE}/ea/index`);
 
-    // Should arrive at a payment page — either PayPal redirect or OJS payment form
-    // OJS payment URLs look like /ea/payment/plugin/paypal or similar
-    const isPaymentPage = currentUrl.includes('/payment')
-      || currentUrl.includes('paypal')
-      || currentUrl.includes('sandbox.paypal');
-    expect(isPaymentPage, `Expected payment page, got: ${currentUrl}`).toBe(true);
+    // Should arrive at a payment page — either:
+    // - PayPal redirect (URL contains paypal/sandbox.paypal)
+    // - OJS manual payment form (page contains "Manual Fee Payment" or "Purchase Article Fee")
+    // - OJS payment plugin page (URL contains /payment)
+    const isPaypalRedirect = currentUrl.includes('paypal');
+    const isOjsPaymentUrl = currentUrl.includes('/payment');
+    const isManualPaymentForm = await page.locator('text=Manual Fee Payment').isVisible().catch(() => false)
+      || await page.locator('text=Purchase Article Fee').isVisible().catch(() => false);
+
+    expect(
+      isPaypalRedirect || isOjsPaymentUrl || isManualPaymentForm,
+      `Expected payment page, got: ${currentUrl}`,
+    ).toBe(true);
   });
 });

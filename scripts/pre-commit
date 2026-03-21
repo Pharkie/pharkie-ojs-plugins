@@ -137,3 +137,4 @@ else
     echo ""
     exit 0
 fi
+ggshield secret scan pre-commit "$@"
