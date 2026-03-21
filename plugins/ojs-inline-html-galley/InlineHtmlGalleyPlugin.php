@@ -218,7 +218,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             . '<a href="https://community.existentialanalysis.org.uk/product-category/memberships/" '
             . 'style="color:#7a5a1a;font-weight:600;">SEA membership</a>. '
             . 'Or to buy a single article (&pound;3) or issue (&pound;25), register an account on this website, '
-            . 'then options to purchase will be available.'
+            . 'then select a padlocked full text button to purchase.'
             . '</div>'
             . '</section>';
     }
