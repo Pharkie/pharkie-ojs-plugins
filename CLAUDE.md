@@ -63,6 +63,8 @@ See `docs/private/plan.md` for full details, `docs/discovery.md` for how we got 
 - **OJS plugin uses `getInstallMigration()`**, not `getInstallSchemaFile()` (which is `final` in OJS 3.5). See `WpojsApiLogMigration.php`.
 - **OJS plugin folder must be `wpojsSubscriptionApi`** (camelCase). Hyphens/underscores break autoloading and the Plugins admin page. See `docs/non-docker-setup.md`.
 - **Apache + PHP-FPM strips Authorization headers.** Need `CGIPassAuth on` in `.htaccess`. Do not use `?apiToken=` query param in production (leaks key into access logs).
+- **OJS 3.5 stores galley labels in `publication_galleys.label` column**, not in `publication_galley_settings`. Inserting label rows into the settings table causes `getLabel()` to return a localized array instead of a string, breaking label comparisons (e.g. inline HTML plugin's `=== 'Full Text'` check).
+- **htmlgen can drop repeated/multilingual content.** Haiku may treat transliterated references (e.g. Cyrillic then Latin script) as duplicates and omit one set. The prompt now explicitly says to include both, but always verify HTML galleys against source PDFs for articles with non-English references.
 - **OJS 3.5 upgrade is the biggest risk.** The 3.5 upgrade has significant breaking changes (Slim->Laravel, Vue 2->3). If this goes badly, re-evaluate Janeway migration.
 
 ## WP membership stack
@@ -136,6 +138,32 @@ All 68 existing issues have toc.json files in `backfill/output/`. Large binaries
    (skips all existing `.html`, only regenerates deleted ones — costs pennies)
 5. Re-generate XML: `python3 backfill/generate_xml.py backfill/output/<vol>.<iss>/toc.json -o backfill/output/<vol>.<iss>/import.xml`
 6. Re-import: `backfill/import.sh backfill/output/<vol>.<iss> --force`
+
+### Fixing an HTML galley on live
+
+**Never re-import on live** — it risks duplicates and ID changes. Instead, update the galley file in place:
+
+1. Edit the `.html` file in `backfill/output/<vol>.<iss>/` and commit
+2. Find the galley file path on live:
+   ```
+   docker compose exec -T ojs-db bash -c 'mysql -u root -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE -e "
+     SELECT f.path FROM files f
+     JOIN submission_files sf ON f.file_id = sf.file_id
+     JOIN publication_galleys g ON g.submission_file_id = sf.submission_file_id
+     JOIN publications p ON g.publication_id = p.publication_id
+     JOIN publication_settings ps ON p.publication_id = ps.publication_id AND ps.setting_name = \"title\"
+     WHERE ps.setting_value LIKE \"%Article Title%\" AND f.mimetype = \"text/html\";
+   "'
+   ```
+3. Build the full HTML file (repo files are body-only, live files need the DOCTYPE wrapper):
+   ```
+   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/output/<vol>.<iss>/<seq>-<slug>.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
+   ```
+4. Copy into the live OJS container:
+   ```
+   scp /tmp/galley-update.html root@$SERVER_IP:/tmp/
+   ssh root@$SERVER_IP "cd /opt/wp-ojs-sync && docker compose cp /tmp/galley-update.html ojs:/var/www/files/<path-from-step-2>"
+   ```
 
 ## Pre-commit hooks
 
