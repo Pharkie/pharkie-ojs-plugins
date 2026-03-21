@@ -139,10 +139,18 @@ def split_author_name(full_name):
     return authors if authors else [('', '')]
 
 
+def _normalize_author(name):
+    """Normalize an author name for matching (lowercase, collapse whitespace)."""
+    return re.sub(r'\s+', ' ', name.strip().lower())
+
+
 def load_doi_registry(script_dir=None):
-    """Load the DOI registry (existing Crossref DOIs to preserve).
+    """Load the DOI registry (existing DOIs to preserve on reimport).
 
     Returns a dict keyed by (normalized_title, volume, issue) -> DOI string.
+    For duplicate titles in the same issue, stores a list in '_duplicates'
+    keyed by (normalized_title, volume, issue) -> [(doi, [authors]), ...].
+    Also includes '_issue_dois' keyed by (volume, issue) -> DOI string.
     """
     if script_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -152,16 +160,69 @@ def load_doi_registry(script_dir=None):
     with open(registry_path) as f:
         data = json.load(f)
     lookup = {}
+    duplicates = {}
     for entry in data.get('dois', []):
         key = (_normalize_title(entry['title']), entry['volume'], entry['issue'])
-        lookup[key] = entry['doi']
+        authors = [_normalize_author(a) for a in entry.get('authors', [])]
+        if key in lookup:
+            # Collision — move to duplicates list for author-based disambiguation
+            if key not in duplicates:
+                # Move the first entry too (need to find its authors)
+                first_doi = lookup[key]
+                first_authors = []
+                for e2 in data['dois']:
+                    if e2['doi'] == first_doi:
+                        first_authors = [_normalize_author(a) for a in e2.get('authors', [])]
+                        break
+                duplicates[key] = [(first_doi, first_authors)]
+            duplicates[key].append((entry['doi'], authors))
+        else:
+            lookup[key] = entry['doi']
+    lookup['_duplicates'] = duplicates
     # Load aliases (TOC title -> Crossref title) for manual overrides
     lookup['_aliases'] = {}
     for toc_title, crossref_title in data.get('aliases', {}).items():
         if toc_title.startswith('_'):
             continue
         lookup['_aliases'][_normalize_title(toc_title)] = _normalize_title(crossref_title)
+    # Load issue-level DOIs
+    lookup['_issue_dois'] = {}
+    for entry in data.get('issue_dois', []):
+        key = (str(entry['volume']), str(entry['issue']))
+        lookup['_issue_dois'][key] = entry['doi']
     return lookup
+
+
+def _match_by_author(candidates, authors_str):
+    """Disambiguate duplicate titles by matching author names.
+
+    candidates: [(doi, [normalized_author_names]), ...]
+    authors_str: author string from toc.json (e.g. "John Heaton & Emmy van Deurzen")
+    """
+    # Split toc.json authors string into individual names
+    toc_authors = set()
+    for name in re.split(r'\s*[&,]\s*', authors_str):
+        name = name.strip()
+        if name:
+            # Extract surname (last word) for matching
+            toc_authors.add(_normalize_author(name))
+
+    best_doi = None
+    best_score = 0
+    for doi, reg_authors in candidates:
+        # Score = number of author surname matches
+        score = 0
+        for toc_name in toc_authors:
+            toc_surname = toc_name.split()[-1] if toc_name.split() else ''
+            for reg_name in reg_authors:
+                reg_surname = reg_name.split()[-1] if reg_name.split() else ''
+                if toc_surname and reg_surname and toc_surname == reg_surname:
+                    score += 1
+                    break
+        if score > best_score:
+            best_score = score
+            best_doi = doi
+    return best_doi
 
 
 def _normalize_title(title):
@@ -174,12 +235,13 @@ def _normalize_title(title):
     return title
 
 
-def lookup_doi(doi_registry, title, volume, issue):
+def lookup_doi(doi_registry, title, volume, issue, authors=None):
     """Look up an existing DOI for an article by title + volume + issue.
 
     Tries exact match first, then falls back to prefix matching (TOC titles
     often include subtitles that Crossref entries omit). Also handles
-    'Book Review: ...' prefixes and editorial naming differences.
+    'Book Review: ...' prefixes, editorial naming differences, and
+    author-based disambiguation for duplicate titles in the same issue.
     """
     vol = str(volume)
     iss = str(issue)
@@ -193,8 +255,13 @@ def lookup_doi(doi_registry, title, volume, issue):
         if key in doi_registry:
             return doi_registry[key]
 
-    # Exact match
+    # Check for duplicate titles requiring author disambiguation
+    duplicates = doi_registry.get('_duplicates', {})
     key = (norm, vol, iss)
+    if key in duplicates and authors:
+        return _match_by_author(duplicates[key], authors)
+
+    # Exact match
     if key in doi_registry:
         return doi_registry[key]
 
@@ -567,6 +634,11 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
     # Issue
     lines.append(f'  <issue xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
                  f' published="1" current="0" access_status="2" url_path="">')
+    # Issue-level DOI
+    issue_dois = doi_registry.get('_issue_dois', {})
+    issue_doi = issue_dois.get((str(vol), str(iss)))
+    if issue_doi:
+        lines.append(f'    <id type="doi" advice="update">{escape(issue_doi)}</id>')
     lines.append(f'    <issue_identification>')
     lines.append(f'      <volume>{vol}</volume>')
     lines.append(f'      <number>{iss}</number>')
@@ -605,7 +677,8 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
     lines.append(f'    <articles>')
     doi_count = 0
     for idx, article in enumerate(toc_data['articles']):
-        doi = lookup_doi(doi_registry, article['title'], vol, iss)
+        doi = lookup_doi(doi_registry, article['title'], vol, iss,
+                        authors=article.get('authors'))
         if doi:
             doi_count += 1
         review_id = article.get('_review_id', '')
@@ -613,8 +686,13 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
         lines.append(generate_article_xml(article, idx, date_published, indent='      ',
                                           doi=doi, enrichment=article_enrichment))
     lines.append(f'    </articles>')
-    if doi_count > 0:
-        print(f"DOIs preserved: {doi_count}", file=sys.stderr)
+    if doi_count > 0 or issue_doi:
+        parts = []
+        if doi_count > 0:
+            parts.append(f"{doi_count} articles")
+        if issue_doi:
+            parts.append("1 issue")
+        print(f"DOIs preserved: {', '.join(parts)}", file=sys.stderr)
 
     # Close
     lines.append(f'  </issue>')

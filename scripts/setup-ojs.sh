@@ -433,6 +433,41 @@ $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, set
   VALUES ($JOURNAL_ID_META, '', 'masthead', '1')
   ON DUPLICATE KEY UPDATE setting_value='1';"
 
+# Fix OJS locale strings for editorial history page
+LOCALE_FILE="/var/www/html/lib/pkp/locale/en/common.po"
+sed -i 's/^msgstr "Editorial History Page"$/msgstr "Editorial History"/' "$LOCALE_FILE"
+sed -i 's/^msgstr "This section lists past contributors."$/msgstr "This section lists past and present editors."/' "$LOCALE_FILE"
+# Clear OJS locale cache so changes take effect
+rm -f /var/www/html/cache/opcache/*.php
+
+# Rename default "Journal editor" group to plural (OJS doesn't pluralize headings)
+EDITOR_GROUP_ID=$($MARIADB -N -e "SELECT user_group_id FROM user_groups WHERE context_id=$JOURNAL_ID_META AND role_id=16 LIMIT 1")
+$MARIADB -e "UPDATE user_group_settings SET setting_value='Journal editors'
+  WHERE user_group_id=$EDITOR_GROUP_ID AND setting_name='name' AND locale='en';"
+
+# Create custom editorial user groups (based on Section editor role, role_id=17).
+# OJS 3.5 auto-generates masthead headings from user group names.
+for CUSTOM_ROLE in "Book review editor" "Peer review editor"; do
+  EXISTING_GROUP=$($MARIADB -N -e "SELECT ug.user_group_id FROM user_groups ug
+    JOIN user_group_settings ugs ON ug.user_group_id = ugs.user_group_id
+    WHERE ugs.setting_name='name' AND ugs.setting_value='$CUSTOM_ROLE' AND ugs.locale='en'
+    AND ug.context_id = $JOURNAL_ID_META LIMIT 1")
+  if [ -z "$EXISTING_GROUP" ]; then
+    $MARIADB -e "INSERT INTO user_groups (context_id, role_id, is_default, show_title, permit_self_registration, permit_metadata_edit, masthead)
+      VALUES ($JOURNAL_ID_META, 17, 0, 0, 0, 0, 1);"
+    NEW_GROUP_ID=$($MARIADB -N -e "SELECT MAX(user_group_id) FROM user_groups WHERE context_id=$JOURNAL_ID_META AND role_id=17")
+    ABBREV=$(echo "$CUSTOM_ROLE" | sed 's/\b\(.\)/\U\1/g' | sed 's/ //g' | head -c 5)
+    $MARIADB -e "INSERT INTO user_group_settings (user_group_id, locale, setting_name, setting_value) VALUES
+      ($NEW_GROUP_ID, 'en', 'name', '$CUSTOM_ROLE'),
+      ($NEW_GROUP_ID, 'en', 'abbrev', '$ABBREV'),
+      ($NEW_GROUP_ID, '', 'nameLocaleKey', 'default.groups.name.sectionEditor'),
+      ($NEW_GROUP_ID, '', 'abbrevLocaleKey', 'default.groups.abbrev.sectionEditor');"
+    echo "[OJS]   Created custom user group: $CUSTOM_ROLE (group_id=$NEW_GROUP_ID)"
+  else
+    echo "[OJS]   Custom user group exists: $CUSTOM_ROLE (group_id=$EXISTING_GROUP)"
+  fi
+done
+
 # Static editorialTeam HTML (used by OJS 3.4; kept as fallback content)
 if [ -f "/opt/ojs-branding/editorialTeam.html" ]; then
   EDITORIAL_HTML=$(cat /opt/ojs-branding/editorialTeam.html)
@@ -875,19 +910,34 @@ else
   echo "[OJS] DOI prefix not set (OJS_DOI_PREFIX), skipping DOI config."
 fi
 
-# --- Mark imported DOIs as STALE (needs sync) ---
-# Backfill imports create DOIs with status=1 (UNREGISTERED), but many are already
-# registered at Crossref (just pointing to the old URL). Setting status=5 (STALE)
-# shows them as "Needs Sync" in the OJS admin so the admin can re-deposit to
-# update Crossref with the new canonical URL. Safe to run repeatedly — only
-# touches status=1 DOIs (won't downgrade REGISTERED or other statuses).
-DOI_UNREGISTERED=$($MARIADB -N -e "SELECT COUNT(*) FROM dois WHERE status = 1" 2>/dev/null || echo "0")
-if [ "$DOI_UNREGISTERED" -gt "0" ]; then
-  echo "[OJS] Marking $DOI_UNREGISTERED imported DOIs as STALE (needs sync)..."
-  $MARIADB -e "UPDATE dois SET status = 5 WHERE status = 1;"
-  echo "[OJS] $DOI_UNREGISTERED DOIs marked as STALE."
+# --- Mark pre-existing Crossref DOIs as STALE (needs sync) ---
+# Some DOIs (36.2 + 37.1) were already registered at Crossref before our migration.
+# They point to the old URL and need re-depositing with the new canonical URL.
+# Mark only these as STALE (status=5 = "Needs Sync"). All other DOIs stay
+# UNREGISTERED (status=1) until explicitly deposited. We identify pre-existing
+# DOIs by matching against issues that had Crossref DOIs before migration.
+# TODO: Once all DOIs are deposited to Crossref, change this to mark ALL DOIs
+# as STALE on repave (they'll all need re-syncing after reimport).
+STALE_COUNT=$($MARIADB -N -e "
+  SELECT COUNT(*) FROM dois d
+  JOIN publications p ON p.doi_id = d.doi_id
+  JOIN issues i ON i.issue_id = p.issue_id
+  WHERE d.status = 1
+    AND ((i.volume = '36' AND i.number = '2') OR (i.volume = '37' AND i.number = '1'))
+" 2>/dev/null || echo "0")
+if [ "$STALE_COUNT" -gt "0" ]; then
+  echo "[OJS] Marking $STALE_COUNT pre-existing Crossref DOIs (36.2 + 37.1) as STALE..."
+  $MARIADB -e "
+    UPDATE dois d
+    JOIN publications p ON p.doi_id = d.doi_id
+    JOIN issues i ON i.issue_id = p.issue_id
+    SET d.status = 5
+    WHERE d.status = 1
+      AND ((i.volume = '36' AND i.number = '2') OR (i.volume = '37' AND i.number = '1'));
+  "
+  echo "[OJS] $STALE_COUNT DOIs marked as STALE."
 else
-  echo "[OJS] No unregistered DOIs to mark as STALE."
+  echo "[OJS] No pre-existing Crossref DOIs to mark as STALE."
 fi
 
 # --- ORCID integration ---
