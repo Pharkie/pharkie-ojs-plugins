@@ -44,7 +44,6 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
     private const SUB_STATUS_ACTIVE = 1;
 
     public const DEFAULT_LOGIN_HINT = 'Member? Log in with your membership email and password.';
-    public const DEFAULT_PAYWALL_HINT = 'If you believe you should have access through your membership, please contact <a href="mailto:{supportEmail}">{supportEmail}</a>.';
     public const DEFAULT_FOOTER_MESSAGE = 'Your journal access is provided by your membership. <a href="{wpUrl}">Manage your membership</a>.';
     public const DEFAULT_PASSWORD_RESET_HINT = 'Members: <a href="{wpResetUrl}">change your password on the membership website</a> — it will sync to the journal automatically. Passwords set here may be overwritten by your membership password.';
 
@@ -66,7 +65,8 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
         // UI messages
         Hook::add('TemplateManager::display', $this->addLoginMessage(...));
         Hook::add('TemplateManager::display', $this->addPasswordResetMessage(...));
-        Hook::add('Templates::Article::Footer::PageFooter', $this->addPaywallMessage(...));
+        // Paywall hint removed — the inline HTML galley plugin now shows a more
+        // actionable CTA box with membership link and purchase pricing.
         Hook::add('Templates::Common::Footer::PageFooter', $this->addFooterMessage(...));
 
         return $success;
@@ -220,52 +220,6 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     /**
-     * Article page: hint for logged-in users who lack a subscription.
-     * "Member? Contact support."
-     */
-    public function addPaywallMessage(string $hookName, array $params): bool
-    {
-        $output = &$params[2];
-
-        $user = Application::get()->getRequest()->getUser();
-        if (!$user) {
-            return Hook::CONTINUE;
-        }
-
-        // Don't show if user already has access (open-access, subscription, purchase)
-        $templateMgr = \APP\template\TemplateManager::getManager(Application::get()->getRequest());
-        if ($templateMgr->getTemplateVars('hasAccess')) {
-            return Hook::CONTINUE;
-        }
-
-        $context = Application::get()->getRequest()->getContext();
-        if (!$context) {
-            return Hook::CONTINUE;
-        }
-
-        $dao = DAORegistry::getDAO('IndividualSubscriptionDAO');
-        $sub = $dao->getByUserIdForJournal($user->getId(), $context->getId());
-
-        if (!$sub || (int) $sub->getStatus() !== self::SUB_STATUS_ACTIVE) {
-            $supportEmail = Config::getVar('wpojs', 'support_email', '');
-            if (!empty($supportEmail)) {
-                $messageTemplate = $this->getMessage('paywallHint', self::DEFAULT_PAYWALL_HINT);
-                $escapedEmail = htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8');
-                $messageHtml = str_replace(
-                    '{supportEmail}',
-                    $escapedEmail,
-                    $messageTemplate
-                );
-                $output .= '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:12px 16px;margin-top:16px;font-size:14px;">'
-                    . $messageHtml
-                    . '</div>';
-            }
-        }
-
-        return Hook::CONTINUE;
-    }
-
-    /**
      * Site footer: "Your journal access is provided by your membership."
      */
     public function addFooterMessage(string $hookName, array $params): bool
@@ -395,7 +349,6 @@ document.addEventListener("DOMContentLoaded", function() {
         if ($request->isPost()) {
             $this->updateSetting($contextId, 'loginHint', mb_substr(strip_tags($request->getUserVar('loginHint') ?? '', '<a>'), 0, 1000));
             $this->updateSetting($contextId, 'passwordResetHint', mb_substr(strip_tags($request->getUserVar('passwordResetHint') ?? '', '<a>'), 0, 1000));
-            $this->updateSetting($contextId, 'paywallHint', mb_substr(strip_tags($request->getUserVar('paywallHint') ?? '', '<a>'), 0, 1000));
             $this->updateSetting($contextId, 'footerMessage', mb_substr(strip_tags($request->getUserVar('footerMessage') ?? '', '<a>'), 0, 1000));
 
             return new \PKP\core\JSONMessage(true);
@@ -405,11 +358,9 @@ document.addEventListener("DOMContentLoaded", function() {
         $templateMgr->assign([
             'loginHint' => $this->getSetting($contextId, 'loginHint') ?: self::DEFAULT_LOGIN_HINT,
             'passwordResetHint' => $this->getSetting($contextId, 'passwordResetHint') ?: self::DEFAULT_PASSWORD_RESET_HINT,
-            'paywallHint' => $this->getSetting($contextId, 'paywallHint') ?: self::DEFAULT_PAYWALL_HINT,
             'footerMessage' => $this->getSetting($contextId, 'footerMessage') ?: self::DEFAULT_FOOTER_MESSAGE,
             'defaultLoginHint' => self::DEFAULT_LOGIN_HINT,
             'defaultPasswordResetHint' => self::DEFAULT_PASSWORD_RESET_HINT,
-            'defaultPaywallHint' => self::DEFAULT_PAYWALL_HINT,
             'defaultFooterMessage' => self::DEFAULT_FOOTER_MESSAGE,
         ]);
 

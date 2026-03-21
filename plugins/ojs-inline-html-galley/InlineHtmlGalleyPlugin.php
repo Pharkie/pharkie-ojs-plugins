@@ -14,7 +14,11 @@
 namespace APP\plugins\generic\inlineHtmlGalley;
 
 use APP\core\Application;
+use APP\facades\Repo;
+use Illuminate\Support\Facades\DB;
+use PKP\db\DAORegistry;
 use PKP\plugins\GenericPlugin;
+use PKP\security\Role;
 use PKP\plugins\Hook;
 
 class InlineHtmlGalleyPlugin extends GenericPlugin
@@ -60,13 +64,6 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
-        // Only render inline if the user has access to this article.
-        // $hasAccess is set by ArticleHandler — covers open-access,
-        // active subscription, domain-based access, and completed purchases.
-        if (!$templateMgr->getTemplateVars('hasAccess')) {
-            return Hook::CONTINUE;
-        }
-
         // Find an HTML galley labeled "Full Text"
         $galleys = $publication->getData('galleys');
         $htmlGalley = null;
@@ -80,6 +77,26 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         }
 
         if (!$htmlGalley) {
+            return Hook::CONTINUE;
+        }
+
+        $hasAccess = $templateMgr->getTemplateVars('hasAccess');
+
+        // Site admins and journal managers always have access
+        if (!$hasAccess) {
+            $user = $request->getUser();
+            if ($user) {
+                $userRoles = $templateMgr->getTemplateVars('userRoles') ?? [];
+                $privilegedRoles = [Role::ROLE_ID_SITE_ADMIN, Role::ROLE_ID_MANAGER];
+                if (array_intersect($privilegedRoles, $userRoles)) {
+                    $hasAccess = true;
+                }
+            }
+        }
+
+        if (!$hasAccess) {
+            // Non-subscriber CTA — shown in article main area instead of inline content
+            $output .= $this->getNonSubscriberNotice();
             return Hook::CONTINUE;
         }
 
@@ -105,21 +122,93 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
+        // Subscriber notice — only on paywalled articles (section = "Articles")
+        $subscriberNotice = $this->getSubscriberNotice($publication);
+
         // Archive quality notice — shown above inline content for digitised back-issues
         $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
             . 'border:1px solid #e0d8cc;border-radius:4px;font-size:13px;color:#666;line-height:1.5;">'
             . 'This article has been digitally restored from print. If you spot any errors '
             . 'or formatting issues, please email '
             . '<a href="mailto:journal@existentialanalysis.org.uk">journal@existentialanalysis.org.uk</a>.'
+            . ' You can also view the PDF version of this article.'
             . '</div>';
 
         $output .= '<section class="item inline-html-galley">'
             . '<h2 class="label">Full Text</h2>'
+            . $subscriberNotice
             . $archiveNotice
             . '<div class="value">' . $bodyContent . '</div>'
             . '</section>';
 
         return Hook::CONTINUE;
+    }
+
+    /**
+     * Subscriber notice for paywalled articles.
+     * Only shown on section "Articles" (paywalled). Distinguishes SEA members
+     * (synced from WP) from direct OJS subscribers.
+     */
+    private function getSubscriberNotice($publication): string
+    {
+        // Only show on paywalled section ("Articles")
+        $sectionId = $publication->getData('sectionId');
+        $section = Repo::section()->get($sectionId);
+        if (!$section || $section->getLocalizedTitle() !== 'Articles') {
+            return '';
+        }
+
+        // Check if logged-in user is a synced SEA member vs direct subscriber
+        $request = Application::get()->getRequest();
+        $user = $request->getUser();
+        if (!$user) {
+            return '';
+        }
+
+        // Check for wpojs_created_by_sync flag in user_settings
+        // (value is the date the account was synced, not a boolean)
+        $isSyncedMember = DB::table('user_settings')
+            ->where('user_id', $user->getId())
+            ->where('setting_name', 'wpojs_created_by_sync')
+            ->exists();
+
+        if ($isSyncedMember) {
+            $message = 'Showing article full text linked to your SEA membership. Thanks for your support!';
+        } else {
+            // Direct OJS subscriber (active sub, no sync flag)
+            $subscriptionDao = DAORegistry::getDAO('IndividualSubscriptionDAO');
+            $context = $request->getContext();
+            $subscription = $subscriptionDao->getByUserIdForJournal($user->getId(), $context->getId());
+            if (!$subscription || $subscription->getStatus() !== \APP\subscription\Subscription::SUBSCRIPTION_STATUS_ACTIVE) {
+                // Not a subscriber — could be purchased access or other grant. No box.
+                return '';
+            }
+            $message = 'Showing article full text via your journal subscription.';
+        }
+
+        return '<div style="margin-bottom:16px;padding:10px 14px;background:#e8f0fe;'
+            . 'border:1px solid #b8d4f0;border-radius:4px;font-size:13px;color:#1a4a7a;line-height:1.5;">'
+            . $message
+            . '</div>';
+    }
+
+    /**
+     * Non-subscriber CTA box shown in the article main area when the user
+     * doesn't have access but an HTML galley exists.
+     */
+    private function getNonSubscriberNotice(): string
+    {
+        return '<section class="item inline-html-galley-cta">'
+            . '<div style="margin-top:1em;padding:16px 20px;background:#fef7ec;'
+            . 'border:1px solid #f0d8a0;border-radius:6px;font-size:14px;color:#7a5a1a;line-height:1.6;">'
+            . '<strong>Full text available to members</strong><br>'
+            . 'Complete access to the full archive of articles is available with SEA membership. '
+            . '<a href="https://community.existentialanalysis.org.uk/product-category/memberships/" '
+            . 'style="color:#7a5a1a;font-weight:600;">Buy membership for instant access</a>. '
+            . 'Or to buy a single article (&pound;3) or issue (&pound;25), register an account on this website, '
+            . 'then options to purchase will be available.'
+            . '</div>'
+            . '</section>';
     }
 
     /**
