@@ -165,14 +165,17 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             return '';
         }
 
-        // Check for wpojs_created_by_sync flag in user_settings
-        // (value is the date the account was synced, not a boolean)
-        $isSyncedMember = DB::table('user_settings')
+        // Site admins and journal managers — show admin notice
+        $templateMgr = \APP\template\TemplateManager::getManager($request);
+        $userRoles = $templateMgr->getTemplateVars('userRoles') ?? [];
+        $privilegedRoles = [Role::ROLE_ID_SITE_ADMIN, Role::ROLE_ID_MANAGER];
+        if (array_intersect($privilegedRoles, $userRoles)) {
+            $message = 'Showing article full text. You have access as a journal administrator.';
+        } elseif (DB::table('user_settings')
             ->where('user_id', $user->getId())
             ->where('setting_name', 'wpojs_created_by_sync')
-            ->exists();
-
-        if ($isSyncedMember) {
+            ->exists()) {
+            // Synced SEA member
             $message = 'Showing article full text linked to your SEA membership. Thanks for your support!';
         } else {
             // Direct OJS subscriber (active sub, no sync flag)
