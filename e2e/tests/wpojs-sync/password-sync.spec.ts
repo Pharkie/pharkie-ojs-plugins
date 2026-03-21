@@ -101,9 +101,9 @@ echo json_encode($result);
         await articleLink.click();
         await page.waitForLoadState('domcontentloaded');
 
-        // Subscriber should NOT see the paywall hint (yellow #fff3cd box).
-        const paywallHint = page.locator('[style*="fff3cd"]');
-        await expect(paywallHint).not.toBeVisible({ timeout: 5_000 });
+        // Subscriber should NOT see the non-subscriber CTA box.
+        const ctaBox = page.locator('.inline-html-galley-cta');
+        await expect(ctaBox).toHaveCount(0);
 
         // Subscriber should see a galley link (PDF download).
         const galleyLink = page.locator('a.obj_galley_link, a[href*="/galley/"]').first();

@@ -761,19 +761,42 @@ else
   echo "[OJS] Payments already enabled, skipping."
 fi
 
-# Enable PayPal payment plugin + test mode
+# Enable PayPal payment plugin + configure credentials
+PAYPAL_ACCOUNT="${OJS_PAYPAL_ACCOUNT:-}"
+PAYPAL_CLIENT_ID="${OJS_PAYPAL_CLIENT_ID:-}"
+PAYPAL_SECRET="${OJS_PAYPAL_SECRET:-}"
+PAYPAL_TEST_MODE="${OJS_PAYPAL_TEST_MODE:-1}"
+
 PAYPAL_ENABLED=$($MARIADB -N -e "SELECT COUNT(*) FROM plugin_settings WHERE plugin_name='paypalpayment' AND context_id=$JOURNAL_ID AND setting_name='enabled' AND setting_value='1'" 2>/dev/null)
-if [ "$PAYPAL_ENABLED" = "0" ]; then
-  echo "[OJS] Enabling PayPal payment plugin (test mode)..."
+if [ "$PAYPAL_ENABLED" = "0" ] || [ -n "$PAYPAL_ACCOUNT" ]; then
+  PAYPAL_MODE_LABEL="test"
+  [ "$PAYPAL_TEST_MODE" = "0" ] && PAYPAL_MODE_LABEL="LIVE"
+  echo "[OJS] Configuring PayPal payment plugin (${PAYPAL_MODE_LABEL} mode)..."
   $MARIADB <<SQL
     INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
     VALUES ('paypalpayment', $JOURNAL_ID, 'enabled', '1', 'bool')
     ON DUPLICATE KEY UPDATE setting_value='1';
     INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('paypalpayment', $JOURNAL_ID, 'testMode', '1', 'bool')
-    ON DUPLICATE KEY UPDATE setting_value='1';
+    VALUES ('paypalpayment', $JOURNAL_ID, 'testMode', '$PAYPAL_TEST_MODE', 'bool')
+    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_TEST_MODE';
 SQL
-  echo "[OJS] PayPal plugin enabled (test mode)."
+  if [ -n "$PAYPAL_ACCOUNT" ]; then
+    $MARIADB <<SQL
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('paypalpayment', $JOURNAL_ID, 'accountName', '$PAYPAL_ACCOUNT', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_ACCOUNT';
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('paypalpayment', $JOURNAL_ID, 'clientId', '$PAYPAL_CLIENT_ID', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_CLIENT_ID';
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('paypalpayment', $JOURNAL_ID, 'secret', '$PAYPAL_SECRET', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_SECRET';
+SQL
+    echo "[OJS] PayPal credentials configured (account: $PAYPAL_ACCOUNT)."
+  else
+    echo "[OJS] PayPal plugin enabled but no credentials set (OJS_PAYPAL_ACCOUNT empty)."
+    echo "       Purchase flow will not work until credentials are added to .env."
+  fi
 else
   echo "[OJS] PayPal plugin already enabled, skipping."
 fi
@@ -831,10 +854,63 @@ SQL
     [ -n "$CROSSREF_USER" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'username', '$(sql_escape_doi "$CROSSREF_USER")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_doi "$CROSSREF_USER")';"
     [ -n "$CROSSREF_PASS" ] && $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'password', '$(sql_escape_doi "$CROSSREF_PASS")', 'string') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_doi "$CROSSREF_PASS")';"
 
-    echo "[OJS] Crossref depositor configured."
+    # Test mode on for dev/staging, off for production
+    if [ "${WP_ENV:-development}" = "production" ]; then
+      CROSSREF_TEST_MODE=0
+    else
+      CROSSREF_TEST_MODE=1
+    fi
+    $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type) VALUES ('crossrefplugin', $JOURNAL_ID, 'testMode', '$CROSSREF_TEST_MODE', 'bool') ON DUPLICATE KEY UPDATE setting_value='$CROSSREF_TEST_MODE';"
+
+    echo "[OJS] Crossref depositor configured (testMode=$CROSSREF_TEST_MODE)."
   fi
 else
   echo "[OJS] DOI prefix not set (OJS_DOI_PREFIX), skipping DOI config."
+fi
+
+# --- Mark imported DOIs as STALE (needs sync) ---
+# Backfill imports create DOIs with status=1 (UNREGISTERED), but many are already
+# registered at Crossref (just pointing to the old URL). Setting status=5 (STALE)
+# shows them as "Needs Sync" in the OJS admin so the admin can re-deposit to
+# update Crossref with the new canonical URL. Safe to run repeatedly — only
+# touches status=1 DOIs (won't downgrade REGISTERED or other statuses).
+DOI_UNREGISTERED=$($MARIADB -N -e "SELECT COUNT(*) FROM dois WHERE status = 1" 2>/dev/null || echo "0")
+if [ "$DOI_UNREGISTERED" -gt "0" ]; then
+  echo "[OJS] Marking $DOI_UNREGISTERED imported DOIs as STALE (needs sync)..."
+  $MARIADB -e "UPDATE dois SET status = 5 WHERE status = 1;"
+  echo "[OJS] $DOI_UNREGISTERED DOIs marked as STALE."
+else
+  echo "[OJS] No unregistered DOIs to mark as STALE."
+fi
+
+# --- ORCID integration ---
+# OJS 3.5 has ORCID built-in (not a plugin). Settings are stored in journal_settings.
+ORCID_CLIENT_ID="${OJS_ORCID_CLIENT_ID:-}"
+ORCID_CLIENT_SECRET="${OJS_ORCID_CLIENT_SECRET:-}"
+ORCID_API_TYPE="${OJS_ORCID_API_TYPE:-memberProduction}"
+ORCID_CITY="${OJS_ORCID_CITY:-}"
+
+if [ -n "$ORCID_CLIENT_ID" ] && [ -n "$ORCID_CLIENT_SECRET" ]; then
+  echo "[OJS] Configuring ORCID integration (API type: $ORCID_API_TYPE)..."
+  sql_escape_orcid() { printf '%s' "$1" | sed "s/'/''/g"; }
+  $MARIADB <<SQL
+    INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID, '', 'orcidEnabled', '1')
+    ON DUPLICATE KEY UPDATE setting_value='1';
+    INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID, '', 'orcidApiType', '$(sql_escape_orcid "$ORCID_API_TYPE")')
+    ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_orcid "$ORCID_API_TYPE")';
+    INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID, '', 'orcidClientId', '$(sql_escape_orcid "$ORCID_CLIENT_ID")')
+    ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_orcid "$ORCID_CLIENT_ID")';
+    INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID, '', 'orcidClientSecret', '$(sql_escape_orcid "$ORCID_CLIENT_SECRET")')
+    ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_orcid "$ORCID_CLIENT_SECRET")';
+SQL
+  [ -n "$ORCID_CITY" ] && $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value) VALUES ($JOURNAL_ID, '', 'orcidCity', '$(sql_escape_orcid "$ORCID_CITY")') ON DUPLICATE KEY UPDATE setting_value='$(sql_escape_orcid "$ORCID_CITY")';"
+  echo "[OJS] ORCID configured."
+else
+  echo "[OJS] ORCID client ID/secret not set, skipping ORCID config."
 fi
 
 echo "[OJS] OJS base setup complete."
