@@ -26,7 +26,7 @@ CONTAINER=""
 JOURNAL_PATH="ea"
 ADMIN_USER="admin"
 FORCE=0
-CLEAN=1
+CLEAN=0
 for arg in "$@"; do
   case "$arg" in
     --container=*) CONTAINER="${arg#--container=}" ;;
@@ -34,7 +34,6 @@ for arg in "$@"; do
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
     --force) FORCE=1 ;;
     --clean) CLEAN=1 ;;
-    --no-clean) CLEAN=0 ;;
     --help|-h)
       sed -n '2,/^set -eo/p' "$0" | head -n -1 | sed 's/^# \?//'
       exit 0
@@ -61,8 +60,7 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --journal=<path>    Journal URL path (default: ea)"
   echo "  --admin=<user>      Admin username (default: admin)"
   echo "  --force             Reimport issues that already exist in OJS"
-  echo "  --clean             Wipe all existing issues/articles before importing (default)"
-  echo "  --no-clean          Skip the DB wipe (import on top of existing data)"
+  echo "  --clean             Wipe all existing issues/articles before importing"
   echo
   echo "Example: backfill/import.sh backfill/output/37.1"
   echo "         backfill/import.sh backfill/output/*"
@@ -99,7 +97,26 @@ fi
 
 echo
 
-# --- Clean existing data (default: on, use --no-clean to skip) ---
+# Sort directories by volume.issue numerically (skip non-issue names like reports, Pro, etc.)
+IFS=$'\n' SORTED_DIRS=($(for d in "${DIRS[@]}"; do
+  base="$(basename "$d")"
+  vol="${base%%.*}"
+  # Skip entries where the volume part isn't numeric (e.g., "audit-report.json", "Pro")
+  [[ "$vol" =~ ^[0-9]+$ ]] || continue
+  if [[ "$base" == *.* ]]; then iss="${base#*.}"; else iss="0"; fi
+  printf "%03d.%s\t%s\n" "$vol" "$iss" "$d"
+done | sort -t. -k1,1n -k2,2n | cut -f2))
+unset IFS
+
+# --- Suggest --clean for bulk imports ---
+if [ ${#SORTED_DIRS[@]} -ge 5 ] && [ "$CLEAN" = "0" ]; then
+  echo "WARNING: Importing ${#SORTED_DIRS[@]} issues without --clean."
+  echo "  Existing issues will be skipped unless you also pass --force."
+  echo "  For a full re-import, use: backfill/import.sh backfill/output/* --clean"
+  echo
+fi
+
+# --- Clean existing data ---
 if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
   echo "--- Cleaning existing issues, articles, and sections ---"
   docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "
@@ -127,17 +144,6 @@ fi
 FAILED=0
 SUCCEEDED=0
 SKIPPED=0
-
-# Sort directories by volume.issue numerically (skip non-issue names like reports, Pro, etc.)
-IFS=$'\n' SORTED_DIRS=($(for d in "${DIRS[@]}"; do
-  base="$(basename "$d")"
-  vol="${base%%.*}"
-  # Skip entries where the volume part isn't numeric (e.g., "audit-report.json", "Pro")
-  [[ "$vol" =~ ^[0-9]+$ ]] || continue
-  if [[ "$base" == *.* ]]; then iss="${base#*.}"; else iss="0"; fi
-  printf "%03d.%s\t%s\n" "$vol" "$iss" "$d"
-done | sort -t. -k1,1n -k2,2n | cut -f2))
-unset IFS
 
 for DIR in "${SORTED_DIRS[@]}"; do
   DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "ERROR: $DIR not found"; FAILED=$((FAILED + 1)); continue; }
