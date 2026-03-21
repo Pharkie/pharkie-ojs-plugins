@@ -1,0 +1,13 @@
+{
+    "name": "sea/ojs-stripe-payment",
+    "description": "Stripe payment plugin for OJS",
+    "type": "ojs-plugin",
+    "require": {
+        "stripe/stripe-php": "^16.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "APP\\plugins\\paymethod\\stripe\\": "."
+        }
+    }
+}

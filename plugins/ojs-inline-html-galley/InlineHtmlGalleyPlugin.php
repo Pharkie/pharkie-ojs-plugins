@@ -183,10 +183,18 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             $context = $request->getContext();
             $subscription = $subscriptionDao->getByUserIdForJournal($user->getId(), $context->getId());
             if (!$subscription || $subscription->getStatus() !== \APP\subscription\Subscription::SUBSCRIPTION_STATUS_ACTIVE) {
-                // Not a subscriber — could be purchased access or other grant. No box.
-                return '';
+                // Check if this is a purchased article
+                $completedPaymentDao = DAORegistry::getDAO('OJSCompletedPaymentDAO');
+                $submissionId = $publication->getData('submissionId');
+                if ($completedPaymentDao->hasPaidPurchaseArticle($user->getId(), $submissionId)) {
+                    $message = 'Showing article full text. You have access via direct purchase.';
+                } else {
+                    // Other grant (e.g. open access override). No box.
+                    return '';
+                }
+            } else {
+                $message = 'Showing article full text via your journal subscription.';
             }
-            $message = 'Showing article full text via your journal subscription.';
         }
 
         return '<div style="margin-bottom:16px;padding:10px 14px;background:#e8f0fe;'
@@ -205,9 +213,10 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             . '<div style="margin-top:1em;padding:16px 20px;background:#fef7ec;'
             . 'border:1px solid #f0d8a0;border-radius:6px;font-size:14px;color:#7a5a1a;line-height:1.6;">'
             . '<strong>Full text available to members</strong><br>'
-            . 'Complete access to the full archive of articles is available with SEA membership. '
+            . 'Existing members: please log in (top right) with your membership password to view content. '
+            . 'Complete access to the full archive of articles is available with '
             . '<a href="https://community.existentialanalysis.org.uk/product-category/memberships/" '
-            . 'style="color:#7a5a1a;font-weight:600;">Buy membership for instant access</a>. '
+            . 'style="color:#7a5a1a;font-weight:600;">SEA membership</a>. '
             . 'Or to buy a single article (&pound;3) or issue (&pound;25), register an account on this website, '
             . 'then options to purchase will be available.'
             . '</div>'
