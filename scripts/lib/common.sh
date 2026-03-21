@@ -32,8 +32,9 @@ get_files_to_scan() {
 # Read file content safely
 read_file_content() {
     local file="$1"
-    # Skip binary files — command substitution can't handle null bytes
-    if grep -qPI '\x00' "$file" 2>/dev/null; then
+    # Skip binary files — command substitution can't handle null bytes.
+    # grep -I classifies files with null bytes as binary and returns 1.
+    if ! grep -qI '' "$file" 2>/dev/null; then
         return 1
     fi
     cat "$file" 2>/dev/null
