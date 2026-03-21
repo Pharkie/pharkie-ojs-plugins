@@ -20,7 +20,7 @@ CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data export',
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
 
 HEADERS = [
-    'Volume', 'Issue', 'Date', 'Section', 'Title', 'Authors',
+    'Volume', 'Issue', 'Date', 'Section', 'Title', 'Authors', 'DOI',
     'PDF Page Start', 'PDF Page End',
     # Book review fields
     'Book Title', 'Book Author', 'Book Year', 'Reviewer', 'Publisher',
@@ -30,12 +30,17 @@ HEADERS = [
 ]
 
 
-def load_all_tocs(output_dir):
+def load_all_tocs(output_dir, doi_registry=None):
     """Load and sort all toc.json files by volume/issue.
 
     Deduplicates by (volume, issue) — if both '<vol>/' and '<vol>.1/' exist
     for single-issue volumes, only the first one found is used.
     """
+    try:
+        from backfill.generate_xml import lookup_doi
+    except ModuleNotFoundError:
+        from generate_xml import lookup_doi
+
     rows = []
     seen_vol_iss = set()
     output_path = Path(output_dir)
@@ -58,11 +63,18 @@ def load_all_tocs(output_dir):
                     return '; '.join(str(v) for v in val)
                 return val or ''
 
+            # Look up DOI from registry
+            doi = ''
+            if doi_registry:
+                doi = lookup_doi(doi_registry, article.get('title', ''),
+                                 vol, iss, authors=article.get('authors')) or ''
+
             row = [
                 vol, iss, date,
                 article.get('section', ''),
                 article.get('title', ''),
                 article.get('authors', '') or '',
+                doi,
                 article.get('pdf_page_start', '') or '',
                 article.get('pdf_page_end', '') or '',
                 # Book review fields
@@ -107,8 +119,8 @@ def export_to_sheets(rows, dry_run=False):
     ws.clear()
     ws.update(range_name='A1', values=all_data)
 
-    # Bold header row + freeze (columns A through U = 21 columns)
-    ws.format('A1:U1', {'textFormat': {'bold': True}})
+    # Bold header row + freeze (columns A through V = 22 columns)
+    ws.format('A1:V1', {'textFormat': {'bold': True}})
     ws.freeze(rows=1)
 
     print(f"Published {len(rows)} rows to: https://docs.google.com/spreadsheets/d/{SHEET_KEY}")
@@ -123,7 +135,16 @@ def main():
         print(f"Error: output directory not found: {OUTPUT_DIR}", file=sys.stderr)
         sys.exit(1)
 
-    rows = load_all_tocs(OUTPUT_DIR)
+    try:
+        from backfill.generate_xml import load_doi_registry
+    except ModuleNotFoundError:
+        from generate_xml import load_doi_registry
+    doi_registry = load_doi_registry()
+    doi_count = sum(1 for k in doi_registry if isinstance(k, tuple))
+    dup_count = sum(len(v) for v in doi_registry.get('_duplicates', {}).values())
+    print(f"DOI registry loaded: {doi_count + dup_count} article DOIs")
+
+    rows = load_all_tocs(OUTPUT_DIR, doi_registry=doi_registry)
     if not rows:
         print("No toc.json files found in output/", file=sys.stderr)
         sys.exit(1)

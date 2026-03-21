@@ -104,6 +104,27 @@ repository_id = ojs2.localhost
 ; WP-OJS Integration
 ;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;
+; Job Queue
+;;;;;;;;;;;;;;
+
+[queues]
+default_connection = "database"
+default_queue = "queue"
+
+; Process jobs at the end of each web request.
+; Fine for low-traffic sites. For high-traffic, use a worker daemon instead.
+; See: https://docs.pkp.sfu.ca/admin-guide/en/deploy-jobs
+job_runner = On
+
+; Max jobs per request / max seconds per request
+job_runner_max_jobs = 30
+job_runner_max_execution_time = 30
+
+;;;;;;;;;;;;;;;;;;;;;
+; WP-OJS Integration
+;;;;;;;;;;;;;;;;;;;;;
+
 [wpojs]
 api_key_secret = ${WPOJS_API_KEY_SECRET}
 allowed_ips = ${WPOJS_ALLOWED_IPS}
