@@ -120,6 +120,20 @@ fi
 echo ""
 
 # ==========================================
+# CHECK 7: ggshield Secret Scan (BLOCKS)
+# ==========================================
+echo -e "${BLUE}7. Running ggshield secret scan...${NC}"
+if ! command -v ggshield &>/dev/null; then
+    echo -e "    ${BLUE}SKIP${NC}: ggshield not installed"
+elif ! ggshield secret scan pre-commit 2>/dev/null; then
+    echo -e "    ${RED}FAIL${NC}: ggshield detected secrets"
+    ((ERRORS++))
+else
+    echo -e "    ${GREEN}OK${NC}: ggshield found no secrets"
+fi
+echo ""
+
+# ==========================================
 # SUMMARY
 # ==========================================
 echo "=========================================="
@@ -137,4 +151,3 @@ else
     echo ""
     exit 0
 fi
-ggshield secret scan pre-commit "$@"
