@@ -90,12 +90,13 @@ WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existen
 
 - [ ] **ggshield** — installed (v1.48.0) but needs verification: check pre-commit integration, VS Code extension working, test with a dummy secret
 - [ ] **DOI deposits: switch off test mode** — all 1,470 DOIs deposited in test mode (2026-03-21). Queue fully drained (blast-queue.sh). Current status: 883 SUBMITTED (test accepted), 581 ERROR (test rejected), 8 UNREGISTERED. None are registered in production — test mode deposits don't count. Steps to go live:
-  1. Reset ALL DOIs to UNREGISTERED: `UPDATE dois SET status = 1;` (all need fresh production deposit — SUBMITTED/ERROR from test mode are meaningless)
-  2. Flip Crossref plugin from test mode to production: `UPDATE plugin_settings SET setting_value='0' WHERE plugin_name='crossrefplugin' AND setting_name='testMode';`
-  3. Re-queue all deposits: trigger via OJS admin DOI management page (select all → deposit)
-  4. Run `blast-queue.sh --host=sea-live --workers=3` to drain
-  5. Verify on Crossref: check a few DOIs resolve to `journal.existentialanalysis.org.uk`
-  6. The 38 pre-existing DOIs (36.2 + 37.1) will get updated URLs automatically via the new deposit
+  1. Identify the 38 pre-existing DOIs (36.2 + 37.1) — these are **already registered on Crossref** with old PKP-hosted URLs
+  2. Mark pre-existing DOIs as STALE: `UPDATE dois SET status = 5 WHERE doi LIKE '10.%' AND doi_id IN (SELECT doi_id FROM ...);` (STALE = registered but needs re-deposit to update URL)
+  3. Mark all remaining DOIs as UNREGISTERED: `UPDATE dois SET status = 1 WHERE status != 5;` (SUBMITTED/ERROR from test mode are meaningless — test deposits don't register)
+  4. Flip Crossref plugin from test mode to production: `UPDATE plugin_settings SET setting_value='0' WHERE plugin_name='crossrefplugin' AND setting_name='testMode';`
+  5. Queue all deposits: trigger via OJS admin DOI management page (select all → deposit)
+  6. Run `blast-queue.sh --host=sea-live --workers=3` to drain
+  7. Verify on Crossref: check a few DOIs resolve to `journal.existentialanalysis.org.uk` (both new and pre-existing)
 - [ ] **SMTP credentials audit** — Resend API key in `.env.live` (gitignored). Docs only have placeholder `re_your_api_key_here`. Git history is clean (no real keys). Consider rotating the Resend key anyway as a precaution.
 - [ ] **Env var hardening deployed** — committed (aeb04c3) but not yet deployed to live. Next deploy will pick it up automatically.
 
