@@ -807,7 +807,14 @@ if [ -n "$DOI_PREFIX" ]; then
   DOI_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='doiPrefix'" 2>/dev/null)
   if [ "$DOI_ENABLED" != "$DOI_PREFIX" ]; then
     echo "[OJS] Configuring DOIs (prefix: $DOI_PREFIX)..."
-    # Enable DOIs, set prefix, assign to articles + issues, suffix = default, assignment = never
+    # Auto-generate DOIs on publication for live/production (articles should have DOIs,
+    # automaticDoiDeposit=0 prevents Crossref costs). Keep 'never' on dev/staging to
+    # avoid clutter from repeated reimports.
+    if [ "${WP_ENV:-development}" = "production" ]; then
+      DOI_CREATION_TIME="publication"
+    else
+      DOI_CREATION_TIME="never"
+    fi
     $MARIADB <<SQL
       INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
       VALUES ($JOURNAL_ID, '', 'enableDois', '1')
@@ -822,8 +829,8 @@ if [ -n "$DOI_PREFIX" ]; then
       VALUES ($JOURNAL_ID, '', 'doiSuffixType', 'default')
       ON DUPLICATE KEY UPDATE setting_value='default';
       INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
-      VALUES ($JOURNAL_ID, '', 'doiCreationTime', 'never')
-      ON DUPLICATE KEY UPDATE setting_value='never';
+      VALUES ($JOURNAL_ID, '', 'doiCreationTime', '$DOI_CREATION_TIME')
+      ON DUPLICATE KEY UPDATE setting_value='$DOI_CREATION_TIME';
       INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
       VALUES ($JOURNAL_ID, '', 'doiVersioning', '0')
       ON DUPLICATE KEY UPDATE setting_value='0';
@@ -923,6 +930,8 @@ echo "[OJS] OJS base setup complete."
 # because OJS recompiles templates on cache miss.
 echo "[OJS] Clearing caches..."
 find /var/www/html/cache/ -type f -delete 2>/dev/null || true
+# Flush Laravel cache (plugin settings inserted via SQL bypass the OJS cache layer)
+php -r "require_once('/var/www/html/tools/bootstrap.php'); Illuminate\Support\Facades\Cache::flush();" 2>/dev/null || true
 apache2ctl graceful 2>/dev/null || true
 sleep 2
 echo "[OJS] Caches cleared, Apache reloaded."
