@@ -220,23 +220,66 @@ The Manual Payment plugin (`plugins/paymethod/manual`) lets non-subscribers requ
 
 This makes the Manual Payment plugin essentially unusable as a self-service purchase flow — it requires developer intervention to grant access after payment.
 
-- **Not reported upstream** — the plugin has always been this bare-bones.
+- **Confirmed upstream:** [pkp/pkp-lib#6136](https://github.com/pkp/pkp-lib/issues/6136) — open since 2020, unresolved. The issue confirms the plugin has no completion/approval mechanism. Six years without a fix.
 - **Impact:** Cannot use Manual Payment as a fallback when PayPal is unavailable.
 - **Workaround:** Use PayPal plugin (which auto-completes payments on callback).
 
-### 18. PayPal sandbox rejects all transactions for non-US developer accounts
+### 18. PayPal sandbox rejects all payments for UK-based developer account
 
-PayPal's sandbox environment declines all buyer approval attempts with "This transaction has been declined in order to comply with international regulations" when the developer account is UK-based. The REST API successfully creates payments (returns `PAYER_ACTION_REQUIRED`), but the buyer approval step on `sandbox.paypal.com` fails regardless of:
+Two separate issues confirmed:
 
-- Sandbox account country (UK or US)
-- Currency (GBP or USD)
-- API version (v1 `payments/payment` or v2 `checkout/orders`)
-- Browser (normal or incognito)
-- Merchant account settings (no payment blocks configured)
+**a) Expired sandbox credentials (fixed 2026-03-21).** Original sandbox app credentials returned 401 "Authentication failed". Fixed by creating a fresh sandbox app at developer.paypal.com.
 
-Transactions don't appear in sandbox activity at all — the compliance check rejects at the approval redirect level before any transaction is initiated.
+**b) Sandbox rejects buyer approval (confirmed 2026-03-21).** With valid credentials, the PayPal REST API successfully creates the payment order and redirects to `sandbox.paypal.com`. The buyer logs in, the "Pay" button appears briefly, then rejects with "This transaction has been declined in order to comply with international regulations." Tested and fails with:
 
-- **Confirmed as known issue:** [paypal/paypal-js#511](https://github.com/paypal/paypal-js/issues/511) — "The issue is related to the Sandbox user's country. It starts working with a US account. all other countries won't work." Forwarded to PayPal's Checkout team, closed as "not planned".
-- **Impact:** Cannot test the PayPal purchase flow from a UK developer account. Must test with real (live) PayPal credentials.
-- **Workaround:** None found. Manual Payment plugin can verify the OJS access-granting logic works, but the PayPal redirect flow can only be tested on live.
+- UK and US sandbox buyer accounts
+- GBP and USD currencies
+- UK IP and US VPN
+- Via OJS and via standalone script (`scripts/test-paypal.js`) — confirms the issue is 100% PayPal sandbox, not our integration
+
+- **Reported upstream:** [paypal/paypal-js#511](https://github.com/paypal/paypal-js/issues/511) — "The issue is related to the Sandbox user's country. It starts working with a US account. all other countries won't work." PayPal's Checkout team could not reproduce it; closed as stale (2025-03-26).
+- **Standalone reproduction:** `node scripts/test-paypal.js` — creates a PayPal order via REST API, opens sandbox checkout in Playwright, logs in as buyer, captures the rejection. No OJS involved. Screenshot saved to `scripts/paypal-sandbox-result.png`.
+- **PayPal support ticket submitted** (2026-03-21), awaiting response.
+- **Impact:** Cannot complete the PayPal purchase flow from our developer environment. The OJS integration is correct (creates order, redirects to PayPal, return URL wired up), but the sandbox buyer approval step is blocked.
+- **Workaround:** Manual Payment plugin verifies the OJS access-granting logic works end-to-end (tested and confirmed 2026-03-21). The PayPal callback flow can only be tested with live credentials.
+- **Next step:** Get production PayPal REST API credentials from Emi. Use `scripts/test-paypal.js --live` to verify auth safely, then `--live-buy` for a real £0.10 test.
+
+## 11. Crossref deposit errors: OJS doesn't persist failure details (2026-03-21)
+
+**Two separate bugs:**
+
+1. **`$msgSave` not set on success-with-failures path:** When Crossref returns HTTP 200 but with `failure_count > 0` in the response XML, OJS marks DOIs as ERROR but `$msgSave` is null (only populated in the HTTP exception handler). The error detail from Crossref's response is discarded.
+
+2. **`Repo::doi()->edit()` doesn't persist custom settings:** Even when `$msgSave` IS populated (e.g. on a 401 exception), `updateDepositStatus()` passes it to `Repo::doi()->edit()` but it never appears in `doi_settings`. The OJS 3.5 Doi entity schema likely doesn't include `crossrefplugin_failedMsg` as a recognized property, so it's silently dropped. This means error details are never visible in the DOI management UI — the "Show error details" button never appears.
+
+**Location:** `plugins/generic/crossref/CrossrefExportPlugin.php`, `depositXML()` (~line 367) and `updateDepositStatus()` (~line 403).
+
+**Impact:** DOI management UI shows "Error" status but never shows error details. Debugging deposit failures requires checking container/CLI logs directly.
+
+**Fix applied (permanent):** Core patch in `docker/ojs/patches/crossref-error-details.php`, applied at image build time via Dockerfile. Two changes:
+1. Sets `$msgSave = (string)$response->getBody()` in the `failureCount > 0` path so error details are captured.
+2. Writes `crossrefplugin_failedMsg`, `_batchId`, and `_successMsg` directly to `doi_settings` via `DB::table()` after `Repo::doi()->edit()`, bypassing the broken entity schema.
+
+Patch is idempotent (safe to re-run). Verified on live — error details now visible in DOI management UI.
+
+## 12. MathML schema validation warning during Crossref XML export (2026-03-21)
+
+**Problem:** During Crossref XML export, OJS attempts to validate against `http://www.w3.org/Math/XMLSchema/mathml3/mathml3.xsd`. W3C returns HTTP 403 (they block automated schema downloads — [announced Dec 2022](https://www.w3.org/blog/2022/12/w3c-xml-related-schema-and-dtd-files-now-hosted-by-github-pages/)).
+
+**Location:** `lib/pkp/classes/xslt/XMLTypeDescription.php` line 141 — `$xmlDom->schemaValidate($this->_validationSource)`.
+
+**Impact:** Cosmetic — PHP warning in logs but does not prevent XML generation or deposit. The export continues and produces valid Crossref XML.
+
+**Fix:** None applied. This is OJS core code (no core modifications per project constraints). Would require PKP to bundle the schema locally or skip the remote validation. Known upstream issue.
+
+## 13. `jobs.php work --stop-when-empty` doesn't exit (2026-03-21)
+
+**Problem:** Laravel queue workers started with `jobs.php work --stop-when-empty` don't actually exit when the queue is empty. Workers from a `blast-queue.sh` run at 18:30 were still alive at 20:30+, silently polling for new jobs with stale (pre-patch) code. This caused deposits to be processed by old code, making debugging impossible.
+
+**Impact:** Stale workers process jobs with old PHP code (opcache doesn't help — they loaded files at startup). Any code patches applied after workers start have no effect until workers are killed.
+
+**Fix applied:** Updated `blast-queue.sh` with three safeguards:
+1. Auto-kills stale `jobs.php work` processes before starting new ones
+2. Wraps workers in `timeout` (default 30 min) so they can't live forever
+3. Added `--kill` flag for manual cleanup (`blast-queue.sh --host=sea-live --kill`)
 
