@@ -80,7 +80,8 @@ in OJS metadata). Start from the first paragraph of body text or abstract.
 
 KEEP: Abstract, Keywords, all body text, footnotes/endnotes, References.
 Include ALL content through to the very last reference/footnote — do not
-stop early."""
+stop early. If references appear in multiple scripts (e.g. Cyrillic then
+transliterated Latin), include BOTH sets — they are not duplicates."""
 
 ARTICLE_SHARED_PAGE_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
 The first and/or last page may contain content from an adjacent article
@@ -95,8 +96,10 @@ If the first page starts with the END of a previous article, skip that
 content and start from THIS article's body text.
 
 KEEP: Abstract, Keywords, all body text, footnotes/endnotes, References.
-Include ALL content through to the very last reference/footnote. If the last
-page contains the START of the next article, stop before it."""
+Include ALL content through to the very last reference/footnote. If references
+appear in multiple scripts (e.g. Cyrillic then transliterated Latin), include
+BOTH sets — they are not duplicates. If the last page contains the START of
+the next article, stop before it."""
 
 BOOK_REVIEW_PROMPT = """Convert this book review PDF into clean, well-structured HTML.
 The PDF pages may contain multiple reviews — extract ONLY this one.
