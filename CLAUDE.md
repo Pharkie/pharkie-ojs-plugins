@@ -67,6 +67,21 @@ See `docs/private/plan.md` for full details, `docs/discovery.md` for how we got 
 - **htmlgen can drop repeated/multilingual content.** Haiku may treat transliterated references (e.g. Cyrillic then Latin script) as duplicates and omit one set. The prompt now explicitly says to include both, but always verify HTML galleys against source PDFs for articles with non-English references.
 - **OJS 3.5 upgrade is the biggest risk.** The 3.5 upgrade has significant breaking changes (Slim->Laravel, Vue 2->3). If this goes badly, re-evaluate Janeway migration.
 
+## Custom OJS plugins
+
+Three custom plugins, all bind-mounted into the OJS container via `docker-compose.yml`:
+
+| Plugin | Directory | Mount path | Purpose |
+|---|---|---|---|
+| **WP-OJS Subscription API** | `plugins/wpojs-subscription-api` | `plugins/generic/wpojsSubscriptionApi` | REST endpoints for user + subscription CRUD (OJS has none natively). Also adds login hint, paywall hint, footer messages. See `docs/ojs-sync-plugin-api.md`. |
+| **Inline HTML Galley** | `plugins/ojs-inline-html-galley` | `plugins/generic/inlineHtmlGalley` | Inlines HTML galley content on the article page (instead of download link). Shows subscriber/purchase access messages. |
+| **Stripe Payment** | `plugins/stripe-payment` | `plugins/paymethod/stripe` | Stripe Checkout for non-member article/issue purchases. Redirect flow + webhook handler. Replaces PayPal (sandbox broken for UK accounts). |
+
+- **Stripe plugin** uses Stripe Checkout (redirect flow): buyer clicks purchase → OJS creates Checkout Session → redirects to Stripe → payment → redirects back → access granted. Webhook endpoint at `/payment/plugin/StripePayment/webhook` for async confirmation.
+- **Vendor deps**: `plugins/stripe-payment/vendor/` is gitignored. Run `composer install` inside the OJS container after rebuild.
+- **Payment plugin priority** in `setup-ojs.sh`: Stripe (if `OJS_STRIPE_SECRET_KEY`) → PayPal (if `OJS_PAYPAL_ACCOUNT`) → Manual Payment.
+- **Test scripts**: `scripts/test-stripe.js` and `scripts/test-paypal.js` — standalone payment tests, no OJS involved.
+
 ## WP membership stack
 
 **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles registration/profiles/roles. WCS handles billing. Membership = WP role.
