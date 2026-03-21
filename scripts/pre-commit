@@ -34,6 +34,7 @@ source "$SCRIPT_DIR/lib/check-env-vars.sh"
 source "$SCRIPT_DIR/lib/check-yaml-syntax.sh"
 source "$SCRIPT_DIR/lib/check-doc-links.sh"
 source "$SCRIPT_DIR/lib/check-backfill-tests.sh"
+source "$SCRIPT_DIR/lib/check-env-consistency.sh"
 
 # Track results
 ERRORS=0
@@ -102,6 +103,17 @@ echo ""
 echo -e "${BLUE}5. Checking backfill tests...${NC}"
 if check_backfill_tests; then
     echo -e "    ${GREEN}OK${NC}: Backfill tests passed"
+else
+    ((ERRORS++))
+fi
+echo ""
+
+# ==========================================
+# CHECK 6: Env File Consistency (BLOCKS)
+# ==========================================
+echo -e "${BLUE}6. Checking env file consistency...${NC}"
+if check_env_consistency; then
+    echo -e "    ${GREEN}OK${NC}: Content vars consistent across env files"
 else
     ((ERRORS++))
 fi

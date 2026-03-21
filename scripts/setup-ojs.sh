@@ -169,6 +169,35 @@ else
   echo "[OJS] Journal '$JOURNAL_PATH' already exists."
 fi
 
+# --- Remove auto-created editorial accounts ---
+# OJS auto-creates placeholder users (Journal editor, Section editor etc.) when a new
+# journal context is created via the API. These duplicate the real accounts created later
+# by assign-roles.sh from editorial-roles.json, causing duplicates on the Editorial Masthead.
+# Remove all non-admin users that OJS auto-created (user_id > 1, created by context API,
+# not by our scripts). Only safe to run before assign-roles.sh populates real editors.
+JOURNAL_ID_CLEANUP=$($MARIADB -N -e "SELECT journal_id FROM journals WHERE path='$JOURNAL_PATH'")
+AUTO_USERS=$($MARIADB -N -e "
+  SELECT DISTINCT u.user_id FROM users u
+  JOIN user_user_groups uug ON u.user_id = uug.user_id
+  JOIN user_groups ug ON uug.user_group_id = ug.user_group_id
+  WHERE u.user_id > 1 AND u.user_id < 100
+  AND ug.context_id = $JOURNAL_ID_CLEANUP
+  AND ug.role_id = 16
+  AND u.username LIKE '%.%'
+")
+if [ -n "$AUTO_USERS" ]; then
+  for USERID in $AUTO_USERS; do
+    USERNAME=$($MARIADB -N -e "SELECT username FROM users WHERE user_id=$USERID")
+    echo "[OJS] Removing auto-created user: $USERNAME (id=$USERID)"
+    $MARIADB -e "DELETE FROM user_user_groups WHERE user_id=$USERID"
+    $MARIADB -e "DELETE FROM user_settings WHERE user_id=$USERID"
+    $MARIADB -e "DELETE FROM users WHERE user_id=$USERID"
+  done
+  echo "[OJS] Auto-created editorial accounts removed (assign-roles.sh will create real ones)."
+else
+  echo "[OJS] No auto-created editorial accounts to clean up."
+fi
+
 # --- Journal metadata (idempotent — always ensures correct values) ---
 JOURNAL_ID_META=$($MARIADB -N -e "SELECT journal_id FROM journals WHERE path='$JOURNAL_PATH'")
 echo "[OJS] Configuring journal metadata..."
