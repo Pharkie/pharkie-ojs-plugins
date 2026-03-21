@@ -26,7 +26,7 @@ check_secrets() {
     for file in $files_to_check; do
         # Skip binary files, env example files, and check scripts themselves
         case "$file" in
-            *.png|*.jpg|*.gif|*.ico|*.woff|*.woff2|*.ttf|*.eot|*.svg) continue ;;
+            *.png|*.jpg|*.gif|*.ico|*.woff|*.woff2|*.ttf|*.eot|*.svg|.DS_Store|*/.DS_Store) continue ;;
             .env*) continue ;;
             scripts/lib/check-*.sh) continue ;;
             scripts/lib/common.sh) continue ;;
