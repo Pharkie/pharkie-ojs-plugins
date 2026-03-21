@@ -181,3 +181,14 @@ Root cause: `Publication\DAO.php` line 180 (`$citations = $citationDao->getByPub
 - **Known issue:** [pkp/pkp-lib#12184](https://github.com/pkp/pkp-lib/issues/12184), fixed in [pkp/ojs#5249](https://github.com/pkp/ojs/pull/5249) (merged 2026-01-06, `stable-3_5_0` branch). Fix: `{if count($parsedCitations)}` instead of `{if $parsedCitations}`. Not yet in the `3_5_0-3` Docker image we use.
 - **Our workaround:** JS in inline HTML galley plugin hides the section when `.value` has no text content.
 
+## Access control
+
+### 15. `$hasAccess` template variable is false for site admins and journal managers
+
+OJS's `ArticleHandler` computes the `hasAccess` template variable based on subscription/purchase/open-access status only. Site admins (`ROLE_ID_SITE_ADMIN`) and journal managers (`ROLE_ID_MANAGER`) get `hasAccess=false` on paywalled articles, even though they have full editorial access. This means any template or plugin relying on `$hasAccess` to gate content will incorrectly hide it from admin users.
+
+The root cause is in `ArticleHandler::view()` — it checks `IssueAction::subscribedUser()` and `IssueAction::purchasedArticle()` but doesn't check editorial roles.
+
+- **Not reported upstream** — design issue in access logic, affects any paywalled journal.
+- **Our workaround:** Inline HTML galley plugin checks `userRoles` template var for `ROLE_ID_SITE_ADMIN` / `ROLE_ID_MANAGER` and overrides `$hasAccess` for those users.
+
