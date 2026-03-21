@@ -79,14 +79,24 @@ WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existen
 - [ ] Test cancellation flow (cancel → verify OJS access removed)
 - [ ] Test on-hold / failed payment scenario
 - [ ] **Mobile testing** — check OJS article pages, archive, login, inline HTML galley, paywall on mobile browsers (iOS Safari, Android Chrome). Check responsive layout, readability, touch targets, galley content overflow.
-- [ ] Verify non-member OJS purchase flow on live (paywall → buy article → PayPal → access granted)
-  - PayPal credentials needed from Emi: business account email + REST API app (client ID + secret) from https://developer.paypal.com/dashboard/applications/live
-  - Add to `.env.live`: `OJS_PAYPAL_ACCOUNT`, `OJS_PAYPAL_CLIENT_ID`, `OJS_PAYPAL_SECRET`, `OJS_PAYPAL_TEST_MODE=0`
-  - Deploy: `scripts/deploy.sh --host=sea-live --ssl --env-file=.env.live`
-  - **Cannot test on local dev** — PayPal can't reach localhost for return callbacks. Sandbox also declines GBP from US sandbox accounts. Test on staging/live only.
+- [ ] **Non-member purchase flow** — two options to test:
+  - **Option A: PayPal** — credentials needed from Emi (business account email + REST API client ID + secret from https://developer.paypal.com/dashboard/applications/live). Add to `.env.live`: `OJS_PAYPAL_ACCOUNT`, `OJS_PAYPAL_CLIENT_ID`, `OJS_PAYPAL_SECRET`, `OJS_PAYPAL_TEST_MODE=0`. Deploy. Can't test on localhost (PayPal needs callbacks). Sandbox may decline GBP from US sandbox accounts.
+  - **Option B: Manual Payment plugin** — OJS built-in, no third-party credentials. Admin manually marks payments as received. Good enough for low-volume non-member purchases while PayPal creds are pending. Test this workflow first.
 - [x] ~~Monitor 24-48h — check sync log for failures~~ — 0 sync failures, 678/678 reconciliation clean (2026-03-21)
 - [x] ~~Run `wp ojs-sync reconcile` manually after 24h to check for drift~~ — 678 OK, 0 drift (2026-03-21)
 - [x] ~~Investigate "Active WP members: 0" in `wp ojs-sync status`~~ — fixed, now shows 678 correctly
+
+### Hardening — TODO
+
+- [ ] **ggshield** — installed (v1.48.0) but needs verification: check pre-commit integration, VS Code extension working, test with a dummy secret
+- [ ] **DOI deposits: switch off test mode** — all 1,470 DOIs deposited in test mode (2026-03-21). Queue fully drained (blast-queue.sh). Steps to go live:
+  1. Reset DOI status from "error" (test mode deposits show as error): `UPDATE dois SET status = 1` (UNREGISTERED)
+  2. Flip Crossref plugin from test mode to production: `OJS_CROSSREF_TEST_MODE` or via DB `plugin_settings`
+  3. Re-queue all deposits: trigger via OJS admin or `jobs.php`
+  4. Run `blast-queue.sh --host=sea-live --workers=3` to drain
+  5. Verify on Crossref: check a few DOIs resolve correctly
+- [ ] **SMTP credentials audit** — Resend API key in `.env.live` (gitignored). Docs only have placeholder `re_your_api_key_here`. Git history is clean (no real keys). Consider rotating the Resend key anyway as a precaution.
+- [ ] **Env var hardening deployed** — committed (aeb04c3) but not yet deployed to live. Next deploy will pick it up automatically.
 
 ## Later: WP migration to Hetzner (Phase 3)
 
@@ -251,7 +261,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 - [ ] **ORCID integration** — configure ORCID plugin, add ORCID iDs to author metadata where available. OJS has a built-in ORCID plugin (Plugin Gallery). Needs: ORCID Member API credentials (or Public API for display-only), then either manual entry per author or bulk lookup/import.
 - [x] ~~**DOI assignment**~~ — All 1,470 DOIs assigned (1,402 articles + 68 issues). 38 pre-existing Crossref DOIs (36.2 + 37.1) marked STALE (need re-deposit to update URL). Remaining 1,432 UNREGISTERED. `doi-registry.json` exported from live DB for repave resilience. `doiCreationTime=publication` on production, `never` on dev/staging. Author guidelines updated with DOI-in-references requirement.
-- [x] ~~**DOI deposit to Crossref**~~ — all 1,470 DOIs deposited (2026-03-21).
+- [x] ~~**DOI deposit to Crossref**~~ — all 1,470 DOIs deposited in test mode (2026-03-21). Queue fully drained via `blast-queue.sh` (834 jobs, 146 stuck/reserved, cleared and re-drained). Production deposit pending — see Hardening section.
 - [ ] **Crossref reference linking** — Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated on submissions page to request DOIs in references. 18-month grace period for new members.
   - [ ] **Phase 1: Extract archive citations from HTML galleys** — parse reference sections from existing HTML galleys (~1,356 articles), split into individual citations, load into OJS `citations` table. Structures the data properly regardless of DOI availability.
   - [ ] **Phase 2: Look up DOIs for existing citations** — use Crossref REST API to match extracted citations to DOIs (free, no per-lookup cost). Crossref provides reference matching tools for this. Most humanities references won't have DOIs, but this catches what's available. When OJS 3.6 lands, the built-in plugin can include matched DOIs in `<citation_list>` deposits automatically.
