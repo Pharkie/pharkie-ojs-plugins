@@ -776,10 +776,14 @@ fi
 # non-member purchases (single articles, issues, back issues).
 PAYMENTS_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='paymentsEnabled'" 2>/dev/null)
 
-ARTICLE_FEE="${OJS_PURCHASE_ARTICLE_FEE:-0}"
-ISSUE_FEE="${OJS_PURCHASE_ISSUE_FEE:-0}"
+ARTICLE_FEE="${OJS_PURCHASE_ARTICLE_FEE:-}"
+ISSUE_FEE="${OJS_PURCHASE_ISSUE_FEE:-}"
 
 if [ "$PAYMENTS_ENABLED" != "1" ]; then
+  if [ -z "$ARTICLE_FEE" ] || [ -z "$ISSUE_FEE" ]; then
+    echo "[OJS] ERROR: OJS_PURCHASE_ARTICLE_FEE and OJS_PURCHASE_ISSUE_FEE must be set to enable payments."
+    exit 1
+  fi
   echo "[OJS] Enabling payments (article £$ARTICLE_FEE, issue £$ISSUE_FEE)..."
   ojs_api PUT "/$JOURNAL_PATH/api/v1/contexts/$JOURNAL_ID" "{
     \"paymentsEnabled\": true,
@@ -800,10 +804,14 @@ fi
 PAYPAL_ACCOUNT="${OJS_PAYPAL_ACCOUNT:-}"
 PAYPAL_CLIENT_ID="${OJS_PAYPAL_CLIENT_ID:-}"
 PAYPAL_SECRET="${OJS_PAYPAL_SECRET:-}"
-PAYPAL_TEST_MODE="${OJS_PAYPAL_TEST_MODE:-1}"
+PAYPAL_TEST_MODE="${OJS_PAYPAL_TEST_MODE:-}"
 
 PAYPAL_ENABLED=$($MARIADB -N -e "SELECT COUNT(*) FROM plugin_settings WHERE plugin_name='paypalpayment' AND context_id=$JOURNAL_ID AND setting_name='enabled' AND setting_value='1'" 2>/dev/null)
 if [ "$PAYPAL_ENABLED" = "0" ] || [ -n "$PAYPAL_ACCOUNT" ]; then
+  if [ -n "$PAYPAL_ACCOUNT" ] && { [ -z "$PAYPAL_CLIENT_ID" ] || [ -z "$PAYPAL_SECRET" ] || [ -z "$PAYPAL_TEST_MODE" ]; }; then
+    echo "[OJS] ERROR: OJS_PAYPAL_ACCOUNT is set but OJS_PAYPAL_CLIENT_ID, OJS_PAYPAL_SECRET, and OJS_PAYPAL_TEST_MODE are required."
+    exit 1
+  fi
   PAYPAL_MODE_LABEL="test"
   [ "$PAYPAL_TEST_MODE" = "0" ] && PAYPAL_MODE_LABEL="LIVE"
   echo "[OJS] Configuring PayPal payment plugin (${PAYPAL_MODE_LABEL} mode)..."
@@ -944,7 +952,7 @@ fi
 # OJS 3.5 has ORCID built-in (not a plugin). Settings are stored in journal_settings.
 ORCID_CLIENT_ID="${OJS_ORCID_CLIENT_ID:-}"
 ORCID_CLIENT_SECRET="${OJS_ORCID_CLIENT_SECRET:-}"
-ORCID_API_TYPE="${OJS_ORCID_API_TYPE:-memberProduction}"
+ORCID_API_TYPE="${OJS_ORCID_API_TYPE:-}"
 ORCID_CITY="${OJS_ORCID_CITY:-}"
 
 if [ -n "$ORCID_CLIENT_ID" ] && [ -n "$ORCID_CLIENT_SECRET" ]; then

@@ -71,10 +71,10 @@ if [ "$NEEDS_INSTALL" = true ]; then
       --data-urlencode "locale=en" \
       --data-urlencode "additionalLocales[]=en" \
       --data-urlencode "filesDir=/var/www/files" \
-      --data-urlencode "adminUsername=${OJS_ADMIN_USER:-admin}" \
+      --data-urlencode "adminUsername=${OJS_ADMIN_USER:?OJS_ADMIN_USER not set}" \
       --data-urlencode "adminPassword=${OJS_ADMIN_PASSWORD:?OJS_ADMIN_PASSWORD not set}" \
       --data-urlencode "adminPassword2=${OJS_ADMIN_PASSWORD}" \
-      --data-urlencode "adminEmail=${OJS_ADMIN_EMAIL:-admin@existentialanalysis.org.uk}" \
+      --data-urlencode "adminEmail=${OJS_ADMIN_EMAIL:?OJS_ADMIN_EMAIL not set}" \
       --data-urlencode "databaseDriver=mysqli" \
       --data-urlencode "databaseHost=${OJS_DB_HOST}" \
       --data-urlencode "databaseUsername=${OJS_DB_USER}" \
@@ -82,7 +82,7 @@ if [ "$NEEDS_INSTALL" = true ]; then
       --data-urlencode "databaseName=${OJS_DB_NAME}" \
       --data-urlencode "oaiRepositoryId=ojs2.localhost" \
       --data-urlencode "enableBeacon=0" \
-      --data-urlencode "timeZone=${OJS_TIMEZONE:-Europe/London}" \
+      --data-urlencode "timeZone=${OJS_TIMEZONE:?OJS_TIMEZONE not set}" \
       2>/dev/null)
 
     if echo "$RESULT" | grep -q "Installation of OJS has completed successfully"; then

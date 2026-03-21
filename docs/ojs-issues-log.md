@@ -192,3 +192,51 @@ The root cause is in `ArticleHandler::view()` — it checks `IssueAction::subscr
 - **Not reported upstream** — design issue in access logic, affects any paywalled journal.
 - **Our workaround:** Inline HTML galley plugin checks `userRoles` template var for `ROLE_ID_SITE_ADMIN` / `ROLE_ID_MANAGER` and overrides `$hasAccess` for those users.
 
+## Schema validation
+
+### 16. W3C MathML XSD returns 403, causing PHP warnings during DOI deposit
+
+OJS's `XMLTypeDescription.php` (line 141) calls `DOMDocument::schemaValidate()` against `http://www.w3.org/Math/XMLSchema/mathml3/mathml3.xsd` during Crossref XML generation. W3C now returns HTTP 403 for automated schema requests (they've long asked tools to use local copies rather than hitting their servers).
+
+The warning fires on every `DepositSubmission` job:
+
+```
+PHP Warning: DOMDocument::schemaValidate(http://www.w3.org/Math/XMLSchema/mathml3/mathml3.xsd):
+Failed to open stream: HTTP request failed! HTTP/1.1 403 Forbidden
+in /var/www/html/lib/pkp/classes/xslt/XMLTypeDescription.php on line 141
+```
+
+Jobs still process successfully — the schema validation fails but `schemaValidate()` returns false, and OJS continues. The warning is cosmetic noise.
+
+- **Not reported upstream** — W3C policy change, not an OJS bug. Many projects hit this.
+- **Impact:** Log noise during bulk DOI deposit (hundreds of warnings). No functional impact.
+- **Workaround:** Could add a local XML catalog (`/etc/xml/catalog`) mapping the URL to a bundled XSD copy, avoiding the HTTP fetch entirely. Not worth doing unless the warnings cause log rotation issues.
+
+## Payments
+
+### 17. Manual Payment plugin has no admin approval UI
+
+The Manual Payment plugin (`plugins/paymethod/manual`) lets non-subscribers request article purchases: the buyer sees a "Send notification of payment" button, which emails the journal manager. But there is no admin UI to approve/fulfil the payment. The payment appears in Payments > Payments as a log entry, but with no action button. The only way to complete a manual payment is direct DB insertion into `completed_payments` or calling `OJSPaymentManager::fulfillQueuedPayment()` programmatically.
+
+This makes the Manual Payment plugin essentially unusable as a self-service purchase flow — it requires developer intervention to grant access after payment.
+
+- **Not reported upstream** — the plugin has always been this bare-bones.
+- **Impact:** Cannot use Manual Payment as a fallback when PayPal is unavailable.
+- **Workaround:** Use PayPal plugin (which auto-completes payments on callback).
+
+### 18. PayPal sandbox rejects all transactions for non-US developer accounts
+
+PayPal's sandbox environment declines all buyer approval attempts with "This transaction has been declined in order to comply with international regulations" when the developer account is UK-based. The REST API successfully creates payments (returns `PAYER_ACTION_REQUIRED`), but the buyer approval step on `sandbox.paypal.com` fails regardless of:
+
+- Sandbox account country (UK or US)
+- Currency (GBP or USD)
+- API version (v1 `payments/payment` or v2 `checkout/orders`)
+- Browser (normal or incognito)
+- Merchant account settings (no payment blocks configured)
+
+Transactions don't appear in sandbox activity at all — the compliance check rejects at the approval redirect level before any transaction is initiated.
+
+- **Confirmed as known issue:** [paypal/paypal-js#511](https://github.com/paypal/paypal-js/issues/511) — "The issue is related to the Sandbox user's country. It starts working with a US account. all other countries won't work." Forwarded to PayPal's Checkout team, closed as "not planned".
+- **Impact:** Cannot test the PayPal purchase flow from a UK developer account. Must test with real (live) PayPal credentials.
+- **Workaround:** None found. Manual Payment plugin can verify the OJS access-granting logic works, but the PayPal redirect flow can only be tested on live.
+
