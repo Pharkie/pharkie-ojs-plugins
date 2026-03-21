@@ -174,9 +174,9 @@ No staging server currently exists. Live is `sea-live`.
 - [x] All 6 products mapped to OJS subscription types
 - [x] Smoke tests 22/22 — includes full sync round-trip (create, subscribe, expire, anonymise)
 - [x] OJS login with WP password works after bulk sync
-- [ ] **New member flow** — create WCS subscription, verify OJS user + access created automatically (needs live testing)
-- [ ] **Cancellation/expiry** — cancel subscription, verify OJS access removed (needs live testing)
-- [ ] **On-hold / failed payment** — test payment failure scenarios (needs live testing)
+- [ ] **New member flow** — (see post-launch checklist above)
+- [ ] **Cancellation/expiry** — (see post-launch checklist above)
+- [ ] **On-hold / failed payment** — (see post-launch checklist above)
 
 ## Playwright E2E browser tests (`e2e/`)
 
@@ -251,7 +251,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 - [ ] **ORCID integration** — configure ORCID plugin, add ORCID iDs to author metadata where available. OJS has a built-in ORCID plugin (Plugin Gallery). Needs: ORCID Member API credentials (or Public API for display-only), then either manual entry per author or bulk lookup/import.
 - [x] ~~**DOI assignment**~~ — All 1,470 DOIs assigned (1,402 articles + 68 issues). 38 pre-existing Crossref DOIs (36.2 + 37.1) marked STALE (need re-deposit to update URL). Remaining 1,432 UNREGISTERED. `doi-registry.json` exported from live DB for repave resilience. `doiCreationTime=publication` on production, `never` on dev/staging. Author guidelines updated with DOI-in-references requirement.
-- [ ] **DOI deposit to Crossref** — deposit from OJS admin → DOIs → select → Deposit. Cost: $0.15/DOI back-year (2023 and before), $1/DOI current (2024–2026) — estimated ~$268 total ([fee schedule](https://www.crossref.org/fees/#content-registration-fees)). 38 already-deposited DOIs re-deposit free. `automaticDoiDeposit=0` so nothing deposits without manual action.
+- [x] ~~**DOI deposit to Crossref**~~ — all 1,470 DOIs deposited (2026-03-21).
 - [ ] **Crossref reference linking** — Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated on submissions page to request DOIs in references. 18-month grace period for new members.
   - [ ] **Phase 1: Extract archive citations from HTML galleys** — parse reference sections from existing HTML galleys (~1,356 articles), split into individual citations, load into OJS `citations` table. Structures the data properly regardless of DOI availability.
   - [ ] **Phase 2: Look up DOIs for existing citations** — use Crossref REST API to match extracted citations to DOIs (free, no per-lookup cost). Crossref provides reference matching tools for this. Most humanities references won't have DOIs, but this catches what's available. When OJS 3.6 lands, the built-in plugin can include matched DOIs in `<citation_list>` deposits automatically.
