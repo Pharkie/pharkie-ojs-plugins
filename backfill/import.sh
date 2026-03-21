@@ -195,7 +195,53 @@ for DIR in "${SORTED_DIRS[@]}"; do
         echo
         continue
       else
-        echo "  WARNING: Vol ${ISSUE_VOL}.${ISSUE_NUM} already exists, reimporting (--force)"
+        echo "  Deleting existing Vol ${ISSUE_VOL}.${ISSUE_NUM} before reimport..."
+        # Get the issue_id and submission_ids for this specific issue
+        ISSUE_ID=$(ojs_db_query "
+          SELECT i.issue_id FROM issues i
+          JOIN journals j ON i.journal_id = j.journal_id
+          WHERE j.path = '${JOURNAL_PATH}'
+            AND i.volume = ${ISSUE_VOL} AND i.number = '${ISSUE_NUM}' LIMIT 1;
+        " || true)
+        if [ -n "$ISSUE_ID" ]; then
+          # Get submission IDs belonging to this issue
+          SUB_IDS=$(ojs_db_query "
+            SELECT DISTINCT submission_id FROM publications WHERE issue_id = ${ISSUE_ID};
+          " | tr '\n' ',' | sed 's/,$//' || true)
+
+          if [ -n "$SUB_IDS" ]; then
+            ojs_db_query "
+              SET FOREIGN_KEY_CHECKS=0;
+              DELETE pgs FROM publication_galley_settings pgs
+                JOIN publication_galleys pg ON pgs.galley_id = pg.galley_id
+                JOIN publications p ON pg.publication_id = p.publication_id
+                WHERE p.submission_id IN (${SUB_IDS});
+              DELETE FROM publication_galleys WHERE publication_id IN
+                (SELECT publication_id FROM publications WHERE submission_id IN (${SUB_IDS}));
+              DELETE FROM submission_file_settings WHERE submission_file_id IN
+                (SELECT submission_file_id FROM submission_files WHERE submission_id IN (${SUB_IDS}));
+              DELETE FROM submission_files WHERE submission_id IN (${SUB_IDS});
+              DELETE FROM publication_settings WHERE publication_id IN
+                (SELECT publication_id FROM publications WHERE submission_id IN (${SUB_IDS}));
+              DELETE FROM publications WHERE submission_id IN (${SUB_IDS});
+              DELETE FROM submission_settings WHERE submission_id IN (${SUB_IDS});
+              DELETE FROM submissions WHERE submission_id IN (${SUB_IDS});
+              SET FOREIGN_KEY_CHECKS=1;
+            " || true
+          fi
+
+          # Delete the issue itself
+          ojs_db_query "
+            SET FOREIGN_KEY_CHECKS=0;
+            DELETE FROM issue_galley_settings WHERE issue_id = ${ISSUE_ID};
+            DELETE FROM issue_galleys WHERE issue_id = ${ISSUE_ID};
+            DELETE FROM issue_settings WHERE issue_id = ${ISSUE_ID};
+            DELETE FROM custom_issue_orders WHERE issue_id = ${ISSUE_ID};
+            DELETE FROM issues WHERE issue_id = ${ISSUE_ID};
+            SET FOREIGN_KEY_CHECKS=1;
+          " || true
+          echo "  OK: Existing issue deleted."
+        fi
       fi
     fi
   fi
