@@ -141,8 +141,8 @@ Full dev rebuild is a two-step process:
 
 1. **Rebuild + sample data** (~3–5 min): `scripts/rebuild-dev.sh --with-sample-data --skip-tests`
    Seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. Includes branding, plugin config, subscription types.
-2. **Full backfill import** (~15 min): `backfill/import.sh backfill/output/*`
-   Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). Cleans DB first (default), then imports fresh.
+2. **Full backfill import** (~15 min): `backfill/import.sh backfill/output/* --clean`
+   Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). `--clean` wipes DB first. For single-issue updates: `import.sh backfill/output/37.1 --force` (overwrites that issue only).
 3. **Run e2e tests**: `npx playwright test` — 66 tests, all should pass.
 4. **Verify banner links**: sidebar "BOOK NOW" banners should link to `WPOJS_WP_MEMBER_URL` (not localhost).
 
