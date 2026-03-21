@@ -213,7 +213,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             . '<div style="margin-top:1em;padding:16px 20px;background:#fef7ec;'
             . 'border:1px solid #f0d8a0;border-radius:6px;font-size:14px;color:#7a5a1a;line-height:1.6;">'
             . '<strong>Full text available to members</strong><br>'
-            . 'Existing members: please log in (top right) with your membership password to view content. '
+            . 'Existing members: please log in with your membership password to view content. '
             . 'Complete access to the full archive of articles is available with '
             . '<a href="https://community.existentialanalysis.org.uk/product-category/memberships/" '
             . 'style="color:#7a5a1a;font-weight:600;">SEA membership</a>. '
