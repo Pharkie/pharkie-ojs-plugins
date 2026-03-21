@@ -77,3 +77,4 @@ e2e/playwright-report/
 
 # Added by ggshield
 .cache_ggshield
+plugins/stripe-payment/vendor/

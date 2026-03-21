@@ -771,23 +771,43 @@ else
   echo "[OJS] Publishing mode already set to 'Subscription', skipping."
 fi
 
-# --- Enable payments + PayPal plugin ---
-# Payments must be enabled for the paywall to work. The PayPal plugin handles
-# non-member purchases (single articles, issues, back issues).
+# --- Enable payments ---
+# Payments must be enabled for the paywall to work. Three payment plugins:
+# - Stripe: preferred (when OJS_STRIPE_SECRET_KEY is set)
+# - PayPal: fallback (when OJS_PAYPAL_ACCOUNT is set)
+# - Manual Payment: always enabled as last resort
 PAYMENTS_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='paymentsEnabled'" 2>/dev/null)
 
 ARTICLE_FEE="${OJS_PURCHASE_ARTICLE_FEE:-}"
 ISSUE_FEE="${OJS_PURCHASE_ISSUE_FEE:-}"
+MANUAL_INSTRUCTIONS="${OJS_MANUAL_PAYMENT_INSTRUCTIONS:-}"
+STRIPE_SECRET_KEY="${OJS_STRIPE_SECRET_KEY:-}"
+STRIPE_PUBLISHABLE_KEY="${OJS_STRIPE_PUBLISHABLE_KEY:-}"
+STRIPE_WEBHOOK_SECRET="${OJS_STRIPE_WEBHOOK_SECRET:-}"
+STRIPE_TEST_MODE="${OJS_STRIPE_TEST_MODE:-}"
+PAYPAL_ACCOUNT="${OJS_PAYPAL_ACCOUNT:-}"
+PAYPAL_CLIENT_ID="${OJS_PAYPAL_CLIENT_ID:-}"
+PAYPAL_SECRET="${OJS_PAYPAL_SECRET:-}"
+PAYPAL_TEST_MODE="${OJS_PAYPAL_TEST_MODE:-}"
+
+# Determine which payment plugin to use: Stripe > PayPal > Manual
+if [ -n "$STRIPE_SECRET_KEY" ]; then
+  PAYMENT_PLUGIN="StripePayment"
+elif [ -n "$PAYPAL_ACCOUNT" ]; then
+  PAYMENT_PLUGIN="PaypalPayment"
+else
+  PAYMENT_PLUGIN="ManualPayment"
+fi
 
 if [ "$PAYMENTS_ENABLED" != "1" ]; then
   if [ -z "$ARTICLE_FEE" ] || [ -z "$ISSUE_FEE" ]; then
     echo "[OJS] ERROR: OJS_PURCHASE_ARTICLE_FEE and OJS_PURCHASE_ISSUE_FEE must be set to enable payments."
     exit 1
   fi
-  echo "[OJS] Enabling payments (article £$ARTICLE_FEE, issue £$ISSUE_FEE)..."
+  echo "[OJS] Enabling payments (article £$ARTICLE_FEE, issue £$ISSUE_FEE, plugin: $PAYMENT_PLUGIN)..."
   ojs_api PUT "/$JOURNAL_PATH/api/v1/contexts/$JOURNAL_ID" "{
     \"paymentsEnabled\": true,
-    \"paymentPluginName\": \"PaypalPayment\",
+    \"paymentPluginName\": \"$PAYMENT_PLUGIN\",
     \"currency\": \"GBP\",
     \"purchaseArticleFee\": $ARTICLE_FEE,
     \"purchaseArticleFeeEnabled\": true,
@@ -797,18 +817,85 @@ if [ "$PAYMENTS_ENABLED" != "1" ]; then
   }" > /dev/null
   echo "[OJS] Payments enabled."
 else
+  # Update payment plugin if it changed
+  CURRENT_PLUGIN=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='paymentPluginName'" 2>/dev/null)
+  if [ "$CURRENT_PLUGIN" != "$PAYMENT_PLUGIN" ]; then
+    echo "[OJS] Switching payment plugin from $CURRENT_PLUGIN to $PAYMENT_PLUGIN..."
+    ojs_api PUT "/$JOURNAL_PATH/api/v1/contexts/$JOURNAL_ID" "{
+      \"paymentPluginName\": \"$PAYMENT_PLUGIN\"
+    }" > /dev/null
+  fi
   echo "[OJS] Payments already enabled, skipping."
 fi
 
-# Enable PayPal payment plugin + configure credentials
-PAYPAL_ACCOUNT="${OJS_PAYPAL_ACCOUNT:-}"
-PAYPAL_CLIENT_ID="${OJS_PAYPAL_CLIENT_ID:-}"
-PAYPAL_SECRET="${OJS_PAYPAL_SECRET:-}"
-PAYPAL_TEST_MODE="${OJS_PAYPAL_TEST_MODE:-}"
+# --- Manual Payment plugin ---
+# Always configure Manual Payment as fallback. The plugin's isConfigured() returns
+# false if manualInstructions is empty, which breaks the entire purchase flow.
+if [ -z "$MANUAL_INSTRUCTIONS" ]; then
+  MANUAL_INSTRUCTIONS="Please contact the journal to arrange payment. Your access will be granted once payment is confirmed."
+fi
+MANUAL_CONFIGURED=$($MARIADB -N -e "SELECT COUNT(*) FROM plugin_settings WHERE plugin_name='manualpaymentplugin' AND context_id=$JOURNAL_ID AND setting_name='manualInstructions' AND setting_value != ''" 2>/dev/null)
+if [ "$MANUAL_CONFIGURED" = "0" ]; then
+  echo "[OJS] Configuring Manual Payment plugin..."
+  $MARIADB <<SQL
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('manualpaymentplugin', $JOURNAL_ID, 'enabled', '1', 'bool')
+    ON DUPLICATE KEY UPDATE setting_value='1';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('manualpaymentplugin', $JOURNAL_ID, 'manualInstructions', '$MANUAL_INSTRUCTIONS', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$MANUAL_INSTRUCTIONS';
+SQL
+  echo "[OJS] Manual Payment configured."
+else
+  echo "[OJS] Manual Payment already configured, skipping."
+fi
 
-PAYPAL_ENABLED=$($MARIADB -N -e "SELECT COUNT(*) FROM plugin_settings WHERE plugin_name='paypalpayment' AND context_id=$JOURNAL_ID AND setting_name='enabled' AND setting_value='1'" 2>/dev/null)
-if [ "$PAYPAL_ENABLED" = "0" ] || [ -n "$PAYPAL_ACCOUNT" ]; then
-  if [ -n "$PAYPAL_ACCOUNT" ] && { [ -z "$PAYPAL_CLIENT_ID" ] || [ -z "$PAYPAL_SECRET" ] || [ -z "$PAYPAL_TEST_MODE" ]; }; then
+# --- Stripe payment plugin ---
+if [ -n "$STRIPE_SECRET_KEY" ]; then
+  echo "[OJS] Configuring Stripe payment plugin..."
+  # Register plugin in versions table if not already present
+  STRIPE_REGISTERED=$($MARIADB -N -e "SELECT COUNT(*) FROM versions WHERE product_type='plugins.paymethod' AND product='stripe'" 2>/dev/null)
+  if [ "$STRIPE_REGISTERED" = "0" ]; then
+    $MARIADB <<SQL
+      INSERT INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
+      VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.paymethod', 'stripe', '', 0, 0);
+SQL
+  fi
+  STRIPE_MODE_LABEL="test"
+  [ "$STRIPE_TEST_MODE" = "0" ] && STRIPE_MODE_LABEL="LIVE"
+  $MARIADB <<SQL
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('stripepayment', $JOURNAL_ID, 'enabled', '1', 'bool')
+    ON DUPLICATE KEY UPDATE setting_value='1';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('stripepayment', $JOURNAL_ID, 'secretKey', '$STRIPE_SECRET_KEY', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$STRIPE_SECRET_KEY';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('stripepayment', $JOURNAL_ID, 'publishableKey', '$STRIPE_PUBLISHABLE_KEY', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$STRIPE_PUBLISHABLE_KEY';
+SQL
+  if [ -n "$STRIPE_WEBHOOK_SECRET" ]; then
+    $MARIADB <<SQL
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('stripepayment', $JOURNAL_ID, 'webhookSecret', '$STRIPE_WEBHOOK_SECRET', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$STRIPE_WEBHOOK_SECRET';
+SQL
+  fi
+  if [ -n "$STRIPE_TEST_MODE" ]; then
+    $MARIADB <<SQL
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('stripepayment', $JOURNAL_ID, 'testMode', '$STRIPE_TEST_MODE', 'bool')
+      ON DUPLICATE KEY UPDATE setting_value='$STRIPE_TEST_MODE';
+SQL
+  fi
+  echo "[OJS] Stripe configured (${STRIPE_MODE_LABEL} mode)."
+else
+  echo "[OJS] Stripe not configured (no OJS_STRIPE_SECRET_KEY)."
+fi
+
+# --- PayPal payment plugin ---
+if [ -n "$PAYPAL_ACCOUNT" ]; then
+  if [ -z "$PAYPAL_CLIENT_ID" ] || [ -z "$PAYPAL_SECRET" ] || [ -z "$PAYPAL_TEST_MODE" ]; then
     echo "[OJS] ERROR: OJS_PAYPAL_ACCOUNT is set but OJS_PAYPAL_CLIENT_ID, OJS_PAYPAL_SECRET, and OJS_PAYPAL_TEST_MODE are required."
     exit 1
   fi
@@ -822,26 +909,19 @@ if [ "$PAYPAL_ENABLED" = "0" ] || [ -n "$PAYPAL_ACCOUNT" ]; then
     INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
     VALUES ('paypalpayment', $JOURNAL_ID, 'testMode', '$PAYPAL_TEST_MODE', 'bool')
     ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_TEST_MODE';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('paypalpayment', $JOURNAL_ID, 'accountName', '$PAYPAL_ACCOUNT', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_ACCOUNT';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('paypalpayment', $JOURNAL_ID, 'clientId', '$PAYPAL_CLIENT_ID', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_CLIENT_ID';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('paypalpayment', $JOURNAL_ID, 'secret', '$PAYPAL_SECRET', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_SECRET';
 SQL
-  if [ -n "$PAYPAL_ACCOUNT" ]; then
-    $MARIADB <<SQL
-      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-      VALUES ('paypalpayment', $JOURNAL_ID, 'accountName', '$PAYPAL_ACCOUNT', 'string')
-      ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_ACCOUNT';
-      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-      VALUES ('paypalpayment', $JOURNAL_ID, 'clientId', '$PAYPAL_CLIENT_ID', 'string')
-      ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_CLIENT_ID';
-      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-      VALUES ('paypalpayment', $JOURNAL_ID, 'secret', '$PAYPAL_SECRET', 'string')
-      ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_SECRET';
-SQL
-    echo "[OJS] PayPal credentials configured (account: $PAYPAL_ACCOUNT)."
-  else
-    echo "[OJS] PayPal plugin enabled but no credentials set (OJS_PAYPAL_ACCOUNT empty)."
-    echo "       Purchase flow will not work until credentials are added to .env."
-  fi
+  echo "[OJS] PayPal credentials configured (account: $PAYPAL_ACCOUNT)."
 else
-  echo "[OJS] PayPal plugin already enabled, skipping."
+  echo "[OJS] PayPal not configured (no OJS_PAYPAL_ACCOUNT). Manual Payment is the active plugin."
 fi
 
 # --- DOI configuration ---
