@@ -7,5 +7,10 @@ RUN mkdir -p /var/lib/apt/lists/partial && apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/www/files/temp && chown www-data:www-data /var/www/files/temp
 
+# Core patches (OJS bugs that can't wait for upstream fixes)
+COPY docker/ojs/patches/ /opt/ojs-patches/
+RUN php /opt/ojs-patches/crossref-error-details.php \
+    && php /opt/ojs-patches/skip-remote-schema-validation.php
+
 # Branding assets (logo, favicon, homepage image, sidebar banners) — applied by setup-ojs.sh
 COPY docker/ojs/branding/ /opt/ojs-branding/
