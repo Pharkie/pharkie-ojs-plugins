@@ -246,6 +246,8 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 - [ ] **ORCID integration** — configure ORCID plugin, add ORCID iDs to author metadata where available. OJS has a built-in ORCID plugin (Plugin Gallery). Needs: ORCID Member API credentials (or Public API for display-only), then either manual entry per author or bulk lookup/import.
 - [ ] **DOI updates for existing articles** — Crossref depositor is configured (prefix 10.65828) but existing backfill articles need DOIs assigned and deposited. OJS can auto-assign DOIs to all published articles via the DOI plugin settings. Then bulk-deposit to Crossref. Check: which articles already have DOIs (36.2 and 37.1 had them preserved during import) vs which need new ones.
+- [ ] **Analytics** — decide on analytics approach: OJS Usage Statistics plugin (built-in, basic), Google Analytics, Plausible, or Matomo. Consider: privacy (GDPR), what metrics matter (downloads, page views, geographic), cost.
+- [ ] **Security audit** — review OJS hardening: file upload restrictions, rate limiting, CSP headers, admin access controls, backup strategy, update policy. Check Caddy security headers. Review WP plugin (API key handling, input validation, CSRF). Penetration test the sync API endpoint.
 
 Dropped (not worth the complexity):
 - ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Load-based backpressure + adaptive throttling makes sequential sync fast enough (~40s on Hetzner for 684 users).
