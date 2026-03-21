@@ -104,8 +104,9 @@ def audit_toc_integrity(result):
                 gap = start - prev_end
                 if gap > 3:
                     result.warn('toc_pages', toc_path, f'{prefix}: {gap}-page gap after previous article')
-                elif gap < 0:
-                    result.warn('toc_pages', toc_path, f'{prefix}: {abs(gap)}-page overlap with previous article')
+                elif gap < -5:
+                    # Large overlaps are suspicious; small overlaps are shared pages (normal for book reviews)
+                    result.warn('toc_pages', toc_path, f'{prefix}: large {abs(gap)}-page overlap with previous article')
             prev_end = end
 
             # Abstract quality
@@ -187,9 +188,13 @@ def audit_html_quality(result):
 
         # --- Quality checks ---
 
-        # Running headers (journal name leaked into body)
-        if re.search(r'Existential Analysis[\s:]+\d+\.\d', content):
-            result.warn('html_running_header', html_path, f'{prefix}: possible running header')
+        # Running headers (standalone paragraphs with just journal name + vol/issue)
+        running_headers = re.findall(
+            r'<p>(?:<strong>)?(?:\d+[a-z]*\s+)?Existential Analysis[\s:]+\d+\.\d[^<]*(?:</strong>)?</p>',
+            content)
+        if running_headers:
+            result.warn('html_running_header', html_path,
+                         f'{prefix}: {len(running_headers)} running header(s)')
 
         # Page numbers in body (standalone numbers)
         page_nums = re.findall(r'<p>\s*\d{1,3}\s*</p>', content)
