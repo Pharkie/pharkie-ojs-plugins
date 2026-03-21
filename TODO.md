@@ -239,7 +239,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [x] **HTML galley QA & consistency pass** — `audit_html.py` + `fix_html_bleed.py` enhancements. Fixed 168 issues (running headers, reviewer mismatches, missing bylines, page boundaries). Broader spot-check (109 reviews across 41 volumes): 89/109 pass (82%), then fixed all 20 failures (truncations, merged reviews, wrong reviewers). Final audit: 1398 files, 0 issues.
 - [x] **Archive quality notice** — subtle footer box on all OJS pages: "Our archive has been digitally restored from 30 years of print issues. If you spot any errors or formatting issues, please let us know at [email]." Contact email configurable via `OJS_CONTACT_EMAIL`.
 - [x] **Fix duplicate abstracts** — article pages showed abstract twice (once in OJS metadata, once in HTML galley). Phase 1: updated 312 toc.json abstracts + 103 keywords from cleaner HTML galley text, fixed 24 bad keyword arrays. Phase 2: stripped abstract sections from all 520 HTML galley files. Scripts: `backfill/update_abstracts.py`, `backfill/strip_abstract.py`. Deployed to live 2026-03-21.
-- [ ] **Broader shared-page book review check** — spot-checks found shared-page bleed in ~10% of sampled reviews. Run a systematic check of ALL shared-page book reviews (where pdf_page_start == prev article's pdf_page_end) to catch remaining cases.
+- [x] ~~**Broader shared-page book review check**~~ — 268 shared-page reviews checked, 3 bleed cases fixed (14.2, 32.2×2), 7 false positives confirmed. 0 remaining (2026-03-21).
 
 ## Future improvements
 
