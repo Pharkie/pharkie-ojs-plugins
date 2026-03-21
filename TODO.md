@@ -89,16 +89,11 @@ WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existen
 ### Hardening — TODO
 
 - [ ] **ggshield** — installed (v1.48.0) but needs verification: check pre-commit integration, VS Code extension working, test with a dummy secret
-- [ ] **DOI deposits: switch off test mode** — all 1,470 DOIs deposited in test mode (2026-03-21). Queue fully drained (blast-queue.sh). Current status: 883 SUBMITTED (test accepted), 581 ERROR (test rejected), 8 UNREGISTERED. None are registered in production — test mode deposits don't count. Steps to go live:
-  1. Identify the 38 pre-existing DOIs (36.2 + 37.1) — these are **already registered on Crossref** with old PKP-hosted URLs
-  2. Mark pre-existing DOIs as STALE: `UPDATE dois SET status = 5 WHERE doi LIKE '10.%' AND doi_id IN (SELECT doi_id FROM ...);` (STALE = registered but needs re-deposit to update URL)
-  3. Mark all remaining DOIs as UNREGISTERED: `UPDATE dois SET status = 1 WHERE status != 5;` (SUBMITTED/ERROR from test mode are meaningless — test deposits don't register)
-  4. Flip Crossref plugin from test mode to production: `UPDATE plugin_settings SET setting_value='0' WHERE plugin_name='crossrefplugin' AND setting_name='testMode';`
-  5. Queue all deposits: trigger via OJS admin DOI management page (select all → deposit)
-  6. Run `blast-queue.sh --host=sea-live --workers=3` to drain
-  7. Verify on Crossref: check a few DOIs resolve to `journal.existentialanalysis.org.uk` (both new and pre-existing)
+- [x] ~~**DOI deposits to Crossref**~~ — 1,470 DOIs registered in production (2026-03-21). Includes 44 pre-existing DOIs (36.2 + 37.1) re-deposited with updated URLs. 6 articles with leading `"` in titles were missed by auto-assignment — assigned and deposited via API. One book review (9771) had empty surname author ("ChatGPT") fixed. `blast-queue.sh` rewritten: `jobs.php run --once` loop, worker script injection, timeout, stale worker kill, `--delay` flag, ETA monitor. See `docs/blast-queue.md`.
+  - [ ] **Verify DOIs resolve** — spot-check a few DOIs on https://doi.org/ to confirm they redirect to `journal.existentialanalysis.org.uk`
 - [ ] **SMTP credentials audit** — Resend API key in `.env.live` (gitignored). Docs only have placeholder `re_your_api_key_here`. Git history is clean (no real keys). Consider rotating the Resend key anyway as a precaution.
 - [ ] **Env var hardening deployed** — committed (aeb04c3) but not yet deployed to live. Next deploy will pick it up automatically.
+- [ ] **Author emails** — backfilled articles use `firstname.lastname@placeholder.invalid` as dummy emails. Cross-reference known authors (editorial board, regular contributors) with real emails from WP/UM user list or SEA membership records.
 
 ## Later: WP migration to Hetzner (Phase 3)
 
@@ -262,14 +257,30 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [ ] **Non-member payment UX flow** — registration now enabled (`disableUserReg=0`). OJS redirects anonymous users to login when they click a paywalled article, with no "this is paywalled / subscribe / purchase" interstitial. Just a bare login form. This is how the OJS code works (`Validation::redirectLogin()` in `ArticleHandler.php` fires for anonymous users on restricted galleys; purchase flow requires `$user->getId()`). Need to test the full non-member flow (register → login → purchase) and work out whether the UX is acceptable or needs a custom interstitial.
 - [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
 - [ ] **ORCID integration** — configure ORCID plugin, add ORCID iDs to author metadata where available. OJS has a built-in ORCID plugin (Plugin Gallery). Needs: ORCID Member API credentials (or Public API for display-only), then either manual entry per author or bulk lookup/import.
-- [x] ~~**DOI assignment**~~ — All 1,470 DOIs assigned (1,402 articles + 68 issues). 38 pre-existing Crossref DOIs (36.2 + 37.1) marked STALE (need re-deposit to update URL). Remaining 1,432 UNREGISTERED. `doi-registry.json` exported from live DB for repave resilience. `doiCreationTime=publication` on production, `never` on dev/staging. Author guidelines updated with DOI-in-references requirement.
-- [x] ~~**DOI deposit to Crossref**~~ — all 1,470 DOIs deposited in test mode (2026-03-21). Queue fully drained via `blast-queue.sh` (834 jobs, 146 stuck/reserved, cleared and re-drained). Production deposit pending — see Hardening section.
+- [x] ~~**DOI assignment**~~ — All 1,476 DOIs assigned (1,408 articles + 68 issues). 6 articles with leading `"` in titles were missed by auto-assignment — assigned via API. `doi-registry.json` exported from live DB for repave resilience. `doiCreationTime=publication` on production, `never` on dev/staging. Author guidelines updated with DOI-in-references requirement.
+- [x] ~~**DOI deposit to Crossref**~~ — 1,470 DOIs registered in production (2026-03-21). 44 pre-existing DOIs (36.2 + 37.1) re-deposited with updated URLs pointing to `journal.existentialanalysis.org.uk`. Queue drained via `blast-queue.sh` with 3 workers + 1s delay (~19 min). Two OJS core patches applied (Dockerfile-persistent): error details persistence (`crossref-error-details.php`) and schema validation skip (`skip-remote-schema-validation.php`). See `docs/blast-queue.md`.
 - [ ] **Crossref reference linking** — Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated on submissions page to request DOIs in references. 18-month grace period for new members.
   - [ ] **Phase 1: Extract archive citations from HTML galleys** — parse reference sections from existing HTML galleys (~1,356 articles), split into individual citations, load into OJS `citations` table. Structures the data properly regardless of DOI availability.
   - [ ] **Phase 2: Look up DOIs for existing citations** — use Crossref REST API to match extracted citations to DOIs (free, no per-lookup cost). Crossref provides reference matching tools for this. Most humanities references won't have DOIs, but this catches what's available. When OJS 3.6 lands, the built-in plugin can include matched DOIs in `<citation_list>` deposits automatically.
 - [ ] **Analytics** — decide on analytics approach: OJS Usage Statistics plugin (built-in, basic), Google Analytics, Plausible, or Matomo. Consider: privacy (GDPR), what metrics matter (downloads, page views, geographic), cost.
 - [ ] **Security audit** — review OJS hardening: file upload restrictions, rate limiting, CSP headers, admin access controls, backup strategy, update policy. Check Caddy security headers. Review WP plugin (API key handling, input validation, CSRF). Penetration test the sync API endpoint.
 - [ ] **SEO** — verify OJS metadata for search engines: citation meta tags (Highwire/Dublin Core), sitemap.xml, robots.txt, Open Graph tags, Google Scholar indexing. Check that abstracts, keywords, and author names appear in page source. Submit sitemap to Google Search Console. Consider structured data (schema.org/ScholarlyArticle).
+- [ ] **JATS XML galleys** — generate JATS (Journal Article Tag Suite) XML for each article. JATS is the standard format for scholarly article interchange, required/preferred by DOAJ, PubMed, Crossref enhanced deposits, and preservation services (LOCKSS/CLOCKSS/PKP PN). OJS natively supports JATS XML as a galley format. Approach options:
+  - **From HTML galleys** — convert existing HTML galleys to JATS XML (simplest, ~1,356 articles already have HTML). Tools: custom script or Pandoc with JATS output. Would need to map our HTML structure (headings, paragraphs, citations) to JATS elements.
+  - **From source PDFs via API** — re-extract structured content directly to JATS using Claude API. Higher quality but higher cost.
+  - **JATS Parser Plugin** — OJS has a `jatsParser` plugin that can render JATS XML inline (similar to our inline HTML galley plugin). Consider whether to use it alongside or instead of the custom inline HTML plugin.
+- [ ] **Google Scholar indexing** — ensure articles are discoverable in Google Scholar. Key requirements:
+  - [ ] Verify Highwire Press meta tags (`citation_title`, `citation_author`, `citation_date`, `citation_pdf_url`, etc.) are present on article pages — OJS generates these by default but check completeness.
+  - [ ] Ensure abstracts are visible to crawlers (not behind paywall/JS).
+  - [ ] Submit to Google Scholar inclusion request form if not already indexed.
+  - [ ] Check that PDF metadata (title, author) matches HTML meta tags.
+  - [ ] Verify `robots.txt` and paywall don't block Googlebot from metadata/abstracts.
+- [ ] **DOAJ indexing** — apply for Directory of Open Access Journals listing (for open-access content: editorials, book reviews). Requirements:
+  - [ ] DOAJ application form — journal metadata, editorial process, licensing, preservation policy.
+  - [ ] JATS XML or article-level metadata feed (DOAJ API accepts OAI-PMH or DOAJ article XML).
+  - [ ] Verify OAI-PMH endpoint works (`/oai?verb=ListRecords&metadataPrefix=oai_dc`) — OJS has this built-in.
+  - [ ] Clear licensing info on each article (Creative Commons or equivalent).
+  - [ ] Consider which sections qualify (Book Reviews and Editorials are open; Articles are paywalled — DOAJ is for OA content only).
 
 Dropped (not worth the complexity):
 - ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Load-based backpressure + adaptive throttling makes sequential sync fast enough (~40s on Hetzner for 684 users).
