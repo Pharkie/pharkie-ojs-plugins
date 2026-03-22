@@ -406,8 +406,7 @@ document.addEventListener("DOMContentLoaded", function() {
     private function gatherStatusData(): array
     {
         // Config health checks.
-        $apiKeyDefined = !empty(Config::getVar('wpojs', 'api_key_secret', ''))
-            || !empty(Config::getVar('security', 'api_key_secret', ''));
+        $apiKeyDefined = !empty(getenv('WPOJS_API_KEY_SECRET'));
         $allowedIps = Config::getVar('wpojs', 'allowed_ips', '');
         $wpMemberUrl = Config::getVar('wpojs', 'wp_member_url', '');
         $supportEmail = Config::getVar('wpojs', 'support_email', '');

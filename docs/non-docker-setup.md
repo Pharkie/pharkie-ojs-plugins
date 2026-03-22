@@ -60,12 +60,6 @@ Add the `[wpojs]` section to OJS's `config.inc.php`:
 ;;;;;;;;;;;;;;;;;;
 
 [wpojs]
-; Shared secret for API authentication (Bearer token).
-; IMPORTANT: Use a non-numeric value or quote it. PHP's INI parser
-; treats unquoted numeric values as integers, which causes a type
-; error in hash_equals(). Use something like: "my-secret-key-here"
-api_key_secret = "your-shared-secret-here"
-
 ; Comma-separated list of IP addresses allowed to call the API.
 ; Use the WP server's outbound IP. Supports CIDR notation (e.g. 172.16.0.0/12).
 allowed_ips = "1.2.3.4"
@@ -78,7 +72,9 @@ support_email = "support@example.org"
 
 ```
 
-**Config value quoting:** Always quote string values in `config.inc.php`. PHP's INI parser silently coerces unquoted numeric values to integers, which causes `hash_equals()` to throw a TypeError. This applies to `api_key_secret`, `allowed_ips`, and any other string values.
+**API secret:** The plugin reads its shared secret from the `WPOJS_API_KEY_SECRET` environment variable. For non-Docker installs, set this in your Apache config (`SetEnv WPOJS_API_KEY_SECRET your-secret-here`) or nginx config (`fastcgi_param WPOJS_API_KEY_SECRET your-secret-here`).
+
+**Config value quoting:** Always quote string values in `config.inc.php`. PHP's INI parser silently coerces unquoted numeric values to integers. This applies to `allowed_ips` and any other string values.
 
 <table><tr><td>
 
@@ -178,7 +174,7 @@ Add to `wp-config.php` (before the "That's all" line):
 define('WPOJS_API_KEY', 'your-shared-secret-here');
 ```
 
-This must match the `api_key_secret` value in OJS's `config.inc.php`.
+This must match the `WPOJS_API_KEY_SECRET` environment variable on the OJS server.
 
 <table><tr><td>
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Assign editorial roles to OJS users from a JSON mapping file.
 #
-# Reads data/editorial-roles.json and for each entry:
+# Reads docs/private/editorial-roles.json (bind-mounted to /data/ in container) and for each entry:
 #   1. Finds user by email (or creates with random password)
 #   2. Assigns specified OJS user group(s)
 #   3. Sets masthead flag for Editorial Masthead page
@@ -75,20 +75,20 @@ for i in $(seq 0 $((COUNT - 1))); do
     echo "[Roles]   Found $EMAIL (user_id=$USER_ID)"
   fi
 
-  # Remove all existing journal-level roles — the JSON file is the single source of truth.
-  # This prevents stale roles (e.g. Reader from sync) accumulating alongside editorial roles.
-  $MARIADB -e "DELETE uug FROM user_user_groups uug
-    JOIN user_groups ug ON ug.user_group_id = uug.user_group_id
-    WHERE uug.user_id = $USER_ID AND ug.context_id = $JOURNAL_ID;"
-
-  # Assign each role
+  # Additive role assignment — never delete existing roles.
+  # Each role in the JSON is ensured to exist; roles not in the JSON are left untouched.
   for j in $(seq 0 $((ROLE_COUNT - 1))); do
     ROLE_NAME=$(jq -r ".[$i].roles[$j]" "$ROLES_FILE")
 
-    GROUP_ID=$($MARIADB -N -e "SELECT ug.user_group_id FROM user_groups ug
-      JOIN user_group_settings ugs ON ug.user_group_id = ugs.user_group_id
-      WHERE ugs.setting_name='name' AND ugs.setting_value='$ROLE_NAME' AND ugs.locale='en'
-      AND ug.context_id = $JOURNAL_ID LIMIT 1")
+    # "Site admin" is a site-level role (context_id IS NULL), not a journal-level role.
+    if [ "$ROLE_NAME" = "Site admin" ]; then
+      GROUP_ID=$($MARIADB -N -e "SELECT user_group_id FROM user_groups WHERE role_id = 1 LIMIT 1")
+    else
+      GROUP_ID=$($MARIADB -N -e "SELECT ug.user_group_id FROM user_groups ug
+        JOIN user_group_settings ugs ON ug.user_group_id = ugs.user_group_id
+        WHERE ugs.setting_name='name' AND ugs.setting_value='$ROLE_NAME' AND ugs.locale='en'
+        AND ug.context_id = $JOURNAL_ID LIMIT 1")
+    fi
 
     if [ -z "$GROUP_ID" ]; then
       echo "[Roles]   WARNING: Role '$ROLE_NAME' not found, skipping."

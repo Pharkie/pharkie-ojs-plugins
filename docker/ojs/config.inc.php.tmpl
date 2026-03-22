@@ -57,7 +57,7 @@ web_cache_hours = 1
 [security]
 force_ssl = Off
 force_login_ssl = Off
-api_key_secret = ${WPOJS_API_KEY_SECRET}
+api_key_secret = ${OJS_API_KEY_SECRET}
 password_reset_timeout = 7
 
 ;;;;;;;;;;;;;;
@@ -128,7 +128,7 @@ job_runner_max_execution_time = 30
 ;;;;;;;;;;;;;;;;;;;;;
 
 [wpojs]
-api_key_secret = ${WPOJS_API_KEY_SECRET}
+; api_key_secret is in [security] section (OJS masks it on System Info page)
 allowed_ips = ${WPOJS_ALLOWED_IPS}
 wp_member_url = ${WPOJS_WP_MEMBER_URL}
 support_email = ${WPOJS_SUPPORT_EMAIL}

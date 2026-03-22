@@ -84,7 +84,8 @@ The `.env` file on the VPS controls all configuration. It is **not in git** — 
 | `WP_ADMIN_PASSWORD` | WordPress admin password | **Required — no default.** Setup fails if missing. |
 | `OJS_ADMIN_PASSWORD` | OJS admin password | **Required — no default.** Setup fails if missing. |
 | `WPOJS_API_KEY` | API key WP sends to OJS | **Must match** `WPOJS_API_KEY_SECRET` |
-| `WPOJS_API_KEY_SECRET` | API key OJS validates | **Must match** `WPOJS_API_KEY` |
+| `WPOJS_API_KEY_SECRET` | API key OJS validates (env var, not config.inc.php) | **Must match** `WPOJS_API_KEY` |
+| `OJS_API_KEY_SECRET` | OJS internal JWT signing key (user API tokens) | Separate from `WPOJS_API_KEY_SECRET` |
 | `DB_PASSWORD` | WP database password (Bedrock reads this) | **Must match** `WP_DB_PASSWORD` |
 | `WP_DB_PASSWORD` | WP database password (Docker Compose reads this) | **Must match** `DB_PASSWORD` |
 | Auth salts | WordPress security salts | Generate unique random values per environment |

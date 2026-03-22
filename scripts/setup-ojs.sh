@@ -75,8 +75,8 @@ else
   API_KEY=$($MARIADB -N -e "SELECT setting_value FROM user_settings WHERE user_id=1 AND setting_name='apiKey'")
 fi
 
-# Build JWT token: header.payload.signature using the api_key_secret from config
-API_SECRET=$(grep "api_key_secret" /var/www/html/config.inc.php | head -1 | sed 's/.*= *//')
+# Build JWT token: header.payload.signature using the OJS api_key_secret from [security] config
+API_SECRET=$(sed -n '/^\[security\]/,/^\[/{/^api_key_secret/s/.*= *//p}' /var/www/html/config.inc.php)
 JWT_HEADER=$(echo -n '{"typ":"JWT","alg":"HS256"}' | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 JWT_PAYLOAD=$(echo -n "[\"$API_KEY\"]" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 JWT_SIGNATURE=$(echo -n "${JWT_HEADER}.${JWT_PAYLOAD}" | openssl dgst -sha256 -hmac "$API_SECRET" -binary | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
@@ -424,7 +424,7 @@ $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, set
 echo "[OJS] User registration enabled."
 
 # --- Editorial team metadata ---
-# User accounts + roles are assigned by scripts/assign-roles.sh (reads data/editorial-roles.json).
+# User accounts + roles are assigned by scripts/assign-roles.sh (reads docs/private/editorial-roles.json).
 # This section only configures journal-level metadata: masthead setting, static HTML, contact info.
 echo "[OJS] Setting up editorial team..."
 
@@ -440,10 +440,16 @@ sed -i 's/^msgstr "This section lists past contributors."$/msgstr "This section 
 # Clear OJS locale cache so changes take effect
 rm -f /var/www/html/cache/opcache/*.php
 
-# Rename default "Journal editor" group to plural (OJS doesn't pluralize headings)
-EDITOR_GROUP_ID=$($MARIADB -N -e "SELECT user_group_id FROM user_groups WHERE context_id=$JOURNAL_ID_META AND role_id=16 LIMIT 1")
-$MARIADB -e "UPDATE user_group_settings SET setting_value='Journal editors'
-  WHERE user_group_id=$EDITOR_GROUP_ID AND setting_name='name' AND locale='en';"
+# Note: OJS creates multiple user groups with role_id=16 ("Journal editor",
+# "Production editor", etc). We use the standard "Journal editor" name as-is.
+# Enable masthead display for the Journal editor group so editors appear on the masthead page.
+JOURNAL_EDITOR_GROUP=$($MARIADB -N -e "SELECT ug.user_group_id FROM user_groups ug
+  JOIN user_group_settings ugs ON ug.user_group_id = ugs.user_group_id
+  WHERE ugs.setting_name='name' AND ugs.setting_value='Journal editor' AND ugs.locale='en'
+  AND ug.context_id = $JOURNAL_ID_META LIMIT 1")
+if [ -n "$JOURNAL_EDITOR_GROUP" ]; then
+  $MARIADB -e "UPDATE user_groups SET masthead = 1 WHERE user_group_id = $JOURNAL_EDITOR_GROUP;"
+fi
 
 # Create custom editorial user groups (based on Section editor role, role_id=17).
 # OJS 3.5 auto-generates masthead headings from user group names.
@@ -701,7 +707,7 @@ if [ "$SUB_TYPE_COUNT" = "0" ] && [ -n "$OJS_SUB_TYPES" ]; then
     # Escape backslashes and single quotes for SQL
     TYPE_NAME_SQL=$(printf '%s' "$TYPE_NAME" | sed "s/\\\\/\\\\\\\\/g; s/'/''/g")
     echo "[OJS]   $TYPE_NAME (£$TYPE_COST)"
-    $MARIADB -e "INSERT INTO subscription_types (journal_id, cost, currency_code_alpha, duration, format, institutional, membership, disable_public_display, seq) VALUES ($JOURNAL_ID_SUB, $TYPE_COST, 'GBP', NULL, 1, 0, 0, 0, $SEQ)"
+    $MARIADB -e "INSERT INTO subscription_types (journal_id, cost, currency_code_alpha, duration, format, institutional, membership, disable_public_display, seq) VALUES ($JOURNAL_ID_SUB, $TYPE_COST, 'GBP', NULL, 1, 0, 0, 1, $SEQ)"
     TYPE_ID=$($MARIADB -N -e "SELECT type_id FROM subscription_types WHERE journal_id=$JOURNAL_ID_SUB AND seq=$SEQ")
     $MARIADB -e "INSERT INTO subscription_type_settings (type_id, locale, setting_name, setting_value, setting_type) VALUES ($TYPE_ID, 'en', 'name', '$TYPE_NAME_SQL', 'string')"
     SEQ=$((SEQ + 1))
@@ -715,6 +721,12 @@ else
   if [ "$WRONG_DURATION" -gt "0" ]; then
     echo "[OJS] Fixing subscription type duration (NULL = non-expiring)..."
     $MARIADB -e "UPDATE subscription_types SET duration = NULL WHERE journal_id = $JOURNAL_ID_SUB"
+  fi
+  # Ensure subscription types are hidden from public (managed via WP sync, not self-service).
+  WRONG_DISPLAY=$($MARIADB -N -e "SELECT COUNT(*) FROM subscription_types WHERE journal_id=$JOURNAL_ID_SUB AND disable_public_display != 1")
+  if [ "$WRONG_DISPLAY" -gt "0" ]; then
+    echo "[OJS] Hiding subscription types from public display..."
+    $MARIADB -e "UPDATE subscription_types SET disable_public_display = 1 WHERE journal_id = $JOURNAL_ID_SUB"
   fi
   echo "[OJS] Subscription types already exist ($SUB_TYPE_COUNT type(s)), skipping."
 fi

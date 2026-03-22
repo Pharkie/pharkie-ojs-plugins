@@ -13,19 +13,12 @@ For the full endpoint table, see [ojs-sync-plugin-api.md](ojs-sync-plugin-api.md
 Every protected endpoint calls `checkAuth()`, which runs three checks in order:
 
 1. **IP allowlist** (`checkIp`) -- Client IP must match an entry in `allowed_ips` (config.inc.php). Supports exact IPv4/IPv6 addresses and IPv4 CIDR notation (e.g. `172.16.0.0/12`). Uses `REMOTE_ADDR` directly, not `$request->ip()`, to avoid X-Forwarded-For spoofing.
-2. **Bearer token** (`checkApiKey`) -- The `Authorization: Bearer <token>` header must match the `api_key_secret` value. The comparison uses `hash_equals()` (timing-safe).
+2. **Bearer token** (`checkApiKey`) -- The `Authorization: Bearer <token>` header must match the `WPOJS_API_KEY_SECRET` environment variable. The comparison uses `hash_equals()` (timing-safe).
 3. **Load protection** (`checkLoad`) -- See next section.
 
 If any check fails, the request is rejected and logged before reaching the endpoint logic. The `/ping` endpoint is the only exception -- it bypasses all auth for reachability probing.
 
-**Key lookup order for `api_key_secret`:**
-
-| Priority | config.inc.php section | Setting |
-|---|---|---|
-| 1 | `[wpojs]` | `api_key_secret` |
-| 2 | `[security]` | `api_key_secret` |
-
-The plugin checks `[wpojs]` first, falling back to `[security]`. This lets you use the same key OJS already has, or define a separate one for the sync API.
+The API secret is read from the `WPOJS_API_KEY_SECRET` environment variable (not `config.inc.php`). This avoids exposure on the OJS System Info page and keeps it separate from OJS's own `api_key_secret` (used for JWT signing).
 
 **Auth failures:**
 
@@ -134,7 +127,7 @@ The status page shows three sections:
 
 | Check | What it verifies |
 |---|---|
-| API key defined | `api_key_secret` exists in `[wpojs]` or `[security]` |
+| API key defined | `WPOJS_API_KEY_SECRET` env var is set |
 | Allowed IPs configured | `allowed_ips` is non-empty |
 | WP member URL set | `wp_member_url` is non-empty |
 | Support email set | `support_email` is non-empty |
@@ -253,13 +246,12 @@ If two concurrent requests try to create the same user (same email), the second 
 
 ## OJS configuration
 
-All plugin configuration goes in `config.inc.php` under the `[wpojs]` section:
+The API secret is read from the `WPOJS_API_KEY_SECRET` environment variable. Set it in Docker Compose `.env`, or for non-Docker installs in Apache/nginx config (`SetEnv WPOJS_API_KEY_SECRET ...`).
+
+Non-secret settings go in `config.inc.php` under the `[wpojs]` section:
 
 ```ini
 [wpojs]
-; Shared secret for Bearer token auth. Must match WPOJS_API_KEY on the WP side.
-api_key_secret = "your-secret-key-here"
-
 ; Comma-separated IP allowlist. Supports exact IPs and IPv4 CIDR notation.
 allowed_ips = "203.0.113.10,172.16.0.0/12"
 
@@ -270,11 +262,11 @@ wp_member_url = "https://your-wp-site.example.org/membership"
 support_email = "support@example.org"
 ```
 
-| Setting | Required | Used by |
-|---|---|---|
-| `api_key_secret` | Yes | Bearer token auth. Falls back to `[security].api_key_secret` if not set here. |
-| `allowed_ips` | Yes | IP allowlist. Empty = all requests blocked (403). |
-| `wp_member_url` | No | Footer message template (`{wpUrl}` placeholder). Footer hidden if empty. |
-| `support_email` | No | Paywall hint template (`{supportEmail}` placeholder). Hint hidden if empty. |
+| Setting | Source | Required | Used by |
+|---|---|---|---|
+| `WPOJS_API_KEY_SECRET` | env var | Yes | Bearer token auth. Must match `WPOJS_API_KEY` on the WP side. |
+| `allowed_ips` | `[wpojs]` | Yes | IP allowlist. Empty = all requests blocked (403). |
+| `wp_member_url` | `[wpojs]` | No | Footer message template (`{wpUrl}` placeholder). Footer hidden if empty. |
+| `support_email` | `[wpojs]` | No | Paywall hint template (`{supportEmail}` placeholder). Hint hidden if empty. |
 
 **UI messages** (login hint, paywall hint, footer) are stored in `plugin_settings` (database), not in config.inc.php. PHP INI files corrupt values containing double quotes and curly braces (needed for HTML links and placeholders). Instance defaults are written by `setup-ojs.sh` during environment setup. Admins can edit them via the plugin Settings page in OJS.
