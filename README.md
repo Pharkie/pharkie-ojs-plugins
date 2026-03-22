@@ -4,7 +4,7 @@
 
 **The problem:** An organisation runs its membership and payments through [WordPress](https://wordpress.org/) (using WooCommerce Subscriptions), and publishes an academic journal on [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems). Members should get journal access automatically when they pay, and lose it when they cancel — but these are two separate systems with no built-in connection. OJS has no subscription API, so there's no obvious way to bridge them.
 
-**What this repo does:** A set of plugins — two for WordPress, three for OJS — that keep the two systems in sync and improve the journal reading experience. At launch, a bulk sync creates OJS accounts for all existing members (with their WordPress password hashes, so they can log in immediately). After that, the WP plugin automatically pushes changes to OJS whenever a member signs up, renews, cancels, or expires. Non-members can buy individual articles via Stripe checkout.
+**What this repo does:** A set of plugins — one for WordPress, three for OJS — that keep the two systems in sync and improve the journal reading experience. At launch, a bulk sync creates OJS accounts for all existing members (with their WordPress password hashes, so they can log in immediately). After that, the WP plugin automatically pushes changes to OJS whenever a member signs up, renews, cancels, or expires. Non-members can buy individual articles via Stripe checkout.
 
 </td><td width="45%">
 

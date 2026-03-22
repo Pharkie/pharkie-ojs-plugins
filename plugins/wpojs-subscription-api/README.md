@@ -15,28 +15,54 @@ Also handles WordPress password hash verification at login (so members can use t
 
    **Important:** The folder name must be exactly `wpojsSubscriptionApi` (camelCase). Hyphens or underscores break OJS autoloading and the plugin won't appear in the admin UI.
 
-2. Register the plugin in the OJS database (if not auto-detected):
+2. Mount the API route handler into OJS's API directory:
+   ```
+   plugins/wpojs-subscription-api/api/v1/wpojs  →  api/v1/wpojs
+   ```
+   (In Docker, add a read-only bind mount. On bare metal, symlink or copy.)
+
+3. Register the plugin in the OJS database (if not auto-detected):
    ```sql
    INSERT INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
    VALUES (1, 3, 0, 0, NOW(), 1, 'plugins.generic', 'wpojsSubscriptionApi', 'WpojsSubscriptionApiPlugin', 1, 0);
    ```
-3. Enable the plugin in **Website Settings → Plugins → Generic Plugins**.
-4. Clear the OJS cache: `rm -rf cache/fc-* cache/wc-* cache/opcache`
+   Check `version.xml` for the current version numbers before running this.
+
+4. Enable the plugin in **Website Settings → Plugins → Generic Plugins**.
+5. Clear the OJS cache: `rm -rf cache/fc-* cache/wc-* cache/opcache`
 
 ## Configuration
 
-The plugin is configured via `plugin_settings` database entries (typically set by a deployment script, not through the UI):
+Settings are split across two locations:
+
+### `config.inc.php` (server config)
+
+Add a `[wpojs]` section to your OJS `config.inc.php`:
+
+```ini
+[wpojs]
+api_key_secret = "your-shared-secret-here"
+allowed_ips = "1.2.3.4,10.0.0.0/8"
+wp_member_url = "https://your-wordpress-site.example.org"
+support_email = "support@example.org"
+```
 
 | Setting | Description |
 |---|---|
-| `apiKeyHash` | SHA-256 hash of the API key. Requests must send `Authorization: Bearer {key}`. |
-| `allowedIps` | Comma-separated CIDR ranges for IP allowlisting (e.g. `172.0.0.0/8`). |
-| `wpMemberUrl` | URL of the WordPress membership site (used in UI messages). |
-| `supportEmail` | Support email address (used in paywall hint message). |
-| `loginHint` | Message shown on the login page (e.g. "Log in with your membership email"). |
-| `paywallHint` | Message shown on paywalled articles for logged-in non-subscribers. |
-| `footerMessage` | Message added to the site footer. |
-| `passwordResetHint` | Message on the password change page directing members to WP. |
+| `api_key_secret` | Shared secret for API authentication. Requests must send `Authorization: Bearer {secret}`. Compared using timing-safe `hash_equals()`. |
+| `allowed_ips` | Comma-separated IPs or CIDR ranges. Requests from other IPs are rejected (403). |
+| `wp_member_url` | WordPress membership site URL. Used in UI messages (`{wpUrl}` placeholder). |
+| `support_email` | Support email. Used in paywall hint (`{supportEmail}` placeholder). |
+
+### `plugin_settings` table (UI messages)
+
+These settings contain HTML and special characters that break PHP INI parsing, so they're stored in the database. Set them via the OJS admin UI (**Plugins → WP-OJS Subscription API → Settings**) or via a deployment script:
+
+| Setting | Description |
+|---|---|
+| `loginHint` | Message shown on the login page (e.g. "Log in with your membership email"). Supports `{supportEmail}` placeholder. |
+| `footerMessage` | Message added to the site footer. Supports `{wpUrl}` placeholder. |
+| `passwordResetHint` | Message on the password change page. Supports `{wpResetUrl}` placeholder (auto-generated from `wp_member_url`). |
 
 ## API endpoints
 
@@ -68,6 +94,7 @@ All endpoints are under `/api/v1/wpojs/`. Authentication is via `Authorization: 
 | `GET` | `/subscriptions?userId={userId}` | Yes | Get subscription for user. |
 | `PUT` | `/subscriptions/{id}/expire` | Yes | Expire subscription by ID. |
 | `PUT` | `/subscriptions/expire-by-user/{userId}` | Yes | Expire subscription by user ID. |
+| `POST` | `/subscriptions/status-batch` | Yes | Batch status lookup for multiple users. |
 
 For full endpoint details including request/response schemas, see the [API reference](../../docs/ojs-sync-plugin-api.md).
 
@@ -85,10 +112,10 @@ This means members can log into OJS with their existing WP password immediately 
 ## Authentication
 
 API requests must include:
-- `Authorization: Bearer {API_KEY}` header (key is validated against the stored SHA-256 hash)
-- Request must originate from an allowed IP range
+- `Authorization: Bearer {secret}` header — the secret is compared against `api_key_secret` from `config.inc.php` using timing-safe `hash_equals()`.
+- Request must originate from an IP in the `allowed_ips` allowlist.
 
-The API key is stored as a hash, never in plaintext. Do not use `?apiToken=` query parameters — they leak into access logs. If using Apache with PHP-FPM, add `CGIPassAuth on` to `.htaccess` (Apache strips `Authorization` headers by default).
+**Important:** If using Apache with PHP-FPM, add `CGIPassAuth on` to `.htaccess` — Apache strips `Authorization` headers by default. Do not use `?apiToken=` query parameters (they leak into access logs).
 
 ## Docker deployment
 
@@ -103,7 +130,13 @@ services:
       - ./plugins/wpojs-subscription-api/api/v1/wpojs:/var/www/html/api/v1/wpojs:ro
 ```
 
-The second mount exposes the API route handler to OJS's API router.
+The `[wpojs]` settings must also be present in your OJS `config.inc.php`. If using a template (e.g. `config.inc.php.tmpl` with `envsubst`), add the section there.
+
+## Uninstallation
+
+1. Disable the plugin in **Website Settings → Plugins**.
+2. Remove the plugin directory and API route mount.
+3. Optionally clean up: `DELETE FROM versions WHERE product = 'wpojsSubscriptionApi';` and `DELETE FROM plugin_settings WHERE plugin_name = 'wpojssubscriptionapiplugin';`
 
 ## License
 

@@ -317,12 +317,18 @@ class StripePaymentPlugin extends PaymethodPlugin
                 exit;
             }
 
-            // Verify amount
+            // Verify amount and currency
             $expectedAmount = (int) round($queuedPayment->getAmount() * 100);
             if ($session->amount_total !== $expectedAmount) {
                 error_log("Stripe webhook: amount mismatch for payment {$queuedPaymentId}");
                 http_response_code(200);
                 echo json_encode(['status' => 'amount_mismatch']);
+                exit;
+            }
+            if (strtoupper($session->currency) !== strtoupper($queuedPayment->getCurrencyCode())) {
+                error_log("Stripe webhook: currency mismatch for payment {$queuedPaymentId}");
+                http_response_code(200);
+                echo json_encode(['status' => 'currency_mismatch']);
                 exit;
             }
 
