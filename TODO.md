@@ -248,14 +248,15 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 
 ## Next priorities
 
-### 1. Stripe live deployment
-- [x] ~~Create Stripe account with SEA bank details~~ (2026-03-22)
-- [x] ~~Create restricted API key (Checkout Sessions write-only)~~ (2026-03-22)
-- [x] ~~Add live keys (`rk_live_`, `pk_live_`) to `.env.live`~~ (2026-03-22)
-- [x] ~~Configure Stripe webhook endpoint in Stripe dashboard~~ (2026-03-22)
-- [x] ~~Add webhook secret (`whsec_`) to `.env.live`~~ (2026-03-22)
-- [x] ~~Configure keys via OJS admin UI~~ (2026-03-22)
-- [ ] Deploy code changes (env var auth, multi-stage build, field order) and verify end-to-end purchase on live
+### ~~1. Stripe live deployment~~ — DONE (2026-03-22)
+- [x] ~~Create Stripe account with SEA bank details~~
+- [x] ~~Create restricted API key (Checkout Sessions write-only)~~
+- [x] ~~Add live + test keys to `.env.live`~~
+- [x] ~~Configure live + test webhook endpoints in Stripe dashboard~~
+- [x] ~~Deploy and verify end-to-end purchase (test mode)~~
+- [x] ~~Fix webhook/redirect race condition (webhook fulfills first → redirect now handles gracefully)~~
+- [x] ~~Test mode checkbox now functional (separate test/live key pairs)~~
+- **Note:** Each deploy resets test mode to off (`OJS_STRIPE_TEST_MODE=0` in `.env.live`). Re-tick in UI if needed.
 
 ### 2. Citation extraction + Crossref reference linking
 Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated. 18-month grace period for new members.
@@ -307,7 +308,7 @@ Crossref membership obligation: include DOIs for cited works when depositing ([r
 - [x] **Inline HTML galley plugin** — standalone, configurable settings UI, 5 Playwright tests
 - [x] **DOI assignment** — 1,476 DOIs assigned (1,408 articles + 68 issues)
 - [x] **DOI deposit to Crossref** — 1,470 DOIs registered in production (2026-03-21). See `docs/blast-queue.md`.
-- [x] **Stripe Payment plugin** — built, tested on dev, 5/5 e2e tests (2026-03-22). Replaced PayPal (sandbox broken for UK accounts, PayPal support unhelpful). Stripe account created with restricted API key (Checkout Sessions only).
+- [x] **Stripe Payment plugin** — built, tested on dev (5/5 e2e tests), deployed to live (2026-03-22). Replaced PayPal (sandbox broken for UK accounts, support unhelpful). Restricted API key (Checkout Sessions only), separate test/live key pairs, webhook + redirect dual confirmation with race condition handling. Test mode verified end-to-end on live.
 
 Dropped (not worth the complexity):
 - ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Load-based backpressure + adaptive throttling makes sequential sync fast enough (~40s on Hetzner for 684 users).
