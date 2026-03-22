@@ -242,7 +242,7 @@ Two separate issues confirmed:
 - **PayPal support ticket submitted** (2026-03-21), awaiting response.
 - **Impact:** Cannot complete the PayPal purchase flow from our developer environment. The OJS integration is correct (creates order, redirects to PayPal, return URL wired up), but the sandbox buyer approval step is blocked.
 - **Workaround:** Manual Payment plugin verifies the OJS access-granting logic works end-to-end (tested and confirmed 2026-03-21). The PayPal callback flow can only be tested with live credentials.
-- **Next step:** Get production PayPal REST API credentials from Emi. Use `scripts/test-paypal.js --live` to verify auth safely, then `--live-buy` for a real £0.10 test.
+- **Resolution:** PayPal abandoned in favour of Stripe (2026-03-22). See `docs/private/stripe-live-checklist.md`. The `scripts/test-paypal.js` script remains as a historical artifact.
 
 ## 11. Crossref deposit errors: OJS doesn't persist failure details (2026-03-21)
 
