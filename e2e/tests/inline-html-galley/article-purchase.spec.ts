@@ -203,6 +203,12 @@ test.describe('Article purchase flow', () => {
       await emailField.fill(EMAIL);
     }
 
+    // Fill postal code if present (required for UK cards)
+    const postalCode = page.locator('input[name="billingPostalCode"], input[placeholder*="Postal code"], input[placeholder*="postal code"], input[autocomplete="postal-code"]');
+    if (await postalCode.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await postalCode.fill('SW1A 1AA');
+    }
+
     await page.locator('button[type="submit"], .SubmitButton').click();
 
     // Stripe shows decline error on their page — should stay on Stripe
