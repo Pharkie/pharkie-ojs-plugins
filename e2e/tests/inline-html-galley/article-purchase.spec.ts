@@ -206,10 +206,10 @@ test.describe('Article purchase flow', () => {
     await page.locator('button[type="submit"], .SubmitButton').click();
 
     // Stripe shows decline error on their page — should stay on Stripe
-    await page.waitForTimeout(5000);
-    expect(page.url()).toContain('checkout.stripe.com');
+    await expect(page).toHaveURL(/checkout\.stripe\.com/, { timeout: 15_000 });
 
     // Should see an error message
+    await page.waitForSelector('text=/declined|denied|failed|error/i', { timeout: 10_000 });
     const bodyText = await page.textContent('body');
     expect(bodyText).toMatch(/declined|denied|failed|error/i);
   });

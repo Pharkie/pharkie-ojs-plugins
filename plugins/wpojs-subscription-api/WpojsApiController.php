@@ -144,10 +144,7 @@ class WpojsApiController extends PKPBaseController
      */
     private function checkApiKey(Request $request): ?JsonResponse
     {
-        $secret = (string) Config::getVar('wpojs', 'api_key_secret', '');
-        if (empty($secret)) {
-            $secret = (string) Config::getVar('security', 'api_key_secret', '');
-        }
+        $secret = (string) getenv('WPOJS_API_KEY_SECRET');
 
         if (empty($secret)) {
             return response()->json(
@@ -641,7 +638,7 @@ class WpojsApiController extends PKPBaseController
             $locale = Application::get()->getRequest()->getContext()?->getPrimaryLocale() ?? 'en';
             $user->setGivenName($firstName, $locale);
             $user->setFamilyName($lastName, $locale);
-            if (!empty($passwordHash) && is_string($passwordHash)) {
+            if (!empty($passwordHash) && is_string($passwordHash) && strlen($passwordHash) <= 255) {
                 // Store the WP password hash directly — the custom hasher
                 // (WpCompatibleHasher) will verify it at login and lazy-rehash.
                 $user->setPassword($passwordHash);
@@ -792,7 +789,7 @@ class WpojsApiController extends PKPBaseController
         if ($userId <= 0) {
             return $this->jsonResponse($request, ['error' => 'Invalid userId'], Response::HTTP_BAD_REQUEST);
         }
-        if (empty($passwordHash) || !is_string($passwordHash)) {
+        if (empty($passwordHash) || !is_string($passwordHash) || strlen($passwordHash) > 255) {
             return $this->jsonResponse($request, ['error' => 'Invalid or missing passwordHash'], Response::HTTP_BAD_REQUEST);
         }
 
