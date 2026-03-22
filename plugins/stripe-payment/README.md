@@ -78,13 +78,19 @@ services:
       - ./plugins/stripe-payment:/var/www/html/plugins/paymethod/stripe
 ```
 
-The `vendor/` directory must exist inside the container. Either:
-- Run `composer install` inside the container after startup, or
-- Include `vendor/` in your image build
+The `vendor/` directory (Stripe PHP SDK) must exist inside the container. It is **not** checked into git — run `composer install --no-dev` inside the container after deploy:
+
+```bash
+docker compose exec ojs bash -c 'cd /var/www/html/plugins/paymethod/stripe && \
+  curl -sS https://getcomposer.org/installer | php -- --install-dir=/tmp && \
+  /tmp/composer.phar install --no-dev'
+```
+
+Or include the `composer install` step in your image build.
 
 ## Environment variables
 
-For automated setup (e.g. via a setup script), the plugin reads settings from `plugin_settings` DB table. You can populate these from env vars in your deployment scripts:
+The plugin itself reads settings from the `plugin_settings` DB table at runtime — **not** from environment variables. These env vars are consumed by the deployment setup script (`setup-ojs.sh`) which writes them into `plugin_settings`:
 
 | Env var | Plugin setting | Required |
 |---|---|---|
@@ -93,13 +99,27 @@ For automated setup (e.g. via a setup script), the plugin reads settings from `p
 | `OJS_STRIPE_WEBHOOK_SECRET` | `webhookSecret` | Recommended |
 | `OJS_STRIPE_TEST_MODE` | `testMode` | No (default: 1) |
 
+You can also configure settings manually via the OJS admin UI (Settings → Distribution → Payments).
+
 ## Security
 
 - Secret key and webhook secret are stored server-side only (never sent to browser).
 - Payment status is always verified server-side via Stripe API — never trusts client-supplied data.
 - Webhook signature verification prevents forged/replayed events.
-- Amount and currency are verified against the OJS `QueuedPayment` record.
+- Amount and currency are verified against the OJS `QueuedPayment` record (both redirect callback and webhook).
 - Double-fulfillment is prevented (idempotent).
+
+## Troubleshooting
+
+- **Webhook returns 400:** Check that the `Stripe-Signature` HTTP header reaches PHP. Apache with PHP-FPM may strip custom headers — add `CGIPassAuth on` to `.htaccess` or configure Apache to pass the header.
+- **"A payment error occurred":** Check OJS container logs (`docker logs <ojs-container>`) for the specific Stripe API error. Common causes: invalid secret key, expired keys, or missing `vendor/` directory.
+- **Checkout Session creates but redirect fails:** Ensure `OJS_BASE_URL` in your OJS config matches the actual URL the browser uses. Mismatches (e.g. `http` vs `https`, or wrong hostname) cause Stripe's redirect to fail.
+
+## Uninstallation
+
+1. Switch to a different payment plugin in Settings → Distribution → Payments.
+2. Remove the plugin directory and Docker bind mount.
+3. Optionally clean up: `DELETE FROM versions WHERE product = 'stripe';` and `DELETE FROM plugin_settings WHERE plugin_name = 'stripepayment';`
 
 ## License
 
