@@ -49,40 +49,8 @@ WordPress plugin that hooks into WooCommerce Subscription lifecycle events and p
 - Daily reconciliation to catch drift
 - Admin UI with sync log and connection testing
 
-## Requirements
-
-Each plugin lists its own requirements in its README. In general:
-
-- **OJS plugins:** OJS 3.5+, PHP 8.1+
-- **WP plugin:** WordPress 5.6+, WooCommerce + WooCommerce Subscriptions
-- **Stripe plugin** additionally needs: `composer install` for the Stripe PHP SDK
-
-## Quick start
-
-Each plugin can be installed standalone — copy the folder into your OJS (or WP) plugins directory and follow the README. For a full dev environment with all plugins:
-
-```bash
-git clone https://github.com/Pharkie/pharkie-ojs-plugins.git
-cd pharkie-ojs-plugins
-# Docker dev stack (OJS + WP + databases)
-scripts/rebuild-dev.sh --with-sample-data --skip-tests
-```
-
-See the [Docker setup guide](docs/docker-setup.md) for details.
-
-## Documentation
-
-**Getting started:**
-[Docker setup](docs/docker-setup.md) · [VPS deployment](docs/vps-deployment.md) · [Non-Docker install](docs/non-docker-setup.md)
-
-**Using the plugins:**
-[WP admin guide](docs/wp-admin-reference.md) · [WP-CLI commands](docs/wp-cli-reference.md) · [Support runbook](docs/support-runbook.md)
-
-**Reference:**
-[OJS plugin API](docs/ojs-sync-plugin-api.md) · [WP plugin internals](docs/wp-plugin-reference.md) · [OJS internals](docs/ojs-internals.md) · [Hosting requirements](docs/private/hosting-requirements.md)
-
-**Design:**
-[Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [TODO / roadmap](TODO.md)
+**WP-OJS Sync docs:**
+[Docker setup](docs/docker-setup.md) · [VPS deployment](docs/vps-deployment.md) · [Non-Docker install](docs/non-docker-setup.md) · [WP admin guide](docs/wp-admin-reference.md) · [WP-CLI commands](docs/wp-cli-reference.md) · [Support runbook](docs/support-runbook.md) · [OJS plugin API](docs/ojs-sync-plugin-api.md) · [WP plugin internals](docs/wp-plugin-reference.md) · [Design decisions](docs/discovery.md)
 
 ## LLM Generated, Human Reviewed
 
