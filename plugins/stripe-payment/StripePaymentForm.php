@@ -93,8 +93,20 @@ class StripePaymentForm extends Form
             $request->redirectUrl($session->url);
         } catch (\Exception $e) {
             error_log('Stripe checkout error: ' . $e->getMessage());
+
+            $context = Application::get()->getRequest()->getContext();
+            $contactEmail = $context ? $context->getData('contactEmail') : '';
+
+            $userMessage = 'Payment could not be initiated. Please try again.';
+            if ($e instanceof \Stripe\Exception\AuthenticationException) {
+                $userMessage = 'Payment system configuration error. Please contact the journal.';
+            }
+            if (!empty($contactEmail)) {
+                $userMessage .= ' If the problem persists, please contact ' . htmlspecialchars($contactEmail) . '.';
+            }
+
             $templateMgr = TemplateManager::getManager($request);
-            $templateMgr->assign('message', 'plugins.paymethod.stripe.error');
+            $templateMgr->assign('message', $userMessage);
             $templateMgr->display('frontend/pages/message.tpl');
         }
     }
