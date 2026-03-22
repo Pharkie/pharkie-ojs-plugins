@@ -70,9 +70,17 @@ if [ -n "$DRY_RUN" ]; then
   exit 0
 fi
 
-# --- Dump + compress + encrypt ---
+# --- Pre-flight: check Docker is running ---
+if ! docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
+  ps --status running 2>/dev/null | grep -q ojs-db; then
+  log "ERROR: ojs-db container is not running"
+  exit 1
+fi
+
+# --- Dump + compress + encrypt (atomic: write to .tmp, rename on success) ---
 log "Starting OJS database backup..."
 START=$(date +%s)
+TMP_FILE="${DUMP_FILE}.tmp"
 
 docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
   exec -T ojs-db mariadb-dump \
@@ -81,23 +89,29 @@ docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-comp
   --triggers \
   -u "${OJS_DB_USER:-ojs}" -p"$OJS_DB_PASSWORD" "${OJS_DB_NAME:-ojs}" \
   | gzip \
-  | openssl enc -aes-256-cbc -pbkdf2 -pass file:"$KEY_FILE" -out "$DUMP_FILE"
+  | openssl enc -aes-256-cbc -pbkdf2 -pass file:"$KEY_FILE" -out "$TMP_FILE"
 
-DUMP_SIZE=$(stat -c%s "$DUMP_FILE" 2>/dev/null || stat -f%z "$DUMP_FILE" 2>/dev/null)
+DUMP_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
 ELAPSED=$(( $(date +%s) - START ))
-log "Dump complete: $DUMP_FILE ($(numfmt --to=iec "$DUMP_SIZE" 2>/dev/null || echo "${DUMP_SIZE}B"), ${ELAPSED}s)"
+log "Dump complete: $(numfmt --to=iec "$DUMP_SIZE" 2>/dev/null || echo "${DUMP_SIZE}B"), ${ELAPSED}s"
 
 # --- Verify dump is not empty ---
 if [ "$DUMP_SIZE" -lt 1024 ]; then
-  log "ERROR: Dump file suspiciously small ($DUMP_SIZE bytes). Keeping file for inspection."
+  log "ERROR: Dump file suspiciously small ($DUMP_SIZE bytes). Removing."
+  rm -f "$TMP_FILE"
   exit 1
 fi
 
 # Verify we can decrypt it (round-trip check)
-if ! openssl enc -aes-256-cbc -d -pbkdf2 -pass file:"$KEY_FILE" -in "$DUMP_FILE" | gzip -t 2>/dev/null; then
-  log "ERROR: Dump file failed decrypt+gzip integrity check"
+if ! openssl enc -aes-256-cbc -d -pbkdf2 -pass file:"$KEY_FILE" -in "$TMP_FILE" | gzip -t 2>/dev/null; then
+  log "ERROR: Dump file failed decrypt+gzip integrity check. Removing."
+  rm -f "$TMP_FILE"
   exit 1
 fi
+
+# Atomic rename — file only appears with final name after verification
+mv "$TMP_FILE" "$DUMP_FILE"
+log "Verified and saved: $DUMP_FILE"
 
 # --- Promote Sunday dumps to weekly ---
 if [ "$DAY_OF_WEEK" = "7" ]; then

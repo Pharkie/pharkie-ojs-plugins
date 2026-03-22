@@ -80,10 +80,10 @@ case "$MODE" in
   pull-all)
     log "Pulling all backups from $SSH_HOST..."
     mkdir -p "$LOCAL_DEST/daily" "$LOCAL_DEST/weekly"
-    rsync -avz --progress -e "ssh" \
-      "$SSH_HOST:$REMOTE_BACKUP_DIR/daily/" "$LOCAL_DEST/daily/"
-    rsync -avz --progress -e "ssh" \
-      "$SSH_HOST:$REMOTE_BACKUP_DIR/weekly/" "$LOCAL_DEST/weekly/"
+    rsync -avz --progress -e ssh \
+      "$SSH_HOST:$REMOTE_BACKUP_DIR/daily/" "$LOCAL_DEST/daily/" || { log "ERROR: rsync daily failed"; exit 1; }
+    rsync -avz --progress -e ssh \
+      "$SSH_HOST:$REMOTE_BACKUP_DIR/weekly/" "$LOCAL_DEST/weekly/" || { log "ERROR: rsync weekly failed"; exit 1; }
     log "Sync complete"
     ls -lhR "$LOCAL_DEST"
     ;;
