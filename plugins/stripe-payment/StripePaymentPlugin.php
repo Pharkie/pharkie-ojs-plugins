@@ -249,9 +249,6 @@ class StripePaymentPlugin extends PaymethodPlugin
 
             $queuedPaymentDao = DAORegistry::getDAO('QueuedPaymentDAO');
             $queuedPayment = $queuedPaymentDao->getById($queuedPaymentId);
-            if (!$queuedPayment) {
-                throw new \Exception("Invalid queued payment ID {$queuedPaymentId}");
-            }
 
             // Verify with Stripe server-side (never trust client data)
             $stripe = new \Stripe\StripeClient($this->getActiveSecretKey($journal->getId()));
@@ -259,6 +256,14 @@ class StripePaymentPlugin extends PaymethodPlugin
 
             if ($session->payment_status !== 'paid') {
                 throw new \Exception('Payment not completed. Status: ' . $session->payment_status);
+            }
+
+            if (!$queuedPayment) {
+                // Webhook already fulfilled and deleted the queued payment — that's success.
+                // Redirect to the article URL from the Stripe session metadata, or fall back to journal home.
+                $redirectUrl = $session->metadata['requestUrl'] ?? $request->url(null, 'index');
+                $request->redirectUrl($redirectUrl);
+                return;
             }
 
             // Verify amount and currency match
