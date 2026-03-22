@@ -29,7 +29,7 @@ fi
 
 # Source helper functions
 source "$SCRIPT_DIR/lib/common.sh"
-source "$SCRIPT_DIR/lib/check-secrets.sh"
+
 source "$SCRIPT_DIR/lib/check-env-vars.sh"
 source "$SCRIPT_DIR/lib/check-yaml-syntax.sh"
 source "$SCRIPT_DIR/lib/check-doc-links.sh"
@@ -97,20 +97,9 @@ fi
 echo ""
 
 # ==========================================
-# CHECK 5: Secret Detection (BLOCKS)
+# CHECK 5: ggshield Secret Scan (BLOCKS)
 # ==========================================
-echo -e "${BLUE}5. Checking for secrets...${NC}"
-if check_secrets; then
-    echo -e "    ${GREEN}OK${NC}: No secrets detected"
-else
-    ((ERRORS++))
-fi
-echo ""
-
-# ==========================================
-# CHECK 6: ggshield Secret Scan (BLOCKS)
-# ==========================================
-echo -e "${BLUE}6. Running ggshield secret scan...${NC}"
+echo -e "${BLUE}5. Running ggshield secret scan...${NC}"
 if ! command -v ggshield &>/dev/null; then
     echo -e "    ${RED}WARNING${NC}: ggshield not installed (install: pipx install ggshield)"
 elif ! ggshield secret scan pre-commit 2>/dev/null; then
