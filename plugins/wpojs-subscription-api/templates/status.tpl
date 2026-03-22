@@ -20,9 +20,9 @@
                     <td>{$check.name|escape}</td>
                     <td>
                         {if $check.ok}
-                            <span style="color:#46b450;">&#10003; Yes</span>
+                            <span style="color:#46b450;" aria-label="Passed">Yes &#10003;</span>
                         {else}
-                            <span style="color:#dc3232;">&#10007; No</span>
+                            <span style="color:#dc3232;" aria-label="Failed">No &#10007;</span>
                         {/if}
                     </td>
                     <td>{if isset($check.detail)}{$check.detail|escape}{/if}</td>
@@ -90,9 +90,9 @@
                         <td>{$log->source_ip|escape}</td>
                         <td>
                             {if $log->http_status >= 200 && $log->http_status < 300}
-                                <span style="color:#46b450;">{$log->http_status}</span>
+                                <span style="color:#46b450;">{$log->http_status} &#10003;</span>
                             {elseif $log->http_status >= 400}
-                                <span style="color:#dc3232;">{$log->http_status}</span>
+                                <span style="color:#dc3232;">{$log->http_status} &#10007;</span>
                             {else}
                                 {$log->http_status}
                             {/if}
