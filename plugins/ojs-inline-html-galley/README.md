@@ -40,7 +40,7 @@ The plugin shows a contextual info box above the inline content:
 | User type | Message |
 |---|---|
 | Journal administrator | "You have access as a journal administrator." |
-| Synced member (via WP-OJS sync) | "Showing article full text linked to your SEA membership." |
+| Synced member (via WP-OJS sync) | "Showing article full text linked to your membership." * |
 | Direct OJS subscriber | "Showing article full text via your journal subscription." |
 | Article purchaser | "You have access via direct purchase." |
 
@@ -53,7 +53,7 @@ Users without access see a call-to-action box with links to membership signup an
 **This plugin contains hardcoded text specific to the Society for Existential Analysis.** If deploying on a different journal, you must edit `InlineHtmlGalleyPlugin.php`:
 
 - **Non-subscriber CTA** (`getNonSubscriberNotice()`): Contains hardcoded URLs (`community.existentialanalysis.org.uk`), organisation name ("SEA membership"), and prices ("£3" / "£25"). Update these to match your journal.
-- **Subscriber messages** (`getSubscriberNotice()`): References "SEA membership" for synced members. Update if your integration uses a different name.
+- **Subscriber messages** (`getSubscriberNotice()`): * References "SEA membership" for synced members. Update to match your organisation name.
 - **Archive quality notice** (`getArchiveNotice()`): Shows "digitally restored from print" on all inline HTML articles. Remove or customise if not applicable to your content.
 - **Paywall section name**: The plugin paywalls only articles in a section titled exactly **"Articles"** (case-sensitive, in `getSubscriberNotice()`). If your journal uses a different section name, update this string match.
 
