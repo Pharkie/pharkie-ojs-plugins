@@ -15,8 +15,6 @@ Adds [Stripe](https://stripe.com) as a payment method for non-member article and
 - Test mode support (Stripe test keys)
 - Amount + currency verification against OJS payment records
 
-**Replaces the built-in PayPal plugin** — which has [known sandbox issues](docs/ojs-issues-log.md) for non-US developer accounts.
-
 ### [Inline HTML Galley](plugins/ojs-inline-html-galley/)
 
 Renders HTML galley content directly on article landing pages. Readers with access see the full text immediately — no extra click to a separate viewer. Readers without access see a call-to-action with membership/purchase links.
