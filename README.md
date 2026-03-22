@@ -1,68 +1,88 @@
-<table><tr><td>
+# Pharkie OJS Plugins
 
-# WP OJS Sync
+A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, and membership sync with WordPress.
 
-**The problem:** An organisation runs its membership and payments through [WordPress](https://wordpress.org/) (using WooCommerce Subscriptions), and publishes an academic journal on [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems). Members should get journal access automatically when they pay, and lose it when they cancel — but these are two separate systems with no built-in connection. OJS has no subscription API, so there's no obvious way to bridge them.
-
-**What this repo does:** A set of plugins — one for WordPress, three for OJS — that keep the two systems in sync and improve the journal reading experience. At launch, a bulk sync creates OJS accounts for all existing members (with their WordPress password hashes, so they can log in immediately). After that, the WP plugin automatically pushes changes to OJS whenever a member signs up, renews, cancels, or expires. Non-members can buy individual articles via Stripe checkout.
-
-</td><td width="45%">
-
-<img src="docs/images/wp-settings-page.png" alt="OJS Sync settings page in WordPress admin">
-
-</td></tr></table>
-
-## How it works
-
-WordPress is the source of truth for membership. The WP plugin hooks into WooCommerce Subscription lifecycle events and pushes changes to OJS via a custom REST API. All sync is async (Action Scheduler), with daily reconciliation to catch drift.
-
-Bulk sync creates OJS accounts with WP password hashes — members log in to OJS with their existing WP password, no "set your password" step.
-
-```mermaid
-flowchart LR
-    A[Member signs up / renews] -->|WCS status → active| B[WP queues sync]
-    B --> C[Action Scheduler]
-    C -->|find-or-create user + subscription| D[OJS grants access]
-
-    E[Member cancels / expires] -->|WCS status change| F[WP queues expire]
-    F --> C
-    C -->|expire subscription| G[OJS revokes access]
-
-    H[Member changes password] --> I[WP queues password sync]
-    I --> C
-    C -->|update password hash| J[OJS accepts new password]
-```
+Each plugin works independently — install only what you need.
 
 ## Plugins
 
-| Plugin | Platform | Directory | Purpose |
-|---|---|---|---|
-| **WP-OJS Sync** | WordPress | `plugins/wpojs-sync` | Hooks into WooCommerce Subscription events, pushes user + subscription changes to OJS. Admin UI, WP-CLI commands, Action Scheduler queue. |
-| **WP-OJS Subscription API** | OJS | `plugins/wpojs-subscription-api` | REST API for user and subscription CRUD (OJS has none natively). WP password hash verification at login. Configurable UI messages. [README](plugins/wpojs-subscription-api/README.md) · [API reference](docs/ojs-sync-plugin-api.md) |
-| **Stripe Payment** | OJS | `plugins/stripe-payment` | Stripe Checkout for non-member article/issue purchases. Redirect flow with webhook confirmation. Replaces PayPal. [README](plugins/stripe-payment/README.md) |
-| **Inline HTML Galley** | OJS | `plugins/ojs-inline-html-galley` | Renders HTML article content inline on the landing page. Access messages for members, purchasers, and non-subscribers. [README](plugins/ojs-inline-html-galley/README.md) |
+### [Stripe Payment](plugins/stripe-payment/)
+
+Adds [Stripe](https://stripe.com) as a payment method for non-member article and issue purchases. Uses Stripe Checkout (hosted payment page) — no card data touches your server. Includes webhook handler for reliable payment confirmation.
+
+- Stripe Checkout redirect flow (card, Apple Pay, Google Pay)
+- Webhook endpoint with signature verification
+- Test mode support (Stripe test keys)
+- Amount + currency verification against OJS payment records
+
+**Replaces the built-in PayPal plugin** — which has [known sandbox issues](docs/ojs-issues-log.md) for non-US developer accounts.
+
+### [Inline HTML Galley](plugins/ojs-inline-html-galley/)
+
+Renders HTML galley content directly on article landing pages. Readers with access see the full text immediately — no extra click to a separate viewer. Readers without access see a call-to-action with membership/purchase links.
+
+- Inline rendering of "Full Text" HTML galleys
+- Contextual access messages (member, subscriber, purchaser, admin)
+- Non-subscriber CTA with membership and purchase links
+- Hides galley links on issue TOC pages (readers click article titles instead)
+
+### [WP-OJS Subscription API](plugins/wpojs-subscription-api/)
+
+REST API for OJS user and subscription management — something OJS doesn't provide natively. Designed for push-sync integrations where an external system manages memberships.
+
+- User CRUD (find, create, update email/password, GDPR delete)
+- Subscription CRUD (create, expire, batch status lookup)
+- WordPress password hash verification at login (members use their WP password on OJS)
+- Configurable UI messages (login hint, paywall hint, footer)
+- IP allowlisting + API key authentication
+
+Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automatic membership sync from WooCommerce Subscriptions.
+
+### [WP-OJS Sync](plugins/wpojs-sync/) (WordPress)
+
+WordPress plugin that hooks into WooCommerce Subscription lifecycle events and pushes changes to OJS via the Subscription API plugin above.
+
+- Automatic sync on signup, renewal, cancellation, expiry
+- Password and email change sync
+- Bulk sync via WP-CLI for initial launch
+- Async queue (Action Scheduler) with retry logic
+- Daily reconciliation to catch drift
+- Admin UI with sync log and connection testing
+
+## Requirements
+
+Each plugin lists its own requirements in its README. In general:
+
+- **OJS plugins:** OJS 3.5+, PHP 8.1+
+- **WP plugin:** WordPress 5.6+, WooCommerce + WooCommerce Subscriptions
+- **Stripe plugin** additionally needs: `composer install` for the Stripe PHP SDK
+
+## Quick start
+
+Each plugin can be installed standalone — copy the folder into your OJS (or WP) plugins directory and follow the README. For a full dev environment with all plugins:
+
+```bash
+git clone https://github.com/Pharkie/pharkie-ojs-plugins.git
+cd pharkie-ojs-plugins
+# Docker dev stack (OJS + WP + databases)
+scripts/rebuild-dev.sh --with-sample-data --skip-tests
+```
+
+See the [Docker setup guide](docs/docker-setup.md) for details.
 
 ## Documentation
 
-**Getting started** — pick your path:
-- [Run locally](docs/docker-setup.md) — Docker stack on your machine
-- [Deploy to a server](docs/vps-deployment.md) — provision a VPS, deploy the Docker stack
-- [Existing servers](docs/non-docker-setup.md) — install plugins without Docker
+**Getting started:**
+[Docker setup](docs/docker-setup.md) · [VPS deployment](docs/vps-deployment.md) · [Non-Docker install](docs/non-docker-setup.md)
 
-**Using the plugins** — [WP admin guide](docs/wp-admin-reference.md) · [WP-CLI commands](docs/wp-cli-reference.md) · [Support runbook](docs/support-runbook.md)
+**Using the plugins:**
+[WP admin guide](docs/wp-admin-reference.md) · [WP-CLI commands](docs/wp-cli-reference.md) · [Support runbook](docs/support-runbook.md)
 
-**Reference** — [WP plugin internals](docs/wp-plugin-reference.md) · [OJS plugin API](docs/ojs-sync-plugin-api.md) · [OJS plugin internals](docs/ojs-plugin-internals.md) · [Hosting requirements](docs/private/hosting-requirements.md)
+**Reference:**
+[OJS plugin API](docs/ojs-sync-plugin-api.md) · [WP plugin internals](docs/wp-plugin-reference.md) · [OJS internals](docs/ojs-internals.md) · [Hosting requirements](docs/private/hosting-requirements.md)
 
-**Design** — [Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [OJS native internals](docs/ojs-internals.md) · [WP integration notes](docs/wp-integration.md) · [Plan review findings](docs/private/review-findings.md) · [Janeway backup path](docs/private/janeway-paywall-investigation.md) · [TODO / roadmap](TODO.md)
-
-## Prerequisites
-
-> If you're just exploring, the [Docker setup](docs/docker-setup.md) runs the full stack locally with no external dependencies.
-
-- WordPress 5.6+, PHP 7.4+
-- WooCommerce + WooCommerce Subscriptions
-- Action Scheduler (bundled with WooCommerce)
-- OJS 3.5+ (the OJS plugin requires the 3.5 plugin API)
+**Design:**
+[Implementation plan](docs/private/plan.md) · [Decision trail](docs/discovery.md) · [TODO / roadmap](TODO.md)
 
 ## LLM Generated, Human Reviewed
 
@@ -70,4 +90,4 @@ This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Developme
 
 ## License
 
-PolyForm Noncommercial 1.0.0 -- see [LICENSE.md](./LICENSE.md).
+PolyForm Noncommercial 1.0.0 — see [LICENSE.md](./LICENSE.md).
