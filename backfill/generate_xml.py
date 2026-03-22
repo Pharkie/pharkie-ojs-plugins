@@ -322,16 +322,8 @@ def generate_cover_image(toc_json_path, vol, iss):
     if fitz is None or not toc_json_path:
         return None, None
 
-    # Look for the source issue PDF in backfill/input/
-    issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
-    project_root = os.path.dirname(os.path.dirname(issue_dir))
-    vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
-    prepared_pdf = os.path.join(project_root, 'input', f'{vol_iss}.pdf')
-
-    if not os.path.exists(prepared_pdf):
-        # Try integer-only name for single-issue volumes
-        prepared_pdf = os.path.join(project_root, 'input', f'{vol}.pdf')
-    if not os.path.exists(prepared_pdf):
+    prepared_pdf = find_issue_pdf(toc_json_path, vol, iss)
+    if not prepared_pdf:
         return None, None
 
     doc = fitz.open(prepared_pdf)
@@ -344,6 +336,80 @@ def generate_cover_image(toc_json_path, vol, iss):
     filename = f'cover-{vol}-{iss}.jpg'
     b64_data = base64.b64encode(img_bytes).decode('ascii')
     return filename, b64_data
+
+
+def find_issue_pdf(toc_json_path, vol, iss):
+    """Find the source whole-issue PDF in backfill/input/.
+
+    Returns the path or None if not found.
+    """
+    if not toc_json_path:
+        return None
+    issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
+    project_root = os.path.dirname(os.path.dirname(issue_dir))
+    vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
+    prepared_pdf = os.path.join(project_root, 'input', f'{vol_iss}.pdf')
+    if not os.path.exists(prepared_pdf):
+        prepared_pdf = os.path.join(project_root, 'input', f'{vol}.pdf')
+    if not os.path.exists(prepared_pdf):
+        return None
+    return prepared_pdf
+
+
+def generate_issue_galley(toc_json_path, vol, iss, date_published):
+    """Generate XML lines for an issue galley (whole-issue PDF).
+
+    Re-saves through PyMuPDF for quality checking (validates structure,
+    strips broken objects). Returns list of XML lines or empty list.
+    """
+    if fitz is None:
+        print("WARNING: PyMuPDF not available, skipping issue galley", file=sys.stderr)
+        return []
+
+    source_pdf = find_issue_pdf(toc_json_path, vol, iss)
+    if not source_pdf:
+        print(f"WARNING: No source PDF found for issue galley (vol {vol} iss {iss})", file=sys.stderr)
+        return []
+
+    # Re-save through PyMuPDF for quality checking
+    try:
+        doc = fitz.open(source_pdf)
+        page_count = len(doc)
+        # Save to bytes with garbage collection (strips broken/orphaned objects)
+        clean_pdf = doc.tobytes(garbage=3, deflate=True)
+        doc.close()
+    except Exception as e:
+        print(f"WARNING: Failed to process issue PDF {source_pdf}: {e}", file=sys.stderr)
+        return []
+
+    original_size = os.path.getsize(source_pdf)
+    clean_size = len(clean_pdf)
+    vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
+    filename = f'vol-{vol}-iss-{iss}.pdf'
+    original_filename = f'{vol_iss}.pdf'
+
+    print(f"Issue galley: {page_count} pages, {original_size:,} → {clean_size:,} bytes "
+          f"({clean_size/original_size*100:.0f}%)", file=sys.stderr)
+
+    b64_data = base64.b64encode(clean_pdf).decode('ascii')
+
+    lines = []
+    lines.append('    <issue_galleys>')
+    lines.append('      <issue_galley locale="en">')
+    lines.append('        <label>PDF</label>')
+    lines.append('        <issue_file>')
+    lines.append(f'          <file_name>{filename}</file_name>')
+    lines.append('          <file_type>application/pdf</file_type>')
+    lines.append(f'          <file_size>{clean_size}</file_size>')
+    lines.append('          <content_type>1</content_type>')
+    lines.append(f'          <original_file_name>{original_filename}</original_file_name>')
+    lines.append(f'          <date_uploaded>{date_published}</date_uploaded>')
+    lines.append(f'          <date_modified>{date_published}</date_modified>')
+    lines.append(f'          <embed encoding="base64">{b64_data}</embed>')
+    lines.append('        </issue_file>')
+    lines.append('      </issue_galley>')
+    lines.append('    </issue_galleys>')
+    return lines
 
 
 def load_html_galley(pdf_path):
@@ -605,7 +671,7 @@ def load_enrichment(toc_json_path):
     return data.get('articles', {})
 
 
-def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
+def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_galley=False):
     """Generate complete OJS Native XML for an issue."""
     vol = toc_data.get('volume', 1)
     iss = toc_data.get('issue', 1)
@@ -673,6 +739,11 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None):
         lines.append(f'      </cover>')
         lines.append(f'    </covers>')
 
+    # Issue galley (whole-issue PDF)
+    if not skip_issue_galley:
+        galley_lines = generate_issue_galley(toc_json_path, vol, iss, date_published)
+        lines.extend(galley_lines)
+
     # Articles
     lines.append(f'    <articles>')
     doi_count = 0
@@ -708,6 +779,8 @@ def main():
     parser.add_argument('--output', '-o', help='Output XML file (default: stdout)')
     parser.add_argument('--no-pdfs', action='store_true',
                         help='Skip PDF embedding (much faster, for testing XML structure)')
+    parser.add_argument('--no-issue-galley', action='store_true',
+                        help='Skip whole-issue PDF galley (article galleys still included)')
     args = parser.parse_args()
 
     with open(args.toc_json) as f:
@@ -724,7 +797,8 @@ def main():
         pdfs = sum(1 for a in toc_data['articles'] if a.get('split_pdf'))
         print(f"PDFs to embed: {pdfs}", file=sys.stderr)
 
-    xml = generate_xml(toc_data, toc_json_path=args.toc_json)
+    xml = generate_xml(toc_data, toc_json_path=args.toc_json,
+                       skip_issue_galley=args.no_issue_galley)
 
     # Validate generated XML is well-formed
     try:
