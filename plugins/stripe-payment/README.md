@@ -38,9 +38,7 @@ Set article/issue purchase fees under **Payments → Payment Types**.
 
 ### Test vs live mode
 
-Stripe routes to test or live based on the key prefix — no endpoint switching needed. Use `sk_test_` keys during development; switch to `sk_live_` for production. The **Test Mode** checkbox is informational only (shown in the admin UI).
-
-Test card: `4242 4242 4242 4242`, any future expiry, any CVC.
+The plugin stores separate test and live key pairs. The **Test Mode** checkbox in the admin UI switches which keys are used at runtime. When enabled, the plugin uses test keys — no real charges are made. See the [Test mode](#test-mode) section below for setup details.
 
 ## How it works
 

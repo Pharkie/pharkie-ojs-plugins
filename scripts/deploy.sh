@@ -128,13 +128,14 @@ if [ -n "$ENV_FILE" ]; then
   if head -5 "$ENV_FILE" | grep -q '"sops"\|ENC\[AES256'; then
     echo "Decrypting SOPS-encrypted env file..."
     DECRYPTED=$(mktemp)
-    if ! sops -d "$ENV_FILE" > "$DECRYPTED" 2>/dev/null; then
-      echo "ERROR: Failed to decrypt $ENV_FILE. Is the age key available?"
-      rm -f "$DECRYPTED"
+    trap "rm -f '$DECRYPTED'" EXIT
+    if ! sops -d "$ENV_FILE" > "$DECRYPTED"; then
+      echo "ERROR: Failed to decrypt $ENV_FILE. Is the age key at ~/.config/sops/age/keys.txt?"
       exit 1
     fi
     $SCP_CMD "$DECRYPTED" "$SCP_HOST:$REMOTE_DIR/.env"
     rm -f "$DECRYPTED"
+    trap - EXIT
   else
     $SCP_CMD "$ENV_FILE" "$SCP_HOST:$REMOTE_DIR/.env"
   fi
@@ -269,7 +270,7 @@ $SSH_CMD "
     echo '[ok] Backup cron already installed.'
   elif [ -f $REMOTE_DIR/scripts/backup-ojs-db.sh ]; then
     mkdir -p /opt/backups/ojs/daily /opt/backups/ojs/weekly
-    (crontab -l 2>/dev/null; echo '0 3 * * * $REMOTE_DIR/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | crontab -
+    (crontab -l 2>/dev/null; echo '0 3 * * * /opt/wp-ojs-sync/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | crontab -
     echo '[ok] Backup cron installed (daily 03:00 UTC).'
   else
     echo '[skip] backup-ojs-db.sh not found, skipping cron.'

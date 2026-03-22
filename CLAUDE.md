@@ -117,6 +117,14 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 - **`scripts/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → `Pharkie/sea-ojs-db-backups` (private repo, daily at 04:00 UTC).
 - **Post-rebuild prompt:** `docs/private/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
 
+## Secrets management
+
+- **Private repo** (`Pharkie/ojs-sea-private`) cloned into `docs/private/` (gitignored). Contains private docs + SOPS-encrypted `.env.live` and `.env.staging`.
+- **SOPS + age** encrypts env files at rest. Keys visible, values encrypted. Age private key at `~/.config/sops/age/keys.txt` (bind-mounted from host).
+- **deploy.sh** auto-decrypts SOPS files before copying to VPS. No manual decrypt needed.
+- **To edit secrets:** `sops docs/private/.env.live` (decrypts in editor, re-encrypts on save).
+- **To commit changes to private repo:** `cd docs/private && git add -A && git commit -m "msg" && git push`.
+
 ## Backfill pipeline
 
 Imports ~30 years of journal back-issues (whole-issue PDFs) into OJS. Three steps:
