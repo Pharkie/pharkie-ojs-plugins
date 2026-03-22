@@ -32,6 +32,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip 
     && rm -rf /var/lib/apt/lists/* \
     && pip install --break-system-packages pyyaml grip pymupdf gspread "deprecation>=2.1.0"
 
+# Ruby + anystyle (CRF-based bibliographic reference parser for citation classification)
+RUN apt-get update && apt-get install -y --no-install-recommends ruby \
+    && gem install anystyle anystyle-cli \
+    && rm -rf /var/lib/apt/lists/*
+
 # SOPS + age (for encrypting secrets in private repo)
 RUN curl -Lo /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64 \
     && chmod +x /usr/local/bin/sops \
