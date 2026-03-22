@@ -93,6 +93,7 @@ class StripePaymentPlugin extends PaymethodPlugin
         ])
             ->addField(new FieldOptions('stripeTestMode', [
                 'label' => __('plugins.paymethod.stripe.settings.testMode'),
+                'description' => __('plugins.paymethod.stripe.settings.testModeDescription'),
                 'options' => [
                     ['value' => true, 'label' => __('common.enable')]
                 ],
@@ -107,6 +108,16 @@ class StripePaymentPlugin extends PaymethodPlugin
             ->addField(new FieldText('stripeSecretKey', [
                 'label' => __('plugins.paymethod.stripe.settings.secretKey'),
                 'value' => $this->getSetting($contextId, 'secretKey'),
+                'groupId' => 'stripepayment',
+            ]))
+            ->addField(new FieldText('stripeTestPublishableKey', [
+                'label' => __('plugins.paymethod.stripe.settings.testPublishableKey'),
+                'value' => $this->getSetting($contextId, 'testPublishableKey'),
+                'groupId' => 'stripepayment',
+            ]))
+            ->addField(new FieldText('stripeTestSecretKey', [
+                'label' => __('plugins.paymethod.stripe.settings.testSecretKey'),
+                'value' => $this->getSetting($contextId, 'testSecretKey'),
                 'groupId' => 'stripepayment',
             ]))
             ->addField(new FieldText('stripeWebhookSecret', [
@@ -131,6 +142,8 @@ class StripePaymentPlugin extends PaymethodPlugin
         $settingsMap = [
             'stripeSecretKey' => ['key' => 'secretKey', 'type' => 'string'],
             'stripePublishableKey' => ['key' => 'publishableKey', 'type' => 'string'],
+            'stripeTestSecretKey' => ['key' => 'testSecretKey', 'type' => 'string'],
+            'stripeTestPublishableKey' => ['key' => 'testPublishableKey', 'type' => 'string'],
             'stripeWebhookSecret' => ['key' => 'webhookSecret', 'type' => 'string'],
             'stripeTestMode' => ['key' => 'testMode', 'type' => 'bool'],
         ];
@@ -156,6 +169,17 @@ class StripePaymentPlugin extends PaymethodPlugin
     }
 
     /**
+     * Get the active secret key based on test mode setting.
+     */
+    public function getActiveSecretKey(int $contextId): string
+    {
+        if ($this->getSetting($contextId, 'testMode')) {
+            return (string) $this->getSetting($contextId, 'testSecretKey');
+        }
+        return (string) $this->getSetting($contextId, 'secretKey');
+    }
+
+    /**
      * @copydoc PaymethodPlugin::isConfigured()
      */
     public function isConfigured($context)
@@ -163,7 +187,8 @@ class StripePaymentPlugin extends PaymethodPlugin
         if (!$context) {
             return false;
         }
-        return $this->getSetting($context->getId(), 'secretKey') != '';
+        $contextId = $context->getId();
+        return $this->getActiveSecretKey($contextId) !== '';
     }
 
     /**
@@ -212,7 +237,7 @@ class StripePaymentPlugin extends PaymethodPlugin
             }
 
             // Verify with Stripe server-side (never trust client data)
-            $stripe = new \Stripe\StripeClient($this->getSetting($journal->getId(), 'secretKey'));
+            $stripe = new \Stripe\StripeClient($this->getActiveSecretKey($journal->getId()));
             $session = $stripe->checkout->sessions->retrieve($sessionId);
 
             if ($session->payment_status !== 'paid') {

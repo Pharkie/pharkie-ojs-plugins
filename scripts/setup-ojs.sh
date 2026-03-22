@@ -795,12 +795,10 @@ ISSUE_FEE="${OJS_PURCHASE_ISSUE_FEE:-}"
 MANUAL_INSTRUCTIONS="${OJS_MANUAL_PAYMENT_INSTRUCTIONS:-}"
 STRIPE_SECRET_KEY="${OJS_STRIPE_SECRET_KEY:-}"
 STRIPE_PUBLISHABLE_KEY="${OJS_STRIPE_PUBLISHABLE_KEY:-}"
+STRIPE_TEST_SECRET_KEY="${OJS_STRIPE_TEST_SECRET_KEY:-}"
+STRIPE_TEST_PUBLISHABLE_KEY="${OJS_STRIPE_TEST_PUBLISHABLE_KEY:-}"
 STRIPE_WEBHOOK_SECRET="${OJS_STRIPE_WEBHOOK_SECRET:-}"
 STRIPE_TEST_MODE="${OJS_STRIPE_TEST_MODE:-}"
-PAYPAL_ACCOUNT="${OJS_PAYPAL_ACCOUNT:-}"
-PAYPAL_CLIENT_ID="${OJS_PAYPAL_CLIENT_ID:-}"
-PAYPAL_SECRET="${OJS_PAYPAL_SECRET:-}"
-PAYPAL_TEST_MODE="${OJS_PAYPAL_TEST_MODE:-}"
 
 # Determine which payment plugin to use: Stripe > PayPal > Manual
 if [ -n "$STRIPE_SECRET_KEY" ]; then
@@ -886,6 +884,16 @@ SQL
     VALUES ('stripepayment', $JOURNAL_ID, 'publishableKey', '$STRIPE_PUBLISHABLE_KEY', 'string')
     ON DUPLICATE KEY UPDATE setting_value='$STRIPE_PUBLISHABLE_KEY';
 SQL
+  if [ -n "$STRIPE_TEST_SECRET_KEY" ]; then
+    $MARIADB <<SQL
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('stripepayment', $JOURNAL_ID, 'testSecretKey', '$STRIPE_TEST_SECRET_KEY', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$STRIPE_TEST_SECRET_KEY';
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('stripepayment', $JOURNAL_ID, 'testPublishableKey', '$STRIPE_TEST_PUBLISHABLE_KEY', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$STRIPE_TEST_PUBLISHABLE_KEY';
+SQL
+  fi
   if [ -n "$STRIPE_WEBHOOK_SECRET" ]; then
     $MARIADB <<SQL
       INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
