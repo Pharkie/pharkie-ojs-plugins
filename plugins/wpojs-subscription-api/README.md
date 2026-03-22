@@ -138,6 +138,10 @@ The `[wpojs]` settings must also be present in your OJS `config.inc.php`. If usi
 2. Remove the plugin directory and API route mount.
 3. Optionally clean up: `DELETE FROM versions WHERE product = 'wpojsSubscriptionApi';` and `DELETE FROM plugin_settings WHERE plugin_name = 'wpojssubscriptionapiplugin';`
 
+## LLM Generated, Human Reviewed
+
+This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Development was overseen by the human author with attention to reliability and security. Architectural decisions, configuration choices, and development sessions were closely planned, directed and verified by the human author throughout. The code and test results were reviewed and tested by the human author beyond the LLM. Still, the code has had limited manual review, I encourage you to make your own checks and use this code at your own risk.
+
 ## License
 
 GNU General Public License v3.0. See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.html).
