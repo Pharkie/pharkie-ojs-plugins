@@ -449,7 +449,8 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
 
         for article in toc.get('articles', []):
             section = article.get('section', 'Unknown')
-            slug = article.get('split_pdf', '').replace('.pdf', '')
+            split_pdf = article.get('split_pdf', '')
+            slug = Path(split_pdf).stem if split_pdf else ''
             if not slug:
                 continue
 
@@ -600,6 +601,10 @@ def export_to_sheet(rows, dry_run=False):
     try:
         ws = sh.worksheet(TAB_NAME)
         ws.clear()
+        # Ensure sheet has enough rows for all data
+        needed_rows = len(rows) + 1  # +1 for header
+        if ws.row_count < needed_rows:
+            ws.resize(rows=needed_rows)
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title=TAB_NAME, rows=len(rows) + 1,
                               cols=len(SHEET_HEADERS))
