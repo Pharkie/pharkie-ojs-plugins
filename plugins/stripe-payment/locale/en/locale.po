@@ -20,17 +20,26 @@ msgstr "Payments will be processed using Stripe."
 msgid "plugins.paymethod.stripe"
 msgstr "Stripe Payment"
 
-msgid "plugins.paymethod.stripe.settings.secretKey"
-msgstr "Secret Key"
-
 msgid "plugins.paymethod.stripe.settings.publishableKey"
-msgstr "Publishable Key"
+msgstr "Live Publishable Key"
+
+msgid "plugins.paymethod.stripe.settings.secretKey"
+msgstr "Live Secret Key"
+
+msgid "plugins.paymethod.stripe.settings.testPublishableKey"
+msgstr "Test Publishable Key"
+
+msgid "plugins.paymethod.stripe.settings.testSecretKey"
+msgstr "Test Secret Key"
 
 msgid "plugins.paymethod.stripe.settings.webhookSecret"
 msgstr "Webhook Signing Secret"
 
 msgid "plugins.paymethod.stripe.settings.testMode"
 msgstr "Test Mode"
+
+msgid "plugins.paymethod.stripe.settings.testModeDescription"
+msgstr "When enabled, uses test keys instead of live keys. No real charges will be made. Use Stripe test card numbers (e.g. 4242 4242 4242 4242)."
 
 msgid "plugins.paymethod.stripe.error"
 msgstr "A payment error occurred. Please contact the journal manager for details."

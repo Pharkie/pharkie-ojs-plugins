@@ -43,7 +43,7 @@ class StripePaymentForm extends Form
             $contextId = $journal->getId();
             $paymentManager = Application::get()->getPaymentManager($journal);
 
-            $secretKey = $this->_plugin->getSetting($contextId, 'secretKey');
+            $secretKey = $this->_plugin->getActiveSecretKey($contextId);
             if (empty($secretKey)) {
                 throw new \Exception('Stripe secret key not configured');
             }
