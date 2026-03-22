@@ -55,7 +55,7 @@ Users without access see a call-to-action box with links to membership signup an
 - **Non-subscriber CTA** (`getNonSubscriberNotice()`): Contains hardcoded URLs (`community.existentialanalysis.org.uk`), organisation name ("SEA membership"), and prices ("£3" / "£25"). Update these to match your journal.
 - **Subscriber messages** (`getSubscriberNotice()`): References "SEA membership" for synced members. Update if your integration uses a different name.
 - **Archive quality notice** (`getArchiveNotice()`): Shows "digitally restored from print" on all inline HTML articles. Remove or customise if not applicable to your content.
-- **Paywall section name**: The plugin paywalls only articles in a section titled exactly **"Articles"** (case-sensitive, line 157). If your journal uses a different section name, update this string match.
+- **Paywall section name**: The plugin paywalls only articles in a section titled exactly **"Articles"** (case-sensitive, in `getSubscriberNotice()`). If your journal uses a different section name, update this string match.
 
 ## HTML galley format
 
