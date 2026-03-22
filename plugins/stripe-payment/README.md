@@ -94,12 +94,40 @@ The plugin itself reads settings from the `plugin_settings` DB table at runtime 
 
 | Env var | Plugin setting | Required |
 |---|---|---|
-| `OJS_STRIPE_SECRET_KEY` | `secretKey` | Yes |
-| `OJS_STRIPE_PUBLISHABLE_KEY` | `publishableKey` | Yes |
+| `OJS_STRIPE_SECRET_KEY` | `secretKey` | Yes (live) |
+| `OJS_STRIPE_PUBLISHABLE_KEY` | `publishableKey` | Yes (live) |
+| `OJS_STRIPE_TEST_SECRET_KEY` | `testSecretKey` | Yes (test) |
+| `OJS_STRIPE_TEST_PUBLISHABLE_KEY` | `testPublishableKey` | Yes (test) |
 | `OJS_STRIPE_WEBHOOK_SECRET` | `webhookSecret` | Recommended |
-| `OJS_STRIPE_TEST_MODE` | `testMode` | No (default: 1) |
+| `OJS_STRIPE_TEST_MODE` | `testMode` | No (default: 0) |
 
 You can also configure settings manually via the OJS admin UI (Settings → Distribution → Payments).
+
+## Test mode
+
+When "Test Mode" is enabled in the OJS admin UI, the plugin uses the test keys instead of live keys. No real charges are made.
+
+### Setup
+
+1. In the Stripe dashboard, toggle to **Test mode** (top right)
+2. Go to **Developers → API keys**:
+   - Create a **restricted key** with only **Checkout Sessions → Write**
+   - Copy the restricted key (`rk_test_...`) and the publishable key (`pk_test_...`)
+3. Go to **Workbench → Event destinations → Add destination**:
+   - URL: `https://your-ojs-domain/index.php/{journal}/payment/plugin/StripePayment/webhook`
+   - Event: `checkout.session.completed` only
+   - Copy the signing secret (`whsec_...`) — this is separate from the live webhook secret
+4. Enter the test keys in OJS admin (Distribution → Payments → Stripe) or in `.env`
+5. Tick "Test Mode" and save
+
+### Test card numbers
+
+| Card | Result |
+|---|---|
+| `4242 4242 4242 4242` | Success |
+| `4000 0000 0000 0002` | Decline |
+
+Use any future expiry date, any CVC, any postcode.
 
 ## Security
 

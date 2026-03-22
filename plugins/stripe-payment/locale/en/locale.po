@@ -32,8 +32,11 @@ msgstr "Test Publishable Key"
 msgid "plugins.paymethod.stripe.settings.testSecretKey"
 msgstr "Test Secret Key"
 
+msgid "plugins.paymethod.stripe.settings.testWebhookSecret"
+msgstr "Test Webhook Signing Secret"
+
 msgid "plugins.paymethod.stripe.settings.webhookSecret"
-msgstr "Webhook Signing Secret"
+msgstr "Live Webhook Signing Secret"
 
 msgid "plugins.paymethod.stripe.settings.testMode"
 msgstr "Test Mode"
