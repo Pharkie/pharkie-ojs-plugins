@@ -16,3 +16,48 @@ msgstr "Inline HTML Galley"
 
 msgid "plugins.generic.inlineHtmlGalley.description"
 msgstr "Renders HTML galley content inline on article pages when the user has access (open-access, subscription, or purchase), replacing the separate full-text viewer link."
+
+msgid "plugins.generic.inlineHtmlGalley.settings"
+msgstr "Inline HTML Galley Settings"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.organisationName"
+msgstr "Organisation Name"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.organisationNameDesc"
+msgstr "Your organisation name, shown in access messages to synced members (e.g. 'Society for Existential Analysis')."
+
+msgid "plugins.generic.inlineHtmlGalley.settings.membershipUrl"
+msgstr "Membership URL"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.membershipUrlDesc"
+msgstr "URL where non-members can sign up for membership. Shown in the non-subscriber CTA box. Leave empty to show text without a link."
+
+msgid "plugins.generic.inlineHtmlGalley.settings.paywallSectionName"
+msgstr "Paywalled Section Name"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.paywallSectionNameDesc"
+msgstr "The OJS section title that requires a subscription or purchase. Access messages are only shown for articles in this section. Default: 'Articles'."
+
+msgid "plugins.generic.inlineHtmlGalley.settings.archiveNotice"
+msgstr "Archive Notice"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.archiveNoticeEnabledDesc"
+msgstr "Show 'digitally restored from print' notice above inline content. Uses the journal contact email from OJS settings."
+
+msgid "plugins.generic.inlineHtmlGalley.settings.messages"
+msgstr "Access Messages"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.messagesDesc"
+msgstr "Messages shown above inline content for different user types. Use {orgName} as a placeholder for the organisation name."
+
+msgid "plugins.generic.inlineHtmlGalley.settings.syncedMemberMessage"
+msgstr "Synced member message"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.subscriberMessage"
+msgstr "Subscriber message"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.purchaseMessage"
+msgstr "Purchaser message"
+
+msgid "plugins.generic.inlineHtmlGalley.settings.adminMessage"
+msgstr "Admin message"
