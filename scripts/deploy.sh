@@ -124,7 +124,20 @@ if [ -n "$ENV_FILE" ]; then
     echo "ERROR: Local env file not found: $ENV_FILE"
     exit 1
   fi
-  $SCP_CMD "$ENV_FILE" "$SCP_HOST:$REMOTE_DIR/.env"
+  # Auto-decrypt SOPS-encrypted env files
+  if head -5 "$ENV_FILE" | grep -q '"sops"\|ENC\[AES256'; then
+    echo "Decrypting SOPS-encrypted env file..."
+    DECRYPTED=$(mktemp)
+    if ! sops -d "$ENV_FILE" > "$DECRYPTED" 2>/dev/null; then
+      echo "ERROR: Failed to decrypt $ENV_FILE. Is the age key available?"
+      rm -f "$DECRYPTED"
+      exit 1
+    fi
+    $SCP_CMD "$DECRYPTED" "$SCP_HOST:$REMOTE_DIR/.env"
+    rm -f "$DECRYPTED"
+  else
+    $SCP_CMD "$ENV_FILE" "$SCP_HOST:$REMOTE_DIR/.env"
+  fi
   echo "[ok] Env file copied to $SCP_HOST:$REMOTE_DIR/.env"
 fi
 

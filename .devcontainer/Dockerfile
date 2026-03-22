@@ -32,6 +32,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip 
     && rm -rf /var/lib/apt/lists/* \
     && pip install --break-system-packages pyyaml grip pymupdf gspread "deprecation>=2.1.0"
 
+# SOPS + age (for encrypting secrets in private repo)
+RUN curl -Lo /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64 \
+    && chmod +x /usr/local/bin/sops \
+    && curl -Lo /tmp/age.tar.gz "https://dl.filippo.io/age/v1.2.1?for=linux/amd64" \
+    && tar -xzf /tmp/age.tar.gz -C /tmp \
+    && mv /tmp/age/age /tmp/age/age-keygen /usr/local/bin/ \
+    && rm -rf /tmp/age /tmp/age.tar.gz
+
 # Hetzner Cloud CLI (for managing staging/prod VPS)
 RUN curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz \
     | tar xz -C /usr/local/bin/
