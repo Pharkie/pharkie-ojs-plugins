@@ -389,6 +389,31 @@ else
   fail "Reconciliation failed" "$(echo "$RECON_OUTPUT" | tail -3)"
 fi
 
+# --- 12. Backup health ---
+echo "12. Backup health"
+BACKUP_CRON=$($SSH_CMD "crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
+if [ -n "$BACKUP_CRON" ]; then
+  pass "Backup cron installed"
+else
+  fail "Backup cron not installed (run: scripts/pull-ojs-backup.sh --install-cron)"
+fi
+
+BACKUP_KEY=$($SSH_CMD "test -f /opt/backups/ojs/.backup-key && echo 'exists' || echo 'missing'")
+if [ "$BACKUP_KEY" = "exists" ]; then
+  pass "Backup encryption key present"
+else
+  fail "Backup encryption key missing at /opt/backups/ojs/.backup-key"
+fi
+
+LATEST_BACKUP=$($SSH_CMD "ls -t /opt/backups/ojs/daily/ojs-*.sql.gz.enc 2>/dev/null | head -1")
+if [ -n "$LATEST_BACKUP" ]; then
+  BACKUP_AGE=$($SSH_CMD "echo \$(( (\$(date +%s) - \$(stat -c %Y '$LATEST_BACKUP')) / 3600 ))h")
+  BACKUP_SIZE=$($SSH_CMD "stat -c%s '$LATEST_BACKUP' | numfmt --to=iec")
+  pass "Latest backup: $(basename "$LATEST_BACKUP") ($BACKUP_SIZE, ${BACKUP_AGE} old)"
+else
+  fail "No encrypted backups found in /opt/backups/ojs/daily/"
+fi
+
 # --- Summary ---
 echo ""
 echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
