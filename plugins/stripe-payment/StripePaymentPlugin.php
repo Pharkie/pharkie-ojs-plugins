@@ -310,7 +310,7 @@ class StripePaymentPlugin extends PaymethodPlugin
             }
 
             $templateMgr = TemplateManager::getManager($request);
-            $templateMgr->assign('message', $userMessage);
+            $templateMgr->assign('messageTranslated', $userMessage);
             $templateMgr->display('frontend/pages/message.tpl');
         }
     }
