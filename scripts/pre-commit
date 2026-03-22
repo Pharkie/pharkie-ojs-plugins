@@ -52,20 +52,9 @@ if [[ -z "$STAGED_FILES" ]]; then
 fi
 
 # ==========================================
-# CHECK 1: Secret Detection (BLOCKS)
+# CHECK 1: Environment Variable Coverage (BLOCKS)
 # ==========================================
-echo -e "${BLUE}1. Checking for secrets...${NC}"
-if check_secrets; then
-    echo -e "    ${GREEN}OK${NC}: No secrets detected"
-else
-    ((ERRORS++))
-fi
-echo ""
-
-# ==========================================
-# CHECK 2: Environment Variable Coverage (BLOCKS)
-# ==========================================
-echo -e "${BLUE}2. Checking environment variable documentation...${NC}"
+echo -e "${BLUE}1. Checking environment variable documentation...${NC}"
 if check_env_vars; then
     echo -e "    ${GREEN}OK${NC}: All compose variables documented"
 fi
@@ -75,9 +64,9 @@ fi
 echo ""
 
 # ==========================================
-# CHECK 3: YAML Syntax (BLOCKS)
+# CHECK 2: YAML Syntax (BLOCKS)
 # ==========================================
-echo -e "${BLUE}3. Checking YAML syntax...${NC}"
+echo -e "${BLUE}2. Checking YAML syntax...${NC}"
 if check_yaml_syntax; then
     echo -e "    ${GREEN}OK${NC}: YAML syntax valid"
 else
@@ -86,9 +75,9 @@ fi
 echo ""
 
 # ==========================================
-# CHECK 4: Documentation Links (BLOCKS)
+# CHECK 3: Documentation Links (BLOCKS)
 # ==========================================
-echo -e "${BLUE}4. Checking documentation links...${NC}"
+echo -e "${BLUE}3. Checking documentation links...${NC}"
 if check_doc_links; then
     echo -e "    ${GREEN}OK${NC}: All internal links valid"
 else
@@ -97,9 +86,9 @@ fi
 echo ""
 
 # ==========================================
-# CHECK 5: Backfill Tests (BLOCKS)
+# CHECK 4: Backfill Tests (BLOCKS)
 # ==========================================
-echo -e "${BLUE}5. Checking backfill tests...${NC}"
+echo -e "${BLUE}4. Checking backfill tests...${NC}"
 if check_backfill_tests; then
     echo -e "    ${GREEN}OK${NC}: Backfill tests passed"
 else
@@ -108,9 +97,20 @@ fi
 echo ""
 
 # ==========================================
+# CHECK 5: Secret Detection (BLOCKS)
+# ==========================================
+echo -e "${BLUE}5. Checking for secrets...${NC}"
+if check_secrets; then
+    echo -e "    ${GREEN}OK${NC}: No secrets detected"
+else
+    ((ERRORS++))
+fi
+echo ""
+
+# ==========================================
 # CHECK 6: ggshield Secret Scan (BLOCKS)
 # ==========================================
-echo -e "${BLUE}7. Running ggshield secret scan...${NC}"
+echo -e "${BLUE}6. Running ggshield secret scan...${NC}"
 if ! command -v ggshield &>/dev/null; then
     echo -e "    ${RED}WARNING${NC}: ggshield not installed (install: pipx install ggshield)"
 elif ! ggshield secret scan pre-commit 2>/dev/null; then
