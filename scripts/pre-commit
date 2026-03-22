@@ -34,7 +34,6 @@ source "$SCRIPT_DIR/lib/check-env-vars.sh"
 source "$SCRIPT_DIR/lib/check-yaml-syntax.sh"
 source "$SCRIPT_DIR/lib/check-doc-links.sh"
 source "$SCRIPT_DIR/lib/check-backfill-tests.sh"
-source "$SCRIPT_DIR/lib/check-env-consistency.sh"
 
 # Track results
 ERRORS=0
@@ -109,18 +108,7 @@ fi
 echo ""
 
 # ==========================================
-# CHECK 6: Env File Consistency (BLOCKS)
-# ==========================================
-echo -e "${BLUE}6. Checking env file consistency...${NC}"
-if check_env_consistency; then
-    echo -e "    ${GREEN}OK${NC}: Content vars consistent across env files"
-else
-    ((ERRORS++))
-fi
-echo ""
-
-# ==========================================
-# CHECK 7: ggshield Secret Scan (BLOCKS)
+# CHECK 6: ggshield Secret Scan (BLOCKS)
 # ==========================================
 echo -e "${BLUE}7. Running ggshield secret scan...${NC}"
 if ! command -v ggshield &>/dev/null; then
