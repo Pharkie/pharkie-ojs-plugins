@@ -246,43 +246,64 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 - [x] **Fix duplicate abstracts** — article pages showed abstract twice (once in OJS metadata, once in HTML galley). Phase 1: updated 312 toc.json abstracts + 103 keywords from cleaner HTML galley text, fixed 24 bad keyword arrays. Phase 2: stripped abstract sections from all 520 HTML galley files. Scripts: `backfill/update_abstracts.py`, `backfill/strip_abstract.py`. Deployed to live 2026-03-21.
 - [x] ~~**Broader shared-page book review check**~~ — 268 shared-page reviews checked, 3 bleed cases fixed (14.2, 32.2×2), 7 false positives confirmed. 0 remaining (2026-03-21).
 
-## Future improvements
+## Next priorities
 
-- [x] **Inline HTML galley plugin** — standalone OJS plugin (`inlineHtmlGalley`) renders HTML galley content inline on article pages for users with access. Hides all galley links (PDF, HTML, Full Text) on issue TOC / archive pages so readers click through to the article landing page. On article pages, hides "Full Text" link when inline content is shown; PDF link remains visible. 5 Playwright tests.
-- [ ] **Cross-issue browsing** — let readers browse articles by type (e.g., Book Reviews) across issue boundaries. Two things to investigate:
-  - [ ] **Browse by Section plugin** (`pkp/browseBySection`) — install from Plugin Gallery, enable per-section. Works with existing section assignments, no extra metadata. Easiest win.
-  - [ ] **OJS categories** — decide taxonomy/topology (hierarchical, one level of nesting supported). Categories are independent of sections and require assigning articles (could be done during backfill import). Decide what categories to create and whether they add value beyond section browsing.
-- [ ] **Non-member payment UX flow** — registration now enabled (`disableUserReg=0`). OJS redirects anonymous users to login when they click a paywalled article, with no "this is paywalled / subscribe / purchase" interstitial. Just a bare login form. This is how the OJS code works (`Validation::redirectLogin()` in `ArticleHandler.php` fires for anonymous users on restricted galleys; purchase flow requires `$user->getId()`). Need to test the full non-member flow (register → login → purchase) and work out whether the UX is acceptable or needs a custom interstitial.
-- [ ] Admin per-member sync status — Sync Log page shows global stats but no per-user view. Data exists in `wp_wpojs_sync_log` + `_wpojs_user_id` usermeta; just needs a UI.
-- [x] ~~**DOI assignment**~~ — All 1,476 DOIs assigned (1,408 articles + 68 issues). 6 articles with leading `"` in titles were missed by auto-assignment — assigned via API. `doi-registry.json` exported from live DB for repave resilience. `doiCreationTime=publication` on production, `never` on dev/staging. Author guidelines updated with DOI-in-references requirement.
-- [x] ~~**DOI deposit to Crossref**~~ — 1,470 DOIs registered in production (2026-03-21). 44 pre-existing DOIs (36.2 + 37.1) re-deposited with updated URLs pointing to `journal.existentialanalysis.org.uk`. Queue drained via `blast-queue.sh` with 3 workers + 1s delay (~19 min). Two OJS core patches applied (Dockerfile-persistent): error details persistence (`crossref-error-details.php`) and schema validation skip (`skip-remote-schema-validation.php`). See `docs/blast-queue.md`.
-- [ ] **Crossref reference linking** — Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated on submissions page to request DOIs in references. 18-month grace period for new members.
-  - [ ] **Phase 1: Extract archive citations from HTML galleys** — parse reference sections from existing HTML galleys (~1,356 articles), split into individual citations, load into OJS `citations` table. Structures the data properly regardless of DOI availability.
-  - [ ] **Phase 2: Look up DOIs for existing citations** — use Crossref REST API to match extracted citations to DOIs (free, no per-lookup cost). Crossref provides reference matching tools for this. Most humanities references won't have DOIs, but this catches what's available. When OJS 3.6 lands, the built-in plugin can include matched DOIs in `<citation_list>` deposits automatically.
-- [ ] **Analytics** — decide on analytics approach: OJS Usage Statistics plugin (built-in, basic), Google Analytics, Plausible, or Matomo. Consider: privacy (GDPR), what metrics matter (downloads, page views, geographic), cost.
-- [ ] **Security audit** — review OJS hardening: file upload restrictions, rate limiting, CSP headers, admin access controls, backup strategy, update policy. Check Caddy security headers. Review WP plugin (API key handling, input validation, CSRF). Penetration test the sync API endpoint.
-- [ ] **JATS XML galleys** — generate JATS (Journal Article Tag Suite) XML for each article. JATS is the standard format for scholarly article interchange, required/preferred by DOAJ, PubMed, Crossref enhanced deposits, and preservation services (LOCKSS/CLOCKSS/PKP PN). OJS natively supports JATS XML as a galley format. Approach options:
-  - **From HTML galleys** — convert existing HTML galleys to JATS XML (simplest, ~1,356 articles already have HTML). Tools: custom script or Pandoc with JATS output. Would need to map our HTML structure (headings, paragraphs, citations) to JATS elements.
-  - **From source PDFs via API** — re-extract structured content directly to JATS using Claude API. Higher quality but higher cost.
-  - **JATS Parser Plugin** — OJS has a `jatsParser` plugin that can render JATS XML inline (similar to our inline HTML galley plugin). Consider whether to use it alongside or instead of the custom inline HTML plugin.
+### 1. Stripe live deployment
+- [ ] Create Stripe account with SEA bank details
+- [ ] Add live keys (`sk_live_`, `pk_live_`) to `.env.live`
+- [ ] Configure Stripe webhook endpoint in Stripe dashboard
+- [ ] Add webhook secret (`whsec_`) to `.env.live`
+- [ ] Deploy and verify end-to-end purchase on live
 
-## Discoverability & indexing
+### 2. Citation extraction + Crossref reference linking
+Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated. 18-month grace period for new members.
+- [ ] **Phase 1: Extract archive citations from HTML galleys** — parse reference sections from existing HTML galleys (~1,356 articles), split into individual citations, load into OJS `citations` table.
+- [ ] **Phase 2: Look up DOIs for existing citations** — use Crossref REST API to match extracted citations to DOIs (free, no per-lookup cost). When OJS 3.6 lands, the built-in plugin can include matched DOIs in `<citation_list>` deposits automatically.
 
-- [ ] **SEO** — verify OJS metadata for search engines: citation meta tags (Highwire/Dublin Core), sitemap.xml, robots.txt, Open Graph tags. Check that abstracts, keywords, and author names appear in page source. Submit sitemap to Google Search Console. Consider structured data (schema.org/ScholarlyArticle).
-- [ ] **Google Scholar indexing** — ensure articles are discoverable in Google Scholar:
-  - [ ] Verify Highwire Press meta tags (`citation_title`, `citation_author`, `citation_date`, `citation_pdf_url`, etc.) are present on article pages — OJS generates these by default but check completeness.
-  - [ ] Ensure abstracts are visible to crawlers (not behind paywall/JS).
-  - [ ] Submit to Google Scholar inclusion request form if not already indexed.
-  - [ ] Check that PDF metadata (title, author) matches HTML meta tags.
-  - [ ] Verify `robots.txt` and paywall don't block Googlebot from metadata/abstracts.
-- [ ] **ResearchGate journal profile** — create/claim the journal profile on ResearchGate to improve discoverability and allow authors to link their publications.
-- [ ] **DOAJ indexing** — apply for Directory of Open Access Journals listing (for open-access content: editorials, book reviews):
-  - [ ] DOAJ application form — journal metadata, editorial process, licensing, preservation policy.
-  - [ ] JATS XML or article-level metadata feed (DOAJ API accepts OAI-PMH or DOAJ article XML).
-  - [ ] Verify OAI-PMH endpoint works (`/oai?verb=ListRecords&metadataPrefix=oai_dc`) — OJS has this built-in.
-  - [ ] Clear licensing info on each article (Creative Commons or equivalent).
-  - [ ] Consider which sections qualify (Book Reviews and Editorials are open; Articles are paywalled — DOAJ is for OA content only).
-- [ ] **ORCID integration** — configure ORCID plugin, add ORCID iDs to author metadata where available. OJS has a built-in ORCID plugin (Plugin Gallery). Needs: ORCID Member API credentials (or Public API for display-only), then either manual entry per author or bulk lookup/import.
+### 3. Security audit
+- [ ] OJS hardening: file upload restrictions, rate limiting, CSP headers, admin access controls, backup strategy, update policy
+- [ ] Caddy security headers
+- [ ] WP plugin: API key handling, input validation, CSRF
+- [ ] Stripe plugin: webhook signature verification, amount/currency checks (done in code, needs pen test)
+- [ ] Penetration test the sync API endpoint
+
+### 4. Discoverability & indexing
+- [ ] **SEO** — citation meta tags (Highwire/Dublin Core), sitemap.xml, robots.txt, Open Graph tags. Submit sitemap to Google Search Console. Consider structured data (schema.org/ScholarlyArticle).
+- [ ] **Google Scholar indexing**:
+  - [ ] Verify Highwire Press meta tags on article pages
+  - [ ] Ensure abstracts visible to crawlers (not behind paywall/JS)
+  - [ ] Submit to Google Scholar inclusion request form
+  - [ ] Check PDF metadata matches HTML meta tags
+  - [ ] Verify `robots.txt` and paywall don't block Googlebot
+- [ ] **JATS XML galleys** — standard format for scholarly interchange, required/preferred by DOAJ, PubMed, Crossref enhanced deposits, preservation services. Approach options:
+  - **From HTML galleys** — convert existing HTML galleys to JATS XML (~1,356 articles already have HTML)
+  - **From source PDFs via API** — re-extract structured content directly to JATS using Claude API
+  - **JATS Parser Plugin** — OJS built-in, can render JATS XML inline
+- [ ] **ResearchGate journal profile** — create/claim the journal profile
+- [ ] **DOAJ indexing** — apply for Directory of Open Access Journals listing (open-access content: editorials, book reviews):
+  - [ ] DOAJ application form
+  - [ ] JATS XML or OAI-PMH metadata feed
+  - [ ] Verify OAI-PMH endpoint works
+  - [ ] Clear licensing info on each article
+- [ ] **ORCID integration** — configure OJS ORCID plugin, add ORCID iDs to author metadata
+
+### 5. Analytics
+- [ ] Decide approach: OJS Usage Statistics (built-in), Google Analytics, Plausible, or Matomo. Consider: privacy (GDPR), metrics needed, cost.
+
+### 6. Everything else
+- [ ] **Non-member payment UX flow** — OJS redirects anonymous users to bare login form. Test whether UX is acceptable or needs a custom interstitial.
+- [ ] **Cross-issue browsing** — Browse by Section plugin (`pkp/browseBySection`) and/or OJS categories
+- [ ] Admin per-member sync status — per-user view of sync log
+- [ ] **Author emails** — replace `firstname.lastname@placeholder.invalid` with real emails
+- [ ] Test new member / cancellation / on-hold flows
+- [ ] Mobile testing
+
+## Done
+
+- [x] **Inline HTML galley plugin** — standalone, configurable settings UI, 5 Playwright tests
+- [x] **DOI assignment** — 1,476 DOIs assigned (1,408 articles + 68 issues)
+- [x] **DOI deposit to Crossref** — 1,470 DOIs registered in production (2026-03-21). See `docs/blast-queue.md`.
+- [x] **Stripe Payment plugin** — built, tested on dev, 5/5 e2e tests (2026-03-22). PayPal remains as fallback.
 
 Dropped (not worth the complexity):
 - ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Load-based backpressure + adaptive throttling makes sequential sync fast enough (~40s on Hetzner for 684 users).
