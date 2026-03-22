@@ -8,7 +8,7 @@
 - Member dashboard widget (WooCommerce My Account)
 - UI messages (OJS login hint, paywall hint, footer)
 - Non-Docker setup guide — `docs/non-docker-setup.md`
-- Dev environment clean rebuild verified — all 79 e2e tests passing
+- Dev environment clean rebuild verified — all 81 e2e tests passing
 - Staging VPS on Hetzner (Michal's org account) — fully scripted, smoke tests (22/22) + load tests passing, bulk sync 684/684 clean
 - Deployment automation — `init-vps.sh`, `deploy.sh`, `provision-vps.sh`, `smoke-test.sh`, `load-test.sh`
 - Deployment docs — `docs/vps-deployment.md` (public), `docs/private/staging-prod-setup.md` (private)
@@ -79,7 +79,7 @@ WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existen
 - [ ] Test cancellation flow (cancel → verify OJS access removed)
 - [ ] Test on-hold / failed payment scenario
 - [ ] **Mobile testing** — check OJS article pages, archive, login, inline HTML galley, paywall on mobile browsers (iOS Safari, Android Chrome). Check responsive layout, readability, touch targets, galley content overflow.
-- [x] ~~**Non-member purchase flow**~~ — Stripe Payment plugin built and tested on dev (2026-03-22). Full Checkout redirect flow with webhook handler. PayPal sandbox broken for UK accounts (support ticket filed). Live deployment pending Stripe account setup with SEA bank details. PayPal remains available as fallback (`setup-ojs.sh` priority: Stripe > PayPal > Manual).
+- [x] ~~**Non-member purchase flow**~~ — Stripe Payment plugin built and tested on dev (2026-03-22). Full Checkout redirect flow with webhook handler. PayPal sandbox was broken for UK accounts — multiple support tickets filed, PayPal support was unable to resolve. Switched to Stripe. Live Stripe account created (2026-03-22), restricted API key (Checkout Sessions only). PayPal removed as payment option.
 - [x] ~~Monitor 24-48h — check sync log for failures~~ — 0 sync failures, 678/678 reconciliation clean (2026-03-21)
 - [x] ~~Run `wp ojs-sync reconcile` manually after 24h to check for drift~~ — 678 OK, 0 drift (2026-03-21)
 - [x] ~~Investigate "Active WP members: 0" in `wp ojs-sync status`~~ — fixed, now shows 678 correctly
@@ -153,12 +153,12 @@ Full dev rebuild is a two-step process:
    Seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. Includes branding, plugin config, subscription types.
 2. **Full backfill import** (~15 min): `backfill/import.sh backfill/output/* --clean`
    Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). `--clean` wipes DB first. For single-issue updates: `import.sh backfill/output/37.1 --force` (overwrites that issue only).
-3. **Run e2e tests**: `npx playwright test` — 79 tests, all should pass.
+3. **Run e2e tests**: `npx playwright test` — 81 tests, all should pass.
 4. **Verify banner links**: sidebar "BOOK NOW" banners should link to `WPOJS_WP_MEMBER_URL` (not localhost).
 
 Last verified 2026-03-19:
 - [x] Dev containers running, test-connection passes
-- [x] 79/79 Playwright e2e tests pass (inline HTML galley TOC test fixed — was incorrectly checking paywalled articles' Full Text links)
+- [x] 81/81 Playwright e2e tests pass (inline HTML galley TOC test fixed — was incorrectly checking paywalled articles' Full Text links)
 
 ## Future staging rebuild
 
@@ -185,7 +185,7 @@ No staging server currently exists. Live is `sea-live`.
 
 ## Playwright E2E browser tests (`e2e/`)
 
-All passing (66/66):
+All passing (81/81):
 
 - [x] Sync lifecycle — WCS activate/expire → OJS subscription status
 - [x] OJS login — synced user logs in with WP password (no password setup needed)
@@ -249,8 +249,9 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 ## Next priorities
 
 ### 1. Stripe live deployment
-- [ ] Create Stripe account with SEA bank details
-- [ ] Add live keys (`sk_live_`, `pk_live_`) to `.env.live`
+- [x] ~~Create Stripe account with SEA bank details~~ (2026-03-22)
+- [x] ~~Create restricted API key (Checkout Sessions write-only)~~ (2026-03-22)
+- [ ] Add live keys (`rk_live_`, `pk_live_`) to `.env.live`
 - [ ] Configure Stripe webhook endpoint in Stripe dashboard
 - [ ] Add webhook secret (`whsec_`) to `.env.live`
 - [ ] Deploy and verify end-to-end purchase on live
@@ -304,7 +305,7 @@ Crossref membership obligation: include DOIs for cited works when depositing ([r
 - [x] **Inline HTML galley plugin** — standalone, configurable settings UI, 5 Playwright tests
 - [x] **DOI assignment** — 1,476 DOIs assigned (1,408 articles + 68 issues)
 - [x] **DOI deposit to Crossref** — 1,470 DOIs registered in production (2026-03-21). See `docs/blast-queue.md`.
-- [x] **Stripe Payment plugin** — built, tested on dev, 5/5 e2e tests (2026-03-22). PayPal remains as fallback.
+- [x] **Stripe Payment plugin** — built, tested on dev, 5/5 e2e tests (2026-03-22). Replaced PayPal (sandbox broken for UK accounts, PayPal support unhelpful). Stripe account created with restricted API key (Checkout Sessions only).
 
 Dropped (not worth the complexity):
 - ~~Batch bulk sync endpoint~~ — would reduce 1400 HTTP calls to ~14 but adds OJS-side complexity (transactions, partial failure). Load-based backpressure + adaptive throttling makes sequential sync fast enough (~40s on Hetzner for 684 users).

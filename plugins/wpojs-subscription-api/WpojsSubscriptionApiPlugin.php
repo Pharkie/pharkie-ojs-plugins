@@ -145,6 +145,8 @@ document.addEventListener("DOMContentLoaded", function() {
     if (h1) {
         var div = document.createElement("div");
         div.className = "wpojs-login-hint";
+        div.setAttribute("role", "status");
+        div.setAttribute("aria-live", "polite");
         div.innerHTML = "' . $jsEscapedHtml . '";
         h1.insertAdjacentElement("afterend", div);
     }

@@ -306,7 +306,7 @@ class WpojsApiController extends PKPBaseController
     private function errorCategory(int $status): ?string
     {
         return match (true) {
-            in_array($status, [400, 401, 403, 409], true) => 'permanent',
+            $status >= 400 && $status < 500 && $status !== 404 && $status !== 429 => 'permanent',
             in_array($status, [429, 500, 502, 503], true) => 'retryable',
             $status === 404 => 'noop',
             default => null,
