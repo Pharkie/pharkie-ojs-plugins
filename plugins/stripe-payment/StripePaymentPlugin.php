@@ -194,6 +194,8 @@ class StripePaymentPlugin extends PaymethodPlugin
     private function handleReturn(Request $request)
     {
         $journal = $request->getJournal();
+        $context = Application::get()->getRequest()->getContext();
+        $contactEmail = $context ? $context->getData('contactEmail') : '';
 
         try {
             $sessionId = $request->getUserVar('session_id');
@@ -239,8 +241,25 @@ class StripePaymentPlugin extends PaymethodPlugin
             $request->redirectUrl($queuedPayment->getRequestUrl());
         } catch (\Exception $e) {
             error_log('Stripe return error: ' . $e->getMessage());
+
+            // Determine user-friendly message based on the exception.
+            $exMsg = strtolower($e->getMessage());
+            if (str_contains($exMsg, 'card') || str_contains($exMsg, 'declined')) {
+                $userMessage = 'Your card was declined. Please try again with a different card.';
+            } elseif (str_contains($exMsg, 'expired')) {
+                $userMessage = 'Your card has expired. Please use a different card.';
+            } elseif (str_contains($exMsg, 'amount mismatch') || str_contains($exMsg, 'currency mismatch') || str_contains($exMsg, 'metadata')) {
+                $userMessage = 'There was a problem verifying your payment. Please try again.';
+            } else {
+                $userMessage = 'Payment could not be processed. Please try again.';
+            }
+
+            if (!empty($contactEmail)) {
+                $userMessage .= ' If the problem persists, please contact ' . htmlspecialchars($contactEmail) . '.';
+            }
+
             $templateMgr = TemplateManager::getManager($request);
-            $templateMgr->assign('message', 'plugins.paymethod.stripe.error');
+            $templateMgr->assign('message', $userMessage);
             $templateMgr->display('frontend/pages/message.tpl');
         }
     }

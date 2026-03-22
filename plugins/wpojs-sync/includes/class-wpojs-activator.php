@@ -38,6 +38,7 @@ class WPOJS_Activator {
 			ojs_response_code smallint(5) unsigned DEFAULT NULL,
 			ojs_response_body text DEFAULT NULL,
 			attempt_count tinyint(3) unsigned NOT NULL DEFAULT 1,
+			request_id varchar(36) DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			KEY idx_status (status),

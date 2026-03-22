@@ -205,7 +205,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             $email = htmlspecialchars($context ? $context->getData('contactEmail') : '');
             $emailLink = $email ? '<a href="mailto:' . $email . '">' . $email . '</a>' : 'the journal';
             $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
-                . 'border:1px solid #e0d8cc;border-radius:4px;font-size:13px;color:#666;line-height:1.5;">'
+                . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
                 . 'This article has been digitally restored from print. If you spot any errors '
                 . 'or formatting issues, please email ' . $emailLink . '.'
                 . ' You can also view the PDF version of this article.'

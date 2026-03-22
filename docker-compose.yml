@@ -145,7 +145,7 @@ services:
       - sea-net
 
   adminer:
-    image: adminer:4-standalone
+    image: adminer:4.8.1-standalone
     restart: unless-stopped
     environment:
       ADMINER_DEFAULT_SERVER: wp-db

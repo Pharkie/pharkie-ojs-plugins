@@ -8,7 +8,7 @@
 - Member dashboard widget (WooCommerce My Account)
 - UI messages (OJS login hint, paywall hint, footer)
 - Non-Docker setup guide — `docs/non-docker-setup.md`
-- Dev environment clean rebuild verified — all 61 e2e tests passing
+- Dev environment clean rebuild verified — all 79 e2e tests passing
 - Staging VPS on Hetzner (Michal's org account) — fully scripted, smoke tests (22/22) + load tests passing, bulk sync 684/684 clean
 - Deployment automation — `init-vps.sh`, `deploy.sh`, `provision-vps.sh`, `smoke-test.sh`, `load-test.sh`
 - Deployment docs — `docs/vps-deployment.md` (public), `docs/private/staging-prod-setup.md` (private)
@@ -153,12 +153,12 @@ Full dev rebuild is a two-step process:
    Seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. Includes branding, plugin config, subscription types.
 2. **Full backfill import** (~15 min): `backfill/import.sh backfill/output/* --clean`
    Imports all 68 issues (1398 articles, HTML + PDF galleys, 469MB XML). `--clean` wipes DB first. For single-issue updates: `import.sh backfill/output/37.1 --force` (overwrites that issue only).
-3. **Run e2e tests**: `npx playwright test` — 66 tests, all should pass.
+3. **Run e2e tests**: `npx playwright test` — 79 tests, all should pass.
 4. **Verify banner links**: sidebar "BOOK NOW" banners should link to `WPOJS_WP_MEMBER_URL` (not localhost).
 
 Last verified 2026-03-19:
 - [x] Dev containers running, test-connection passes
-- [x] 66/66 Playwright e2e tests pass (inline HTML galley TOC test fixed — was incorrectly checking paywalled articles' Full Text links)
+- [x] 79/79 Playwright e2e tests pass (inline HTML galley TOC test fixed — was incorrectly checking paywalled articles' Full Text links)
 
 ## Future staging rebuild
 
@@ -295,6 +295,7 @@ Crossref membership obligation: include DOIs for cited works when depositing ([r
 - [ ] **Cross-issue browsing** — Browse by Section plugin (`pkp/browseBySection`) and/or OJS categories
 - [ ] Admin per-member sync status — per-user view of sync log
 - [ ] **Author emails** — replace `firstname.lastname@placeholder.invalid` with real emails
+- [ ] **Invite article authors to review their contributions** — email authors to check: right number of articles, correct full text, correct PDF pages. Requires real author emails first.
 - [ ] Test new member / cancellation / on-hold flows
 - [ ] Mobile testing
 

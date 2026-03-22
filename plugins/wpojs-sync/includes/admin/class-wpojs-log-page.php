@@ -162,6 +162,7 @@ class WPOJS_Log_List_Table extends WP_List_Table {
             'ojs_response_code' => 'HTTP Code',
             'ojs_response_body' => 'Response',
             'attempt_count'     => 'Attempts',
+            'request_id'        => 'Request ID',
         );
     }
 
@@ -245,6 +246,12 @@ class WPOJS_Log_List_Table extends WP_List_Table {
                 return esc_html( $raw );
             case 'attempt_count':
                 return esc_html( $item->attempt_count );
+            case 'request_id':
+                if ( empty( $item->request_id ) ) {
+                    return '—';
+                }
+                $short = substr( $item->request_id, 0, 8 );
+                return '<span title="' . esc_attr( $item->request_id ) . '"><code>' . esc_html( $short ) . '</code></span>';
             default:
                 return '';
         }

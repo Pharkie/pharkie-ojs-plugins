@@ -77,6 +77,8 @@
                     <th>Endpoint</th>
                     <th>Source IP</th>
                     <th>HTTP Status</th>
+                    <th>Error Detail</th>
+                    <th>Request ID</th>
                 </tr>
             </thead>
             <tbody>
@@ -93,6 +95,16 @@
                                 <span style="color:#dc3232;">{$log->http_status}</span>
                             {else}
                                 {$log->http_status}
+                            {/if}
+                        </td>
+                        <td>
+                            {if !empty($log->error_detail)}
+                                <span title="{$log->error_detail|escape}">{$log->error_detail|truncate:80:"..."|escape}</span>
+                            {/if}
+                        </td>
+                        <td>
+                            {if !empty($log->request_id)}
+                                <code title="{$log->request_id|escape}">{$log->request_id|truncate:8:""|escape}</code>
                             {/if}
                         </td>
                     </tr>
