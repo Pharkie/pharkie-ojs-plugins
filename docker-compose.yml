@@ -64,6 +64,7 @@ services:
       OJS_ADMIN_USER: ${OJS_ADMIN_USER:?OJS_ADMIN_USER not set in .env}
       OJS_ADMIN_PASSWORD: ${OJS_ADMIN_PASSWORD:?OJS_ADMIN_PASSWORD not set in .env}
       OJS_ADMIN_EMAIL: ${OJS_ADMIN_EMAIL:?OJS_ADMIN_EMAIL not set in .env}
+      OJS_API_KEY_SECRET: ${OJS_API_KEY_SECRET:?OJS_API_KEY_SECRET not set in .env}
       WPOJS_API_KEY_SECRET: ${WPOJS_API_KEY_SECRET:?WPOJS_API_KEY_SECRET not set in .env}
       WPOJS_ALLOWED_IPS: ${WPOJS_ALLOWED_IPS:?WPOJS_ALLOWED_IPS not set in .env}
       WPOJS_WP_MEMBER_URL: ${WPOJS_WP_MEMBER_URL:?WPOJS_WP_MEMBER_URL not set in .env}
@@ -119,7 +120,7 @@ services:
       - ./scripts:/scripts:ro
       - "./backfill/output/35.2/import.xml:/data/sample-issues/35.2.xml:ro"
       - "./backfill/output/36.1/import.xml:/data/sample-issues/36.1.xml:ro"
-      - "./data export/editorial-roles.json:/data/editorial-roles.json:ro"
+      - "./docs/private/editorial-roles.json:/data/editorial-roles.json:ro"
     depends_on:
       ojs-db:
         condition: service_healthy

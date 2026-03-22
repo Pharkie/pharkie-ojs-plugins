@@ -99,14 +99,14 @@ class StripePaymentPlugin extends PaymethodPlugin
                 'value' => (bool) $this->getSetting($contextId, 'testMode'),
                 'groupId' => 'stripepayment',
             ]))
-            ->addField(new FieldText('stripeSecretKey', [
-                'label' => __('plugins.paymethod.stripe.settings.secretKey'),
-                'value' => $this->getSetting($contextId, 'secretKey'),
-                'groupId' => 'stripepayment',
-            ]))
             ->addField(new FieldText('stripePublishableKey', [
                 'label' => __('plugins.paymethod.stripe.settings.publishableKey'),
                 'value' => $this->getSetting($contextId, 'publishableKey'),
+                'groupId' => 'stripepayment',
+            ]))
+            ->addField(new FieldText('stripeSecretKey', [
+                'label' => __('plugins.paymethod.stripe.settings.secretKey'),
+                'value' => $this->getSetting($contextId, 'secretKey'),
                 'groupId' => 'stripepayment',
             ]))
             ->addField(new FieldText('stripeWebhookSecret', [

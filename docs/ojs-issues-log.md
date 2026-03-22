@@ -244,6 +244,16 @@ Two separate issues confirmed:
 - **Workaround:** Manual Payment plugin verifies the OJS access-granting logic works end-to-end (tested and confirmed 2026-03-21). The PayPal callback flow can only be tested with live credentials.
 - **Resolution:** PayPal abandoned in favour of Stripe (2026-03-22). See `docs/private/stripe-live-checklist.md`. The `scripts/test-paypal.js` script remains as a historical artifact.
 
+### 19. Payment settings page shows all plugins' fields regardless of selection
+
+The Distribution Settings → Payments page renders every installed payment plugin's configuration fields (PayPal, Manual Payment, Stripe) in a single long form, regardless of which plugin is selected in the "Payment Plugins" dropdown. There's no show/hide logic — all fields are always visible, making the page confusing and error-prone.
+
+This is OJS core behaviour: `PKPPaymentSettingsForm` fires a `Form::config::before` hook that each payment plugin uses to append its fields. The form has no mechanism to conditionally show only the selected plugin's fields.
+
+- **Not reported upstream** — by-design architecture, not a bug.
+- **Impact:** Admin UX confusion. Three sets of payment credentials visible at once.
+- **Workaround:** None applied. The page is visited once to configure keys and then rarely again.
+
 ## 11. Crossref deposit errors: OJS doesn't persist failure details (2026-03-21)
 
 **Two separate bugs:**

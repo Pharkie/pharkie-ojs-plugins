@@ -15,7 +15,7 @@ fi
 # Only the variables we actually use in the template — envsubst replaces ALL ${} by
 # default, which blanks out anything not in the environment.
 VARS='$OJS_APP_KEY $OJS_BASE_URL $OJS_TIMEZONE $OJS_DB_HOST $OJS_DB_USER $OJS_DB_PASSWORD $OJS_DB_NAME'
-VARS="$VARS "'$WPOJS_API_KEY_SECRET $OJS_MAIL_FROM $OJS_SMTP_ENABLED $OJS_SMTP_HOST'
+VARS="$VARS "'$OJS_API_KEY_SECRET $OJS_MAIL_FROM $OJS_SMTP_ENABLED $OJS_SMTP_HOST'
 VARS="$VARS "'$OJS_SMTP_PORT $OJS_SMTP_AUTH $OJS_SMTP_USER $OJS_SMTP_PASSWORD $WPOJS_ALLOWED_IPS'
 VARS="$VARS "'$WPOJS_WP_MEMBER_URL $WPOJS_SUPPORT_EMAIL'
 # UI messages are stored in plugin_settings (DB), not config.inc.php.
@@ -27,6 +27,14 @@ NEEDS_INSTALL=true
 if mysql --skip-ssl -h "$OJS_DB_HOST" -u "$OJS_DB_USER" -p"$OJS_DB_PASSWORD" "$OJS_DB_NAME" \
     -e "SELECT 1 FROM journals LIMIT 1" &>/dev/null; then
   NEEDS_INSTALL=false
+fi
+
+# Install Stripe vendor deps (built into image, copied to bind-mounted plugin dir)
+if [ -d /opt/stripe-vendor ] && [ -d /var/www/html/plugins/paymethod/stripe ]; then
+  if [ ! -f /var/www/html/plugins/paymethod/stripe/vendor/autoload.php ]; then
+    cp -r /opt/stripe-vendor /var/www/html/plugins/paymethod/stripe/vendor
+    echo "[OJS] Stripe vendor deps installed."
+  fi
 fi
 
 # Always re-template config from environment (picks up SMTP, API key, URL changes on restart)

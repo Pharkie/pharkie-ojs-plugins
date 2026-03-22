@@ -45,7 +45,7 @@ Base URL: `{OJS_BASE_URL}/index.php/{journal_path}/api/v1/wpojs`
 All protected endpoints (marked "Auth: Yes" above) enforce dual-layer auth:
 
 1. **IP allowlist** — Client IP must be in `allowed_ips` (OJS `config.inc.php` `[wpojs]` section). Supports exact match (IPv4/IPv6) and CIDR notation (IPv4 only).
-2. **Bearer token** — `Authorization: Bearer {secret}` header. Compared via `hash_equals()` against `api_key_secret` in `[wpojs]` config section (falls back to `[security]`).
+2. **Bearer token** — `Authorization: Bearer {secret}` header. Compared via `hash_equals()` against the `WPOJS_API_KEY_SECRET` environment variable.
 
 ## Load protection
 

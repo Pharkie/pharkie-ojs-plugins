@@ -149,7 +149,7 @@ Select **MySQL** as the system on the Adminer login page. Type the server name e
 |---|---|---|
 | "OJS not reachable" | WP can't reach OJS server at all | Check OJS URL in settings, verify OJS is running, check firewall |
 | "Access denied (IP not allowlisted)" | OJS is reachable but blocking WP's IP | Add WP server IP to OJS `config.inc.php` `[wpojs] allowed_ips` |
-| "Authentication failed" | API key mismatch | Verify `WPOJS_API_KEY` in `wp-config.php` matches `api_key_secret` in OJS `config.inc.php` |
+| "Authentication failed" | API key mismatch | Verify `WPOJS_API_KEY` in `wp-config.php` matches `WPOJS_API_KEY_SECRET` env var on OJS server |
 | "Incompatible" | OJS plugin API changed | Run OJS `/preflight` to see which checks failed. May need OJS plugin update. |
 
 ### How to reset an OJS password

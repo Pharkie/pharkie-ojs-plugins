@@ -35,24 +35,27 @@ Also handles WordPress password hash verification at login (so members can use t
 
 Settings are split across two locations:
 
+### Environment variable
+
+The API shared secret is read from the `WPOJS_API_KEY_SECRET` environment variable (not `config.inc.php`). Set it in your Docker Compose `.env` file, or for non-Docker installs, in your Apache/nginx config (`SetEnv WPOJS_API_KEY_SECRET ...`).
+
 ### `config.inc.php` (server config)
 
-Add a `[wpojs]` section to your OJS `config.inc.php`:
+Add a `[wpojs]` section for non-secret settings:
 
 ```ini
 [wpojs]
-api_key_secret = "your-shared-secret-here"
 allowed_ips = "1.2.3.4,10.0.0.0/8"
 wp_member_url = "https://your-wordpress-site.example.org"
 support_email = "support@example.org"
 ```
 
-| Setting | Description |
-|---|---|
-| `api_key_secret` | Shared secret for API authentication. Requests must send `Authorization: Bearer {secret}`. Compared using timing-safe `hash_equals()`. |
-| `allowed_ips` | Comma-separated IPs or CIDR ranges. Requests from other IPs are rejected (403). |
-| `wp_member_url` | WordPress membership site URL. Used in UI messages (`{wpUrl}` placeholder). |
-| `support_email` | Support email. Used in paywall hint (`{supportEmail}` placeholder). |
+| Setting | Source | Description |
+|---|---|---|
+| `WPOJS_API_KEY_SECRET` | env var | Shared secret for API authentication. Requests must send `Authorization: Bearer {secret}`. Compared using timing-safe `hash_equals()`. Read from environment to avoid exposure on OJS System Info page. |
+| `allowed_ips` | `[wpojs]` | Comma-separated IPs or CIDR ranges. Requests from other IPs are rejected (403). |
+| `wp_member_url` | `[wpojs]` | WordPress membership site URL. Used in UI messages (`{wpUrl}` placeholder). |
+| `support_email` | `[wpojs]` | Support email. Used in paywall hint (`{supportEmail}` placeholder). |
 
 ### `plugin_settings` table (UI messages)
 
@@ -112,7 +115,7 @@ This means members can log into OJS with their existing WP password immediately 
 ## Authentication
 
 API requests must include:
-- `Authorization: Bearer {secret}` header — the secret is compared against `api_key_secret` from `config.inc.php` using timing-safe `hash_equals()`.
+- `Authorization: Bearer {secret}` header — the secret is compared against the `WPOJS_API_KEY_SECRET` environment variable using timing-safe `hash_equals()`.
 - Request must originate from an IP in the `allowed_ips` allowlist.
 
 **Important:** If using Apache with PHP-FPM, add `CGIPassAuth on` to `.htaccess` — Apache strips `Authorization` headers by default. Do not use `?apiToken=` query parameters (they leak into access logs).

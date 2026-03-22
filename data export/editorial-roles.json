@@ -1,6 +1,6 @@
 [
   {"email": "rswann@existentialanalysis.org.uk", "firstName": "Richard", "lastName": "Swann", "roles": ["Peer review editor"], "masthead": true},
-  {"email": "therapy@adamknowles.co.uk", "firstName": "Adam", "lastName": "Knowles", "roles": ["Site admin", "Journal manager"], "masthead": false},
+  {"email": "therapy@adamknowles.co.uk", "firstName": "Adam", "lastName": "Knowles", "roles": ["Site admin", "Journal editor"], "masthead": false},
   {"email": "deanandrewstherapy@gmail.com", "firstName": "Dean", "lastName": "Andrews", "roles": ["Journal editor"], "masthead": false},
   {"email": "smuldersea@outlook.com", "firstName": "Ondine", "lastName": "Smulders", "roles": ["Book review editor"], "masthead": true},
   {"email": "simon@oxfordtherapy.uk", "firstName": "Simon", "lastName": "du Plock", "roles": ["Journal editor"], "masthead": true},

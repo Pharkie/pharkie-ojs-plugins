@@ -77,10 +77,10 @@ Three custom plugins, all bind-mounted into the OJS container via `docker-compos
 | **Inline HTML Galley** | `plugins/ojs-inline-html-galley` | `plugins/generic/inlineHtmlGalley` | Inlines HTML galley content on the article page (instead of download link). Shows subscriber/purchase access messages. |
 | **Stripe Payment** | `plugins/stripe-payment` | `plugins/paymethod/stripe` | Stripe Checkout for non-member article/issue purchases. Redirect flow + webhook handler. Replaces PayPal (sandbox broken for UK accounts). |
 
-- **Stripe plugin** uses Stripe Checkout (redirect flow): buyer clicks purchase → OJS creates Checkout Session → redirects to Stripe → payment → redirects back → access granted. Webhook endpoint at `/payment/plugin/StripePayment/webhook` for async confirmation.
-- **Vendor deps**: `plugins/stripe-payment/vendor/` is gitignored. Run `composer install` inside the OJS container after rebuild.
-- **Payment plugin priority** in `setup-ojs.sh`: Stripe (if `OJS_STRIPE_SECRET_KEY`) → PayPal (if `OJS_PAYPAL_ACCOUNT`) → Manual Payment.
-- **Test scripts**: `scripts/test-stripe.js` and `scripts/test-paypal.js` — standalone payment tests, no OJS involved.
+- **Stripe plugin** uses Stripe Checkout (redirect flow): buyer clicks purchase → OJS creates Checkout Session → redirects to Stripe → payment → redirects back → access granted. Webhook endpoint at `/payment/plugin/StripePayment/webhook` for async confirmation. Uses a restricted API key scoped to Checkout Sessions only.
+- **Vendor deps**: `plugins/stripe-payment/vendor/` is gitignored. Stripe PHP SDK is installed via multi-stage Docker build (composer stage) and copied into the bind-mounted plugin dir by the entrypoint.
+- **Payment plugin priority** in `setup-ojs.sh`: Stripe (if `OJS_STRIPE_SECRET_KEY`) → Manual Payment. PayPal eliminated (sandbox broken for UK accounts, support unhelpful).
+- **Test scripts**: `scripts/test-stripe.js` — standalone Stripe payment test, no OJS involved.
 
 ## WP membership stack
 

@@ -141,6 +141,18 @@ Consider switching if the OJS 3.5 upgrade takes more than 2 weeks or the custom 
 
 **OJS quality concerns (2026-02-20):** During Docker dev environment setup, we hit 6 separate OJS bugs — install crashes, broken CLI tooling, XML import/export that can't round-trip its own data, and missing APIs. Documented in [`ojs-issues-log.md`](./ojs-issues-log.md). This strengthens the case for keeping Janeway as a genuine backup.
 
+## Payment gateway: PayPal → Stripe
+
+**Status: Stripe chosen.** PayPal eliminated 2026-03-22.
+
+OJS ships with a PayPal payment plugin for non-member article/issue purchases. We attempted to use it but **PayPal sandbox was completely broken for UK accounts** — couldn't create working sandbox credentials. Multiple support tickets were filed; PayPal support was unable to diagnose or resolve the issue.
+
+Built a custom Stripe Checkout plugin instead (`plugins/stripe-payment/`). Redirect flow: buyer clicks purchase → OJS creates Stripe Checkout Session → redirect to Stripe → payment → redirect back → access granted. Webhook endpoint as backup confirmation path.
+
+**Security:** Uses a restricted Stripe API key scoped to Checkout Sessions only (write), rather than an unrestricted secret key. No OAuth available for custom integrations (unlike WooCommerce's Stripe plugin which uses Stripe Connect).
+
+PayPal has been removed as a payment option. Manual Payment remains as a fallback for edge cases.
+
 ---
 
 <details>

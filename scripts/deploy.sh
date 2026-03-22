@@ -140,7 +140,7 @@ fi
 $SSH_CMD "chmod 644 $REMOTE_DIR/.env"
 
 # Validate required env vars are set (catch blank passwords before compose fails with a cryptic error)
-MISSING=$($SSH_CMD "cd $REMOTE_DIR && for VAR in WP_ADMIN_PASSWORD OJS_ADMIN_PASSWORD WP_DB_PASSWORD DB_PASSWORD OJS_DB_PASSWORD WPOJS_API_KEY WPOJS_API_KEY_SECRET; do grep -qE \"^\${VAR}=.+\" .env || echo \$VAR; done")
+MISSING=$($SSH_CMD "cd $REMOTE_DIR && for VAR in WP_ADMIN_PASSWORD OJS_ADMIN_PASSWORD WP_DB_PASSWORD DB_PASSWORD OJS_DB_PASSWORD WPOJS_API_KEY WPOJS_API_KEY_SECRET OJS_API_KEY_SECRET; do grep -qE \"^\${VAR}=.+\" .env || echo \$VAR; done")
 if [ -n "$MISSING" ]; then
   echo ""
   echo "ERROR: Required variables missing or empty in $SSH_HOST:$REMOTE_DIR/.env:"
@@ -193,10 +193,10 @@ else
 fi
 
 # Sync editorial roles mapping
-ROLES_FILE="$PROJECT_DIR/data export/editorial-roles.json"
+ROLES_FILE="$PROJECT_DIR/docs/private/editorial-roles.json"
 if [ -f "$ROLES_FILE" ]; then
-  $SSH_CMD "mkdir -p '$REMOTE_DIR/data export'"
-  rsync -az -e "$RSYNC_SSH" "$ROLES_FILE" "$SCP_HOST:$REMOTE_DIR/data export/editorial-roles.json"
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/docs/private'"
+  rsync -az -e "$RSYNC_SSH" "$ROLES_FILE" "$SCP_HOST:$REMOTE_DIR/docs/private/editorial-roles.json"
   echo "[ok] Editorial roles synced."
 else
   echo "[skip] No editorial-roles.json found locally."
