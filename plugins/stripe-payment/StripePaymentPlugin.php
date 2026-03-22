@@ -260,8 +260,12 @@ class StripePaymentPlugin extends PaymethodPlugin
 
             if (!$queuedPayment) {
                 // Webhook already fulfilled and deleted the queued payment — that's success.
-                // Redirect to the article URL from the Stripe session metadata, or fall back to journal home.
-                $redirectUrl = $session->metadata['requestUrl'] ?? $request->url(null, 'index');
+                // Validate redirect URL is same-origin to prevent open redirect.
+                $redirectUrl = $session->metadata['requestUrl'] ?? '';
+                $baseUrl = $request->getBaseUrl();
+                if (empty($redirectUrl) || !str_starts_with($redirectUrl, $baseUrl)) {
+                    $redirectUrl = $request->url(null, 'index');
+                }
                 $request->redirectUrl($redirectUrl);
                 return;
             }
@@ -326,9 +330,9 @@ class StripePaymentPlugin extends PaymethodPlugin
         $payload = file_get_contents('php://input');
         $sigHeader = $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '';
 
-        // Must have webhook secret configured
+        // Must have webhook secret configured (400 = don't retry, this is misconfiguration)
         if (empty($webhookSecret)) {
-            http_response_code(500);
+            http_response_code(400);
             echo json_encode(['error' => 'Webhook secret not configured']);
             exit;
         }

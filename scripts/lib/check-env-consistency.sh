@@ -54,7 +54,10 @@ check_env_consistency() {
     read_env_content() {
         local file="$1"
         if head -5 "$file" 2>/dev/null | grep -q '"sops"\|ENC\[AES256'; then
-            sops -d "$file" 2>/dev/null || echo ""
+            if ! sops -d "$file" 2>/dev/null; then
+                echo "    SKIP: Cannot decrypt $(basename "$file") (age key missing?)" >&2
+                return 1
+            fi
         else
             cat "$file"
         fi
