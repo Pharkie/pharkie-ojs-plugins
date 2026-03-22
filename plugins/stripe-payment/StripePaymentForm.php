@@ -84,6 +84,7 @@ class StripePaymentForm extends Form
                 ]],
                 'metadata' => [
                     'queuedPaymentId' => (string) $this->_queuedPayment->getId(),
+                    'requestUrl' => $this->_queuedPayment->getRequestUrl() ?: '',
                 ],
                 'success_url' => $returnUrl,
                 'cancel_url' => $cancelUrl,
