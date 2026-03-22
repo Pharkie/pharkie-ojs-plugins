@@ -293,12 +293,12 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         return '<section class="item inline-html-galley-cta">'
             . '<div style="margin-top:1em;padding:16px 20px;background:#fef7ec;'
             . 'border:1px solid #f0d8a0;border-radius:6px;font-size:14px;color:#7a5a1a;line-height:1.6;">'
-            . '<strong>Full text available to members</strong><br>'
-            . 'Existing members: please log in (top right) with your membership password to view content. '
+            . '<strong>Full text available</strong><br>'
             . 'Complete access to the full archive of articles is available with '
             . $membershipLink . '. '
-            . 'Or to buy a single article or issue, register an account on this website, '
-            . 'then select a padlocked full text button to purchase.'
+            . 'Existing members: please log in with your membership password to view full text. '
+            . 'Non-members can buy a single article or issue by registering an account on this website, '
+            . 'then selecting a padlocked full text button to purchase.'
             . '</div>'
             . '</section>';
     }
