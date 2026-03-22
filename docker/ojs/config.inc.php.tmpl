@@ -90,7 +90,9 @@ smtp_password = ${OJS_SMTP_PASSWORD}
 index = On
 min_word_length = 3
 results_per_keyword = 500
-index[application/pdf] = "/usr/bin/pdftotext -enc UTF-8 -nopgbrk %s - | /usr/bin/tr '[:cntrl:]' ' '"
+; PDF indexing disabled: split PDFs have page bleed from adjacent articles,
+; causing false matches. HTML galleys are still indexed (built-in handler).
+index[application/pdf] =
 
 ;;;;;;;;;;;;;;;;;;;
 ; OAI Settings

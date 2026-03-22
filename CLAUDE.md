@@ -103,7 +103,7 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 ## Dev environment
 
 - **`scripts/rebuild-dev.sh`** — full grave-and-pave: tears down containers+volumes, rebuilds images, brings up stack, runs setup, runs tests. Devcontainer-only (hardcoded host path for DinD volume mounts). Flags: `--with-sample-data`, `--skip-tests`.
-  - **For full dev environment with all content:** run `rebuild-dev.sh --with-sample-data --skip-tests` (seeds ~1400 test WP users + subscriptions), then `backfill/import.sh backfill/output/*` (imports all 68 issues with HTML + PDF galleys, ~10 min, 469MB XML). The backfill overwrites the 2 sample OJS issues but keeps the WP test users.
+  - **For full dev environment with all content:** run `rebuild-dev.sh --with-sample-data --skip-tests` (seeds ~1400 test WP users + subscriptions), then `backfill/import.sh backfill/output/* --clean` (imports all 68 issues with HTML + PDF galleys, ~10 min, 469MB XML). The `--clean` flag wipes the 2 sample OJS issues first so backfill starts from a clean slate. WP test users are kept.
   - **For quick dev cycle:** `rebuild-dev.sh --with-sample-data` gives 2 sample issues + test users — enough for sync testing without the 10-min backfill wait.
 - **`scripts/setup.sh`** — unified setup for all environments. Assumes containers are already running. Flags: `--env=dev|staging|prod`, `--with-sample-data`. Sample data is always opt-in (never auto-included).
 - **`scripts/setup-dev.sh`** — thin shim, runs `setup.sh --env=dev`. Kept for backwards compatibility.
