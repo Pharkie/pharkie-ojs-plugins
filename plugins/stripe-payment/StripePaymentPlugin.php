@@ -120,6 +120,11 @@ class StripePaymentPlugin extends PaymethodPlugin
                 'value' => $this->getSetting($contextId, 'testSecretKey'),
                 'groupId' => 'stripepayment',
             ]))
+            ->addField(new FieldText('stripeTestWebhookSecret', [
+                'label' => __('plugins.paymethod.stripe.settings.testWebhookSecret'),
+                'value' => $this->getSetting($contextId, 'testWebhookSecret'),
+                'groupId' => 'stripepayment',
+            ]))
             ->addField(new FieldText('stripeWebhookSecret', [
                 'label' => __('plugins.paymethod.stripe.settings.webhookSecret'),
                 'value' => $this->getSetting($contextId, 'webhookSecret'),
@@ -144,6 +149,7 @@ class StripePaymentPlugin extends PaymethodPlugin
             'stripePublishableKey' => ['key' => 'publishableKey', 'type' => 'string'],
             'stripeTestSecretKey' => ['key' => 'testSecretKey', 'type' => 'string'],
             'stripeTestPublishableKey' => ['key' => 'testPublishableKey', 'type' => 'string'],
+            'stripeTestWebhookSecret' => ['key' => 'testWebhookSecret', 'type' => 'string'],
             'stripeWebhookSecret' => ['key' => 'webhookSecret', 'type' => 'string'],
             'stripeTestMode' => ['key' => 'testMode', 'type' => 'bool'],
         ];
@@ -177,6 +183,17 @@ class StripePaymentPlugin extends PaymethodPlugin
             return (string) $this->getSetting($contextId, 'testSecretKey');
         }
         return (string) $this->getSetting($contextId, 'secretKey');
+    }
+
+    /**
+     * Get the active webhook secret based on test mode setting.
+     */
+    public function getActiveWebhookSecret(int $contextId): string
+    {
+        if ($this->getSetting($contextId, 'testMode')) {
+            return (string) $this->getSetting($contextId, 'testWebhookSecret');
+        }
+        return (string) $this->getSetting($contextId, 'webhookSecret');
     }
 
     /**
@@ -298,7 +315,7 @@ class StripePaymentPlugin extends PaymethodPlugin
     private function handleWebhook(Request $request)
     {
         $journal = $request->getJournal();
-        $webhookSecret = $this->getSetting($journal->getId(), 'webhookSecret');
+        $webhookSecret = $this->getActiveWebhookSecret($journal->getId());
 
         // Read raw POST body (Stripe sends JSON)
         $payload = file_get_contents('php://input');

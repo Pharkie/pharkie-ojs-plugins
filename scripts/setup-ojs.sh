@@ -797,6 +797,7 @@ STRIPE_SECRET_KEY="${OJS_STRIPE_SECRET_KEY:-}"
 STRIPE_PUBLISHABLE_KEY="${OJS_STRIPE_PUBLISHABLE_KEY:-}"
 STRIPE_TEST_SECRET_KEY="${OJS_STRIPE_TEST_SECRET_KEY:-}"
 STRIPE_TEST_PUBLISHABLE_KEY="${OJS_STRIPE_TEST_PUBLISHABLE_KEY:-}"
+STRIPE_TEST_WEBHOOK_SECRET="${OJS_STRIPE_TEST_WEBHOOK_SECRET:-}"
 STRIPE_WEBHOOK_SECRET="${OJS_STRIPE_WEBHOOK_SECRET:-}"
 STRIPE_TEST_MODE="${OJS_STRIPE_TEST_MODE:-}"
 
@@ -892,6 +893,13 @@ SQL
       INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
       VALUES ('stripepayment', $JOURNAL_ID, 'testPublishableKey', '$STRIPE_TEST_PUBLISHABLE_KEY', 'string')
       ON DUPLICATE KEY UPDATE setting_value='$STRIPE_TEST_PUBLISHABLE_KEY';
+SQL
+  fi
+  if [ -n "$STRIPE_TEST_WEBHOOK_SECRET" ]; then
+    $MARIADB <<SQL
+      INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('stripepayment', $JOURNAL_ID, 'testWebhookSecret', '$STRIPE_TEST_WEBHOOK_SECRET', 'string')
+      ON DUPLICATE KEY UPDATE setting_value='$STRIPE_TEST_WEBHOOK_SECRET';
 SQL
   fi
   if [ -n "$STRIPE_WEBHOOK_SECRET" ]; then
