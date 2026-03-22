@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # GitHub CLI + Python pip + DNS tools + socat (for port forwarding to compose services)
 # poppler-utils: pdftotext/pdfinfo for journal backfill pipeline
 # ocrmypdf + tesseract: OCR scanned archive PDFs for backfill
-RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip dnsutils socat poppler-utils sox \
+RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip pipx dnsutils socat poppler-utils sox \
       ocrmypdf tesseract-ocr \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --break-system-packages pyyaml grip pymupdf gspread "deprecation>=2.1.0"
