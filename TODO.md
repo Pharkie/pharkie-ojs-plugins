@@ -275,6 +275,7 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
   - [ ] Submit to Google Scholar inclusion request form if not already indexed.
   - [ ] Check that PDF metadata (title, author) matches HTML meta tags.
   - [ ] Verify `robots.txt` and paywall don't block Googlebot from metadata/abstracts.
+- [ ] **ResearchGate journal profile** — create/claim the journal profile on ResearchGate to improve discoverability and allow authors to link their publications.
 - [ ] **DOAJ indexing** — apply for Directory of Open Access Journals listing (for open-access content: editorials, book reviews). Requirements:
   - [ ] DOAJ application form — journal metadata, editorial process, licensing, preservation policy.
   - [ ] JATS XML or article-level metadata feed (DOAJ API accepts OAI-PMH or DOAJ article XML).
