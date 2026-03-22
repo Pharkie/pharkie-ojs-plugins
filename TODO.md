@@ -251,10 +251,11 @@ All 68 issue PDFs (Vol 1–37.1) collected, verified, and in `backfill/input/`. 
 ### 1. Stripe live deployment
 - [x] ~~Create Stripe account with SEA bank details~~ (2026-03-22)
 - [x] ~~Create restricted API key (Checkout Sessions write-only)~~ (2026-03-22)
-- [ ] Add live keys (`rk_live_`, `pk_live_`) to `.env.live`
-- [ ] Configure Stripe webhook endpoint in Stripe dashboard
-- [ ] Add webhook secret (`whsec_`) to `.env.live`
-- [ ] Deploy and verify end-to-end purchase on live
+- [x] ~~Add live keys (`rk_live_`, `pk_live_`) to `.env.live`~~ (2026-03-22)
+- [x] ~~Configure Stripe webhook endpoint in Stripe dashboard~~ (2026-03-22)
+- [x] ~~Add webhook secret (`whsec_`) to `.env.live`~~ (2026-03-22)
+- [x] ~~Configure keys via OJS admin UI~~ (2026-03-22)
+- [ ] Deploy code changes (env var auth, multi-stage build, field order) and verify end-to-end purchase on live
 
 ### 2. Citation extraction + Crossref reference linking
 Crossref membership obligation: include DOIs for cited works when depositing ([reference linking docs](https://www.crossref.org/documentation/reference-linking/)). Current Crossref Reference Linking Plugin (`pkp/crossrefReferenceLinking`) is broken on OJS 3.5. OJS 3.6 will integrate citation linking properly ([pkp/pkp-lib#12104](https://github.com/pkp/pkp-lib/issues/12104)). Author guidelines already updated. 18-month grace period for new members.
@@ -262,7 +263,7 @@ Crossref membership obligation: include DOIs for cited works when depositing ([r
 - [ ] **Phase 2: Look up DOIs for existing citations** — use Crossref REST API to match extracted citations to DOIs (free, no per-lookup cost). When OJS 3.6 lands, the built-in plugin can include matched DOIs in `<citation_list>` deposits automatically.
 
 ### 3. Security audit
-- [x] **OJS database backups** — daily automated mysqldump at 03:00 UTC via cron on VPS. AES-256-CBC encrypted (key in `/opt/backups/ojs/.backup-key`, back up in password manager). 29MB compressed. Retention: 7 daily + 4 weekly on VPS; 30 daily + 12 weekly off-server. Scripts: `scripts/backup-ojs-db.sh` (runs on VPS), `scripts/pull-ojs-backup.sh` (pull/decrypt/manage). Off-server: GitHub Actions pulls encrypted dumps daily at 04:00 UTC to private repo `Pharkie/sea-ojs-db-backups`. Full round-trip tested (dump → encrypt → pull → decrypt → restore). (2026-03-22)
+- [x] **OJS database backups** — daily automated mysqldump at 03:00 UTC via cron on VPS. AES-256-CBC encrypted (key in `/opt/backups/ojs/.backup-key`, back up in password manager). 29MB compressed. Retention: 7 daily + 4 weekly on VPS; 30 daily + 12 weekly off-server. Scripts: `scripts/backup-ojs-db.sh` (runs on VPS), `scripts/pull-ojs-backup.sh` (pull/decrypt/manage). Off-server: GitHub Actions pulls encrypted dumps daily at 04:00 UTC to private repo `Pharkie/sea-ojs-db-backups`. Hardened: restricted SSH key (read-only backup access, no shell), staleness alert (>36h → email), size check (<1MB → fail), deploy.sh auto-installs cron. Full round-trip tested. (2026-03-22)
 - [ ] OJS hardening: file upload restrictions, rate limiting, CSP headers, admin access controls, ~~backup strategy~~, update policy
 - [ ] Caddy security headers
 - [ ] WP plugin: API key handling, input validation, CSRF
