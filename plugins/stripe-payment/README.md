@@ -127,4 +127,4 @@ This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Developme
 
 ## License
 
-GNU General Public License v3.0. See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.html).
+PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../../LICENSE.md).

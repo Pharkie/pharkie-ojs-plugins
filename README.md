@@ -56,4 +56,4 @@ This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Developme
 
 ## License
 
-PolyForm Noncommercial 1.0.0 — see [LICENSE.md](./LICENSE.md). Individual plugins are licensed under GPLv3 (see each plugin's README).
+PolyForm Noncommercial 1.0.0 — see [LICENSE.md](./LICENSE.md).
