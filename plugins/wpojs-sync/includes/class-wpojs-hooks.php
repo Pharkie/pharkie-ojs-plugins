@@ -75,12 +75,13 @@ class WPOJS_Hooks {
 	/**
 	 * WCS subscription expired, cancelled, or on-hold.
 	 *
-	 * Instead of checking membership inline, we defer the check by 5 seconds.
-	 * This prevents a race condition: if two subscriptions expire within
-	 * milliseconds, both handlers might see the other sub as still active
-	 * (due to WCS cache/timing), causing neither to schedule an expire.
-	 * The 5-second delay ensures all status transitions have settled before
-	 * we check whether the user has any remaining active subscriptions.
+	 * Checks inline (excluding the current subscription) whether the user
+	 * has other active subscriptions. If not, schedules an expire action.
+	 *
+	 * Also schedules a deferred safety-net check 5 seconds later to catch
+	 * a theoretical race: if two subscriptions expire within milliseconds,
+	 * both inline checks might see the other sub as still active (WCS cache).
+	 * The deferred check runs after all transitions have settled.
 	 *
 	 * @param WC_Subscription $subscription
 	 */
@@ -92,7 +93,15 @@ class WPOJS_Hooks {
 			return;
 		}
 
-		// Don't check inline — defer to avoid race with simultaneous expirations.
+		// Inline check: exclude the current subscription so we don't see it as "active".
+		if ( ! $this->resolver->is_active_member( $wp_user_id, $subscription->get_id() ) ) {
+			$args = array( array( 'wp_user_id' => $wp_user_id ) );
+			if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
+				as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
+			}
+		}
+
+		// Safety net: deferred re-check after 5s catches simultaneous-expiry race.
 		$hook = 'wpojs_check_and_expire';
 		$args = array( $wp_user_id );
 		if ( ! as_has_scheduled_action( $hook, $args, 'wpojs-sync' ) ) {
@@ -101,18 +110,17 @@ class WPOJS_Hooks {
 	}
 
 	/**
-	 * Deferred expiry check. Runs 5 seconds after an inactive subscription event.
+	 * Deferred expiry safety net. Runs 5 seconds after an inactive event.
 	 *
-	 * By this point all near-simultaneous status changes have settled, so
-	 * is_active_member() gives an accurate answer without needing to exclude
-	 * any specific subscription.
+	 * Catches the race condition where two subs expire simultaneously and
+	 * neither inline check scheduled an expire. By this point all status
+	 * transitions have settled, so no exclusion is needed.
 	 *
 	 * @param int $wp_user_id
 	 */
 	public function on_check_and_expire( $wp_user_id ) {
 		$wp_user_id = (int) $wp_user_id;
 
-		// All subs have settled — no exclusion needed.
 		if ( $this->resolver->is_active_member( $wp_user_id ) ) {
 			return;
 		}
