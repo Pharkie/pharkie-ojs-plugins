@@ -23,8 +23,9 @@ class WPOJS_Logger {
      * @param int    $response_code   HTTP status code from OJS.
      * @param string $response_body   Truncated response body.
      * @param int    $attempt_count
+     * @param string $request_id      UUID v4 request ID for cross-system tracing.
      */
-    public function log( $wp_user_id, $email, $action, $status, $response_code = null, $response_body = '', $attempt_count = 1 ) {
+    public function log( $wp_user_id, $email, $action, $status, $response_code = null, $response_body = '', $attempt_count = 1, $request_id = '' ) {
         global $wpdb;
 
         // Truncate response body to 1000 chars for storage.
@@ -42,9 +43,10 @@ class WPOJS_Logger {
                 'ojs_response_code' => $response_code ? absint( $response_code ) : null,
                 'ojs_response_body' => $response_body,
                 'attempt_count'     => absint( $attempt_count ),
+                'request_id'        => $request_id ? sanitize_text_field( $request_id ) : null,
                 'created_at'        => current_time( 'mysql', true ),
             ),
-            array( '%d', '%s', '%s', '%s', '%d', '%s', '%d', '%s' )
+            array( '%d', '%s', '%s', '%s', '%d', '%s', '%d', '%s', '%s' )
         );
     }
 

@@ -32,6 +32,9 @@ class WPOJS_Hooks {
 		add_action( 'woocommerce_subscription_status_cancelled', array( $this, 'on_subscription_inactive' ) );
 		add_action( 'woocommerce_subscription_status_on-hold', array( $this, 'on_subscription_inactive' ) );
 
+		// Deferred expiry check — runs 5s after an inactive event to avoid race conditions.
+		add_action( 'wpojs_check_and_expire', array( $this, 'on_check_and_expire' ) );
+
 		// WP profile update (email + password change detection).
 		add_action( 'profile_update', array( $this, 'on_profile_update' ), 10, 3 );
 
@@ -71,12 +74,13 @@ class WPOJS_Hooks {
 
 	/**
 	 * WCS subscription expired, cancelled, or on-hold.
-	 * Schedule: expire OJS subscription.
 	 *
-	 * But first check: does the user still have another active subscription?
-	 * If yes, don't expire -- the user is still a member.
-	 * We exclude the current subscription from the check (C4) to avoid
-	 * stale cache issues where the just-cancelled sub still appears active.
+	 * Instead of checking membership inline, we defer the check by 5 seconds.
+	 * This prevents a race condition: if two subscriptions expire within
+	 * milliseconds, both handlers might see the other sub as still active
+	 * (due to WCS cache/timing), causing neither to schedule an expire.
+	 * The 5-second delay ensures all status transitions have settled before
+	 * we check whether the user has any remaining active subscriptions.
 	 *
 	 * @param WC_Subscription $subscription
 	 */
@@ -88,9 +92,28 @@ class WPOJS_Hooks {
 			return;
 		}
 
-		// Check if user is still an active member via other subscriptions or manual roles.
-		// Exclude the current subscription to avoid stale cache returning it as active.
-		if ( $this->resolver->is_active_member( $wp_user_id, $subscription->get_id() ) ) {
+		// Don't check inline — defer to avoid race with simultaneous expirations.
+		$hook = 'wpojs_check_and_expire';
+		$args = array( $wp_user_id );
+		if ( ! as_has_scheduled_action( $hook, $args, 'wpojs-sync' ) ) {
+			as_schedule_single_action( time() + 5, $hook, $args, 'wpojs-sync' );
+		}
+	}
+
+	/**
+	 * Deferred expiry check. Runs 5 seconds after an inactive subscription event.
+	 *
+	 * By this point all near-simultaneous status changes have settled, so
+	 * is_active_member() gives an accurate answer without needing to exclude
+	 * any specific subscription.
+	 *
+	 * @param int $wp_user_id
+	 */
+	public function on_check_and_expire( $wp_user_id ) {
+		$wp_user_id = (int) $wp_user_id;
+
+		// All subs have settled — no exclusion needed.
+		if ( $this->resolver->is_active_member( $wp_user_id ) ) {
 			return;
 		}
 

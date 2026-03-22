@@ -43,7 +43,7 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
 {
     private const SUB_STATUS_ACTIVE = 1;
 
-    public const DEFAULT_LOGIN_HINT = 'Member? Log in with your membership email and password.';
+    public const DEFAULT_LOGIN_HINT = 'Member? Log in with the same email and password you use on the membership website.';
     public const DEFAULT_FOOTER_MESSAGE = 'Your journal access is provided by your membership. <a href="{wpUrl}">Manage your membership</a>.';
     public const DEFAULT_PASSWORD_RESET_HINT = 'Members: <a href="{wpResetUrl}">change your password on the membership website</a> — it will sync to the journal automatically. Passwords set here may be overwritten by your membership password.';
 

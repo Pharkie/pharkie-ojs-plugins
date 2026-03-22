@@ -64,6 +64,30 @@ phase_time() {
 
 echo "=== Deploying to $SSH_HOST (ref: $GIT_REF) ==="
 
+# --- Deploy lock ---
+LOCK_FILE="/tmp/wp-ojs-sync-deploy.lock"
+LOCK_INFO=$($SSH_CMD "
+  if [ -f $LOCK_FILE ]; then
+    lock_age=\$(( \$(date +%s) - \$(stat -c %Y $LOCK_FILE 2>/dev/null || echo 0) ))
+    if [ \$lock_age -lt 1800 ]; then
+      cat $LOCK_FILE
+      exit 1
+    else
+      echo 'STALE'
+    fi
+  fi
+" 2>&1) || {
+  echo "ERROR: Another deploy is in progress (started by: $LOCK_INFO)"
+  echo "If this is stale, wait 30 minutes or remove $LOCK_FILE on the server."
+  exit 1
+}
+if [ "$LOCK_INFO" = "STALE" ]; then
+  echo "WARNING: Stale deploy lock found (>30 min old), removing."
+fi
+$SSH_CMD "echo '$(whoami)@$(hostname) at $(date -Iseconds)' > $LOCK_FILE"
+# Remove lock on exit (success or failure)
+trap '$SSH_CMD "rm -f $LOCK_FILE" 2>/dev/null' EXIT
+
 # --- Provision (optional) ---
 if [ -n "$PROVISION" ]; then
   echo "--- Provisioning VPS ---"
@@ -190,6 +214,21 @@ if [ -z "$SKIP_BUILD" ]; then
   echo "--- Building images ---"
   $SSH_CMD "cd $REMOTE_DIR && $COMPOSE_CMD build"
   echo "$(phase_time) Images built."
+fi
+
+# --- Pre-deploy database snapshot (skip on --clean, volumes are wiped anyway) ---
+if [ -z "$CLEAN" ]; then
+  echo "--- Snapshotting databases ---"
+  SNAP_TS=$(date +%s)
+  $SSH_CMD "cd $REMOTE_DIR && {
+    $COMPOSE_CMD exec -T ojs-db bash -c 'mysqldump -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE 2>/dev/null' > /tmp/pre-deploy-ojs-$SNAP_TS.sql && \
+    $COMPOSE_CMD exec -T wp-db bash -c 'mysqldump -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE 2>/dev/null' > /tmp/pre-deploy-wp-$SNAP_TS.sql && \
+    echo '[ok] Snapshots: /tmp/pre-deploy-{ojs,wp}-$SNAP_TS.sql'
+    # Keep last 3 snapshots per DB, delete older ones
+    ls -t /tmp/pre-deploy-ojs-*.sql 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+    ls -t /tmp/pre-deploy-wp-*.sql 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+  } 2>/dev/null || echo '[skip] DB snapshot failed (containers not running?), continuing.'"
+  echo "$(phase_time) Snapshot done."
 fi
 
 # --- Stop existing containers (prevents "name already in use" conflicts) ---

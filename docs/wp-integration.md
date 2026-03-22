@@ -1,6 +1,6 @@
 # WP Integration: Ultimate Member + WooCommerce Subscriptions
 
-Last updated: 2026-02-19.
+Last updated: 2026-03-22.
 
 This doc covers the WP membership stack and the raw hooks available. For the full WP plugin spec (queue tables, CLI commands, cron schedule, admin pages), see [`plan.md`](./private/plan.md#wp-plugin-spec).
 

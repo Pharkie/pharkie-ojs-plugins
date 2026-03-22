@@ -51,7 +51,7 @@ class WPOJS_Sync {
 
 		$user = get_userdata( $wp_user_id );
 		if ( ! $user ) {
-			$this->logger->log( $wp_user_id, '', 'activate', 'fail', 0, 'WP user not found' );
+			$this->logger->log( $wp_user_id, '', 'activate', 'fail', 0, 'WP user not found', 1, $this->api->get_last_request_id() );
 			// Permanent failure: no point retrying a non-existent user.
 			return;
 		}
@@ -61,7 +61,7 @@ class WPOJS_Sync {
 		// Avoids orphaned OJS accounts when type mapping is misconfigured.
 		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
 		if ( ! $sub_data || ! $sub_data['type_id'] ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', 0, 'Could not resolve subscription type. Check type mapping settings.' );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', 0, 'Could not resolve subscription type. Check type mapping settings.', 1, $this->api->get_last_request_id() );
 			$this->send_admin_alert(
 				'OJS Sync: No Subscription Type',
 				sprintf( "Action: activate\nEmail: %s\nWP User ID: %d\nNo subscription type resolved. Check type mapping settings.", $email, $wp_user_id )
@@ -79,7 +79,7 @@ class WPOJS_Sync {
 			$result = $this->find_after_fail( $result, $email );
 		}
 		if ( ! $result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'], 1, $this->api->get_last_request_id() );
 			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
 				$this->send_admin_alert(
 					'OJS Sync: Permanent Failure',
@@ -92,7 +92,7 @@ class WPOJS_Sync {
 
 		$ojs_user_id = $result['body']['userId'] ?? null;
 		if ( ! $ojs_user_id ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], 'Unexpected API response: missing userId' );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], 'Unexpected API response: missing userId', 1, $this->api->get_last_request_id() );
 			throw new Exception( 'find_or_create_user returned success but no userId' );
 		}
 
@@ -101,7 +101,7 @@ class WPOJS_Sync {
 
 		// Log user creation if new.
 		if ( ! empty( $result['body']['created'] ) ) {
-			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ), 1, $this->api->get_last_request_id() );
 		}
 
 		$sub_result = $this->api->create_subscription(
@@ -112,7 +112,7 @@ class WPOJS_Sync {
 		);
 
 		if ( ! $sub_result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'], 1, $this->api->get_last_request_id() );
 			if ( $this->api->is_permanent_fail( $sub_result['code'] ) ) {
 				$this->send_admin_alert(
 					'OJS Sync: Permanent Failure',
@@ -123,7 +123,7 @@ class WPOJS_Sync {
 			throw new Exception( 'create_subscription failed: ' . $sub_result['error'] );
 		}
 
-		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ) );
+		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ), 1, $this->api->get_last_request_id() );
 	}
 
 	/**
@@ -140,7 +140,7 @@ class WPOJS_Sync {
 		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $email );
 		if ( ! $ojs_user_id ) {
 			// User never synced to OJS. Nothing to expire.
-			$this->logger->log( $wp_user_id, $email, 'expire', 'success', 0, 'User not found on OJS -- nothing to expire' );
+			$this->logger->log( $wp_user_id, $email, 'expire', 'success', 0, 'User not found on OJS -- nothing to expire', 1, $this->api->get_last_request_id() );
 			return;
 		}
 
@@ -148,12 +148,12 @@ class WPOJS_Sync {
 
 		// 404 = no subscription to expire -- that's fine.
 		if ( ! $result['success'] && $result['code'] === 404 ) {
-			$this->logger->log( $wp_user_id, $email, 'expire', 'success', 404, 'No OJS subscription found -- nothing to expire' );
+			$this->logger->log( $wp_user_id, $email, 'expire', 'success', 404, 'No OJS subscription found -- nothing to expire', 1, $this->api->get_last_request_id() );
 			return;
 		}
 
 		if ( ! $result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'expire', 'fail', $result['code'], $result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'expire', 'fail', $result['code'], $result['error'], 1, $this->api->get_last_request_id() );
 			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
 				$this->send_admin_alert(
 					'OJS Sync: Permanent Failure',
@@ -164,7 +164,7 @@ class WPOJS_Sync {
 			throw new Exception( 'expire_subscription failed: ' . $result['error'] );
 		}
 
-		$this->logger->log( $wp_user_id, $email, 'expire', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+		$this->logger->log( $wp_user_id, $email, 'expire', 'success', $result['code'], wp_json_encode( $result['body'] ), 1, $this->api->get_last_request_id() );
 	}
 
 	/**
@@ -178,7 +178,7 @@ class WPOJS_Sync {
 		$new_email  = isset( $args['new_email'] ) ? strtolower( $args['new_email'] ) : '';
 
 		if ( ! $old_email || ! $new_email ) {
-			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', 0, 'Missing old/new email in args' );
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', 0, 'Missing old/new email in args', 1, $this->api->get_last_request_id() );
 			return; // Permanent: bad data, don't retry.
 		}
 
@@ -187,14 +187,15 @@ class WPOJS_Sync {
 		$current_user = get_userdata( $wp_user_id );
 		if ( $current_user && strtolower( $current_user->user_email ) !== $new_email ) {
 			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'success', 0,
-				sprintf( 'Superseded by newer change (current email: %s)', $current_user->user_email )
+				sprintf( 'Superseded by newer change (current email: %s)', $current_user->user_email ),
+				1, $this->api->get_last_request_id()
 			);
 			return;
 		}
 
 		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $old_email );
 		if ( ! $ojs_user_id ) {
-			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'success', 0, 'User not found on OJS -- nothing to update' );
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'success', 0, 'User not found on OJS -- nothing to update', 1, $this->api->get_last_request_id() );
 			return;
 		}
 
@@ -211,19 +212,19 @@ class WPOJS_Sync {
 					$old_email
 				)
 			);
-			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', 409, $result['error'] );
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', 409, $result['error'], 1, $this->api->get_last_request_id() );
 			return; // Don't retry 409.
 		}
 
 		if ( ! $result['success'] ) {
-			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', $result['code'], $result['error'] );
+			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'fail', $result['code'], $result['error'], 1, $this->api->get_last_request_id() );
 			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
 				return;
 			}
 			throw new Exception( 'update_user_email failed: ' . $result['error'] );
 		}
 
-		$this->logger->log( $wp_user_id, $new_email, 'email_change', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+		$this->logger->log( $wp_user_id, $new_email, 'email_change', 'success', $result['code'], wp_json_encode( $result['body'] ), 1, $this->api->get_last_request_id() );
 	}
 
 	/**
@@ -249,7 +250,7 @@ class WPOJS_Sync {
 		}
 
 		if ( ! $ojs_user_id ) {
-			$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', 0, 'User not found on OJS -- nothing to delete' );
+			$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', 0, 'User not found on OJS -- nothing to delete', 1, $this->api->get_last_request_id() );
 			// Anonymize sync log entries even if user wasn't on OJS.
 			$this->logger->anonymize_user_logs( $wp_user_id, $email );
 			return;
@@ -258,7 +259,7 @@ class WPOJS_Sync {
 		$result = $this->api->delete_user( $ojs_user_id );
 
 		if ( ! $result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'delete_user', 'fail', $result['code'], $result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'delete_user', 'fail', $result['code'], $result['error'], 1, $this->api->get_last_request_id() );
 			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
 				$this->send_admin_alert(
 					'OJS Sync: GDPR Delete Failed',
@@ -272,7 +273,7 @@ class WPOJS_Sync {
 		}
 
 		// User is already deleted from WP, so no usermeta to clean up.
-		$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+		$this->logger->log( $wp_user_id, $email, 'delete_user', 'success', $result['code'], wp_json_encode( $result['body'] ), 1, $this->api->get_last_request_id() );
 		// Anonymize all sync log entries for this user (GDPR).
 		$this->logger->anonymize_user_logs( $wp_user_id, $email );
 	}
@@ -290,7 +291,7 @@ class WPOJS_Sync {
 
 		$user = get_userdata( $wp_user_id );
 		if ( ! $user ) {
-			$this->logger->log( $wp_user_id, '', 'password_change', 'fail', 0, 'WP user not found' );
+			$this->logger->log( $wp_user_id, '', 'password_change', 'fail', 0, 'WP user not found', 1, $this->api->get_last_request_id() );
 			return;
 		}
 
@@ -299,21 +300,21 @@ class WPOJS_Sync {
 
 		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $email );
 		if ( ! $ojs_user_id ) {
-			$this->logger->log( $wp_user_id, $email, 'password_change', 'success', 0, 'User not found on OJS -- nothing to update' );
+			$this->logger->log( $wp_user_id, $email, 'password_change', 'success', 0, 'User not found on OJS -- nothing to update', 1, $this->api->get_last_request_id() );
 			return;
 		}
 
 		$result = $this->api->update_user_password( $ojs_user_id, $password_hash );
 
 		if ( ! $result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'password_change', 'fail', $result['code'], $result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'password_change', 'fail', $result['code'], $result['error'], 1, $this->api->get_last_request_id() );
 			if ( $this->api->is_permanent_fail( $result['code'] ) ) {
 				return;
 			}
 			throw new Exception( 'update_user_password failed: ' . $result['error'] );
 		}
 
-		$this->logger->log( $wp_user_id, $email, 'password_change', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+		$this->logger->log( $wp_user_id, $email, 'password_change', 'success', $result['code'], wp_json_encode( $result['body'] ), 1, $this->api->get_last_request_id() );
 	}
 
 	/**
@@ -438,7 +439,7 @@ class WPOJS_Sync {
 			$result = $this->find_after_fail( $result, $email );
 		}
 		if ( ! $result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], $result['error'], 1, $this->api->get_last_request_id() );
 			$ret = array( 'success' => false, 'code' => $result['code'], 'message' => 'Find-or-create failed: ' . $result['error'] );
 			if ( isset( $result['retry_after'] ) ) {
 				$ret['retry_after'] = $result['retry_after'];
@@ -448,13 +449,13 @@ class WPOJS_Sync {
 
 		$ojs_user_id = $result['body']['userId'] ?? null;
 		if ( ! $ojs_user_id ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], 'Unexpected API response: missing userId' );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $result['code'], 'Unexpected API response: missing userId', 1, $this->api->get_last_request_id() );
 			return array( 'success' => false, 'code' => $result['code'], 'message' => 'Find-or-create returned success but no userId' );
 		}
 		update_user_meta( $wp_user_id, '_wpojs_user_id', $ojs_user_id );
 
 		if ( ! empty( $result['body']['created'] ) ) {
-			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ) );
+			$this->logger->log( $wp_user_id, $email, 'create_user', 'success', $result['code'], wp_json_encode( $result['body'] ), 1, $this->api->get_last_request_id() );
 		}
 
 		// Step 2: Create subscription.
@@ -466,7 +467,7 @@ class WPOJS_Sync {
 		);
 
 		if ( ! $sub_result['success'] ) {
-			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'] );
+			$this->logger->log( $wp_user_id, $email, 'activate', 'fail', $sub_result['code'], $sub_result['error'], 1, $this->api->get_last_request_id() );
 			$ret = array( 'success' => false, 'code' => $sub_result['code'], 'message' => 'Create subscription failed: ' . $sub_result['error'] );
 			if ( isset( $sub_result['retry_after'] ) ) {
 				$ret['retry_after'] = $sub_result['retry_after'];
@@ -474,7 +475,7 @@ class WPOJS_Sync {
 			return $ret;
 		}
 
-		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ) );
+		$this->logger->log( $wp_user_id, $email, 'activate', 'success', $sub_result['code'], wp_json_encode( $sub_result['body'] ), 1, $this->api->get_last_request_id() );
 
 		return array(
 			'success' => true,

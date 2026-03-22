@@ -10,16 +10,18 @@ class WpojsApiLog
     /**
      * Log an API request.
      */
-    public static function log(string $endpoint, string $method, string $sourceIp, int $httpStatus, ?int $durationMs = null): void
+    public static function log(string $endpoint, string $method, string $sourceIp, int $httpStatus, ?int $durationMs = null, ?string $errorDetail = null, ?string $requestId = null): void
     {
         try {
             DB::table('wpojs_api_log')->insert([
-                'endpoint'    => substr($endpoint, 0, 255),
-                'method'      => substr($method, 0, 10),
-                'source_ip'   => substr($sourceIp, 0, 45),
-                'http_status' => $httpStatus,
-                'duration_ms' => $durationMs,
-                'created_at'  => Core::getCurrentDate(),
+                'endpoint'     => substr($endpoint, 0, 255),
+                'method'       => substr($method, 0, 10),
+                'source_ip'    => substr($sourceIp, 0, 45),
+                'http_status'  => $httpStatus,
+                'duration_ms'  => $durationMs,
+                'error_detail' => $errorDetail !== null ? substr($errorDetail, 0, 500) : null,
+                'request_id'   => $requestId !== null ? substr($requestId, 0, 36) : null,
+                'created_at'   => Core::getCurrentDate(),
             ]);
         } catch (\Exception $e) {
             // Logging should never break the API, but record the failure.

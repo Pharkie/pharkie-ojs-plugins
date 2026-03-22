@@ -9,6 +9,7 @@ class WPOJS_API_Client {
     private $base_url;
     private $api_key;
     private $timeout;
+    private $last_request_id = '';
 
     public function __construct() {
         $this->base_url = untrailingslashit( get_option( 'wpojs_url', '' ) );
@@ -256,7 +257,34 @@ class WPOJS_API_Client {
         if ( $auth && $this->api_key ) {
             $headers['Authorization'] = 'Bearer ' . $this->api_key;
         }
+        $this->last_request_id    = $this->generate_request_id();
+        $headers['X-Request-ID']  = $this->last_request_id;
         return $headers;
+    }
+
+    /**
+     * Get the request ID from the most recent API call.
+     *
+     * @return string UUID v4 or empty string if no request has been made.
+     */
+    public function get_last_request_id() {
+        return $this->last_request_id;
+    }
+
+    /**
+     * Generate a UUID v4 for request tracing.
+     *
+     * @return string
+     */
+    private function generate_request_id() {
+        if ( function_exists( 'wp_generate_uuid4' ) ) {
+            return wp_generate_uuid4();
+        }
+        // Fallback for older WP versions.
+        $data    = random_bytes( 16 );
+        $data[6] = chr( ord( $data[6] ) & 0x0f | 0x40 );
+        $data[8] = chr( ord( $data[8] ) & 0x3f | 0x80 );
+        return vsprintf( '%s%s-%s-%s-%s-%s%s%s', str_split( bin2hex( $data ), 4 ) );
     }
 
     /**

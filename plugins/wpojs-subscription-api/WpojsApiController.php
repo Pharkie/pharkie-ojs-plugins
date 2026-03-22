@@ -25,6 +25,9 @@ class WpojsApiController extends PKPBaseController
     private const STATUS_ACTIVE = 1;
     private const STATUS_OTHER = 16; // "Other" — used for expired-by-sync and GDPR
 
+    /** @var string|null X-Request-ID header from the caller (for log correlation). */
+    private ?string $requestId = null;
+
     public function getHandlerPath(): string
     {
         return 'wpojs';
@@ -182,6 +185,9 @@ class WpojsApiController extends PKPBaseController
             define('WPOJS_REQUEST_START', microtime(true));
         }
 
+        // Capture X-Request-ID for log correlation with WP-side.
+        $this->requestId = $request->header('X-Request-ID');
+
         $this->maybeCleanupLogs();
 
         $ipError = $this->checkIp($request);
@@ -279,27 +285,61 @@ class WpojsApiController extends PKPBaseController
     /**
      * Write an entry to the API request log.
      */
-    private function logRequest(Request $request, int $httpStatus, ?int $durationMs = null): void
+    private function logRequest(Request $request, int $httpStatus, ?int $durationMs = null, ?string $errorDetail = null): void
     {
         $endpoint = $request->path();
         $method = $request->method();
         $sourceIp = $request->server('REMOTE_ADDR', 'unknown');
 
-        WpojsApiLog::log($endpoint, $method, $sourceIp, $httpStatus, $durationMs);
+        WpojsApiLog::log($endpoint, $method, $sourceIp, $httpStatus, $durationMs, $errorDetail, $this->requestId);
+    }
+
+    /**
+     * Map HTTP status codes to error categories for WP-side retry logic.
+     *
+     * Categories:
+     *   permanent — do not retry (bad input, auth failure, conflict)
+     *   retryable — transient failure, safe to retry after backoff
+     *   noop      — resource not found, no action needed
+     *   null      — success (2xx), no category needed
+     */
+    private function errorCategory(int $status): ?string
+    {
+        return match (true) {
+            in_array($status, [400, 401, 403, 409], true) => 'permanent',
+            in_array($status, [429, 500, 502, 503], true) => 'retryable',
+            $status === 404 => 'noop',
+            default => null,
+        };
     }
 
     /**
      * Build a JSON response and log the actual HTTP status code + duration.
      * Use this instead of response()->json() in endpoint methods
      * so the API log reflects the real outcome (not a premature 200).
+     *
+     * When status >= 400 and the data contains an 'error' key, the
+     * errorCategory is automatically added for WP-side retry decisions.
      */
     private function jsonResponse(Request $request, array $data, int $status = 200): JsonResponse
     {
+        // Inject error category into error responses.
+        if ($status >= 400 && isset($data['error'])) {
+            $category = $this->errorCategory($status);
+            if ($category !== null) {
+                $data['errorCategory'] = $category;
+            }
+        }
+
         $durationMs = null;
         if (defined('WPOJS_REQUEST_START')) {
             $durationMs = (int) round((microtime(true) - WPOJS_REQUEST_START) * 1000);
         }
-        $this->logRequest($request, $status, $durationMs);
+
+        // Extract error detail for logging.
+        $errorDetail = ($status >= 400 && isset($data['error'])) ? (string) $data['error'] : null;
+
+        $this->logRequest($request, $status, $durationMs, $errorDetail);
         return response()->json($data, $status);
     }
 
