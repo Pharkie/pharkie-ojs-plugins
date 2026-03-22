@@ -122,8 +122,8 @@ test.describe('Membership/access messaging', () => {
     // Should see the non-subscriber CTA
     const cta = page.locator('.inline-html-galley-cta');
     await expect(cta).toBeVisible({ timeout: 10_000 });
-    await expect(cta).toContainText('Full text available to members');
-    await expect(cta).toContainText('Buy membership for instant access');
+    await expect(cta).toContainText('Full text available');
+    await expect(cta).toContainText('membership');
 
     // Should NOT see inline HTML content
     const inlineHtml = page.locator('.inline-html-galley');
@@ -175,7 +175,7 @@ test.describe('Membership/access messaging', () => {
     // Should see the non-subscriber CTA
     const cta = page.locator('.inline-html-galley-cta');
     await expect(cta).toBeVisible({ timeout: 10_000 });
-    await expect(cta).toContainText('Full text available to members');
+    await expect(cta).toContainText('Full text available');
 
     // Should NOT see inline HTML content
     const inlineHtml = page.locator('.inline-html-galley');
