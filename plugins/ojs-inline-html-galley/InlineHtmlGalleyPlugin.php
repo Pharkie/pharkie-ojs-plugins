@@ -25,11 +25,11 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 {
     // Default setting values — override via plugin settings UI
     private const DEFAULTS = [
-        'organisationName' => 'your organisation',
+        'organisationName' => '',
         'membershipUrl' => '',
         'paywallSectionName' => 'Articles',
         'archiveNoticeEnabled' => true,
-        'syncedMemberMessage' => 'Showing article full text linked to your {orgName} membership. Thanks for your support!',
+        'syncedMemberMessage' => 'Showing article full text linked to your membership. Thanks for your support!',
         'subscriberMessage' => 'Showing article full text via your journal subscription.',
         'purchaseMessage' => 'Showing article full text. You have access via direct purchase.',
         'adminMessage' => 'Showing article full text. You have access as a journal administrator.',
@@ -254,6 +254,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             // Synced member
             $orgName = htmlspecialchars($this->cfg('organisationName'));
             $message = str_replace('{orgName}', $orgName, $this->cfg('syncedMemberMessage'));
+            $message = preg_replace('/\s{2,}/', ' ', $message);
         } else {
             // Direct OJS subscriber or purchaser
             $subscriptionDao = DAORegistry::getDAO('IndividualSubscriptionDAO');
@@ -286,9 +287,10 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         $orgName = htmlspecialchars($this->cfg('organisationName'));
         $membershipUrl = htmlspecialchars($this->cfg('membershipUrl'));
 
+        $memberLabel = $orgName ? $orgName . ' membership' : 'a membership';
         $membershipLink = $membershipUrl
-            ? '<a href="' . $membershipUrl . '" style="color:#7a5a1a;font-weight:600;">' . $orgName . ' membership</a>'
-            : $orgName . ' membership';
+            ? '<a href="' . $membershipUrl . '" style="color:#7a5a1a;font-weight:600;">' . $memberLabel . '</a>'
+            : $memberLabel;
 
         return '<section class="item inline-html-galley-cta">'
             . '<div style="margin-top:1em;padding:16px 20px;background:#fef7ec;'
