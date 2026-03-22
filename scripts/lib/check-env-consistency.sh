@@ -50,12 +50,22 @@ check_env_consistency() {
         return 0
     fi
 
+    # Read env file content (decrypts SOPS-encrypted files transparently)
+    read_env_content() {
+        local file="$1"
+        if head -5 "$file" 2>/dev/null | grep -q '"sops"\|ENC\[AES256'; then
+            sops -d "$file" 2>/dev/null || echo ""
+        else
+            cat "$file"
+        fi
+    }
+
     # Extract a var's value from an env file (handles single-quoted, double-quoted, and unquoted)
     get_var() {
         local file="$1" var="$2"
         # Match VAR=value, VAR='value', VAR="value"
         local line
-        line=$(grep -E "^${var}=" "$file" 2>/dev/null | head -1) || true
+        line=$(read_env_content "$file" | grep -E "^${var}=" | head -1) || true
         if [[ -z "$line" ]]; then
             echo "__MISSING__"
             return
