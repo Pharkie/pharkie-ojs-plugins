@@ -302,4 +302,25 @@ if [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ]; then
   echo "  OK: $CURRENT_ISSUE set as current issue"
 fi
 
+# --- Rebuild search index ---
+# OJS Native Import doesn't trigger search indexing, so imported articles
+# won't appear in search results until the index is rebuilt.
+if [ $SUCCEEDED -gt 0 ]; then
+  echo ""
+  echo "--- Rebuilding search index ---"
+  echo "  This may take a few minutes for large imports..."
+  if docker exec "$CONTAINER" php tools/rebuildSearchIndex.php 2>&1 | grep -v "CROSSREF BOOT"; then
+    echo "  OK: Search index jobs scheduled"
+  else
+    echo "  WARNING: Search index rebuild failed — run manually:"
+    echo "    docker exec $CONTAINER php tools/rebuildSearchIndex.php"
+  fi
+
+  # Drain the queue — rebuildSearchIndex.php only schedules jobs, it doesn't
+  # process them. Without this, indexing trickles through the shutdown handler.
+  echo "  Draining search index queue..."
+  docker exec "$CONTAINER" php lib/pkp/tools/jobs.php work 2>&1 | tail -1
+  echo "  OK: Search index complete"
+fi
+
 [ $FAILED -eq 0 ] || exit 1

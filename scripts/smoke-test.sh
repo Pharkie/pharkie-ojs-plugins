@@ -344,8 +344,44 @@ if [ "$SYNC_OK" = true ]; then
   fi
 fi
 
-# --- 10. Reconciliation ---
-echo "10. Reconciliation"
+# --- 10. OJS search ---
+echo "10. OJS search"
+# Check that search index is populated
+SEARCH_OBJECTS=$(remote "$COMPOSE exec -T ojs-db mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e 'SELECT COUNT(*) FROM submission_search_objects'") || SEARCH_OBJECTS="0"
+SEARCH_OBJECTS=$(echo "$SEARCH_OBJECTS" | tr -d '[:space:]')
+if [ "$SEARCH_OBJECTS" -gt "0" ] 2>/dev/null; then
+  pass "Search index has $SEARCH_OBJECTS objects"
+else
+  fail "Search index is empty (run: docker compose exec ojs php tools/rebuildSearchIndex.php)"
+fi
+
+# Test actual search via HTTP — pick a known author
+SEARCH_AUTHOR=$(remote "$COMPOSE exec -T ojs-db mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
+  SELECT asv.setting_value FROM author_settings asv
+  JOIN authors a ON a.author_id = asv.author_id
+  JOIN publications p ON a.publication_id = p.publication_id
+  JOIN submissions s ON s.submission_id = p.submission_id
+  WHERE asv.setting_name = 'familyName' AND s.status = 3
+  GROUP BY asv.setting_value HAVING COUNT(*) >= 3
+  ORDER BY COUNT(*) DESC LIMIT 1
+\"") || SEARCH_AUTHOR=""
+SEARCH_AUTHOR=$(echo "$SEARCH_AUTHOR" | tr -d '[:space:]')
+
+if [ -n "$SEARCH_AUTHOR" ]; then
+  SEARCH_BODY=$(curl -s "${OJS_JOURNAL_URL}/search/search?authors=${SEARCH_AUTHOR}" 2>/dev/null)
+  if echo "$SEARCH_BODY" | grep -qi "obj_article_summary\|search_results\|$SEARCH_AUTHOR"; then
+    pass "Search for author '$SEARCH_AUTHOR' returns results"
+  elif echo "$SEARCH_BODY" | grep -qi "No items found\|no results"; then
+    fail "Search for author '$SEARCH_AUTHOR' returned no results (index may need rebuilding)"
+  else
+    fail "Search page for '$SEARCH_AUTHOR' returned unexpected content"
+  fi
+else
+  echo "  [SKIP] No multi-article author found for search test"
+fi
+
+# --- 11. Reconciliation ---
+echo "11. Reconciliation"
 RECON_OUTPUT=$(wp_cli "ojs-sync reconcile") || RECON_OUTPUT=""
 if echo "$RECON_OUTPUT" | grep -q "Reconciliation complete"; then
   pass "Reconciliation completes successfully"
