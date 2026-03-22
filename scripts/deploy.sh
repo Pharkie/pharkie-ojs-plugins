@@ -128,14 +128,13 @@ if [ -n "$ENV_FILE" ]; then
   if head -5 "$ENV_FILE" | grep -q '"sops"\|ENC\[AES256'; then
     echo "Decrypting SOPS-encrypted env file..."
     DECRYPTED=$(mktemp)
-    trap "rm -f '$DECRYPTED'" EXIT
     if ! sops -d "$ENV_FILE" > "$DECRYPTED"; then
       echo "ERROR: Failed to decrypt $ENV_FILE. Is the age key at ~/.config/sops/age/keys.txt?"
+      rm -f "$DECRYPTED"
       exit 1
     fi
     $SCP_CMD "$DECRYPTED" "$SCP_HOST:$REMOTE_DIR/.env"
     rm -f "$DECRYPTED"
-    trap - EXIT
   else
     $SCP_CMD "$ENV_FILE" "$SCP_HOST:$REMOTE_DIR/.env"
   fi

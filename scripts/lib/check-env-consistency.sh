@@ -50,25 +50,38 @@ check_env_consistency() {
         return 0
     fi
 
-    # Read env file content (decrypts SOPS-encrypted files transparently)
-    read_env_content() {
+    # Cache for decrypted file contents (avoids re-decrypting per variable)
+    declare -A _env_cache
+
+    # Get full content of an env file (decrypts SOPS transparently, caches result)
+    get_env_content() {
         local file="$1"
-        if head -5 "$file" 2>/dev/null | grep -q '"sops"\|ENC\[AES256'; then
-            if ! sops -d "$file" 2>/dev/null; then
-                echo "    SKIP: Cannot decrypt $(basename "$file") (age key missing?)" >&2
-                return 1
-            fi
-        else
-            cat "$file"
+        if [[ -n "${_env_cache[$file]+x}" ]]; then
+            echo "${_env_cache[$file]}"
+            return
         fi
+        local content
+        if head -5 "$file" 2>/dev/null | grep -q '"sops"\|ENC\[AES256'; then
+            content=$(sops -d "$file" 2>/dev/null) || {
+                echo "    SKIP: Cannot decrypt $(basename "$file") (age key missing?)" >&2
+                _env_cache[$file]="__SOPS_FAIL__"
+                return 1
+            }
+        else
+            content=$(cat "$file")
+        fi
+        _env_cache[$file]="$content"
+        echo "$content"
     }
 
     # Extract a var's value from an env file (handles single-quoted, double-quoted, and unquoted)
     get_var() {
         local file="$1" var="$2"
+        local content
+        content=$(get_env_content "$file") || { echo "__SOPS_FAIL__"; return; }
         # Match VAR=value, VAR='value', VAR="value"
         local line
-        line=$(read_env_content "$file" | grep -E "^${var}=" | head -1) || true
+        line=$(echo "$content" | grep -E "^${var}=" | head -1) || true
         if [[ -z "$line" ]]; then
             echo "__MISSING__"
             return
@@ -91,8 +104,8 @@ check_env_consistency() {
         local ref_val
         ref_val=$(get_var "$reference" "$var")
 
-        # Skip if not set in reference
-        [[ "$ref_val" == "__MISSING__" ]] && continue
+        # Skip if not set in reference or decryption failed
+        [[ "$ref_val" == "__MISSING__" || "$ref_val" == "__SOPS_FAIL__" ]] && continue
 
         for f in "${env_files[@]}"; do
             [[ "$f" == "$reference" ]] && continue
@@ -102,7 +115,9 @@ check_env_consistency() {
             local fname
             fname=$(basename "$f")
 
-            if [[ "$other_val" == "__MISSING__" ]]; then
+            if [[ "$other_val" == "__SOPS_FAIL__" ]]; then
+                continue  # Already warned via stderr
+            elif [[ "$other_val" == "__MISSING__" ]]; then
                 missing+="      - $var missing from $fname\n"
                 errors=1
             elif [[ "$ref_val" != "$other_val" ]]; then
