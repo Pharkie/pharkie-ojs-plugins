@@ -79,20 +79,18 @@ WP (`community.existentialanalysis.org.uk` on Krystal) ↔ OJS (`journal.existen
 - [ ] Test cancellation flow (cancel → verify OJS access removed)
 - [ ] Test on-hold / failed payment scenario
 - [ ] **Mobile testing** — check OJS article pages, archive, login, inline HTML galley, paywall on mobile browsers (iOS Safari, Android Chrome). Check responsive layout, readability, touch targets, galley content overflow.
-- [ ] **Non-member purchase flow** — two options to test:
-  - **Option A: PayPal** — credentials needed from Emi (business account email + REST API client ID + secret from https://developer.paypal.com/dashboard/applications/live). Add to `.env.live`: `OJS_PAYPAL_ACCOUNT`, `OJS_PAYPAL_CLIENT_ID`, `OJS_PAYPAL_SECRET`, `OJS_PAYPAL_TEST_MODE=0`. Deploy. Can't test on localhost (PayPal needs callbacks). Sandbox may decline GBP from US sandbox accounts.
-  - **Option B: Manual Payment plugin** — OJS built-in, no third-party credentials. Admin manually marks payments as received. Good enough for low-volume non-member purchases while PayPal creds are pending. Test this workflow first.
+- [x] ~~**Non-member purchase flow**~~ — Stripe Payment plugin built and tested on dev (2026-03-22). Full Checkout redirect flow with webhook handler. PayPal sandbox broken for UK accounts (support ticket filed). Live deployment pending Stripe account setup with SEA bank details. PayPal remains available as fallback (`setup-ojs.sh` priority: Stripe > PayPal > Manual).
 - [x] ~~Monitor 24-48h — check sync log for failures~~ — 0 sync failures, 678/678 reconciliation clean (2026-03-21)
 - [x] ~~Run `wp ojs-sync reconcile` manually after 24h to check for drift~~ — 678 OK, 0 drift (2026-03-21)
 - [x] ~~Investigate "Active WP members: 0" in `wp ojs-sync status`~~ — fixed, now shows 678 correctly
 
 ### Hardening — TODO
 
-- [ ] **ggshield** — installed (v1.48.0) but needs verification: check pre-commit integration, VS Code extension working, test with a dummy secret
+- [x] ~~**ggshield**~~ — wired into pre-commit as Check 7, auth persisted via bind-mounted config dir, tested (2026-03-22)
 - [x] ~~**DOI deposits to Crossref**~~ — 1,470 DOIs registered in production (2026-03-21). Includes 44 pre-existing DOIs (36.2 + 37.1) re-deposited with updated URLs. 6 articles with leading `"` in titles were missed by auto-assignment — assigned and deposited via API. One book review (9771) had empty surname author ("ChatGPT") fixed. `blast-queue.sh` rewritten: `jobs.php run --once` loop, worker script injection, timeout, stale worker kill, `--delay` flag, ETA monitor. See `docs/blast-queue.md`.
-  - [ ] **Verify DOIs resolve** — spot-check a few DOIs on https://doi.org/ to confirm they redirect to `journal.existentialanalysis.org.uk`
-- [ ] **SMTP credentials audit** — Resend API key in `.env.live` (gitignored). Docs only have placeholder `re_your_api_key_here`. Git history is clean (no real keys). Consider rotating the Resend key anyway as a precaution.
-- [ ] **Env var hardening deployed** — committed (aeb04c3) but not yet deployed to live. Next deploy will pick it up automatically.
+  - [x] ~~**Verify DOIs resolve**~~ — confirmed, e.g. `https://doi.org/10.65828/km6aqq62` → `journal.existentialanalysis.org.uk` (2026-03-22)
+- [x] ~~**SMTP credentials audit**~~ — false positive, no real keys in repo.
+- [x] ~~**Env var hardening deployed**~~ — deployed to live (2026-03-22)
 - [ ] **Author emails** — backfilled articles use `firstname.lastname@placeholder.invalid` as dummy emails. Cross-reference known authors (editorial board, regular contributors) with real emails from WP/UM user list or SEA membership records.
 
 ## Later: WP migration to Hetzner (Phase 3)
