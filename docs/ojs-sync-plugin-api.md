@@ -78,12 +78,9 @@ The WP plugin sends `$user->user_login` as an optional `username` field in the `
 
 **Why this matters:** OJS admin screens show usernames, so `bscanlan` (from WP login `BScanlan`) is more recognisable than `benscanlan` (auto-generated from first+last name).
 
-**Login impact:** 536 of 1419 live WP usernames (38%) contain characters stripped by sanitization (dots, hyphens, underscores, spaces, `@` — mostly email-as-username accounts). If those users typed their WP login into OJS, the unsanitized input wouldn't match the sanitized stored username and login would fail. This is mitigated by two things:
+**Login:** Members can log into OJS with either their **email** (preferred) or their **OJS username**. The login page labels the field "Email" and sets `autocomplete="email"` to steer users toward email login, but the input accepts both — OJS's `PKPUserProvider::retrieveByCredentials()` auto-detects email-shaped input and routes to email lookup, otherwise tries username lookup. Username lookup is case-insensitive.
 
-1. The login page relabels the "Username or Email" field to just **"Email"** and sets `autocomplete="email"`, steering users toward email login.
-2. OJS's `PKPUserProvider::retrieveByCredentials()` checks if the input looks like an email — if so, it does an email lookup (which always works). Only non-email-looking input goes through the username path.
-
-Case-only differences (e.g. `BScanlan` → `bscanlan`) are fine — OJS username lookup is case-insensitive.
+**Username mismatch risk:** 536 of 1419 live WP usernames (38%) contain characters stripped by sanitization (dots, hyphens, underscores, spaces, `@` — mostly email-as-username accounts). If those users typed their exact WP login into OJS, the unsanitized input wouldn't match the sanitized stored username and login would fail. In practice this is low-risk: email-as-username logins (e.g. `aamir.ahmad@btinternet.com`) are detected as emails and matched correctly, and the UI steers everyone toward email login. The remaining edge cases are WP logins with dots/hyphens/underscores that don't look like emails (e.g. `aki.olver` stored as `akiolver`) — those users must use their email to log in.
 
 ## Request logging
 
