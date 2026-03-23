@@ -68,7 +68,7 @@ A foreground progress monitor prints the remaining queue count every 30 seconds.
 
 ### Don't use too many workers against production Crossref
 
-Crossref's rate limit is ~2 requests/second. With 10 workers we hit 429 errors on 942 out of 1,464 deposits. **3 workers with `--delay=1` is the recommended combination for DOI deposits** (~1 deposit/second, well under the limit). The script prints a warning if you use more than 3 workers. For non-Crossref jobs (e.g. notifications), more workers are fine.
+Crossref's rate limit is ~2 requests/second. With 10 workers 429 errors were encountered on 942 out of 1,464 deposits. **3 workers with `--delay=1` is the recommended combination for DOI deposits** (~1 deposit/second, well under the limit). The script prints a warning if you use more than 3 workers. For non-Crossref jobs (e.g. notifications), more workers are fine.
 
 ### Stale workers process jobs with old code
 

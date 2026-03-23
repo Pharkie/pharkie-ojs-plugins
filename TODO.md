@@ -2,9 +2,16 @@
 
 Deployment-specific roadmap (milestones, server details, sync status) lives in `docs/private/TODO.md`.
 
-## Generic roadmap
+## Getting started (new deployment)
 
-### Done
+1. Set up a dev environment — see [`docs/docker-setup.md`](docs/docker-setup.md)
+2. Read the architecture — see [`ARCHITECTURE.md`](ARCHITECTURE.md)
+3. Install plugins on your OJS + WP servers — see [`docs/non-docker-setup.md`](docs/non-docker-setup.md)
+4. Configure API keys, subscription type mapping, and IP allowlisting
+5. Run a dry-run bulk sync: `wp ojs-sync sync --bulk --dry-run`
+6. Deploy to a VPS — see [`docs/vps-deployment.md`](docs/vps-deployment.md)
+
+## Done
 
 - OJS plugin (`wpojs-subscription-api`) — REST endpoints for user + subscription CRUD
 - WP plugin (`wpojs-sync`) — hooks into WCS lifecycle events, async queue, CLI bulk sync
