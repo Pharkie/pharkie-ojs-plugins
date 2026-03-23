@@ -205,7 +205,7 @@ Two-step process:
 1. **Import** users via `wp user import-csv` with role `subscriber` (always valid) — handles password hashing, user creation, and WP hooks correctly
 2. **Reassign roles** via `wp eval-file scripts/apply-roles.php` — reads the CSV `original_role` column and updates `wp_capabilities` in `wp_usermeta` directly with the serialized capabilities value
 
-The anonymise script (`docker/anonymize-users.py`) maps all non-builtin roles to `subscriber` for import and preserves the original role in a separate `original_role` column.
+The anonymise script (`scripts/anonymize-users.py`) maps all non-builtin roles to `subscriber` for import and preserves the original role in a separate `original_role` column.
 
 ### Why this is safe
 

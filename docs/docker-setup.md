@@ -64,7 +64,7 @@ docker compose down
 docker compose down -v
 
 # Reset OJS only (wipes DB + volumes, reinstalls automatically)
-./docker/reset-ojs.sh
+./scripts/reset-ojs.sh
 
 # Run WP setup (install core, activate plugins, set options)
 docker compose exec wp bash /var/www/html/scripts/setup-wp.sh
@@ -94,7 +94,7 @@ The `--with-sample-data` flag on `setup-wp.sh` runs a three-step pipeline that p
 
 | Step | Script | What it does | Speed |
 |------|--------|-------------|-------|
-| 1. Import users | `wp user import-csv` | Imports ~1,400 anonymised users from `docker/test-users.csv` as `subscriber` | ~2 min |
+| 1. Import users | `wp user import-csv` | Imports ~1,400 anonymised users from `docker/data/test-users.csv` as `subscriber` | ~2 min |
 | 2. Apply roles | `scripts/apply-roles.php` | Reads `original_role` column from CSV, updates `wp_usermeta` directly (UM roles can't be assigned via `wp user import-csv`) | ~2s |
 | 3. Seed sample data | `scripts/setup-and-sample-data.php` | Creates 6 WC subscription products, batch-inserts WCS subscription records for ~683 members with `um_custom_role_1–6`, and configures wpojs_* plugin options (type mapping, member roles, journal name) | ~1.5s |
 
@@ -111,7 +111,7 @@ All three steps are idempotent — running `setup-wp.sh --with-sample-data` agai
 If OJS gets into a broken state (failed install, version change, corrupt DB), run:
 
 ```bash
-./docker/reset-ojs.sh
+./scripts/reset-ojs.sh
 ```
 
 This handles everything in one shot:
@@ -123,7 +123,7 @@ This handles everything in one shot:
 
 **Why all three steps matter:** OJS has state in three places — the database, the code volume (`ojs_data`), and `config.inc.php` (inside `ojs_data`). If any one of these is stale, the install will fail. The reset script handles all three.
 
-**Changing OJS image version:** Docker does not update named volumes when you change image tags. If you change the OJS image in `docker-compose.yml`, you **must** run `./docker/reset-ojs.sh` — otherwise the old code stays in the volume and you get a version mismatch.
+**Changing OJS image version:** Docker does not update named volumes when you change image tags. If you change the OJS image in `docker-compose.yml`, you **must** run `./scripts/reset-ojs.sh` — otherwise the old code stays in the volume and you get a version mismatch.
 
 ## Architecture
 
