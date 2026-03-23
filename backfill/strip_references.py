@@ -28,15 +28,21 @@ REFERENCE_HEADINGS_RE = re.compile(
     r'References?'
     r'|Notes?'
     r'|Endnotes?'
-    r'|Footnotes?'
+    r'|Footnotes?:?'
     r'|Bibliography'
     r'|Further Reading'
+    r'|Further References'
+    r'|References and Bibliography'
+    r'|References and further reading'
     r'|Works Cited'
     r'|Notes and References'
     r'|References and Notes'
+    r'|Bibliography and References'
     r'|Selected Bibliography'
     r'|References:'
-    r')$',
+    r')(?:\s*[&;]\s*\w+)*'  # optional "& Filmography", "&amp; Filmography", etc.
+    r'(?:\s*\([^)]*\))?'  # optional parenthetical
+    r'[.:]?$',
     re.IGNORECASE
 )
 
@@ -95,6 +101,80 @@ def strip_reference_sections(content):
     return result, removed_headings
 
 
+def _count_tail_section_items(content):
+    """Count items in tail reference sections that will be stripped.
+
+    Uses the same tail-detection logic as strip_reference_sections() and
+    the same item extraction logic as extract_citations.py.
+
+    Returns total item count across all tail reference sections.
+    """
+    from html.parser import HTMLParser
+
+    class _TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._text = []
+        def handle_data(self, data):
+            self._text.append(data)
+        def get_text(self):
+            return "".join(self._text).strip()
+
+    def _strip_html(html_str):
+        ext = _TextExtractor()
+        ext.feed(html_str)
+        return ext.get_text()
+
+    stripped = content.strip()
+    parts = re.split(r'(<h2[^>]*>.*?</h2>)', stripped, flags=re.DOTALL)
+
+    # Find all h2 sections with their indices
+    sections = []
+    for i, part in enumerate(parts):
+        m = re.match(r'<h2[^>]*>(.*?)</h2>', part, re.DOTALL)
+        if m:
+            heading_text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            sections.append((heading_text, i))
+
+    if not sections:
+        return 0
+
+    # Walk backwards to find contiguous reference headings at the tail
+    tail_start = None
+    for si in range(len(sections) - 1, -1, -1):
+        heading = sections[si][0]
+        if REFERENCE_HEADINGS_RE.match(heading):
+            tail_start = si
+        else:
+            break
+
+    if tail_start is None:
+        return 0
+
+    total_items = 0
+    for si in range(tail_start, len(sections)):
+        part_idx = sections[si][1]
+        content_after = parts[part_idx + 1] if part_idx + 1 < len(parts) else ''
+
+        li_pattern = re.compile(r'<li[^>]*>(.*?)</li>', re.IGNORECASE | re.DOTALL)
+        li_matches = li_pattern.findall(content_after)
+        p_pattern = re.compile(r'<p[^>]*>(.*?)</p>', re.IGNORECASE | re.DOTALL)
+        p_matches = p_pattern.findall(content_after)
+
+        if li_matches and len(li_matches) > len(p_matches):
+            items = [_strip_html(li).strip() for li in li_matches if _strip_html(li).strip()]
+        elif p_matches:
+            items = [_strip_html(p).strip() for p in p_matches if _strip_html(p).strip()]
+        else:
+            lines = [_strip_html(line).strip() for line in content_after.split('\n')
+                     if _strip_html(line).strip()]
+            items = [l for l in lines if len(l) > 10]
+
+        total_items += len(items)
+
+    return total_items
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Strip end-of-article reference sections from HTML galley files')
@@ -128,6 +208,7 @@ def main():
         'has_ref_sections': 0,
         'stripped': 0,
         'skipped_no_toc_data': 0,
+        'skipped_incomplete': 0,
         'headings_removed': {},
     }
     details = []
@@ -147,30 +228,43 @@ def main():
 
         stats['has_ref_sections'] += 1
 
-        # Cross-check: does toc.json have citations for this article?
+        # Cross-check: does toc.json account for ALL items in these sections?
+        # Count items in the tail reference sections we're about to strip
+        html_item_count = _count_tail_section_items(content)
+
         toc = toc_cache.get(issue_dir)
-        has_toc_citations = False
+        toc_item_count = 0
+        matched_article = False
         if toc:
             for art in toc.get('articles', []):
-                # Match by HTML filename pattern: seq-slug.html or slug.html
                 art_slug = art.get('slug', '')
                 art_split = art.get('split_pdf', '')
-                # The HTML file stem should match the split PDF stem
                 html_stem = os.path.splitext(html_basename)[0]
                 split_stem = os.path.splitext(os.path.basename(art_split))[0] if art_split else ''
                 if html_stem == split_stem or (art_slug and art_slug in html_basename):
+                    matched_article = True
                     refs = art.get('references', [])
                     notes = art.get('notes', [])
                     citations = art.get('citations', [])
-                    if refs or notes or citations:
-                        has_toc_citations = True
+                    filtered = art.get('filtered_items', [])
+                    toc_item_count = len(refs) + len(notes) + len(filtered)
+                    # Fall back to citations[] if split hasn't been run
+                    if not refs and not notes:
+                        toc_item_count = len(citations) + len(filtered)
                     break
 
-        if not has_toc_citations:
+        if not matched_article or toc_item_count == 0:
             stats['skipped_no_toc_data'] += 1
             if args.dry_run:
                 print(f"  WARN {issue_name}/{html_basename}: has sections {removed_headings} "
                       f"but no citations in toc.json — skipping")
+            continue
+
+        if html_item_count > 0 and toc_item_count < html_item_count:
+            stats['skipped_incomplete'] += 1
+            if args.dry_run:
+                print(f"  WARN {issue_name}/{html_basename}: HTML has {html_item_count} items "
+                      f"but toc.json only has {toc_item_count} — skipping (would lose content)")
             continue
 
         stats['stripped'] += 1
@@ -191,6 +285,7 @@ def main():
     print(f"  With reference sections:   {stats['has_ref_sections']}")
     print(f"  Stripped:                  {stats['stripped']}")
     print(f"  Skipped (no toc.json data):{stats['skipped_no_toc_data']}")
+    print(f"  Skipped (incomplete data): {stats['skipped_incomplete']}")
     print()
     if stats['headings_removed']:
         print("Headings removed:")
