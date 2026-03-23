@@ -58,6 +58,9 @@ class HTMLToJATSConverter(HTMLParser):
         self._tag_stack = []
         self._list_stack = []  # track ol/ul nesting
         self._skip_content = False
+        self._in_blockquote = False  # suppress inner <p> wrapping
+        self._in_li = False  # suppress inner <p> wrapping
+        self._blockquote_has_p = False  # whether blockquote had inner <p>
 
     def _emit(self, text):
         if not self._skip_content:
@@ -74,7 +77,15 @@ class HTMLToJATSConverter(HTMLParser):
             self._in_sec = True
             self._emit('<sec><title>')
         elif tag == 'p':
-            self._emit('<p>')
+            if self._in_blockquote:
+                # Blockquote already opened disp-quote — use inner <p> directly
+                self._blockquote_has_p = True
+                self._emit('<p>')
+            elif self._in_li:
+                # li already has <p> wrapper — skip inner <p>
+                pass
+            else:
+                self._emit('<p>')
         elif tag == 'em' or tag == 'i':
             self._emit('<italic>')
         elif tag == 'strong' or tag == 'b':
@@ -90,9 +101,12 @@ class HTMLToJATSConverter(HTMLParser):
             self._list_stack.append('bullet')
             self._emit('<list list-type="bullet">')
         elif tag == 'li':
+            self._in_li = True
             self._emit('<list-item><p>')
         elif tag == 'blockquote':
-            self._emit('<disp-quote><p>')
+            self._in_blockquote = True
+            self._blockquote_has_p = False
+            self._emit('<disp-quote>')
         elif tag == 'a':
             href = attrs_dict.get('href', '')
             if href:
@@ -117,7 +131,12 @@ class HTMLToJATSConverter(HTMLParser):
         if tag == 'h2':
             self._emit('</title>\n')
         elif tag == 'p':
-            self._emit('</p>\n')
+            if self._in_blockquote:
+                self._emit('</p>\n')
+            elif self._in_li:
+                pass  # skip — li handles closing
+            else:
+                self._emit('</p>\n')
         elif tag == 'em' or tag == 'i':
             self._emit('</italic>')
         elif tag == 'strong' or tag == 'b':
@@ -135,9 +154,18 @@ class HTMLToJATSConverter(HTMLParser):
                 self._list_stack.pop()
             self._emit('</list>\n')
         elif tag == 'li':
+            self._in_li = False
             self._emit('</p></list-item>\n')
         elif tag == 'blockquote':
-            self._emit('</p></disp-quote>\n')
+            if not self._blockquote_has_p:
+                # No inner <p> tags — wrap bare text content
+                # Retroactively wrap: find the <disp-quote> we emitted and add <p>
+                self._emit('</disp-quote>\n')
+                # Need to wrap content in <p> — do it in post-processing
+            else:
+                self._emit('</disp-quote>\n')
+            self._in_blockquote = False
+            self._blockquote_has_p = False
         elif tag == 'a':
             self._emit('</ext-link>')
         elif tag in ('style', 'script'):
@@ -162,6 +190,68 @@ class HTMLToJATSConverter(HTMLParser):
         return result
 
 
+def _postprocess_jats_body(jats: str) -> str:
+    """Fix structural issues in converted JATS body XML."""
+    # Wrap bare disp-quote content (no inner <p>) in <p> tags
+    # Only wrap if there's no <p> tag inside at all
+    def _wrap_bare_dispquote(m):
+        inner = m.group(1).strip()
+        if '<p>' not in inner:
+            return f'<disp-quote><p>{inner}</p></disp-quote>'
+        return m.group(0)
+    jats = re.sub(
+        r'<disp-quote>(.*?)</disp-quote>',
+        _wrap_bare_dispquote,
+        jats, flags=re.DOTALL
+    )
+
+    # Remove empty <p></p> pairs (from suppressed inner tags)
+    jats = re.sub(r'<p>\s*</p>\s*', '', jats)
+
+    # Remove empty sections
+    jats = re.sub(r'<sec><title>\s*</title>\s*</sec>\s*', '', jats)
+
+    # Fix inline tags (italic, bold, sup, sub) that cross block boundaries.
+    # Source HTML often has <strong> spanning across <p> tags — invalid but common.
+    # Close any open inline tag before </p> and reopen after <p>.
+    inline_tags = {'italic', 'bold', 'sup', 'sub'}
+    open_inlines = []
+    fixed_parts = []
+    # Split on block-level boundaries while preserving them
+    tokens = re.split(r'(</?(?:p|disp-quote|list-item|sec|title)(?:\s[^>]*)?>)', jats)
+    for token in tokens:
+        close_match = re.match(r'^</(p|disp-quote|list-item|sec|title)>', token)
+        open_match = re.match(r'^<(p|disp-quote|list-item|sec|title)', token)
+
+        if close_match:
+            # Close any open inline tags before the block close
+            for tag in reversed(open_inlines):
+                fixed_parts.append(f'</{tag}>')
+            fixed_parts.append(token)
+            open_inlines.clear()
+        elif open_match:
+            fixed_parts.append(token)
+            # Don't reopen — inline state resets at block boundaries
+            open_inlines.clear()
+        else:
+            # Track which inline tags are opened/closed in this text chunk
+            for m in re.finditer(r'<(/?)(\w+)(?:\s[^>]*)?>', token):
+                is_close = m.group(1) == '/'
+                tag_name = m.group(2)
+                if tag_name in inline_tags:
+                    if is_close and tag_name in open_inlines:
+                        open_inlines.remove(tag_name)
+                    elif not is_close:
+                        open_inlines.append(tag_name)
+            fixed_parts.append(token)
+    jats = ''.join(fixed_parts)
+
+    # Clean up excessive whitespace between tags
+    jats = re.sub(r'\n{3,}', '\n\n', jats)
+
+    return jats
+
+
 def html_to_jats_body(html_content: str) -> str:
     """Convert HTML galley body content to JATS <body> XML."""
     # Strip DOCTYPE/html/head/body wrappers if present
@@ -172,7 +262,8 @@ def html_to_jats_body(html_content: str) -> str:
 
     converter = HTMLToJATSConverter()
     converter.feed(html_content)
-    return converter.get_jats().strip()
+    raw = converter.get_jats().strip()
+    return _postprocess_jats_body(raw)
 
 
 # ---------------------------------------------------------------
