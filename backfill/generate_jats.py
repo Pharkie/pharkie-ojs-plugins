@@ -363,6 +363,7 @@ def generate_article_jats(article: dict, volume: int, issue: int,
 
     # Journal metadata
     lines.append('<journal-meta>')
+    lines.append(f'<journal-id journal-id-type="issn">{ISSN}</journal-id>')
     lines.append(f'<journal-title-group><journal-title>{JOURNAL_TITLE}</journal-title></journal-title-group>')
     lines.append(f'<issn pub-type="ppub">{ISSN}</issn>')
     lines.append(f'<publisher><publisher-name>{PUBLISHER}</publisher-name></publisher>')
@@ -392,7 +393,8 @@ def generate_article_jats(article: dict, volume: int, issue: int,
         lines.append('</contrib-group>')
 
     # Publication date
-    lines.append(f'<pub-date date-type="pub" publication-format="print">')
+    lines.append(f'<pub-date date-type="pub" publication-format="print" '
+                 f'iso-8601-date="{date_published}">')
     lines.append(f'<month>{month}</month><year>{year}</year>')
     lines.append('</pub-date>')
 
