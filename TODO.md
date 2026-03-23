@@ -294,11 +294,15 @@ Crossref membership obligation: include DOIs for cited works when depositing ([r
 ### 5. Analytics
 - [ ] Decide approach: OJS Usage Statistics (built-in), Google Analytics, Plausible, or Matomo. Consider: privacy (GDPR), metrics needed, cost.
 
-### 6. Everything else
+### 6. Monitoring
+- [ ] **Live website monitoring** — GitHub Actions workflow (or similar) that periodically checks OJS and WP are up, responding correctly, and SSL certs are valid. Alert on failure (email or Slack). Consider: uptime checks (HTTP status), content checks (expected text on page), SSL expiry warning, sync health (reconciliation drift).
+
+### 7. Everything else
 - [ ] **Non-member payment UX flow** — OJS redirects anonymous users to bare login form. Test whether UX is acceptable or needs a custom interstitial.
 - [ ] **Cross-issue browsing** — Browse by Section plugin (`pkp/browseBySection`) and/or OJS categories
 - [ ] Admin per-member sync status — per-user view of sync log
 - [ ] **Author emails** — replace `firstname.lastname@placeholder.invalid` with real emails
+- [ ] **Link articles to real authors** — cross-reference backfilled article authors against OJS user database (synced from WP members). Where an author name matches an existing OJS user, link the article's author record to that user account. Enables author profiles, "my articles" views, and ORCID linking.
 - [ ] **Invite article authors to review their contributions** — email authors to check: right number of articles, correct full text, correct PDF pages. Requires real author emails first.
 - [ ] Test new member / cancellation / on-hold flows
 - [ ] Mobile testing

@@ -58,49 +58,84 @@ def strip_html(html_str: str) -> str:
 
 
 # Headings that indicate a reference/citation section
+# Allow trailing punctuation (.,:) and optional extras like "& Filmography"
 REFERENCE_HEADINGS = re.compile(
     r'<h2>\s*('
     r'References?'
     r'|Notes?'
     r'|Endnotes?'
-    r'|Footnotes?'
+    r'|Footnotes?:?'
     r'|Bibliography'
     r'|Further Reading'
     r'|Works Cited'
     r'|Notes and References'
     r'|References and Notes'
+    r'|Bibliography and References'
+    r'|Further References'
+    r'|References and Bibliography'
+    r'|References and further reading'
     r'|Selected Bibliography'
     r'|References:'
-    r')\s*</h2>',
+    r')(?:\s*[&;]\s*\w+)*'  # optional "& Filmography", "&amp; Filmography", etc.
+    r'(?:\s*\([^)]*\))?'  # optional parenthetical like "(including some key...)"
+    r'[.:]?\s*</h2>',
     re.IGNORECASE
 )
 
 # Headings that are "pure reference" sections (always extract all items)
 PURE_REFERENCE_HEADINGS = re.compile(
     r'^(References?|Bibliography|Works Cited|Further Reading'
+    r'|Further References'
+    r'|References and Bibliography|References and further reading'
     r'|Selected Bibliography|References:|References and Notes'
-    r'|Notes and References)$',
+    r'|Bibliography and References'
+    r'|Notes and References)(?:\s*[&;]\s*\w+)*(?:\s*\([^)]*\))?[.:]?$',
     re.IGNORECASE
 )
 
 # Headings that are "notes" sections (only extract citation-like items)
 NOTES_HEADINGS = re.compile(
-    r'^(Notes?|Endnotes?|Footnotes?)$',
+    r'^(Notes?|Endnotes?|Footnotes?:?)[.:]?$',
     re.IGNORECASE
 )
 
 
-def find_reference_sections(html_content: str) -> list[dict]:
-    """Find all reference-like sections in an HTML galley."""
-    sections = []
+def find_reference_sections(html_content: str, tail_only: bool = False) -> list[dict]:
+    """Find reference-like sections in an HTML galley.
 
+    If tail_only=True, only return sections that form a contiguous block at
+    the end of the document (matching strip_references.py behaviour). This
+    prevents extracting mid-article Notes/References that shouldn't be stripped.
+    """
     h2_pattern = re.compile(r'<h2[^>]*>(.*?)</h2>', re.IGNORECASE | re.DOTALL)
     headings = list(h2_pattern.finditer(html_content))
 
+    if not headings:
+        return []
+
+    # Build list of (heading_text, is_reference, heading_index, match)
+    heading_info = []
     for i, match in enumerate(headings):
         heading_text = strip_html(match.group(1)).strip()
+        is_ref = bool(REFERENCE_HEADINGS.match(f'<h2>{heading_text}</h2>'))
+        heading_info.append((heading_text, is_ref, i, match))
 
-        if not REFERENCE_HEADINGS.match(f'<h2>{heading_text}</h2>'):
+    if tail_only:
+        # Walk backwards to find contiguous reference headings at the tail
+        tail_start = None
+        for si in range(len(heading_info) - 1, -1, -1):
+            if heading_info[si][1]:  # is_reference
+                tail_start = si
+            else:
+                break
+        if tail_start is None:
+            return []
+        # Only process headings from tail_start onwards
+        heading_info = heading_info[tail_start:]
+
+    sections = []
+    for heading_text, is_ref, i, match in heading_info:
+        if not is_ref:
             continue
 
         start = match.end()
@@ -335,17 +370,23 @@ def is_junk(text: str) -> bool:
     return False
 
 
-def extract_article_citations(html_path: Path) -> list[dict]:
+def extract_article_citations(html_path: Path) -> tuple[list[dict], list[str]]:
     """Extract citation strings from an HTML galley file.
 
-    Returns a list of dicts with 'text', 'heading', and 'confidence' keys.
-    Confidence is 0-100 (higher = more likely a clean single citation).
+    Returns (citations, filtered_items):
+    - citations: list of dicts with 'text', 'heading', 'confidence' keys.
+      These are items that look like bibliographic references.
+    - filtered_items: list of plain text strings for items that don't look
+      like citations (bios, prose endnotes, provenance notes, ibid-style
+      refs, short fragments). Captured to prevent content loss when HTML
+      reference sections are stripped.
     """
     with open(html_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    sections = find_reference_sections(content)
+    sections = find_reference_sections(content, tail_only=True)
     citations = []
+    filtered_items = []
 
     for sec in sections:
         heading = sec['heading']
@@ -353,9 +394,11 @@ def extract_article_citations(html_path: Path) -> list[dict]:
 
         for item in sec['items']:
             if is_junk(item):
+                filtered_items.append(item)
                 continue
 
             if is_notes and not is_citation_like(item):
+                filtered_items.append(item)
                 continue
 
             confidence = citation_confidence(item, heading)
@@ -366,7 +409,7 @@ def extract_article_citations(html_path: Path) -> list[dict]:
                 'confidence': confidence,
             })
 
-    return citations
+    return citations, filtered_items
 
 
 def _is_author_bio(text: str) -> bool:
@@ -460,11 +503,12 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
                 continue
 
             stats['total'] += 1
-            citation_items = extract_article_citations(html_path)
+            citation_items, filtered = extract_article_citations(html_path)
 
-            if citation_items:
+            if citation_items or filtered:
                 stats['with_citations'] += 1
                 stats['total_citations'] += len(citation_items)
+                stats['total_filtered'] += len(filtered)
                 low_conf = sum(1 for c in citation_items if c['confidence'] < 50)
                 stats['low_confidence'] += low_conf
 
@@ -475,11 +519,18 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
                     headings_found = list(dict.fromkeys(
                         c['heading'] for c in citation_items))
                     article['citation_headings'] = headings_found
+                    # Capture non-citation items (bios, prose notes, etc.)
+                    # to prevent content loss when HTML sections are stripped
+                    if filtered:
+                        article['filtered_items'] = filtered
+                    elif 'filtered_items' in article:
+                        del article['filtered_items']
                     modified = True
 
                 if verbose:
+                    filt_note = f", {len(filtered)} filtered" if filtered else ""
                     note = f" ({low_conf} low confidence)" if low_conf else ""
-                    print(f"  ✓ {vol_name}/{slug}: {len(citation_items)} citations{note}")
+                    print(f"  ✓ {vol_name}/{slug}: {len(citation_items)} citations{note}{filt_note}")
 
                 # Collect rows for sheet export (ALL items, reviewable)
                 title = article.get('title', '')
@@ -700,10 +751,11 @@ def main():
         print(f"Without citations:         {stats['without_citations']}")
         print(f"No HTML file:              {stats['no_html']}")
         print(f"Total citations:           {stats['total_citations']}")
+        print(f"Total filtered items:      {stats['total_filtered']}")
         if args.dry_run:
             print("\nDRY RUN — no toc.json files were modified.")
         else:
-            print("\nUpdated toc.json files with 'citations' field.")
+            print("\nUpdated toc.json files with 'citations' and 'filtered_items' fields.")
         print("=" * 60)
 
     if args.sheet:
