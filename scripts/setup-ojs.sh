@@ -1295,10 +1295,10 @@ fi
 QA_EMAIL="${OJS_QA_USER_EMAIL:-}"
 QA_PASSWORD="${OJS_QA_USER_PASSWORD:-}"
 if [ -n "$QA_EMAIL" ] && [ -n "$QA_PASSWORD" ]; then
-  QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' LIMIT 1")
+  QA_USERNAME=$(echo "$QA_EMAIL" | sed 's/@.*//' | tr -cd 'a-z0-9.' | head -c 30)
+  QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' OR username='$QA_USERNAME' LIMIT 1")
   if [ -z "$QA_EXISTS" ]; then
     QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
-    QA_USERNAME=$(echo "$QA_EMAIL" | sed 's/@.*//' | tr -cd 'a-z0-9.' | head -c 30)
     $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled, date_validated)
       VALUES ('$QA_USERNAME', '$QA_HASH', '$QA_EMAIL', NOW(), 0, 0, NOW());"
     QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' LIMIT 1")
