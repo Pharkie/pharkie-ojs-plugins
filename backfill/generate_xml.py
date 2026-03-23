@@ -370,8 +370,8 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
     project_root = os.path.dirname(os.path.dirname(issue_dir))
     vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
 
-    # Try pre-saved cleaned PDF first
-    presaved_pdf = os.path.join(project_root, 'output', 'issue-galleys', f'{vol_iss}.pdf')
+    # Try pre-saved cleaned PDF first (in the issue's own output folder)
+    presaved_pdf = os.path.join(issue_dir, 'issue-galley.pdf')
     if os.path.exists(presaved_pdf):
         with open(presaved_pdf, 'rb') as f:
             clean_pdf = f.read()
