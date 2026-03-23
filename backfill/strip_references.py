@@ -246,11 +246,12 @@ def main():
                     refs = art.get('references', [])
                     notes = art.get('notes', [])
                     citations = art.get('citations', [])
-                    filtered = art.get('endmatter', [])
-                    toc_item_count = len(refs) + len(notes) + len(filtered)
+                    author_bios = art.get('author_bios', [])
+                    provenance = [art['provenance']] if art.get('provenance') else []
+                    toc_item_count = len(refs) + len(notes) + len(author_bios) + len(provenance)
                     # Fall back to citations[] if split hasn't been run
                     if not refs and not notes:
-                        toc_item_count = len(citations) + len(filtered)
+                        toc_item_count = len(citations) + len(author_bios) + len(provenance)
                     break
 
         if not matched_article or toc_item_count == 0:
