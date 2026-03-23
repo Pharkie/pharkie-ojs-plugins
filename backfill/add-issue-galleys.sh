@@ -130,7 +130,7 @@ print(f'{vol} {iss} {date}')
   fi
 
   # Use pre-saved cleaned PDF if available, otherwise re-save from source
-  PRESAVED="$PROJECT_DIR/backfill/output/issue-galleys/${VOL_ISS}.pdf"
+  PRESAVED="$ISSUE_DIR/issue-galley.pdf"
   CLEAN_PDF="/tmp/issue-galley-${VOL_ISS}.pdf"
   if [ -f "$PRESAVED" ]; then
     cp "$PRESAVED" "$CLEAN_PDF"
