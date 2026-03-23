@@ -519,12 +519,26 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
                     headings_found = list(dict.fromkeys(
                         c['heading'] for c in citation_items))
                     article['citation_headings'] = headings_found
-                    # Capture non-citation items (bios, prose notes, etc.)
-                    # to prevent content loss when HTML sections are stripped
-                    if filtered:
-                        article['endmatter'] = filtered
-                    elif 'endmatter' in article:
-                        del article['endmatter']
+                    # Classify non-citation items into proper fields
+                    bios = []
+                    prov = []
+                    extra_notes = []
+                    for item in filtered:
+                        if _is_author_bio(item):
+                            bios.append(item)
+                        elif re.match(r'^This (article|paper|chapter|essay|lecture|talk)\s+(is|was)\s', item):
+                            prov.append(item)
+                        else:
+                            extra_notes.append(item)
+                    if bios:
+                        article['author_bios'] = bios
+                    elif 'author_bios' in article:
+                        del article['author_bios']
+                    if prov:
+                        article['provenance'] = prov[0] if len(prov) == 1 else ' '.join(prov)
+                    elif 'provenance' in article:
+                        del article['provenance']
+                    # extra_notes merge into notes[] after split_citation_tiers runs
                     modified = True
 
                 if verbose:
@@ -634,12 +648,20 @@ def load_citations_from_toc(volume_filter=None):
                     text, '', '',
                 ])
 
-            for text in article.get('endmatter', []):
+            for text in article.get('author_bios', []):
                 seq += 1
                 rows.append([
                     volume, issue, date, section, title, authors,
-                    seq, heading_str, 'endmatter', 0,
+                    seq, heading_str, 'author_bio', 0,
                     text, '', '',
+                ])
+
+            if article.get('provenance'):
+                seq += 1
+                rows.append([
+                    volume, issue, date, section, title, authors,
+                    seq, heading_str, 'provenance', 0,
+                    article['provenance'], '', '',
                 ])
 
     return rows
