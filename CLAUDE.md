@@ -46,18 +46,18 @@ Pipeline scripts (called by `split-issue.sh`):
 - `backfill/generate_xml.py` — generate OJS Native XML with base64-embedded PDFs + HTML galleys
 - `backfill/verify.py` — post-import verification against OJS database
 
-HTML galley generation (step 2.5, between split and import):
-- `backfill/htmlgen.py` — sends split PDFs to Claude Haiku API, generates HTML body content for each article. Output: `{split_pdf_stem}.html` next to each split PDF. Resumable (skips existing `.html`). Content-filtered articles get PyMuPDF fallback (marked with `<!-- AUTO-EXTRACTED -->` comment). Report: `backfill/reports/htmlgen-report.json`.
-- `generate_xml.py` reads `.html` files via `load_html_galley()` — if present, wraps in DOCTYPE/body and embeds as "Full Text" galley. No `.html` = no HTML galley (PDF only).
+JATS is the single source of truth for article content. The pipeline direction is **PDF → JATS → HTML**:
 
-Citation extraction and classification:
-- `backfill/extract_citations.py` — extract citations from HTML galleys into toc.json (`references[]`, `notes[]`, `author_bios[]`, `provenance`). Uses tail-only heading detection to match strip behaviour.
-- `backfill/split_citation_tiers.py` — classify flat `citations[]` into `references[]` (Crossref-compatible) and `notes[]` (display-only)
-- `backfill/split_endmatter.py` — split catch-all items into `author_bios[]`, `provenance`, and merge rest into `notes[]`
-- `backfill/strip_references.py` — strip reference sections from HTML galleys (after extraction). Verifies item counts before stripping — refuses if any content would be lost.
+1. `backfill/htmlgen.py` — sends split PDFs to Claude API, generates initial HTML body content
+2. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + HTML body. Output: `backfill/output/<vol.iss>/<seq>-<slug>.jats.xml`
+3. `backfill/extract_citations.py` — reads JATS `<body>`, finds reference sections, extracts items, writes to JATS `<back>` (ref-list, fn-group, bio, notes). Removes ref sections from body.
+4. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
+5. `backfill/jats_to_html.py` — generates HTML galley from JATS (body + notes + bios + provenance; references excluded — OJS renders those from citations table)
+6. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads citations from JATS `<ref-list>`.
 
-JATS XML generation:
-- `backfill/generate_jats.py` — generates one JATS 1.3 XML file per article from toc.json + HTML galleys. Output: `backfill/output/<vol.iss>/<seq>-<slug>.jats.xml`. JATS files are the **single source of truth** for article content (metadata + body + references + notes + author bios + provenance). toc.json retains issue-level data (PDF page splits, article ordering, section assignments).
+Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, etc.)
+
+toc.json retains issue-level data only: PDF page splits, article ordering, section assignments, metadata.
 
 Standalone utilities:
 - `backfill/audit.py` — audit all source PDFs in `backfill/input/` for completeness
