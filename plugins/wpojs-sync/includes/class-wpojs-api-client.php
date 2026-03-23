@@ -52,8 +52,9 @@ class WPOJS_API_Client {
      * @param string      $first_name
      * @param string      $last_name
      * @param string|null $password_hash Optional WP password hash to store on OJS.
+     * @param string|null $username      Optional WP username to use on OJS.
      */
-    public function find_or_create_user( $email, $first_name, $last_name, $password_hash = null ) {
+    public function find_or_create_user( $email, $first_name, $last_name, $password_hash = null, $username = null ) {
         $body = array(
             'email'    => $email,
             'firstName' => $first_name,
@@ -61,6 +62,9 @@ class WPOJS_API_Client {
         );
         if ( $password_hash !== null ) {
             $body['passwordHash'] = $password_hash;
+        }
+        if ( $username !== null ) {
+            $body['username'] = $username;
         }
         return $this->post( '/wpojs/users/find-or-create', $body );
     }

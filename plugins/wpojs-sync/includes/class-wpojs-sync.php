@@ -74,7 +74,7 @@ class WPOJS_Sync {
 
 		// Step 2: Find or create OJS user (with WP password hash so they
 		// can log into OJS with their existing WP password).
-		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $user->user_pass );
+		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $user->user_pass, $user->user_login );
 		if ( ! $result['success'] ) {
 			$result = $this->find_after_fail( $result, $email );
 		}
@@ -434,7 +434,7 @@ class WPOJS_Sync {
 		$password_hash = $send_password_hash ? $user->user_pass : null;
 
 		// Step 1: Find or create OJS user.
-		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $password_hash );
+		$result = $this->api->find_or_create_user( $email, $first_name, $last_name, $password_hash, $user->user_login );
 		if ( ! $result['success'] ) {
 			$result = $this->find_after_fail( $result, $email );
 		}

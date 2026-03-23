@@ -25,7 +25,7 @@ Base URL: `{OJS_BASE_URL}/index.php/{journal_path}/api/v1/wpojs`
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `GET` | `/users?email={email}` | Yes | Find user by email. Returns `{"found":true, "userId":N, "email":"...", "username":"...", "disabled":bool}` or `{"found":false}`. |
-| `POST` | `/users/find-or-create` | Yes | Idempotent. Finds existing user by email or creates a new one. Assigns Reader role. Body: `{email, firstName, lastName, passwordHash?}`. Returns `{"userId":N, "created":bool}`. |
+| `POST` | `/users/find-or-create` | Yes | Idempotent. Finds existing user by email or creates a new one. Assigns Reader role. Body: `{email, firstName, lastName, passwordHash?, username?}`. Returns `{"userId":N, "created":bool}`. |
 | `PUT` | `/users/{userId}/email` | Yes | Update user email. Body: `{newEmail}`. Returns 409 if email already in use. |
 | `PUT` | `/users/{userId}/password` | Yes | Update user password hash. Body: `{passwordHash}`. |
 | `DELETE` | `/users/{userId}` | Yes | GDPR erasure. Anonymises all PII, disables account, expires subscription, removes settings and access keys. Does not delete the user record. |
@@ -71,6 +71,19 @@ All errors return JSON: `{"error": "description"}` with appropriate HTTP status:
 | `409` | Email conflict (update email) |
 | `429` | Server under load (retry after delay) |
 | `500` | Internal error |
+
+## Username sync
+
+The WP plugin sends `$user->user_login` as an optional `username` field in the `find-or-create` call. The OJS plugin sanitizes it to OJS's lowercase-alphanumeric constraint (`preg_replace('/[^a-z0-9]/', '', strtolower($wpUsername))`) and uses it as the base for username generation. If not provided or if it sanitizes to empty, falls back to the existing auto-gen from firstName+lastName. The collision loop (`base`, `base1`, `base2`...) handles duplicates regardless of source.
+
+**Why this matters:** OJS admin screens show usernames, so `bscanlan` (from WP login `BScanlan`) is more recognisable than `benscanlan` (auto-generated from first+last name).
+
+**Login impact:** 536 of 1419 live WP usernames (38%) contain characters stripped by sanitization (dots, hyphens, underscores, spaces, `@` — mostly email-as-username accounts). If those users typed their WP login into OJS, the unsanitized input wouldn't match the sanitized stored username and login would fail. This is mitigated by two things:
+
+1. The login page relabels the "Username or Email" field to just **"Email"** and sets `autocomplete="email"`, steering users toward email login.
+2. OJS's `PKPUserProvider::retrieveByCredentials()` checks if the input looks like an email — if so, it does an email lookup (which always works). Only non-email-looking input goes through the username path.
+
+Case-only differences (e.g. `BScanlan` → `bscanlan`) are fine — OJS username lookup is case-insensitive.
 
 ## Request logging
 
