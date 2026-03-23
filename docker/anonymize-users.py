@@ -23,7 +23,7 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 
 INPUT_CSV = os.path.join(
     PROJECT_DIR,
-    "data export",
+    "data-export",
     "user_export_2026-02-20-10-44-46.csv",
 )
 OUTPUT_CSV = os.path.join(SCRIPT_DIR, "test-users.csv")

@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
-CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data export',
+CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data-export',
                           'sea-journal-87a19feadadd.json')
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
 

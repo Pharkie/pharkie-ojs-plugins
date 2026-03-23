@@ -37,14 +37,8 @@ docker/snapshots/
 # Database backups (pulled from VPS)
 backups/
 
-# Data exports
-/data export
-
-# Pre-launch deliverables (welcome email copy, member FAQ, support runbook)
-/launch-comms/
-
-# Screenshots (churn on every test run with minor pixel diffs)
-/discovery-screenshots/
+# Data exports (live WP exports, journal archive PDFs, plugin zips)
+/data-export/
 e2e/screenshots/
 
 # Rebuild logs

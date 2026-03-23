@@ -16,7 +16,7 @@
 - Smoke tests cover admin pages (WP + OJS) to catch .env/permission issues that WP-CLI misses
 - HPOS fix for sample data seeding (disable → seed → sync → re-enable)
 - Three-phase rollout plan — `docs/private/pre-production-checklist.md`
-- Live WP plugin audit — `data export/live-wp-plugin-audit.md` (35 plugins, theme identified)
+- Live WP plugin audit — `data-export/live-wp-plugin-audit.md` (35 plugins, theme identified)
 - Password hash sync (bulk, new members, ongoing password changes) — WP hashes sent to OJS, members log in with existing WP password, lazy rehash to cost 12 on first OJS login
 - Dev-vs-live branding parity — journal metadata, theme, nav menu, editorial team, sidebar blocks (Information + event banners), "For Advertisers" static page + sidebar link
 

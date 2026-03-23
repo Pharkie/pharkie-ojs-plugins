@@ -21,9 +21,9 @@ except ImportError:
 
 BASE = Path(__file__).resolve().parent.parent
 
-MIRROR_DIR = BASE / "data export" / "securepdfs-mirror"
+MIRROR_DIR = BASE / "data-export" / "securepdfs-mirror"
 PREPARED_DIR = BASE / "backfill" / "prepared"
-ARCHIVE_DIR = BASE / "data export" / "journal archive"
+ARCHIVE_DIR = BASE / "data-export" / "journal archive"
 
 
 def parse_issue_from_mirror(filename: str) -> str | None:

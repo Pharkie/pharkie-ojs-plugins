@@ -4,8 +4,8 @@ Audit all archive PDFs — produce a structured report of every issue's
 readiness for the backfill pipeline.
 
 Usage:
-    python backfill/audit.py "data export/journal archive/Pre 2018/"*.pdf \
-                             "data export/journal archive/2018-25/"*.pdf
+    python backfill/audit.py "data-export/journal archive/Pre 2018/"*.pdf \
+                             "data-export/journal archive/2018-25/"*.pdf
 
 Checks per PDF:
   - Basic info (pages, dimensions, file size)
@@ -460,7 +460,7 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python backfill/audit.py <pdf1> <pdf2> ... or <folder>",
               file=sys.stderr)
-        print("  e.g.: python backfill/audit.py \"data export/journal archive/Pre 2018/\"*.pdf",
+        print("  e.g.: python backfill/audit.py \"data-export/journal archive/Pre 2018/\"*.pdf",
               file=sys.stderr)
         sys.exit(1)
 

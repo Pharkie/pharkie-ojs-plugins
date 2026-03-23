@@ -591,7 +591,7 @@ def export_to_sheet(rows, dry_run=False):
     import gspread
 
     SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
-    CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data export',
+    CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data-export',
                               'sea-journal-87a19feadadd.json')
     gc = gspread.service_account(filename=CREDS_FILE)
     sh = gc.open_by_key(SHEET_KEY)
