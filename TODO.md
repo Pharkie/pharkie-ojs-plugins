@@ -25,7 +25,7 @@ Deployment-specific roadmap (milestones, server details, sync status) lives in `
 
 - [ ] Extract journal page numbers from split PDFs (first page of each article PDF has printed page number) → populate `<fpage>`/`<lpage>` in JATS
 - [ ] AI-generate abstracts for 372 research articles that lack them (flag as `abstract-type="AI-generated"`)
-- [ ] Parse `<mixed-citation>` into `<element-citation>` (structured author/year/title/publisher fields) — needed for Crossref reference linking
+- [ ] Parse `<mixed-citation>` into `<element-citation>` (structured author/year/title/publisher fields) — improves Crossref reference linking accuracy (Crossref can fuzzy-match raw strings but structured data gets better results)
 
 ### JATS → OJS sync
 
