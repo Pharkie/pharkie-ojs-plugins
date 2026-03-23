@@ -195,6 +195,77 @@ def _local(tag: str) -> str:
 
 
 # ---------------------------------------------------------------
+# Confidence scoring (informational, for review/QA)
+# ---------------------------------------------------------------
+
+def citation_confidence(text: str, heading: str) -> int:
+    """Score 0-100 how confident we are this is a single, clean citation."""
+    score = 50
+
+    length = len(text)
+    is_notes = bool(NOTES_HEADING_RE.match(heading))
+    is_refs = bool(PURE_REFERENCE_HEADING_RE.match(heading))
+
+    if re.search(r'\(\d{4}\)', text):
+        score += 12
+    elif re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text):
+        score += 6
+
+    if re.match(r'^[A-Z][a-zà-ü]+,?\s+[A-Z]\.', text):
+        score += 12
+    elif re.match(r'^\d+[\.\)]\s+[A-Z][a-zà-ü]+', text):
+        score += 6
+
+    if re.search(r'(Press|Publisher|Books|Routledge|Sage|Springer|Wiley|Penguin|'
+                 r'Palgrave|Harper|Random House|Vintage)', text, re.IGNORECASE):
+        score += 8
+    if re.search(r'(Journal|Review|Quarterly|Bulletin|Annals|Archives)\s+of\b', text, re.IGNORECASE):
+        score += 8
+    if re.search(r'(pp?\.?\s*\d+[-–]\d+|\b\d+[-–]\d+\b)', text):
+        score += 6
+    if re.search(r'doi[:\s]|10\.\d{4,}/', text, re.IGNORECASE):
+        score += 10
+    if re.search(r'https?://', text):
+        score += 4
+    if re.search(r'\b(Trans\.|trans\.|Transl\.|ed\.|eds\.|Ed\.|Vol\.)', text):
+        score += 4
+    if re.search(r'(London|New York|Cambridge|Oxford|Paris|Berlin|Chicago|Boston)\s*:', text):
+        score += 6
+    if is_refs:
+        score += 8
+
+    if is_notes:
+        score -= 10
+    if length < 30:
+        score -= 15
+    elif length > 500:
+        score -= 20
+    elif length > 300:
+        score -= 8
+
+    year_count = len(re.findall(r'\b(?:1[89]\d{2}|20[0-2]\d)\b', text))
+    if year_count > 3 and length > 200:
+        score -= 25
+    elif year_count > 2 and length > 150:
+        score -= 12
+
+    sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', text))
+    if sentence_count > 3:
+        score -= 15
+    elif sentence_count > 1 and length > 200:
+        score -= 8
+
+    if is_author_bio(text):
+        score -= 40
+    if re.match(r'^(The|This|It|In|As|For|We|He|She|A)\s', text) and not re.match(r'^The\s', text[:20]):
+        score -= 10
+    if re.search(r'\b(Ibid\.?|Ibidem|Op\.?\s*cit)', text, re.IGNORECASE):
+        score -= 15
+
+    return max(0, min(100, score))
+
+
+# ---------------------------------------------------------------
 # Item classification: junk / citation-like / bio / provenance
 # ---------------------------------------------------------------
 

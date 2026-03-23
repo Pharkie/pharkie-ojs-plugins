@@ -341,37 +341,6 @@ def html_to_jats_body(html_content: str) -> str:
 # JATS XML generation
 # ---------------------------------------------------------------
 
-def _load_back_matter_from_jats(html_path: Path | None) -> dict | None:
-    """Load back matter from an existing JATS file (if references etc. removed from toc.json)."""
-    if not html_path:
-        return None
-    jats_path = html_path.with_suffix('.jats.xml')
-    if not jats_path.exists():
-        return None
-    try:
-        from xml.etree import ElementTree as ET
-        tree = ET.parse(jats_path)
-        result = {}
-        refs = [r.text.strip() for r in tree.findall('.//{*}mixed-citation') if r.text]
-        if refs:
-            result['references'] = refs
-        notes = [fn.find('{*}p').text.strip() for fn in tree.findall('.//{*}fn')
-                 if fn.find('{*}p') is not None and fn.find('{*}p').text]
-        if notes:
-            result['notes'] = notes
-        bios = [b.find('{*}p').text.strip() for b in tree.findall('.//{*}bio')
-                if b.find('{*}p') is not None and b.find('{*}p').text]
-        if bios:
-            result['author_bios'] = bios
-        prov = tree.find('.//{*}notes[@notes-type="provenance"]')
-        if prov is not None:
-            p = prov.find('{*}p')
-            if p is not None and p.text:
-                result['provenance'] = p.text.strip()
-        return result if result else None
-    except Exception:
-        return None
-
 
 def _sort_notes_by_number(notes: list[str]) -> list[str]:
     """Sort notes by their leading number (e.g. '3 Text...' before '4 Text...').
@@ -491,20 +460,14 @@ def generate_article_jats(article: dict, volume: int, issue: int,
             lines.append('</body>')
 
     # --- <back> ---
-    # Read from toc.json first; fall back to existing JATS file if fields
-    # have been removed from toc.json (JATS is the source of truth)
+    # Back matter comes from toc.json during initial generation (extraction
+    # pipeline populates these fields). After JATS generation, these fields
+    # are removed from toc.json — JATS is the source of truth.
+    # For regeneration, extract_citations.py populates back matter directly.
     references = article.get('references', [])
     notes = article.get('notes', [])
     author_bios = article.get('author_bios', [])
     provenance = article.get('provenance', '')
-
-    if not references and not notes and not author_bios and not provenance:
-        existing = _load_back_matter_from_jats(html_path)
-        if existing:
-            references = existing.get('references', [])
-            notes = existing.get('notes', [])
-            author_bios = existing.get('author_bios', [])
-            provenance = existing.get('provenance', '')
 
     if references or notes or author_bios or provenance:
         lines.append('<back>')
@@ -585,13 +548,6 @@ def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
         has_refs = bool(article.get('references'))
         has_notes = bool(article.get('notes'))
         has_bios = bool(article.get('author_bios'))
-        # Also check existing JATS file (back matter may have been removed from toc.json)
-        if not has_refs and not has_notes and not has_bios:
-            existing = _load_back_matter_from_jats(html_path)
-            if existing:
-                has_refs = bool(existing.get('references'))
-                has_notes = bool(existing.get('notes'))
-                has_bios = bool(existing.get('author_bios'))
         if has_refs:
             stats['with_refs'] += 1
         if has_notes:
