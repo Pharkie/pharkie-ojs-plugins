@@ -75,7 +75,11 @@ SKIPPED=0
 FAILED=0
 MAX_FAILURES=3
 
-for ISSUE_DIR in "${ISSUE_DIRS[@]}"; do
+# Sort issue dirs numerically (1, 2, 3, ..., 10.1, 10.2, ..., 37.1)
+IFS=$'\n' SORTED_DIRS=($(for d in "${ISSUE_DIRS[@]}"; do echo "$d"; done | sort -t/ -k$(echo "${ISSUE_DIRS[0]}" | tr '/' '\n' | wc -l) -V))
+unset IFS
+
+for ISSUE_DIR in "${SORTED_DIRS[@]}"; do
   TOC="$ISSUE_DIR/toc.json"
   if [ ! -f "$TOC" ]; then
     echo "SKIP: No toc.json in $ISSUE_DIR"
