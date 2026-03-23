@@ -36,8 +36,11 @@ if [ -n "$HOST" ]; then
   source "$PROJECT_DIR/scripts/lib/resolve-ssh.sh"
   resolve_ssh "$HOST"
   REMOTE_DIR="/opt/wp-ojs-sync"
+  # SSH mode: base64-encode SQL to avoid escaping hell, decode inside container.
   run_db() {
-    $SSH_CMD "cd $REMOTE_DIR && docker compose exec -T ojs-db bash -c 'mysql -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE -N -e \"$1\"'" 2>/dev/null
+    local b64
+    b64=$(echo "$1" | base64 -w0)
+    $SSH_CMD "cd $REMOTE_DIR && docker compose exec -T ojs-db bash -c \"echo $b64 | base64 -d | mysql -u root -p\\\$MYSQL_ROOT_PASSWORD \\\$MYSQL_DATABASE -N\"" 2>/dev/null
   }
   run_ojs() {
     $SSH_CMD "cd $REMOTE_DIR && docker compose exec -T ojs bash -c '$1'" 2>/dev/null
@@ -50,7 +53,7 @@ else
   source "$PROJECT_DIR/scripts/lib/dc.sh" 2>/dev/null && init_dc 2>/dev/null
   DC="${DC:-docker compose}"
   run_db() {
-    $DC exec -T ojs-db bash -c "mysql -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE -N -e \"$1\"" 2>/dev/null
+    echo "$1" | $DC exec -T ojs-db bash -c "mysql -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE -N" 2>/dev/null
   }
   run_ojs() {
     $DC exec -T ojs bash -c "$1" 2>/dev/null
@@ -70,6 +73,7 @@ fi
 ADDED=0
 SKIPPED=0
 FAILED=0
+MAX_FAILURES=3
 
 for ISSUE_DIR in "${ISSUE_DIRS[@]}"; do
   TOC="$ISSUE_DIR/toc.json"
@@ -175,6 +179,10 @@ except Exception as e:
     echo "FAIL: $VOL_ISS — copy failed"
     rm -f "$CLEAN_PDF"
     FAILED=$((FAILED + 1))
+    if [ "$FAILED" -ge "$MAX_FAILURES" ]; then
+      echo "ERROR: $MAX_FAILURES failures reached, aborting."
+      break
+    fi
     continue
   fi
   run_ojs "chown www-data:www-data $FILES_DIR/$FILENAME"
@@ -186,6 +194,10 @@ except Exception as e:
     echo "FAIL: $VOL_ISS — issue_files insert failed"
     rm -f "$CLEAN_PDF"
     FAILED=$((FAILED + 1))
+    if [ "$FAILED" -ge "$MAX_FAILURES" ]; then
+      echo "ERROR: $MAX_FAILURES failures reached, aborting."
+      break
+    fi
     continue
   fi
   run_db "INSERT INTO issue_galleys (issue_id, file_id, locale, label, seq) VALUES ($ISSUE_ID, $FILE_ID, 'en', 'PDF', 0)"
