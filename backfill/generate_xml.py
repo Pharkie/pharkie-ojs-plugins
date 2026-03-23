@@ -820,11 +820,58 @@ def main():
     xml = generate_xml(toc_data, toc_json_path=args.toc_json,
                        skip_issue_galley=args.no_issue_galley)
 
-    # Validate generated XML is well-formed
+    # Validate generated XML
     try:
-        ET.fromstring(xml)
-    except ET.ParseError as e:
-        print(f"ERROR: Generated XML is malformed: {e}", file=sys.stderr)
+        root = ET.fromstring(xml)
+        ns = 'http://pkp.sfu.ca'
+
+        def find(parent, path):
+            """Find element with or without namespace."""
+            result = parent.find(path.replace('/', f'/{{{ns}}}').replace(f'/{{{ns}}}/', f'/{{{ns}}}'), )
+            if result is None:
+                # Try with full namespace prefix on each tag
+                parts = path.split('/')
+                prefixed = '/'.join(f'{{{ns}}}{p}' if p and not p.startswith('.') else p for p in parts)
+                result = parent.find(prefixed)
+            if result is None:
+                result = parent.find(path)  # try without namespace
+            return result
+
+        def findall(parent, path):
+            parts = path.split('/')
+            prefixed = '/'.join(f'{{{ns}}}{p}' if p and not p.startswith('.') else p for p in parts)
+            result = parent.findall(prefixed)
+            if not result:
+                result = parent.findall(path)
+            return result
+
+        # Root is <issues> (possibly namespaced), children are <issue>
+        issue = find(root, 'issue')
+        if root.tag.endswith('}issue') or root.tag == 'issue':
+            issue = root
+        if issue is None:
+            raise ValueError("No <issue> element found")
+        articles = findall(issue, './/article')
+        if not articles:
+            raise ValueError("No <article> elements found")
+        # Check issue galley if expected
+        if not args.no_issue_galley:
+            galley = find(issue, './/issue_galleys/issue_galley')
+            if galley is not None:
+                embed = find(galley, './/issue_file/embed')
+                if embed is None or not embed.text or len(embed.text) < 100:
+                    raise ValueError("Issue galley embed is empty or truncated")
+        # Check article galleys have content
+        if not args.no_pdfs:
+            for art in articles:
+                art_galleys = findall(art, './/article_galley')
+                if not art_galleys:
+                    title_el = find(art, './/title')
+                    title = title_el.text if title_el is not None else '?'
+                    print(f"WARNING: Article '{title}' has no galleys", file=sys.stderr)
+        print(f"XML valid: {len(articles)} articles", file=sys.stderr)
+    except (ET.ParseError, ValueError) as e:
+        print(f"ERROR: XML validation failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     if args.output:
