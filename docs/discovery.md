@@ -1,8 +1,8 @@
-# Discovery: What We Investigated and Why
+# Discovery: What Was Investigated and Why
 
 Last updated: 2026-03-08
 
-> **What is this?** Before building anything, we evaluated several approaches to syncing membership data between WordPress and OJS. This document records what we tried, what we found, and why most options were eliminated. The winning approach — **push-sync** — is what this project implements.
+> **What is this?** Before building anything, several approaches were evaluated for syncing membership data between WordPress and OJS. This document records what was tried, what was found, and why most options were eliminated. The winning approach — **push-sync** — is what this project implements.
 
 This document records the research phase: what approaches were evaluated, what was found, and why options were eliminated. For the forward-looking implementation plan, see [`plan.md`](./private/plan.md).
 
@@ -42,7 +42,7 @@ See [`oauth-revisited.md`](./oauth-revisited.md) for the full reassessment.
 
 ## Step 2: Pull-verify (eliminated)
 
-This was reconsidered because it looked simpler than originally understood — but then we read the actual source code of the [Subscription SSO plugin](https://github.com/asmecher/subscriptionSSO).
+This was reconsidered because it looked simpler than originally understood — but then the actual source code was reviewed of the [Subscription SSO plugin](https://github.com/asmecher/subscriptionSSO).
 
 **What it actually does (from [source code audit](./phase0-sso-plugin-audit.md)):**
 
@@ -75,9 +75,9 @@ The initial idea behind Push-sync was simple: WP calls OJS REST API to create su
 
 **Result: Partially wrong.** The OJS REST API has no subscription endpoints. Not in 3.4, not in 3.5, not on main. Confirmed via the [swagger spec](https://github.com/pkp/ojs/blob/main/docs/dev/swagger-source.json), [PKP forums](https://forum.pkp.sfu.ca/t/are-there-api-or-other-options-for-subscription-management-available-in-ojs-3-3/86106), and GitHub issues. PKP has said this is "not a development priority." The user creation API is also questionable — swagger spec shows read-only endpoints.
 
-However: OJS has complete internal PHP classes for subscription CRUD (`IndividualSubscriptionDAO`). They just have no HTTP interface. **The fix is a small OJS plugin that exposes these classes as REST endpoints.** This keeps the spirit of Push-sync intact — the WP side is the same, we just need to build the OJS receiving end ourselves.
+However: OJS has complete internal PHP classes for subscription CRUD (`IndividualSubscriptionDAO`). They just have no HTTP interface. **The fix is a small OJS plugin that exposes these classes as REST endpoints.** This keeps the spirit of Push-sync intact — the WP side is the same, the fix requires building the OJS receiving end as a custom plugin.
 
-See `private/phase0-findings.md` for full API research.
+See `docs/private/phase0-findings.md` for full API research (private repo).
 
 ---
 
@@ -139,13 +139,13 @@ Only use if OJS plugins can't be installed or as a stopgap.
 
 Consider switching if the OJS 3.5 upgrade takes more than 2 weeks or the custom plugin scope grows significantly. See `private/janeway-paywall-investigation.md` for the full concrete plan.
 
-**OJS quality concerns (2026-02-20):** During Docker dev environment setup, we hit 6 separate OJS bugs — install crashes, broken CLI tooling, XML import/export that can't round-trip its own data, and missing APIs. Documented in [`ojs-issues-log.md`](./ojs-issues-log.md). This strengthens the case for keeping Janeway as a genuine backup.
+**OJS quality concerns (2026-02-20):** During Docker dev environment setup, 6 separate OJS bugs were encountered — install crashes, broken CLI tooling, XML import/export that can't round-trip its own data, and missing APIs. Documented in [`ojs-issues-log.md`](./ojs-issues-log.md). This strengthens the case for keeping Janeway as a genuine backup.
 
 ## Citation classification: anystyle evaluated and dropped
 
 **Status: Dropped.** Evaluated 2026-03-23.
 
-[Anystyle](https://github.com/inukshuk/anystyle) is a Ruby CRF-based bibliographic reference parser. We evaluated it as a validation layer for the backfill citation classification pipeline (`split_citation_tiers.py`), which separates ~16,000 citation items into references (for Crossref DOI matching) and notes (display-only).
+[Anystyle](https://github.com/inukshuk/anystyle) is a Ruby CRF-based bibliographic reference parser. It was evaluated as a validation layer for the backfill citation classification pipeline (`split_citation_tiers.py`), which separates ~16,000 citation items into references (for Crossref DOI matching) and notes (display-only).
 
 **What it did:** Parse each citation and check whether anystyle could extract both author and title fields. If not, demote from reference to note.
 
@@ -165,7 +165,7 @@ Consider switching if the OJS 3.5 upgrade takes more than 2 weeks or the custom 
 
 **Status: Stripe chosen.** PayPal eliminated 2026-03-22.
 
-OJS ships with a PayPal payment plugin for non-member article/issue purchases. We attempted to use it but **PayPal sandbox was completely broken for UK accounts** — couldn't create working sandbox credentials. Multiple support tickets were filed; PayPal support was unable to diagnose or resolve the issue.
+OJS ships with a PayPal payment plugin for non-member article/issue purchases. The PayPal sandbox was tested but found to be **completely broken for UK accounts** — couldn't create working sandbox credentials. Multiple support tickets were filed; PayPal support was unable to diagnose or resolve the issue.
 
 Built a custom Stripe Checkout plugin instead (`plugins/stripe-payment/`). Redirect flow: buyer clicks purchase → OJS creates Stripe Checkout Session → redirect to Stripe → payment → redirect back → access granted. Webhook endpoint as backup confirmation path.
 

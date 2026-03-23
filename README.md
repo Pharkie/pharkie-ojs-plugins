@@ -2,6 +2,8 @@
 
 A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, and membership sync with WordPress.
 
+The plugins were built for a WordPress ↔ OJS integration where WP manages memberships via WooCommerce Subscriptions and OJS hosts a journal behind a paywall. See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together.
+
 Each plugin works independently — install only what you need.
 
 ## Plugins

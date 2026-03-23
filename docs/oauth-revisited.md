@@ -2,17 +2,17 @@
 
 Last updated: 2026-03-08
 
-After building and testing the push-sync plugins, we revisited whether a custom OAuth approach would have been better. This documents that reassessment honestly.
+After building and testing the push-sync plugins, this reassesses whether a custom OAuth approach would have been better, documenting the evaluation honestly.
 
 ---
 
 ## Context
 
-The original discovery phase (Feb 2026) eliminated OIDC SSO because the existing OJS OIDC plugin was broken. But the question was never properly asked: **what if we built a custom OAuth flow ourselves, controlling both sides?**
+The original discovery phase (Feb 2026) eliminated OIDC SSO because the existing OJS OIDC plugin was broken. But the question was never properly asked: **what if a custom OAuth flow were built, controlling both sides?**
 
-With push-sync now working, we revisited this with fresh eyes (Mar 2026).
+With push-sync now working, this was revisited with fresh eyes (Mar 2026).
 
-## The OAuth variant we evaluated
+## The OAuth variant evaluated
 
 Not the broken OJS OIDC plugin. A custom-built flow:
 
@@ -27,13 +27,13 @@ Not the broken OJS OIDC plugin. A custom-built flow:
 
 **Key design choice:** the OJS plugin creates real user + subscription records and lets OJS's native paywall handle access. It does NOT try to intercept the paywall check (which is what broke the Subscription SSO plugin).
 
-## What we'd need to build
+## What would need to be built
 
-**WP side (~200 lines):** A single endpoint that requires WP login, checks WCS membership, signs a JWT with membership claims, and redirects back to OJS. No standards-compliant OAuth2 server needed — we control both ends, so a signed redirect is sufficient.
+**WP side (~200 lines):** A single endpoint that requires WP login, checks WCS membership, signs a JWT with membership claims, and redirects back to OJS. No standards-compliant OAuth2 server needed — both ends are controlled, so a signed redirect is sufficient.
 
 **OJS side (similar scope to current plugin):** OAuth consumer that handles the callback, validates the JWT, provisions/updates the OJS user and subscription record. Reuses the same `IndividualSubscriptionDAO` and user creation logic as the current push-sync plugin.
 
-**miniOrange OAuth Server** (already installed on live WP) was evaluated but the free version has shared HS256 signing keys across all installations (security dealbreaker) and no custom claims. Premium would work but adds a paid dependency for something we can build in ~200 lines.
+**miniOrange OAuth Server** (already installed on live WP) was evaluated but the free version has shared HS256 signing keys across all installations (security dealbreaker) and no custom claims. Premium would work but adds a paid dependency for something achievable in ~200 lines of custom code.
 
 ## Reassessment of original objections
 
@@ -41,8 +41,8 @@ The original discovery doc's reasons for eliminating OIDC/OAuth were based on th
 
 | Original objection | Reassessment |
 |---|---|
-| "OIDC only solves auth, not authorization" | A custom OAuth flow includes membership claims in the JWT. Auth = authorization for our use case (one subscription type, one journal, fixed terms). |
-| "OJS OIDC plugin has unresolved bugs" | Irrelevant — we'd build our own consumer, not use the broken plugin. |
+| "OIDC only solves auth, not authorization" | A custom OAuth flow includes membership claims in the JWT. Auth = authorization for this use case (one subscription type, one journal, fixed terms). |
+| "OJS OIDC plugin has unresolved bugs" | Irrelevant — this would be a custom-built consumer, not the broken plugin. |
 | "You'd still need to sync subscriptions" | True, but the sync happens at login time (on-demand) rather than via a push queue. Same OJS DAOs, different trigger. |
 | "Non-members can't buy content" (Pull-verify) | Doesn't apply — OAuth uses a separate login button, not a paywall intercept. Non-members use normal OJS registration/login. |
 
@@ -64,7 +64,7 @@ The original discovery doc's reasons for eliminating OIDC/OAuth were based on th
 
 **The auth flow itself is a new attack surface.** JWT signing, token validation, redirect URI handling, CSRF protection — all security-critical code that doesn't exist in push-sync. Push-sync uses a simple shared API key over HTTPS between servers on the same box. OAuth introduces browser redirects, token-in-URL risks, and session management.
 
-**Unknown unknowns.** Push-sync's failure modes are well-understood: the queue, retries, and reconciliation exist precisely because we know what can go wrong and handle it explicitly. OAuth's failure modes are less predictable — what happens when OJS upgrades break the consumer plugin's login hooks? When JWT libraries have vulnerabilities? When browser cookie policies change? Push-sync is server-to-server; OAuth flows through the user's browser, adding a whole class of client-side edge cases.
+**Unknown unknowns.** Push-sync's failure modes are well-understood: the queue, retries, and reconciliation exist precisely because the failure modes are known and handled explicitly. OAuth's failure modes are less predictable — what happens when OJS upgrades break the consumer plugin's login hooks? When JWT libraries have vulnerabilities? When browser cookie policies change? Push-sync is server-to-server; OAuth flows through the user's browser, adding a whole class of client-side edge cases.
 
 **OJS plugin fragility.** The Subscription SSO plugin broke because it hooked into OJS's access control flow — the exact area that changes between OJS versions. An OAuth consumer plugin would hook into OJS's authentication flow, which is equally version-sensitive. Push-sync's OJS plugin only exposes REST endpoints using stable DAOs — it doesn't hook into any user-facing OJS flow.
 
@@ -74,8 +74,8 @@ OAuth has genuinely better member UX (no second password). But it's not simpler 
 
 The two approaches are roughly equivalent in implementation effort and total complexity. Push-sync's complexity is visible and well-understood (queues, retries, reconciliation). OAuth's complexity is in the auth flow, session management, and vulnerability to OJS upgrade breakage — less visible but no less real.
 
-Push-sync was a reasonable choice. OAuth would also have been a reasonable choice. Neither is clearly superior. We're sticking with push-sync because it's built, tested, and its failure modes are known — not because we evaluated OAuth and rejected it on the merits alone.
+Push-sync was a reasonable choice. OAuth would also have been a reasonable choice. Neither is clearly superior. Push-sync remains the chosen approach because it's built, tested, and its failure modes are known — not because OAuth was evaluated and rejected on the merits alone.
 
-## If we ever revisit
+## If this is ever revisited
 
 The tagged commit `v1-push-sync` preserves the current working implementation. If push-sync causes ongoing maintenance problems (sync drift, queue failures, reconciliation issues), OAuth remains a viable alternative. The WP side is ~200 lines; the OJS side reuses most of the existing plugin's subscription provisioning logic.

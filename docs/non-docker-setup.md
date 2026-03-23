@@ -226,7 +226,7 @@ Members can now log in to OJS with their WP email and password — no welcome em
 
 ---
 
-> **Read this before troubleshooting.** These are the mistakes we've seen (and made) most often.
+> **Read this before troubleshooting.** These are commonly encountered mistakes.
 
 ## Common mistakes
 

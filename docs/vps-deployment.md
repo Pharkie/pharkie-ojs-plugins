@@ -249,7 +249,7 @@ Pass criteria: p95 latency <= 2000ms, zero server errors. Reports peak CPU load 
 
 ---
 
-> **Read this section before your first deploy.** These are real issues we hit during staging — they'll save you time.
+> **Read this section before your first deploy.** These are real issues encountered during staging — they'll save you time.
 
 ## Good to know
 

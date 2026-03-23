@@ -41,9 +41,9 @@ Member signs up and pays
    UM-WooCommerce       ← glues UM profiles to WC data (purchase history, etc.)
 ```
 
-### Why this matters for our OJS sync
+### Why this matters for the OJS sync
 
-We only care about **WC Subscriptions**. It fires status events (`active`, `expired`, `cancelled`, `on-hold`) that tell us whether someone should have journal access. Everything downstream (Memberships assigning roles, UM rendering profiles) is irrelevant to the sync.
+The sync only uses **WC Subscriptions**. It fires status events (`active`, `expired`, `cancelled`, `on-hold`) that indicate whether someone should have journal access. Everything downstream (Memberships assigning roles, UM rendering profiles) is irrelevant to the sync.
 
 ### Why this is fragile
 

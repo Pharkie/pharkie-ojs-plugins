@@ -179,7 +179,7 @@ Repo::user()->edit($user, ['email' => 'new@example.com']);
 OJS has no native anonymise method. Options:
 - `Repo::user()->delete($user)` — hard delete, but orphans submission records. Only safe for accounts with no submission history.
 - `APP\user\Repository::mergeUsers($oldId, $ghostId)` — transfers all assets to a ghost account, then deletes the old user. The OJS-native approach.
-- Blank PII via `edit()` — set name/email to anonymised values. Simplest for our case (sync-created accounts have no submission history).
+- Blank PII via `edit()` — set name/email to anonymised values. Simplest for sync-created accounts (no submission history).
 
 **Password reset token:**
 ```php
@@ -187,7 +187,7 @@ use PKP\security\Validation;
 
 $hash = Validation::generatePasswordResetHash($userId); // HMAC-SHA256, expiry from config
 // Default expiry: 7 days. Controlled by `password_reset_timeout` in the `[security]` section of config.inc.php (value in days).
-// Note: not used by our plugin — WP password hashes are synced directly, so members don't need password reset.
+// Note: not used by the push-sync plugin — WP password hashes are synced directly, so members don't need password reset.
 ```
 
 Token auto-invalidates if user logs in (hash includes `dateLastLogin`).
