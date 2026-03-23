@@ -322,4 +322,70 @@ test.describe('Article purchase flow', () => {
       expect(page.url()).toContain('localhost:8081');
     }
   });
+
+  test('non-subscriber can purchase whole issue', async ({ page }) => {
+    test.skip(!ojsUserId, 'OJS test user not created');
+
+    // Find an issue with an issue galley (whole-issue PDF)
+    const issueOut = ojsQuery(`
+      SELECT i.issue_id
+      FROM issues i
+      JOIN issue_galleys ig ON i.issue_id = ig.issue_id
+      WHERE i.published = 1
+      LIMIT 1
+    `);
+    const issueId = parseInt(issueOut.trim(), 10);
+    test.skip(isNaN(issueId), 'No issue with galley found');
+
+    await ojsLogin(page, EMAIL, OJS_PASSWORD);
+    await page.goto(`${OJS_BASE}/index.php/ea/issue/view/${issueId}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // "Full Issue" section should show galley link with price
+    const issueGalleyLink = page.locator('#issueTocGalleyLabel ~ .galleys_links .obj_galley_link').first();
+    await expect(issueGalleyLink).toBeVisible({ timeout: 5_000 });
+    const linkText = await issueGalleyLink.textContent();
+    expect(linkText).toMatch(/£25|GBP/i);
+
+    // Click to purchase
+    await issueGalleyLink.click();
+    await page.waitForLoadState('domcontentloaded');
+
+    const currentUrl = page.url();
+    if (!currentUrl.includes('checkout.stripe.com')) {
+      test.skip(true, 'Not redirected to Stripe');
+    }
+
+    // Fill Stripe Checkout form
+    await page.locator('input[name="cardNumber"], #cardNumber').fill('4242424242424242');
+    await page.locator('input[name="cardExpiry"], #cardExpiry').fill('12/30');
+    await page.locator('input[name="cardCvc"], #cardCvc').fill('123');
+    await page.locator('input[name="billingName"], #billingName').fill('E2E Issue');
+
+    const emailField = page.locator('input[name="email"], #email');
+    if (await emailField.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await emailField.fill(EMAIL);
+    }
+
+    const postalCode = page.locator('input[name="billingPostalCode"], input[placeholder*="Postal code"], input[placeholder*="postal code"], input[autocomplete="postal-code"]');
+    if (await postalCode.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await postalCode.fill('SW1A 1AA');
+    }
+
+    await page.locator('button[type="submit"], .SubmitButton').click();
+
+    // Wait for redirect back to OJS
+    await page.waitForURL((url) => url.hostname === 'localhost', { timeout: 30_000 });
+    expect(page.url()).toContain('localhost:8081');
+
+    // Verify access: revisit issue page, galley link should not show price
+    await page.goto(`${OJS_BASE}/index.php/ea/issue/view/${issueId}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const galleyAfter = page.locator('#issueTocGalleyLabel ~ .galleys_links .obj_galley_link').first();
+    await expect(galleyAfter).toBeVisible({ timeout: 5_000 });
+    const textAfter = await galleyAfter.textContent();
+    // After purchase, should show "PDF" without price
+    expect(textAfter).not.toMatch(/£25|GBP/i);
+  });
 });
