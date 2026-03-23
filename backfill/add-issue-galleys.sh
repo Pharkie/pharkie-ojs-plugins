@@ -153,7 +153,7 @@ except Exception as e:
     continue
   fi
 
-  CLEAN_SIZE=$(wc -c < "$CLEAN_PDF")
+  CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
   FILENAME="vol-${VOL}-iss-${ISS}.pdf"
 
   if [ -n "$DRY_RUN" ]; then
@@ -163,19 +163,26 @@ except Exception as e:
     continue
   fi
 
-  # Create directory and copy PDF
+  # Create directory, copy PDF, fix permissions
   FILES_DIR="/var/www/files/journals/$JOURNAL_ID/issues/$ISSUE_ID/public"
-  run_ojs "mkdir -p $FILES_DIR"
+  run_ojs "mkdir -p $FILES_DIR && chown www-data:www-data $FILES_DIR"
   if ! copy_to_ojs "$CLEAN_PDF" "$FILES_DIR/$FILENAME"; then
     echo "FAIL: $VOL_ISS — copy failed"
     rm -f "$CLEAN_PDF"
     FAILED=$((FAILED + 1))
     continue
   fi
+  run_ojs "chown www-data:www-data $FILES_DIR/$FILENAME"
 
-  # Insert DB rows
+  # Insert DB rows (file first, then galley referencing it)
   run_db "INSERT INTO issue_files (issue_id, file_name, original_file_name, file_type, file_size, content_type, date_uploaded, date_modified) VALUES ($ISSUE_ID, '$FILENAME', '${VOL_ISS}.pdf', 'application/pdf', $CLEAN_SIZE, 1, '$DATE', '$DATE')"
-  FILE_ID=$(run_db "SELECT MAX(file_id) FROM issue_files WHERE issue_id=$ISSUE_ID")
+  FILE_ID=$(run_db "SELECT file_id FROM issue_files WHERE issue_id=$ISSUE_ID AND file_name='$FILENAME' LIMIT 1")
+  if [ -z "$FILE_ID" ]; then
+    echo "FAIL: $VOL_ISS — issue_files insert failed"
+    rm -f "$CLEAN_PDF"
+    FAILED=$((FAILED + 1))
+    continue
+  fi
   run_db "INSERT INTO issue_galleys (issue_id, file_id, locale, label, seq) VALUES ($ISSUE_ID, $FILE_ID, 'en', 'PDF', 0)"
 
   rm -f "$CLEAN_PDF"
