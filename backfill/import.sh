@@ -318,8 +318,10 @@ if [ $SUCCEEDED -gt 0 ]; then
 
   # Drain the queue — rebuildSearchIndex.php only schedules jobs, it doesn't
   # process them. Without this, indexing trickles through the shutdown handler.
+  # Note: `jobs.php work --stop-when-empty` hangs (OJS bug #13), so we use
+  # `run --once` in a loop instead.
   echo "  Draining search index queue..."
-  docker exec "$CONTAINER" php lib/pkp/tools/jobs.php work 2>&1 | tail -1
+  while docker exec "$CONTAINER" php lib/pkp/tools/jobs.php run --once 2>/dev/null | grep -q Processing; do true; done
   echo "  OK: Search index complete"
 fi
 
