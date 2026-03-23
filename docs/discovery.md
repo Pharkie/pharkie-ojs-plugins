@@ -141,6 +141,26 @@ Consider switching if the OJS 3.5 upgrade takes more than 2 weeks or the custom 
 
 **OJS quality concerns (2026-02-20):** During Docker dev environment setup, we hit 6 separate OJS bugs — install crashes, broken CLI tooling, XML import/export that can't round-trip its own data, and missing APIs. Documented in [`ojs-issues-log.md`](./ojs-issues-log.md). This strengthens the case for keeping Janeway as a genuine backup.
 
+## Citation classification: anystyle evaluated and dropped
+
+**Status: Dropped.** Evaluated 2026-03-23.
+
+[Anystyle](https://github.com/inukshuk/anystyle) is a Ruby CRF-based bibliographic reference parser. We evaluated it as a validation layer for the backfill citation classification pipeline (`split_citation_tiers.py`), which separates ~16,000 citation items into references (for Crossref DOI matching) and notes (display-only).
+
+**What it did:** Parse each citation and check whether anystyle could extract both author and title fields. If not, demote from reference to note.
+
+**Results:**
+- 14,535 (93%) — anystyle found both author+title, confirming existing regex classification
+- 127 — author-only (almost all legitimate references: Brooke, Macquarrie, Heidegger, Spinelli...)
+- 652 — title-only (mix of legitimate references and prose endnotes — can't distinguish)
+- 9 — neither (URLs/legislation)
+
+**Why dropped:** Anystyle's CRF model was trained on modern, well-formatted references. This archive spans 30 years of inconsistent citation styles. Requiring both fields demoted ~780 legitimate references. Relaxing to "at least one field" caught only 9 items. Even as pure validation it added no signal — 93% agreement with the existing regex heuristics, and when it disagreed, anystyle was usually wrong (legitimate refs it couldn't parse). It also couldn't help with the actual problem (prose endnotes with embedded citations), since those contain parseable author+year patterns.
+
+**Decision:** Regex-based `is_reference()` + `is_note()` heuristics are better suited to this archive's diversity. Ruby + anystyle removed from Dockerfile.
+
+---
+
 ## Payment gateway: PayPal → Stripe
 
 **Status: Stripe chosen.** PayPal eliminated 2026-03-22.
