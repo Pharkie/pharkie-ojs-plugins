@@ -341,6 +341,20 @@ def html_to_jats_body(html_content: str) -> str:
 # JATS XML generation
 # ---------------------------------------------------------------
 
+def _sort_notes_by_number(notes: list[str]) -> list[str]:
+    """Sort notes by their leading number (e.g. '3 Text...' before '4 Text...').
+
+    Notes without a leading number are placed at the end in original order.
+    """
+    def sort_key(note):
+        m = re.match(r'^(\d+)[\.\)\s]', note)
+        if m:
+            return (0, int(m.group(1)))
+        return (1, 0)  # unnumbered notes go last
+
+    return sorted(notes, key=sort_key)
+
+
 def generate_article_jats(article: dict, volume: int, issue: int,
                           date_published: str, html_path: Path | None,
                           doi: str | None) -> str:
@@ -460,10 +474,11 @@ def generate_article_jats(article: dict, volume: int, issue: int,
                 lines.append(f'<ref id="ref{i}"><mixed-citation>{escape(ref)}</mixed-citation></ref>')
             lines.append('</ref-list>')
 
-        # Notes/endnotes
+        # Notes/endnotes (sorted by leading number if present)
         if notes:
+            sorted_notes = _sort_notes_by_number(notes)
             lines.append('<fn-group>')
-            for i, note in enumerate(notes, 1):
+            for i, note in enumerate(sorted_notes, 1):
                 lines.append(f'<fn id="fn{i}"><p>{escape(note)}</p></fn>')
             lines.append('</fn-group>')
 
