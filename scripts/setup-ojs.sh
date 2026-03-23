@@ -1291,5 +1291,34 @@ if [ "$HEALTH_FAIL" = "1" ]; then
   exit 1
 fi
 
+# --- QA test user (non-member reader for manual testing) ---
+QA_EMAIL="${OJS_QA_USER_EMAIL:-}"
+QA_PASSWORD="${OJS_QA_USER_PASSWORD:-}"
+if [ -n "$QA_EMAIL" ] && [ -n "$QA_PASSWORD" ]; then
+  QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' LIMIT 1")
+  if [ -z "$QA_EXISTS" ]; then
+    QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
+    QA_USERNAME=$(echo "$QA_EMAIL" | sed 's/@.*//' | tr -cd 'a-z0-9.' | head -c 30)
+    $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled, date_validated)
+      VALUES ('$QA_USERNAME', '$QA_HASH', '$QA_EMAIL', NOW(), 0, 0, NOW());"
+    QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' LIMIT 1")
+    $MARIADB -e "INSERT INTO user_settings (user_id, setting_name, setting_value, locale) VALUES
+      ($QA_EXISTS, 'givenName', 'QA', 'en'),
+      ($QA_EXISTS, 'familyName', 'Tester', 'en')
+      ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
+    # Assign Reader role
+    READER_GROUP=$($MARIADB -N -e "SELECT user_group_id FROM user_groups WHERE role_id=1048576 AND context_id=$JOURNAL_ID LIMIT 1")
+    if [ -n "$READER_GROUP" ]; then
+      $MARIADB -e "INSERT IGNORE INTO user_user_groups (user_group_id, user_id, masthead) VALUES ($READER_GROUP, $QA_EXISTS, 0);"
+    fi
+    echo "[OJS] QA test user created: $QA_EMAIL"
+  else
+    # Update password in case it changed
+    QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
+    $MARIADB -e "UPDATE users SET password='$QA_HASH', must_change_password=0 WHERE user_id=$QA_EXISTS;"
+    echo "[OJS] QA test user exists: $QA_EMAIL (password updated)"
+  fi
+fi
+
 echo ""
 echo "[OJS] [ok] OJS setup complete and healthy."
