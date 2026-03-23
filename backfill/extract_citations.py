@@ -576,14 +576,16 @@ SHEET_HEADERS = [
 ]
 
 
-def load_citations_from_toc(volume_filter=None):
-    """Load citations from toc.json files (source of truth).
+def load_citations_for_sheet(volume_filter=None):
+    """Load citations from JATS XML files (source of truth) for sheet export.
 
-    Reads from 'references' and 'notes' fields (split by split_citation_tiers.py).
-    Falls back to 'citations' if split hasn't been run yet.
+    Reads references, notes, author bios, and provenance from .jats.xml files,
+    with article metadata from toc.json.
 
     Returns rows suitable for sheet export.
     """
+    from xml.etree import ElementTree as ET
+
     if volume_filter:
         toc_files = [OUTPUT_DIR / volume_filter / 'toc.json']
         if not toc_files[0].exists():
@@ -607,62 +609,74 @@ def load_citations_from_toc(volume_filter=None):
         with open(toc_path) as f:
             toc = json.load(f)
 
+        vol_dir = toc_path.parent
         volume = toc.get('volume', 0)
         issue = toc.get('issue', 0)
         date = toc.get('date', '')
 
         for article in toc.get('articles', []):
-            references = article.get('references', [])
-            notes = article.get('notes', [])
+            split_pdf = article.get('split_pdf', '')
+            slug = Path(split_pdf).stem if split_pdf else ''
+            if not slug:
+                continue
 
-            # Fallback: if split hasn't been run, use flat 'citations'
-            if not references and not notes:
-                citations = article.get('citations', [])
-                if not citations:
-                    continue
-                references = citations
-                notes = []
+            jats_path = vol_dir / f'{slug}.jats.xml'
+            if not jats_path.exists():
+                continue
+
+            try:
+                tree = ET.parse(jats_path)
+            except ET.ParseError:
+                continue
 
             section = article.get('section', 'Unknown')
             title = article.get('title', '')
             authors = article.get('authors', '')
-            headings = article.get('citation_headings', ['References'])
-            heading_str = ', '.join(headings)
 
             seq = 0
-            for text in references:
-                seq += 1
-                confidence = citation_confidence(text, headings[0] if headings else 'References')
-                rows.append([
-                    volume, issue, date, section, title, authors,
-                    seq, heading_str, 'reference', confidence,
-                    text, '', '',
-                ])
+            for ref in tree.findall('.//{*}mixed-citation'):
+                if ref.text and ref.text.strip():
+                    seq += 1
+                    text = ref.text.strip()
+                    confidence = citation_confidence(text, 'References')
+                    rows.append([
+                        volume, issue, date, section, title, authors,
+                        seq, 'References', 'reference', confidence,
+                        text, '', '',
+                    ])
 
-            for text in notes:
-                seq += 1
-                confidence = citation_confidence(text, headings[0] if headings else 'Notes')
-                rows.append([
-                    volume, issue, date, section, title, authors,
-                    seq, heading_str, 'note', confidence,
-                    text, '', '',
-                ])
+            for fn in tree.findall('.//{*}fn'):
+                p = fn.find('{*}p')
+                if p is not None and p.text and p.text.strip():
+                    seq += 1
+                    text = p.text.strip()
+                    confidence = citation_confidence(text, 'Notes')
+                    rows.append([
+                        volume, issue, date, section, title, authors,
+                        seq, 'Notes', 'note', confidence,
+                        text, '', '',
+                    ])
 
-            for text in article.get('author_bios', []):
-                seq += 1
-                rows.append([
-                    volume, issue, date, section, title, authors,
-                    seq, heading_str, 'author_bio', 0,
-                    text, '', '',
-                ])
+            for bio in tree.findall('.//{*}bio'):
+                p = bio.find('{*}p')
+                if p is not None and p.text and p.text.strip():
+                    seq += 1
+                    rows.append([
+                        volume, issue, date, section, title, authors,
+                        seq, '', 'author_bio', 0,
+                        p.text.strip(), '', '',
+                    ])
 
-            if article.get('provenance'):
-                seq += 1
-                rows.append([
-                    volume, issue, date, section, title, authors,
-                    seq, heading_str, 'provenance', 0,
-                    article['provenance'], '', '',
-                ])
+            prov = tree.find('.//{*}notes[@notes-type="provenance"]')
+            if prov is not None:
+                p = prov.find('{*}p')
+                if p is not None and p.text and p.text.strip():
+                    seq += 1
+                    rows.append([
+                        volume, issue, date, section, title, authors,
+                        seq, '', 'provenance', 0,
+                        p.text.strip(), '', '',
+                    ])
 
     return rows
 
@@ -793,7 +807,7 @@ def main():
             print("\nSkipping sheet export in dry-run mode.")
         else:
             print("\nLoading citations from toc.json → Google Sheet...")
-            rows = load_citations_from_toc(volume_filter=args.volume)
+            rows = load_citations_for_sheet(volume_filter=args.volume)
             print(f"{len(rows)} citation rows loaded from toc.json")
             sheet_url = export_to_sheet(rows)
             print(f"\nSheet: {sheet_url}")
