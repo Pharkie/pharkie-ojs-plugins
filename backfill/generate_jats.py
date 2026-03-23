@@ -252,6 +252,76 @@ def _postprocess_jats_body(jats: str) -> str:
     return jats
 
 
+def _repair_xml(jats: str) -> str:
+    """Ensure JATS body fragment is well-formed XML.
+
+    Fixes unclosed tags, bare ampersands, and other common issues from
+    malformed source HTML. Uses a stack-based approach: parse all tags,
+    close any that are left open at the end.
+    """
+    from xml.etree import ElementTree as ET
+
+    # Escape bare ampersands (& not followed by amp;/lt;/gt;/quot;/apos;/#)
+    jats = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)', '&amp;', jats)
+
+    # Try parsing — if it works, we're done
+    try:
+        ET.fromstring(f'<root>{jats}</root>')
+        return jats
+    except ET.ParseError:
+        pass
+
+    # Stack-based repair: track open tags and close unclosed ones
+    tag_pattern = re.compile(r'<(/?)(\w[\w-]*)(?:\s[^>]*)?\s*(/?)>')
+    void_tags = {'break', 'ext-link'}  # self-closing in our output
+    stack = []
+    result_parts = []
+    last_end = 0
+
+    for m in tag_pattern.finditer(jats):
+        result_parts.append(jats[last_end:m.start()])
+        tag_text = m.group(0)
+        is_close = m.group(1) == '/'
+        tag_name = m.group(2)
+        is_self_close = m.group(3) == '/'
+
+        if is_self_close or tag_name in void_tags:
+            result_parts.append(tag_text)
+        elif is_close:
+            # Close tag — pop matching open tag, or skip if not found
+            if tag_name in stack:
+                # Close any intervening unclosed tags first
+                while stack and stack[-1] != tag_name:
+                    orphan = stack.pop()
+                    result_parts.append(f'</{orphan}>')
+                if stack:
+                    stack.pop()
+                result_parts.append(tag_text)
+            # else: close tag with no matching open — skip it
+        else:
+            stack.append(tag_name)
+            result_parts.append(tag_text)
+
+        last_end = m.end()
+
+    result_parts.append(jats[last_end:])
+
+    # Close any remaining open tags
+    for tag in reversed(stack):
+        result_parts.append(f'</{tag}>')
+
+    repaired = ''.join(result_parts)
+
+    # Verify repair worked
+    try:
+        ET.fromstring(f'<root>{repaired}</root>')
+    except ET.ParseError:
+        # Last resort: return original (will produce invalid JATS but not crash)
+        return jats
+
+    return repaired
+
+
 def html_to_jats_body(html_content: str) -> str:
     """Convert HTML galley body content to JATS <body> XML."""
     # Strip DOCTYPE/html/head/body wrappers if present
@@ -263,7 +333,8 @@ def html_to_jats_body(html_content: str) -> str:
     converter = HTMLToJATSConverter()
     converter.feed(html_content)
     raw = converter.get_jats().strip()
-    return _postprocess_jats_body(raw)
+    cleaned = _postprocess_jats_body(raw)
+    return _repair_xml(cleaned)
 
 
 # ---------------------------------------------------------------
