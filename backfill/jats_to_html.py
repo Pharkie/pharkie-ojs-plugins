@@ -18,8 +18,14 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 
-def jats_body_to_html(jats_path: Path) -> str | None:
-    """Convert JATS <body> to HTML galley content.
+def jats_to_html(jats_path: Path) -> str | None:
+    """Convert JATS article to HTML galley content.
+
+    Renders <body> + selected <back> matter:
+    - <fn-group> → "Notes" section (readers need these inline)
+    - <bio> → author biographical note
+    - <notes type="provenance"> → provenance note
+    - <ref-list> → EXCLUDED (OJS renders references from citations table)
 
     Returns HTML body content (no DOCTYPE/html/head wrapper — OJS adds those).
     Returns None if no body found.
@@ -34,7 +40,82 @@ def jats_body_to_html(jats_path: Path) -> str | None:
     if body is None:
         return None
 
-    return _element_to_html(body)
+    parts = [_element_to_html(body)]
+
+    # Render back matter (except references)
+    back = root.find('.//{*}back')
+    if back is not None:
+        back_html = _render_back_matter(back)
+        if back_html:
+            parts.append(back_html)
+
+    return '\n'.join(parts)
+
+
+def _render_back_matter(back) -> str:
+    """Render JATS <back> elements as HTML (except ref-list)."""
+    parts = []
+
+    # Notes/endnotes → <h2>Notes</h2> + <ol>
+    fn_group = None
+    for child in back:
+        if _local_name(child.tag) == 'fn-group':
+            fn_group = child
+            break
+
+    if fn_group is not None:
+        notes = []
+        for fn in fn_group:
+            if _local_name(fn.tag) == 'fn':
+                p = fn.find('{*}p') if '}' in fn.tag else fn.find('p')
+                if p is None:
+                    # Try without namespace
+                    for c in fn:
+                        if _local_name(c.tag) == 'p':
+                            p = c
+                            break
+                if p is not None:
+                    text = _text_content(p)
+                    if text.strip():
+                        notes.append(text.strip())
+        if notes:
+            parts.append('\n<h2>Notes</h2>')
+            parts.append('<ol>')
+            for note in notes:
+                parts.append(f'<li>{note}</li>')
+            parts.append('</ol>')
+
+    # Author bios
+    for child in back:
+        if _local_name(child.tag) == 'bio':
+            p = child.find('{*}p') if '}' in child.tag else child.find('p')
+            if p is None:
+                for c in child:
+                    if _local_name(c.tag) == 'p':
+                        p = c
+                        break
+            if p is not None:
+                text = _text_content(p)
+                if text.strip():
+                    parts.append(f'\n<p>{text.strip()}</p>')
+
+    # Provenance notes
+    for child in back:
+        if _local_name(child.tag) == 'notes':
+            notes_type = child.get('notes-type', '')
+            if notes_type == 'provenance':
+                p = child.find('{*}p') if '}' in child.tag else child.find('p')
+                if p is None:
+                    for c in child:
+                        if _local_name(c.tag) == 'p':
+                            p = c
+                            break
+                if p is not None:
+                    text = _text_content(p)
+                    if text.strip():
+                        parts.append(f'\n<p><em>{text.strip()}</em></p>')
+
+    return '\n'.join(parts)
 
 
 def _element_to_html(element) -> str:
@@ -159,7 +240,7 @@ def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:
                 print(f'  SKIP {vol_dir.name}/{slug}: no JATS file')
             continue
 
-        html_content = jats_body_to_html(jats_path)
+        html_content = jats_to_html(jats_path)
         if html_content is None:
             stats['no_body'] += 1
             if verbose:
