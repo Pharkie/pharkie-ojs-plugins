@@ -411,9 +411,6 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
     filename = f'vol-{vol}-iss-{iss}.pdf'
     original_filename = f'{vol_iss}.pdf'
 
-    print(f"Issue galley: {page_count} pages, {original_size:,} → {clean_size:,} bytes "
-          f"({clean_size/original_size*100:.0f}%)", file=sys.stderr)
-
     b64_data = base64.b64encode(clean_pdf).decode('ascii')
 
     lines = []
