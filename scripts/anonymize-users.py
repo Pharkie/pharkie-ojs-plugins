@@ -26,7 +26,7 @@ INPUT_CSV = os.path.join(
     "data-export",
     "user_export_2026-02-20-10-44-46.csv",
 )
-OUTPUT_CSV = os.path.join(SCRIPT_DIR, "test-users.csv")
+OUTPUT_CSV = os.path.join(PROJECT_DIR, "docker", "data", "test-users.csv")
 
 OUTPUT_FIELDS = [
     "user_login",

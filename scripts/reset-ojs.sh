@@ -1,6 +1,6 @@
 #!/bin/bash
 # Reset OJS to a clean state. Entrypoint generates config + runs install automatically.
-# Usage: ./docker/reset-ojs.sh
+# Usage: ./scripts/reset-ojs.sh
 set -e
 
 cd "$(dirname "$0")/.."

@@ -18,7 +18,7 @@ The web installer crashes with `ValueError: Path cannot be empty` in `UpdateRorR
 The `pkp-cli-install` script (used when `OJS_CLI_INSTALL=1`) fails silently on 3.5.x. Two bugs: missing required `timeZone` field (new in 3.5), and no session cookie (OJS 3.5 rejects the POST without one). The install appears to succeed but `installed` stays `Off`.
 
 - **We reported:** [pkp/containers#26](https://github.com/pkp/containers/issues/26)
-- **Workaround:** Our `docker/reset-ojs.sh` script handles both issues.
+- **Workaround:** Our `scripts/reset-ojs.sh` script handles both issues.
 
 ### 3. Failed install leaves database and config in corrupt state
 

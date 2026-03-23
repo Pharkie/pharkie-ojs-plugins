@@ -21,7 +21,7 @@ services:
       - wp_uploads:/var/www/html/web/app/uploads
       - ./.env:/var/www/html/.env:ro
       - ./scripts:/var/www/html/scripts:ro
-      - ./docker/test-users.csv:/data/test-users.csv:ro
+      - ./docker/data/test-users.csv:/data/test-users.csv:ro
     depends_on:
       wp-db:
         condition: service_healthy

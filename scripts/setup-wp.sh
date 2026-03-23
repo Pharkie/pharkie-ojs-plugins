@@ -230,7 +230,7 @@ if [ "$SAMPLE_DATA" = true ]; then
   CSV="/data/test-users.csv"
   if [ ! -f "$CSV" ]; then
     echo "ERROR: Sample data CSV not found at $CSV"
-    echo "Run docker/anonymize-users.py on the host first to generate it."
+    echo "Run scripts/anonymize-users.py on the host first to generate it."
     exit 1
   fi
 
