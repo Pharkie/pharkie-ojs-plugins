@@ -373,10 +373,10 @@ def is_junk(text: str) -> bool:
 def extract_article_citations(html_path: Path) -> tuple[list[dict], list[str]]:
     """Extract citation strings from an HTML galley file.
 
-    Returns (citations, filtered_items):
+    Returns (citations, endmatter):
     - citations: list of dicts with 'text', 'heading', 'confidence' keys.
       These are items that look like bibliographic references.
-    - filtered_items: list of plain text strings for items that don't look
+    - endmatter: list of plain text strings for items that don't look
       like citations (bios, prose endnotes, provenance notes, ibid-style
       refs, short fragments). Captured to prevent content loss when HTML
       reference sections are stripped.
@@ -386,7 +386,7 @@ def extract_article_citations(html_path: Path) -> tuple[list[dict], list[str]]:
 
     sections = find_reference_sections(content, tail_only=True)
     citations = []
-    filtered_items = []
+    endmatter = []
 
     for sec in sections:
         heading = sec['heading']
@@ -394,11 +394,11 @@ def extract_article_citations(html_path: Path) -> tuple[list[dict], list[str]]:
 
         for item in sec['items']:
             if is_junk(item):
-                filtered_items.append(item)
+                endmatter.append(item)
                 continue
 
             if is_notes and not is_citation_like(item):
-                filtered_items.append(item)
+                endmatter.append(item)
                 continue
 
             confidence = citation_confidence(item, heading)
@@ -409,7 +409,7 @@ def extract_article_citations(html_path: Path) -> tuple[list[dict], list[str]]:
                 'confidence': confidence,
             })
 
-    return citations, filtered_items
+    return citations, endmatter
 
 
 def _is_author_bio(text: str) -> bool:
@@ -522,9 +522,9 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
                     # Capture non-citation items (bios, prose notes, etc.)
                     # to prevent content loss when HTML sections are stripped
                     if filtered:
-                        article['filtered_items'] = filtered
-                    elif 'filtered_items' in article:
-                        del article['filtered_items']
+                        article['endmatter'] = filtered
+                    elif 'endmatter' in article:
+                        del article['endmatter']
                     modified = True
 
                 if verbose:
@@ -755,7 +755,7 @@ def main():
         if args.dry_run:
             print("\nDRY RUN — no toc.json files were modified.")
         else:
-            print("\nUpdated toc.json files with 'citations' and 'filtered_items' fields.")
+            print("\nUpdated toc.json files with 'citations' and 'endmatter' fields.")
         print("=" * 60)
 
     if args.sheet:
