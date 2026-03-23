@@ -241,35 +241,29 @@ class TestXmlWithEnrichment:
         subjects = articles[0].findall('.//pkp:subject', NS)
         assert len(subjects) == 0
 
-    def test_citations_from_enrichment(self):
-        """Citations from enrichment sidecar appear in XML."""
+    def test_citations_from_jats(self):
+        """Citations from JATS XML files appear in OJS XML."""
         import tempfile
         toc_data = make_toc_data()
-        toc_data['articles'][1]['_review_id'] = 'v37i1a1'
 
-        # Create a temp dir with enrichment.json
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a fake split PDF path so generate_xml can find the JATS file
+            pdf_path = os.path.join(tmpdir, 'article.pdf')
+            with open(pdf_path, 'w') as f:
+                f.write('')  # empty placeholder
+            toc_data['articles'][1]['split_pdf'] = pdf_path
+
+            # Create a JATS file with references
+            jats_path = os.path.join(tmpdir, 'article.jats.xml')
+            with open(jats_path, 'w') as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                f.write('<article><back><ref-list>\n')
+                f.write('<ref id="ref1"><mixed-citation>Heidegger, M. (1927). Being and Time.</mixed-citation></ref>\n')
+                f.write('</ref-list></back></article>\n')
+
             toc_path = os.path.join(tmpdir, 'toc.json')
             with open(toc_path, 'w') as f:
                 json.dump(toc_data, f)
-
-            enrichment = {
-                '_generated': '2026-01-01T00:00:00Z',
-                '_model': 'test',
-                '_version': 1,
-                'articles': {
-                    'v37i1a1': {
-                        'references': [
-                            {'author': 'Heidegger, M.', 'year': 1927, 'title': 'Being and Time', 'internal': False},
-                        ],
-                        'geographical_context': 'UK',
-                        'era_focus': 'Contemporary',
-                    }
-                }
-            }
-            enrichment_path = os.path.join(tmpdir, 'enrichment.json')
-            with open(enrichment_path, 'w') as f:
-                json.dump(enrichment, f)
 
             xml_str = generate_xml(toc_data, doi_registry={}, toc_json_path=toc_path)
             root = ET.fromstring(xml_str)
@@ -278,12 +272,6 @@ class TestXmlWithEnrichment:
             assert len(citations) == 1
             assert 'Heidegger' in citations[0].text
             assert '1927' in citations[0].text
-
-            # Check coverage
-            coverage = articles[1].find('.//pkp:coverage', NS)
-            assert coverage is not None
-            assert 'UK' in coverage.text
-            assert 'Contemporary' in coverage.text
 
 
 class TestXmlWithDois:

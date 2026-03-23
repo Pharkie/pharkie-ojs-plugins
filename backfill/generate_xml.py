@@ -432,6 +432,31 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
     return lines
 
 
+def _load_jats_references(pdf_path):
+    """Load references from the article's JATS XML file.
+
+    Looks for {split_pdf_stem}.jats.xml next to the split PDF.
+    Returns a list of raw citation strings, or empty list if no JATS file.
+    """
+    if not pdf_path or not os.path.exists(pdf_path):
+        return []
+
+    jats_path = os.path.splitext(pdf_path)[0] + '.jats.xml'
+    if not os.path.exists(jats_path):
+        return []
+
+    try:
+        tree = ET.parse(jats_path)
+        refs = []
+        for ref in tree.findall('.//{*}mixed-citation'):
+            text = ref.text
+            if text and text.strip():
+                refs.append(text.strip())
+        return refs
+    except ET.ParseError:
+        return []
+
+
 def load_html_galley(pdf_path):
     """Load pre-generated HTML galley for an article.
 
@@ -637,15 +662,12 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
             lines.append(f'{i4}</author>')
         lines.append(f'{i3}</authors>')
 
-    # Citations (from enrichment sidecar)
-    if enrichment and enrichment.get('references'):
+    # Citations (from JATS XML — the single source of truth for article content)
+    jats_refs = _load_jats_references(pdf_path)
+    if jats_refs:
         lines.append(f'{i3}<citations>')
-        for ref in enrichment['references']:
-            author = ref.get('author', '')
-            year = ref.get('year', '')
-            title = ref.get('title', '')
-            citation_str = f'{author} ({year}). {title}.' if year else f'{author}. {title}.'
-            lines.append(f'{i4}<citation>{escape(citation_str)}</citation>')
+        for ref in jats_refs:
+            lines.append(f'{i4}<citation>{escape(ref)}</citation>')
         lines.append(f'{i3}</citations>')
 
     # Galley (PDF link)
@@ -698,6 +720,13 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_gal
     date_str = toc_data.get('date')
     date_published = parse_date(date_str)
     year = date_published[:4]
+
+    # Vol 1 canonical date is 1990 (founding), not 1994 (reprint). Guard against regression.
+    if vol == 1 and iss == 1 and year != '1990':
+        raise ValueError(
+            f"Vol 1 Issue 1 date must be 1990 (founding year), not {year}. "
+            f"The PDF says 1994 but that's the reprint date. Fix toc.json."
+        )
 
     if doi_registry is None:
         doi_registry = load_doi_registry()
