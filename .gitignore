@@ -49,6 +49,7 @@ backfill/output/*
 !backfill/output/*/
 backfill/output/*/*.pdf
 backfill/output/*/*.xml
+!backfill/output/*/*.jats.xml
 backfill/output/*/*.csv
 backfill/output/audit-report.*
 backfill/output/review-all.csv
