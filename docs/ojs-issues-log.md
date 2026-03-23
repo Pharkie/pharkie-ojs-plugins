@@ -291,7 +291,7 @@ Patch is idempotent (safe to re-run). Verified on live — error details now vis
 **Fix applied:** Updated `blast-queue.sh` with three safeguards:
 1. Auto-kills stale `jobs.php work` processes before starting new ones
 2. Wraps workers in `timeout` (default 30 min) so they can't live forever
-3. Added `--kill` flag for manual cleanup (`blast-queue.sh --host=sea-live --kill`)
+3. Added `--kill` flag for manual cleanup (`blast-queue.sh --host=<your-server> --kill`)
 
 ## Import/Export
 

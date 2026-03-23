@@ -125,7 +125,7 @@ Adminer is a lightweight DB admin GUI on the staging/prod server. It's bound to 
 **Connect:**
 
 ```bash
-ssh -L 8082:127.0.0.1:8082 sea-staging
+ssh -L 8082:127.0.0.1:8082 <your-server>
 ```
 
 Then open `http://localhost:8082` in your browser.
