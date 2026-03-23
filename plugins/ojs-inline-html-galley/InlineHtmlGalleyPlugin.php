@@ -338,9 +338,14 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     document.querySelectorAll(".obj_galley_link").forEach(function(el) {
         var label = el.textContent.trim();
-        if (!isArticlePage) {
+        // On issue/archive pages, hide article-level galley links (readers click
+        // article title instead). But preserve issue-level galley links (Full Issue PDF).
+        // Issue galleys are inside a .galleys div that contains #issueTocGalleyLabel.
+        var parentGalleys = el.closest(".galleys");
+        var isIssueGalley = parentGalleys && parentGalleys.querySelector("#issueTocGalleyLabel");
+        if (!isArticlePage && !isIssueGalley) {
             el.style.display = "none";
-        } else if (label === "Full Text" && hasInlineContent) {
+        } else if (isArticlePage && label === "Full Text" && hasInlineContent) {
             el.style.display = "none";
         }
     });
