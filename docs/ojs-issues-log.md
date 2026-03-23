@@ -293,3 +293,20 @@ Patch is idempotent (safe to re-run). Verified on live — error details now vis
 2. Wraps workers in `timeout` (default 30 min) so they can't live forever
 3. Added `--kill` flag for manual cleanup (`blast-queue.sh --host=sea-live --kill`)
 
+## Import/Export
+
+### 20. Native XML import always creates new IDs — no idempotent import/update
+
+OJS's Native Import Export Plugin always creates new database rows for imported issues, articles, submissions, and galleys. There is no "update existing" mode — reimporting the same XML creates duplicates with new IDs. This means:
+
+- Article URLs change (new `submission_id`)
+- DOIs must be re-deposited (new IDs → new URL mappings)
+- Completed payments and subscription access break (reference old IDs)
+- Search index must be fully rebuilt
+
+The `<id type="internal" advice="ignore">` attribute in the XML is the only ID-related hint, and OJS ignores it (as the attribute says). There is no `advice="update"` for submissions or issues.
+
+- **Not reported upstream** — appears to be by-design. The importer is built for one-time migration, not iterative sync.
+- **Impact:** Cannot add issue galleys or fix article metadata via reimport on a live system without destroying all existing IDs and DOIs.
+- **Workaround:** `backfill/add-issue-galleys.sh` inserts issue galleys directly via SQL + file copy, bypassing the XML importer entirely. For article-level fixes, edit the database directly.
+
