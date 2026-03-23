@@ -246,7 +246,7 @@ def main():
                     refs = art.get('references', [])
                     notes = art.get('notes', [])
                     citations = art.get('citations', [])
-                    filtered = art.get('filtered_items', [])
+                    filtered = art.get('endmatter', [])
                     toc_item_count = len(refs) + len(notes) + len(filtered)
                     # Fall back to citations[] if split hasn't been run
                     if not refs and not notes:
