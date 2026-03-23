@@ -367,7 +367,8 @@ document.addEventListener("DOMContentLoaded", function() {
         $template = $args[1] ?? '';
 
         if (!str_contains($template, 'issue.tpl')
-            && !str_contains($template, 'article.tpl')) {
+            && !str_contains($template, 'article.tpl')
+            && !str_contains($template, 'indexJournal.tpl')) {
             return Hook::CONTINUE;
         }
 
