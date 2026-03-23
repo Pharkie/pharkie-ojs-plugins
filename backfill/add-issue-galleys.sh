@@ -129,9 +129,15 @@ print(f'{vol} {iss} {date}')
     continue
   fi
 
-  # Re-save PDF through PyMuPDF for quality validation
+  # Use pre-saved cleaned PDF if available, otherwise re-save from source
+  PRESAVED="$PROJECT_DIR/backfill/output/issue-galleys/${VOL_ISS}.pdf"
   CLEAN_PDF="/tmp/issue-galley-${VOL_ISS}.pdf"
-  RESULT=$(python3 -c "
+  if [ -f "$PRESAVED" ]; then
+    cp "$PRESAVED" "$CLEAN_PDF"
+    CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
+    RESULT="${CLEAN_SIZE}b (pre-saved)"
+  else
+    RESULT=$(python3 -c "
 import fitz, sys, os
 try:
     doc = fitz.open('$SOURCE_PDF')
@@ -146,14 +152,13 @@ except Exception as e:
     print(f'ERROR: {e}', file=sys.stderr)
     sys.exit(1)
 " 2>&1)
-
-  if [ $? -ne 0 ]; then
-    echo "FAIL: $VOL_ISS — $RESULT"
-    FAILED=$((FAILED + 1))
-    continue
+    if [ $? -ne 0 ]; then
+      echo "FAIL: $VOL_ISS — $RESULT"
+      FAILED=$((FAILED + 1))
+      continue
+    fi
+    CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
   fi
-
-  CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
   FILENAME="vol-${VOL}-iss-${ISS}.pdf"
 
   if [ -n "$DRY_RUN" ]; then

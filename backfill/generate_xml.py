@@ -359,31 +359,54 @@ def find_issue_pdf(toc_json_path, vol, iss):
 def generate_issue_galley(toc_json_path, vol, iss, date_published):
     """Generate XML lines for an issue galley (whole-issue PDF).
 
-    Re-saves through PyMuPDF for quality checking (validates structure,
-    strips broken objects). Returns list of XML lines or empty list.
+    Uses pre-saved cleaned PDFs from backfill/output/issue-galleys/ if available,
+    otherwise falls back to re-saving through PyMuPDF.
+    Returns list of XML lines or empty list.
     """
-    if fitz is None:
-        print("WARNING: PyMuPDF not available, skipping issue galley", file=sys.stderr)
+    if not toc_json_path:
         return []
 
-    source_pdf = find_issue_pdf(toc_json_path, vol, iss)
-    if not source_pdf:
-        print(f"WARNING: No source PDF found for issue galley (vol {vol} iss {iss})", file=sys.stderr)
-        return []
+    issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
+    project_root = os.path.dirname(os.path.dirname(issue_dir))
+    vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
 
-    # Re-save through PyMuPDF for quality checking
-    try:
-        doc = fitz.open(source_pdf)
-        page_count = len(doc)
-        # Save to bytes with garbage collection (strips broken/orphaned objects)
-        clean_pdf = doc.tobytes(garbage=3, deflate=True)
-        doc.close()
-    except Exception as e:
-        print(f"WARNING: Failed to process issue PDF {source_pdf}: {e}", file=sys.stderr)
-        return []
+    # Try pre-saved cleaned PDF first
+    presaved_pdf = os.path.join(project_root, 'output', 'issue-galleys', f'{vol_iss}.pdf')
+    if os.path.exists(presaved_pdf):
+        with open(presaved_pdf, 'rb') as f:
+            clean_pdf = f.read()
+        clean_size = len(clean_pdf)
+        # Get page count
+        if fitz:
+            doc = fitz.open(presaved_pdf)
+            page_count = len(doc)
+            doc.close()
+        else:
+            page_count = 0
+        print(f"Issue galley: {page_count} pages, {clean_size:,} bytes (pre-saved)", file=sys.stderr)
+    else:
+        # Fall back to re-saving from source
+        if fitz is None:
+            print("WARNING: PyMuPDF not available, skipping issue galley", file=sys.stderr)
+            return []
 
-    original_size = os.path.getsize(source_pdf)
-    clean_size = len(clean_pdf)
+        source_pdf = find_issue_pdf(toc_json_path, vol, iss)
+        if not source_pdf:
+            print(f"WARNING: No source PDF found for issue galley (vol {vol} iss {iss})", file=sys.stderr)
+            return []
+
+        try:
+            doc = fitz.open(source_pdf)
+            page_count = len(doc)
+            clean_pdf = doc.tobytes(garbage=3, deflate=True)
+            doc.close()
+        except Exception as e:
+            print(f"WARNING: Failed to process issue PDF {source_pdf}: {e}", file=sys.stderr)
+            return []
+
+        original_size = os.path.getsize(source_pdf)
+        clean_size = len(clean_pdf)
+        print(f"Issue galley: {page_count} pages, {original_size:,} → {clean_size:,} bytes", file=sys.stderr)
     vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
     filename = f'vol-{vol}-iss-{iss}.pdf'
     original_filename = f'{vol_iss}.pdf'
