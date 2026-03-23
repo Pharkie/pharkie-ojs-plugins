@@ -43,6 +43,9 @@ test.describe('Synced user logs in to OJS', () => {
     const username = getOjsUsername(ojsUserId!);
     expect(username).toBeTruthy();
 
+    // OJS username should match the WP login (sanitized: lowercase, alphanumeric only).
+    expect(username).toBe(LOGIN.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
     // Set a known password directly (avoids needing email/reset flow).
     setOjsPassword(ojsUserId!, username, OJS_PASSWORD);
 

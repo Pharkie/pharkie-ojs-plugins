@@ -623,9 +623,14 @@ class WpojsApiController extends PKPBaseController
 
         try {
             $user = Repo::user()->newDataObject();
-            // Generate unique username (reimplements Validation::suggestUsername
-            // to avoid PHP 8.3 deprecation on empty-string increment — pkp/pkp-lib#12377)
-            $base = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($firstName) . strtolower($lastName));
+            // Use WP username if provided, otherwise auto-generate from name.
+            // OJS usernames must be lowercase alphanumeric (no hyphens/underscores/spaces).
+            $wpUsername = trim($request->input('username', ''));
+            if ($wpUsername !== '') {
+                $base = preg_replace('/[^a-z0-9]/', '', strtolower($wpUsername));
+            } else {
+                $base = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($firstName) . strtolower($lastName));
+            }
             if ($base === '') {
                 $base = 'user';
             }

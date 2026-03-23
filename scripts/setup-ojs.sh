@@ -1179,18 +1179,17 @@ if [ "$SAMPLE_DATA" = true ]; then
 
   # Set archive display order: newest first (by date_published DESC).
   # OJS archive page sorts by custom_issue_orders.seq, not by date_published.
-  # Without this, issues display in import/insertion order (random).
-  EXISTING_ORDER=$($MARIADB -N -e "SELECT COUNT(*) FROM custom_issue_orders WHERE journal_id=$JOURNAL_ID")
-  if [ "$EXISTING_ORDER" = "0" ]; then
-    echo "[OJS] Setting archive order (newest first)..."
-    $MARIADB -e "
-      INSERT INTO custom_issue_orders (issue_id, journal_id, seq)
-      SELECT issue_id, journal_id, @row := @row + 1 as seq
-      FROM issues, (SELECT @row := 0) r
-      WHERE journal_id=$JOURNAL_ID AND published = 1
-      ORDER BY date_published DESC;"
-    echo "[OJS] Archive order set."
-  fi
+  # Always resequence to match date_published — prevents drift after imports
+  # or manual date corrections (e.g. Vol 1: 1990 founding date, not 1994 reprint).
+  echo "[OJS] Setting archive order (newest first by date_published)..."
+  $MARIADB -e "
+    DELETE FROM custom_issue_orders WHERE journal_id=$JOURNAL_ID;
+    INSERT INTO custom_issue_orders (issue_id, journal_id, seq)
+    SELECT issue_id, journal_id, @row := @row + 1 as seq
+    FROM issues, (SELECT @row := 0) r
+    WHERE journal_id=$JOURNAL_ID AND published = 1
+    ORDER BY date_published DESC;"
+  echo "[OJS] Archive order set."
 
   # Set current issue to the newest (highest date_published).
   # OJS stores this in journals.current_issue_id, NOT journal_settings.
@@ -1295,7 +1294,7 @@ fi
 QA_EMAIL="${OJS_QA_USER_EMAIL:-}"
 QA_PASSWORD="${OJS_QA_USER_PASSWORD:-}"
 if [ -n "$QA_EMAIL" ] && [ -n "$QA_PASSWORD" ]; then
-  QA_USERNAME=$(echo "$QA_EMAIL" | sed 's/@.*//' | tr -cd 'a-z0-9.' | head -c 30)
+  QA_USERNAME=$(echo "$QA_EMAIL" | sed 's/@.*//' | tr -cd 'a-z0-9' | head -c 30)
   QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' OR username='$QA_USERNAME' LIMIT 1")
   if [ -z "$QA_EXISTS" ]; then
     QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")

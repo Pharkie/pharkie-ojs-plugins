@@ -157,7 +157,6 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     var usernameInput = document.getElementById("username");
     if (usernameInput) {
-        usernameInput.setAttribute("type", "email");
         usernameInput.setAttribute("autocomplete", "email");
     }
     // Simplify "Remember username and password" to "Remember me"
