@@ -198,7 +198,7 @@ class TestGenerateXmlStructure:
 class TestXmlEscaping:
     def test_ampersand_in_title(self):
         toc = {
-            'volume': 1, 'issue': 1, 'date': 'January 2020',
+            'volume': 2, 'issue': 1, 'date': 'January 2020',
             'articles': [{
                 'title': 'Love & Death',
                 'authors': None,
@@ -218,7 +218,7 @@ class TestXmlEscaping:
 
     def test_angle_brackets_in_title(self):
         toc = {
-            'volume': 1, 'issue': 1, 'date': 'January 2020',
+            'volume': 2, 'issue': 1, 'date': 'January 2020',
             'articles': [{
                 'title': 'The <Other> Problem',
                 'authors': None,
@@ -237,7 +237,7 @@ class TestXmlEscaping:
 
     def test_quotes_in_title(self):
         toc = {
-            'volume': 1, 'issue': 1, 'date': 'January 2020',
+            'volume': 2, 'issue': 1, 'date': 'January 2020',
             'articles': [{
                 'title': 'On "Being" and "Nothingness"',
                 'authors': None,

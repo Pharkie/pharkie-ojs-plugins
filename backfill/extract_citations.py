@@ -634,6 +634,14 @@ def load_citations_from_toc(volume_filter=None):
                     text, '', '',
                 ])
 
+            for text in article.get('endmatter', []):
+                seq += 1
+                rows.append([
+                    volume, issue, date, section, title, authors,
+                    seq, heading_str, 'endmatter', 0,
+                    text, '', '',
+                ])
+
     return rows
 
 
