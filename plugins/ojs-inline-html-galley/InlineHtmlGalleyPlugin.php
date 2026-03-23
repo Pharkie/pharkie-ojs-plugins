@@ -55,6 +55,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 
         Hook::add('Templates::Article::Main', $this->renderInlineHtmlGalley(...));
         Hook::add('TemplateManager::display', $this->hideHtmlGalleyLink(...));
+        Hook::add('TemplateManager::display', $this->fixAdminAccess(...));
 
         return $success;
     }
@@ -351,6 +352,61 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 </script>');
+
+        return Hook::CONTINUE;
+    }
+
+    /**
+     * Fix OJS bug: $hasAccess is false for admins/managers on paywalled content.
+     * OJS only checks subscriptions/purchases, not editorial roles.
+     * Override to true for Site Admin and Journal Manager/Editor roles.
+     */
+    public function fixAdminAccess(string $hookName, array $args): bool
+    {
+        $templateMgr = $args[0];
+        $template = $args[1] ?? '';
+
+        if (!str_contains($template, 'issue.tpl')
+            && !str_contains($template, 'article.tpl')) {
+            return Hook::CONTINUE;
+        }
+
+        // Already has access — nothing to fix
+        if ($templateMgr->getTemplateVars('hasAccess')) {
+            return Hook::CONTINUE;
+        }
+
+        // Check template var first, then fall back to querying DB directly.
+        // userRoles template var isn't set on all pages (e.g. issue TOC).
+        $userRoles = (array) $templateMgr->getTemplateVars('userRoles');
+        $adminRoles = [Role::ROLE_ID_SITE_ADMIN, Role::ROLE_ID_MANAGER];
+
+        foreach ($adminRoles as $role) {
+            if (in_array($role, $userRoles)) {
+                $templateMgr->assign('hasAccess', true);
+                return Hook::CONTINUE;
+            }
+        }
+
+        // Fallback: check user roles via DB
+        $user = Application::get()->getRequest()->getUser();
+        if ($user) {
+            $context = Application::get()->getRequest()->getContext();
+            $contextId = $context ? $context->getId() : 0;
+            $hasAdmin = DB::table('user_user_groups')
+                ->join('user_groups', 'user_user_groups.user_group_id', '=', 'user_groups.user_group_id')
+                ->where('user_user_groups.user_id', $user->getId())
+                ->where(function ($q) use ($contextId) {
+                    $q->where(function ($q2) use ($contextId) {
+                        $q2->where('user_groups.role_id', Role::ROLE_ID_MANAGER)
+                            ->where('user_groups.context_id', $contextId);
+                    })->orWhere('user_groups.role_id', Role::ROLE_ID_SITE_ADMIN);
+                })
+                ->exists();
+            if ($hasAdmin) {
+                $templateMgr->assign('hasAccess', true);
+            }
+        }
 
         return Hook::CONTINUE;
     }
