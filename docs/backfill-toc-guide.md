@@ -2,6 +2,8 @@
 
 How to create `toc.json` files for the backfill pipeline. Each issue PDF needs a `toc.json` in `backfill/output/<vol>.<iss>/` before `split-issue.sh` can process it.
 
+> **Note:** Examples in this guide reference Existential Analysis as a sample journal. Adapt section names, metadata fields, and conventions for your journal.
+
 ## Quick version
 
 Ask Claude: "Read `backfill/input/<vol>.pdf` and create `backfill/output/<vol>/toc.json` following the schema in `docs/backfill-toc-guide.md`."

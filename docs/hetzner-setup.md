@@ -1,6 +1,6 @@
 # Hetzner Cloud Setup
 
-We use [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging and production. Good value, EU data centres, straightforward API. `scripts/init-vps.sh` automates the full setup: SSH key, server creation, firewall, and SSH config. After init, use [deploy.sh](vps-deployment.md) to deploy the stack.
+This guide covers [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging and production hosting. Good value, EU data centres, straightforward API. `scripts/init-vps.sh` automates the full setup: SSH key, server creation, firewall, and SSH config. After init, use [deploy.sh](vps-deployment.md) to deploy the stack.
 
 ## Recommended plan
 

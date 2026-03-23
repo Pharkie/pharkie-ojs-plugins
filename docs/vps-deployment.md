@@ -57,7 +57,7 @@ scripts/deploy.sh [flags]
 
 | Flag | Effect |
 |---|---|
-| `--host=<name>` | Hetzner server name (default: `sea-staging`). Resolved to IP via `hcloud`. |
+| `--host=<name>` | Hetzner server name (e.g. `my-staging`). Resolved to IP via `hcloud`. |
 | `--provision` | Install Docker on fresh VPS first |
 | `--skip-setup` | Don't run setup (just update code + restart) |
 | `--skip-build` | Don't rebuild Docker images |
@@ -137,7 +137,7 @@ SSH to the VPS uses hcloud to resolve the IP at runtime — no SSH config needed
 
 ```bash
 # Helper: resolve SSH for a server name
-source scripts/lib/resolve-ssh.sh && resolve_ssh "sea-staging"
+source scripts/lib/resolve-ssh.sh && resolve_ssh "<your-server>"
 
 # Push code to the VPS (the normal workflow)
 $SSH_CMD "cd /opt/wp-ojs-sync && git pull"
