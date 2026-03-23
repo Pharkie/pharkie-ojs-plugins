@@ -66,7 +66,7 @@ See `docs/private/plan.md` for full details, `docs/discovery.md` for how we got 
 - **OJS 3.5 stores galley labels in `publication_galleys.label` column**, not in `publication_galley_settings`. Inserting label rows into the settings table causes `getLabel()` to return a localized array instead of a string, breaking label comparisons (e.g. inline HTML plugin's `=== 'Full Text'` check).
 - **htmlgen can drop repeated/multilingual content.** Haiku may treat transliterated references (e.g. Cyrillic then Latin script) as duplicates and omit one set. The prompt now explicitly says to include both, but always verify HTML galleys against source PDFs for articles with non-English references.
 - **OJS 3.5 upgrade is the biggest risk.** The 3.5 upgrade has significant breaking changes (Slim->Laravel, Vue 2->3). If this goes badly, re-evaluate Janeway migration.
-- **WP usernames are synced to OJS** but sanitized to lowercase-alphanumeric (OJS constraint). 38% of live WP usernames contain dots, hyphens, underscores, spaces, or `@` (mostly email-as-username accounts) — these get stripped, so typing the WP login into OJS won't match. Mitigated: the login page relabels the field to "Email" and sets `autocomplete="email"`. OJS login auto-detects email-shaped input and does email lookup. See `docs/ojs-sync-plugin-api.md#username-sync`.
+- **WP usernames are synced to OJS** but sanitized to lowercase-alphanumeric (OJS constraint). WP usernames commonly contain dots, hyphens, underscores, spaces, or `@` — these get stripped, so typing the WP login into OJS may not match. Mitigated: the login page relabels the field to "Email" and sets `autocomplete="email"`. OJS login auto-detects email-shaped input and does email lookup. See `docs/ojs-sync-plugin-api.md#username-sync`.
 
 ## Custom OJS plugins
 
@@ -115,12 +115,12 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 - **`scripts/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). No Node/Playwright needed on VPS. Includes backup health checks (cron, encryption key, latest backup age/size).
 - **`scripts/load-test.sh`** — performance tests using `hey` with server resource monitoring.
 - **`scripts/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB → gzip → AES-256-CBC encrypt → rotate (7 daily + 4 weekly). Encryption key at `/opt/backups/ojs/.backup-key`.
-- **`scripts/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → `Pharkie/sea-ojs-db-backups` (private repo, daily at 04:00 UTC).
+- **`scripts/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → a private backup repo (daily schedule).
 - **Post-rebuild prompt:** `docs/private/claude-dev-setup-prompt.md` — copy-paste prompt for a fresh Claude session after devcontainer rebuild.
 
 ## Secrets management
 
-Private docs and env files live in a **separate private GitHub repo** (`Pharkie/ojs-sea-private`), cloned into `docs/private/` (which is gitignored in the public repo). The devcontainer `postCreateCommand` auto-clones it on rebuild.
+Private docs and env files live in a **separate private GitHub repo**, cloned into `docs/private/` (which is gitignored in the public repo). The devcontainer `postCreateCommand` auto-clones it on rebuild.
 
 ### What's in the private repo
 
@@ -147,7 +147,7 @@ sops -d docs/private/.env.live | grep OJS_ADMIN_PASSWORD
 sops docs/private/.env.live
 
 # Deploy to live (deploy.sh auto-detects SOPS and decrypts before SCP)
-scripts/deploy.sh --host=sea-live --ssl --env-file=.env.live
+scripts/deploy.sh --host=<your-server> --ssl --env-file=.env.live
 
 # Decrypt to a temp file (for manual inspection)
 sops -d docs/private/.env.live > /tmp/.env.live
@@ -160,7 +160,7 @@ cd docs/private && git add -A && git commit -m "Update env" && git push
 
 ### Important: two git repos
 
-`docs/private/` is its own git repo (cloned from `Pharkie/ojs-sea-private`). It is NOT part of the public repo. To commit changes to private docs or env files:
+`docs/private/` is its own git repo (cloned from your private GitHub repo). It is NOT part of the public repo. To commit changes to private docs or env files:
 
 ```bash
 cd docs/private
@@ -180,7 +180,7 @@ If `docs/private/` is missing or `~/.config/sops/age/keys.txt` doesn't exist:
 
 ```bash
 # 1. Clone private repo (if not auto-cloned by postCreateCommand)
-gh repo clone Pharkie/ojs-sea-private docs/private
+gh repo clone <your-org>/<private-repo> docs/private
 
 # 2. Create symlinks
 ln -sf docs/private/.env.live .env.live
@@ -215,6 +215,15 @@ HTML galley generation (step 2.5, between split and import):
 - `backfill/htmlgen.py` — sends split PDFs to Claude Haiku API, generates HTML body content for each article. Output: `{split_pdf_stem}.html` next to each split PDF. Resumable (skips existing `.html`). Content-filtered articles get PyMuPDF fallback (marked with `<!-- AUTO-EXTRACTED -->` comment). Report: `backfill/output/htmlgen-report.json`.
 - `generate_xml.py` reads `.html` files via `load_html_galley()` — if present, wraps in DOCTYPE/body and embeds as "Full Text" galley. No `.html` = no HTML galley (PDF only).
 
+Citation extraction and classification:
+- `backfill/extract_citations.py` — extract citations from HTML galleys into toc.json (`references[]`, `notes[]`, `author_bios[]`, `provenance`). Uses tail-only heading detection to match strip behaviour.
+- `backfill/split_citation_tiers.py` — classify flat `citations[]` into `references[]` (Crossref-compatible) and `notes[]` (display-only)
+- `backfill/split_endmatter.py` — split catch-all items into `author_bios[]`, `provenance`, and merge rest into `notes[]`
+- `backfill/strip_references.py` — strip reference sections from HTML galleys (after extraction). Verifies item counts before stripping — refuses if any content would be lost.
+
+JATS XML generation:
+- `backfill/generate_jats.py` — generates one JATS 1.3 XML file per article from toc.json + HTML galleys. Output: `backfill/output/<vol.iss>/<seq>-<slug>.jats.xml`. JATS files are the **single source of truth** for article content (metadata + body + references + notes + author bios + provenance). toc.json retains issue-level data (PDF page splits, article ordering, section assignments).
+
 Standalone utilities:
 - `backfill/audit.py` — audit all source PDFs in `backfill/input/` for completeness
 - `backfill/compare_archive.py` — compare PDF sources (input/, live WP securepdfs/, etc.)
@@ -222,7 +231,7 @@ Standalone utilities:
 - `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
 - `backfill/sheets_export.py` — publish all toc.json data to Google Sheet for review
 
-All 68 existing issues have toc.json files in `backfill/output/`. Large binaries (PDFs, XML) are gitignored. HTML galleys and `htmlgen-report.json` are tracked in git.
+All 68 existing issues have toc.json files in `backfill/output/`. Large binaries (PDFs, OJS import XML) are gitignored. HTML galleys and JATS XML files are tracked in git.
 
 ### Fixing a bad split or HTML galley
 
