@@ -21,7 +21,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 OUTPUT_DIR = SCRIPT_DIR / 'output'
 PREPARED_DIR = SCRIPT_DIR / 'input'
-CREDS_FILE = SCRIPT_DIR.parent / 'data export' / 'sea-journal-87a19feadadd.json'
+CREDS_FILE = SCRIPT_DIR.parent / 'data-export' / 'sea-journal-87a19feadadd.json'
 SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
 
 
