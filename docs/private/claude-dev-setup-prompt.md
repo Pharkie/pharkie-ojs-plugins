@@ -4,7 +4,15 @@ Copy-paste this into a fresh Claude session after a devcontainer rebuild.
 
 ---
 
-The devcontainer was just rebuilt from clean. Run the full dev environment setup in two steps:
+The devcontainer was just rebuilt from clean. Private docs should already be cloned (postCreateCommand does this automatically). Verify:
+
+```
+ls docs/private/plan.md && ls -la .env.live
+```
+
+If missing: `gh repo clone Pharkie/ojs-sea-private docs/private && ln -sf docs/private/.env.live .env.live && ln -sf docs/private/.env.staging .env.staging`
+
+Run the full dev environment setup in two steps:
 
 **Step 1: Rebuild + sample data (~3–5 min)**
 

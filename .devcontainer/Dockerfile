@@ -33,8 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends gh python3-pip 
     && pip install --break-system-packages pyyaml grip pymupdf gspread "deprecation>=2.1.0"
 
 # Ruby + anystyle (CRF-based bibliographic reference parser for citation classification)
-RUN apt-get update && apt-get install -y --no-install-recommends ruby \
-    && gem install anystyle anystyle-cli \
+RUN apt-get update && apt-get install -y --no-install-recommends ruby ruby-dev build-essential \
+    && gem install --no-document anystyle anystyle-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # SOPS + age (for encrypting secrets in private repo)

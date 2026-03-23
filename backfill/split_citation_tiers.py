@@ -13,12 +13,8 @@ Usage:
 """
 
 import json
-import os
 import re
-import shutil
-import subprocess
 import sys
-import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -319,7 +315,7 @@ def anystyle_validate(texts: list[str]) -> list[bool]:
 
     try:
         result = subprocess.run(
-            ['anystyle', 'parse', tmppath, '-f', 'json', '--stdout'],
+            ['anystyle', '--stdout', '-f', 'json', 'parse', tmppath],
             capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0:
