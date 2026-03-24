@@ -7,5 +7,5 @@
  */
 throw new Error(
   '\n\nPlaywright must be run from the project root, not from e2e/.\n' +
-  'Run:  cd /workspaces/wp-ojs-sync && npx playwright test\n',
+  'Run:  cd /workspaces/pharkie-ojs-plugins && npx playwright test\n',
 );

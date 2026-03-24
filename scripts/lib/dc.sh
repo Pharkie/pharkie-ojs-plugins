@@ -16,7 +16,7 @@
 #   Regular Docker (VPS): compose files are relative to the current directory.
 
 # Detect DinD: HOST_PROJECT_DIR is set in devcontainer.json → containerEnv.
-# It expands to the host-side workspace path (e.g. /Users/adam/dev/SEA/wp-ojs-sync).
+# It expands to the host-side workspace path (e.g. /Users/adam/dev/SEA/pharkie-ojs-plugins).
 is_dind() {
   [ -n "${HOST_PROJECT_DIR:-}" ]
 }

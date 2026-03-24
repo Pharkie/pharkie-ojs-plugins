@@ -36,7 +36,7 @@ export default async function globalSetup() {
   // Connect to compose network (idempotent).
   try {
     execSync(
-      'docker network connect wp-ojs-sync_sea-net $(hostname) 2>/dev/null || true',
+      'docker network connect pharkie-ojs-plugins_sea-net $(hostname) 2>/dev/null || true',
       { shell: '/bin/bash', timeout: 5000 },
     );
   } catch {}

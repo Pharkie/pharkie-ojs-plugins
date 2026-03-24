@@ -74,7 +74,7 @@ cd docs/private && git add -A && git commit -m "Update env" && git push
 ```bash
 cd docs/private
 git add -A && git commit -m "description" && git push
-cd /workspaces/wp-ojs-sync  # back to public repo
+cd /workspaces/pharkie-ojs-plugins  # back to public repo
 ```
 
 Running `git add` from the public repo root will NOT stage anything inside `docs/private/` — it's gitignored and has its own `.git/`.

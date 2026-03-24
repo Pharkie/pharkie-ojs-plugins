@@ -30,7 +30,7 @@ for arg in "$@"; do
 done
 
 # --- Log file setup ---
-LOG_DIR="/workspaces/wp-ojs-sync/logs"
+LOG_DIR="/workspaces/pharkie-ojs-plugins/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/rebuild-$(date '+%Y%m%d-%H%M%S').log"
 
@@ -42,9 +42,9 @@ exec > >(tee "$LOG_FILE") 2>&1
 trap 'echo ""; echo "=== REBUILD FAILED (exit code $?) ===" >&2; echo "  Log: $LOG_FILE" >&2' ERR
 
 # --- Auto-generate .env if missing ---
-if [ ! -f /workspaces/wp-ojs-sync/.env ]; then
+if [ ! -f /workspaces/pharkie-ojs-plugins/.env ]; then
   echo "--- Generating .env ---"
-  /workspaces/wp-ojs-sync/scripts/generate-env.sh
+  /workspaces/pharkie-ojs-plugins/scripts/generate-env.sh
   echo ""
 fi
 
@@ -60,12 +60,12 @@ echo ""
 
 # --- 2. Build images ---
 echo "--- Building OJS image ---"
-DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -f docker/ojs/Dockerfile -t wp-ojs-sync-ojs .
+DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -f docker/ojs/Dockerfile -t pharkie-ojs-plugins-ojs .
 echo "[ok] OJS image built."
 echo ""
 
 echo "--- Building WP image ---"
-DOCKER_BUILDKIT=1 docker build -f docker/wp/Dockerfile -t wp-ojs-sync-wp .
+DOCKER_BUILDKIT=1 docker build -f docker/wp/Dockerfile -t pharkie-ojs-plugins-wp .
 echo "[ok] WP image built."
 echo ""
 
