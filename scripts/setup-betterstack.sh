@@ -119,15 +119,36 @@ monitor_id() {
   echo "$EXISTING" | grep "^$1|" | cut -d'|' -f2
 }
 
-# --- Delete all SEA monitors ---
+# --- Fetch existing heartbeats ---
+EXISTING_HB=$(bs_api GET "/heartbeats?per_page=50" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for h in data.get('data', []):
+    print(h['attributes']['name'] + '|' + h['id'] + '|' + h['attributes']['url'])
+" 2>/dev/null) || EXISTING_HB=""
+
+heartbeat_exists() {
+  echo "$EXISTING_HB" | grep -q "^$1|"
+}
+
+# --- Delete all SEA monitors and heartbeats ---
 if [ "$DELETE_ALL" = true ]; then
   echo "Deleting all SEA monitors..."
   echo "$EXISTING" | grep "^SEA:" | while IFS='|' read -r name id; do
     if [ "$DRY_RUN" = true ]; then
-      echo "  [DRY-RUN] Would delete: $name (ID: $id)"
+      echo "  [DRY-RUN] Would delete monitor: $name (ID: $id)"
     else
       bs_api DELETE "/monitors/$id" > /dev/null
-      echo "  Deleted: $name"
+      echo "  Deleted monitor: $name"
+    fi
+  done
+  echo "Deleting all SEA heartbeats..."
+  echo "$EXISTING_HB" | grep "^SEA:" | while IFS='|' read -r name id url; do
+    if [ "$DRY_RUN" = true ]; then
+      echo "  [DRY-RUN] Would delete heartbeat: $name (ID: $id)"
+    else
+      bs_api DELETE "/heartbeats/$id" > /dev/null
+      echo "  Deleted heartbeat: $name"
     fi
   done
   exit 0
@@ -293,8 +314,121 @@ create_monitor "SEA: HTTPS Port" "$(cat <<EOF
 EOF
 )"
 
+# ============================================================
+# HEARTBEATS
+# ============================================================
+# Heartbeats monitor that periodic jobs actually run.
+# Each job pings its heartbeat URL on success, or /fail on error.
+# If no ping arrives within period + grace, Better Stack creates an incident.
+
+HB_CREATED=0
+HB_SKIPPED=0
+
+create_heartbeat() {
+  local name="$1"
+  local json="$2"
+
+  if heartbeat_exists "$name"; then
+    echo "  [SKIP] $name (already exists)"
+    HB_SKIPPED=$((HB_SKIPPED + 1))
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    echo "  [DRY-RUN] Would create heartbeat: $name"
+    echo "            $json" | python3 -m json.tool 2>/dev/null || echo "            $json"
+    HB_CREATED=$((HB_CREATED + 1))
+    return
+  fi
+
+  RESPONSE=$(bs_api POST "/heartbeats" "$json")
+  if [ $? -eq 0 ]; then
+    HB_URL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['attributes']['url'])" 2>/dev/null)
+    echo "  [CREATED] $name"
+    echo "            URL: $HB_URL"
+    HB_CREATED=$((HB_CREATED + 1))
+  else
+    echo "  [ERROR] Failed to create heartbeat: $name"
+    echo "          $RESPONSE"
+  fi
+}
+
 echo ""
-echo "=== Done: $CREATED created, $SKIPPED skipped ==="
+echo "Creating heartbeats..."
+echo ""
+
+# 1. Hourly monitoring workflow (expect every 75 min, grace 30 min)
+create_heartbeat "SEA: Hourly monitoring" "$(cat <<EOF
+{
+  "name": "SEA: Hourly monitoring",
+  "period": 4500,
+  "grace": 1800,
+  "call": false,
+  "sms": true,
+  "email": true,
+  "push": true
+}
+EOF
+)"
+
+# 2. Daily deep monitoring workflow (expect every 25 hours, grace 2 hours)
+create_heartbeat "SEA: Daily monitoring" "$(cat <<EOF
+{
+  "name": "SEA: Daily monitoring",
+  "period": 90000,
+  "grace": 7200,
+  "call": false,
+  "sms": true,
+  "email": true,
+  "push": true
+}
+EOF
+)"
+
+# 3. Database backup (expect every 25 hours, grace 2 hours)
+create_heartbeat "SEA: Database backup" "$(cat <<EOF
+{
+  "name": "SEA: Database backup",
+  "period": 90000,
+  "grace": 7200,
+  "call": false,
+  "sms": true,
+  "email": true,
+  "push": true
+}
+EOF
+)"
+
+# 4. OJS scheduled tasks cron (expect every 75 min, grace 30 min)
+create_heartbeat "SEA: OJS scheduled tasks" "$(cat <<EOF
+{
+  "name": "SEA: OJS scheduled tasks",
+  "period": 4500,
+  "grace": 1800,
+  "call": false,
+  "sms": true,
+  "email": true,
+  "push": true
+}
+EOF
+)"
+
+# 5. GitHub backup pull workflow (expect every 25 hours, grace 2 hours)
+create_heartbeat "SEA: GitHub backup pull" "$(cat <<EOF
+{
+  "name": "SEA: GitHub backup pull",
+  "period": 90000,
+  "grace": 7200,
+  "call": false,
+  "sms": true,
+  "email": true,
+  "push": true
+}
+EOF
+)"
+
+echo ""
+echo "=== Done: $CREATED monitors created, $SKIPPED skipped; $HB_CREATED heartbeats created, $HB_SKIPPED skipped ==="
 if [ "$DRY_RUN" = true ]; then
   echo "(Dry run — no monitors were actually created)"
 fi
