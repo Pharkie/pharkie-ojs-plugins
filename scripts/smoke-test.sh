@@ -331,13 +331,13 @@ if [ "$SYNC_OK" = true ]; then
     pass "OJS user anonymised after WP deletion"
     # Hard-delete the anonymised shell — smoke test users shouldn't persist
     if [ -n "$OJS_USER_ID" ]; then
-      remote "$COMPOSE exec -T ojs-db mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -e \"
+      remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -e \"
         DELETE FROM subscriptions WHERE user_id = $OJS_USER_ID;
         DELETE FROM event_log WHERE user_id = $OJS_USER_ID;
         DELETE FROM user_settings WHERE user_id = $OJS_USER_ID;
         DELETE FROM user_user_groups WHERE user_id = $OJS_USER_ID;
         DELETE FROM users WHERE user_id = $OJS_USER_ID;
-      \"" > /dev/null 2>&1 && pass "Smoke test user hard-deleted from OJS" || warn "Could not hard-delete smoke test user from OJS"
+      \"'" > /dev/null 2>&1 && pass "Smoke test user hard-deleted from OJS" || echo "  [WARN] Could not hard-delete smoke test user from OJS"
     fi
   else
     fail "OJS user not properly cleaned up after WP deletion" "$OJS_DELETED_USER"
@@ -347,7 +347,7 @@ fi
 # --- 10. OJS search ---
 echo "10. OJS search"
 # Check that search index is populated
-SEARCH_OBJECTS=$(remote "$COMPOSE exec -T ojs-db mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e 'SELECT COUNT(*) FROM submission_search_objects'") || SEARCH_OBJECTS="0"
+SEARCH_OBJECTS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM submission_search_objects\"'") || SEARCH_OBJECTS="0"
 SEARCH_OBJECTS=$(echo "$SEARCH_OBJECTS" | tr -d '[:space:]')
 if [ "$SEARCH_OBJECTS" -gt "0" ] 2>/dev/null; then
   pass "Search index has $SEARCH_OBJECTS objects"
@@ -356,15 +356,15 @@ else
 fi
 
 # Test actual search via HTTP — pick a known author
-SEARCH_AUTHOR=$(remote "$COMPOSE exec -T ojs-db mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
+SEARCH_AUTHOR=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
   SELECT asv.setting_value FROM author_settings asv
   JOIN authors a ON a.author_id = asv.author_id
   JOIN publications p ON a.publication_id = p.publication_id
   JOIN submissions s ON s.submission_id = p.submission_id
-  WHERE asv.setting_name = 'familyName' AND s.status = 3
+  WHERE asv.setting_name = '\\''familyName'\\'' AND s.status = 3
   GROUP BY asv.setting_value HAVING COUNT(*) >= 3
   ORDER BY COUNT(*) DESC LIMIT 1
-\"") || SEARCH_AUTHOR=""
+\"'") || SEARCH_AUTHOR=""
 SEARCH_AUTHOR=$(echo "$SEARCH_AUTHOR" | tr -d '[:space:]')
 
 if [ -n "$SEARCH_AUTHOR" ]; then
