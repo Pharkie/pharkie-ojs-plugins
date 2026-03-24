@@ -14,7 +14,7 @@ function ensureSubscriberUser(): {
 } {
   const email = 'test-subscriber@example.com';
   const username = 'testsubscriber';
-  const password = 'TestPass123!';
+  const password = process.env.TEST_OJS_PASSWORD!;
 
   let userId: number | null = null;
   const existing = ojsQuery(

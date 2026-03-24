@@ -9,7 +9,7 @@ import {
 } from '../../helpers/wp';
 
 const OJS_BASE = 'http://localhost:8081';
-const OJS_PASSWORD = 'TestPass123!';
+const OJS_PASSWORD = process.env.TEST_OJS_PASSWORD!;
 
 /**
  * Find a paywalled article (section = "Articles") that has an HTML galley.
