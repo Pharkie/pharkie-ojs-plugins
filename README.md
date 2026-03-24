@@ -52,6 +52,19 @@ WordPress plugin that hooks into WooCommerce Subscription lifecycle events and p
 **WP-OJS Sync docs:**
 [Docker setup](docs/docker-setup.md) · [VPS deployment](docs/vps-deployment.md) · [Non-Docker install](docs/non-docker-setup.md) · [WP admin guide](docs/wp-admin-reference.md) · [WP-CLI commands](docs/wp-cli-reference.md) · [Support runbook](docs/support-runbook.md) · [OJS plugin API](docs/ojs-sync-plugin-api.md) · [WP plugin internals](docs/wp-plugin-reference.md) · [Design decisions](docs/discovery.md)
 
+## [Backfill Toolkit](backfill/)
+
+Tools for digitising a journal's print archive into OJS. Takes whole-issue PDFs and produces per-article PDFs, HTML galleys, JATS XML, and OJS Native XML for import.
+
+- PDF splitting into per-article files using table-of-contents metadata
+- AI-powered HTML galley generation (Claude API)
+- JATS 1.3 XML generation (single source of truth for article content)
+- Citation extraction and classification (references vs. notes)
+- OJS Native XML generation and import
+
+**Backfill docs:**
+[Process guide](docs/backfill-pipeline.md) · [Technical reference](docs/backfill-reference.md) · [TOC schema](docs/backfill-toc-guide.md)
+
 ## LLM Generated, Human Reviewed
 
 This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Development was overseen by the human author with attention to reliability and security. Architectural decisions, configuration choices, and development sessions were closely planned, directed and verified by the human author throughout. The code and test results were reviewed and tested by the human author beyond the LLM. Still, the code has had limited manual review, I encourage you to make your own checks and use this code at your own risk.

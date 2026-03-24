@@ -1,6 +1,6 @@
 # Backfill Pipeline
 
-A process guide for reviewing and importing back-issues of Existential Analysis into OJS. This guide is for anyone reviewing the backfill output -- you don't need to run commands or use the terminal. If you're the person running the scripts, see [Backfill Reference](backfill-reference.md) for all commands and technical details.
+A process guide for reviewing and importing journal back-issues into OJS. This guide is for anyone reviewing the backfill output -- you don't need to run commands or use the terminal. If you're the person running the scripts, see [Backfill Reference](backfill-reference.md) for all commands and technical details.
 
 ## What you'll need
 

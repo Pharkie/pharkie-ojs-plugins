@@ -66,4 +66,7 @@ Primary integration: hook into **WooCommerce Subscriptions** status events (`woo
 | [`docs/non-docker-setup.md`](docs/non-docker-setup.md) | Non-Docker plugin installation |
 | [`docs/vps-deployment.md`](docs/vps-deployment.md) | VPS deployment guide |
 | [`docs/support-runbook.md`](docs/support-runbook.md) | Support staff quick reference |
+| [`docs/setup-guide.md`](docs/setup-guide.md) | Dev environment, secrets management (SOPS/age) |
+| [`docs/backfill-pipeline.md`](docs/backfill-pipeline.md) | Backfill process guide for reviewers |
+| [`docs/backfill-reference.md`](docs/backfill-reference.md) | Backfill technical reference |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Code conventions, testing, pre-commit hooks |
