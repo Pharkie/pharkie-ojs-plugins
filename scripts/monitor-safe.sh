@@ -128,8 +128,12 @@ else
   fail "WP not responding (HTTP $WP_STATUS via ${WP_CHECK_URL})"
 fi
 
-# 1b. WP Admin
-WP_ADMIN_STATUS=$(wp_curl "/wp/wp-admin/") || WP_ADMIN_STATUS="000"
+# 1b. WP Admin (path differs: /wp/wp-admin/ internally, /wp-admin/ via Caddy)
+if [ -n "$WP_PUBLIC_URL" ]; then
+  WP_ADMIN_STATUS=$(wp_curl "/wp-admin/") || WP_ADMIN_STATUS="000"
+else
+  WP_ADMIN_STATUS=$(wp_curl "/wp/wp-admin/") || WP_ADMIN_STATUS="000"
+fi
 if [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
   pass "WP Admin responds (HTTP $WP_ADMIN_STATUS)"
 else
@@ -164,14 +168,14 @@ else
   fail "OJS Admin not responding (HTTP $OJS_ADMIN_STATUS)"
 fi
 
-# 1f. Response time thresholds
+# 1f. Response time thresholds (10s — generous for cross-Atlantic CI runners)
 WP_TIME_INT=$(echo "$WP_TIME" | cut -d. -f1)
 OJS_TIME_INT=$(echo "$OJS_TIME" | cut -d. -f1)
-if [ "${WP_TIME_INT:-0}" -gt 5 ] 2>/dev/null; then
-  fail "WP response time too slow (${WP_TIME}s > 5s)"
+if [ "${WP_TIME_INT:-0}" -gt 10 ] 2>/dev/null; then
+  fail "WP response time too slow (${WP_TIME}s > 10s)"
 fi
-if [ "${OJS_TIME_INT:-0}" -gt 5 ] 2>/dev/null; then
-  fail "OJS response time too slow (${OJS_TIME}s > 5s)"
+if [ "${OJS_TIME_INT:-0}" -gt 10 ] 2>/dev/null; then
+  fail "OJS response time too slow (${OJS_TIME}s > 10s)"
 fi
 
 # ============================================================
