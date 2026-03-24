@@ -241,7 +241,7 @@ export async function wpLogin(
  * Set a known password on a WP user (for browser login).
  */
 export function setUserPassword(userId: number, password: string): void {
-  wpCli(`user update ${userId} --user_pass=${password}`);
+  wpCli(`user update ${userId} --user_pass='${password.replace(/'/g, "'\\''")}'`);
 }
 
 /**

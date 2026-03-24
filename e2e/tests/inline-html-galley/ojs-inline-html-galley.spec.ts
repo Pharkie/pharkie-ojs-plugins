@@ -97,12 +97,13 @@ test.describe('Inline HTML Galley plugin', () => {
     );
     await page.waitForLoadState('domcontentloaded');
 
-    // All galley links (PDF, HTML, Full Text) should be hidden on the TOC.
+    // Per-article galley links (PDF, HTML, Full Text) should be hidden on the TOC.
     // Readers click the article title to reach the landing page instead.
-    const allGalleyLinks = page.locator('.obj_galley_link');
-    const count = await allGalleyLinks.count();
+    // Issue-level PDF galleys remain visible — they're the purchase entry point.
+    const articleGalleyLinks = page.locator('.obj_article_summary .obj_galley_link');
+    const count = await articleGalleyLinks.count();
     for (let i = 0; i < count; i++) {
-      await expect(allGalleyLinks.nth(i)).toBeHidden();
+      await expect(articleGalleyLinks.nth(i)).toBeHidden();
     }
   });
 
