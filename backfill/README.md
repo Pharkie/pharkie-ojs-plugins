@@ -37,6 +37,6 @@ Issue PDF → toc.json (metadata) → split PDFs → HTML galleys (AI) → JATS 
 - [Backfill Reference](../docs/backfill-reference.md) — technical reference for all commands and workflows
 - [TOC Guide](../docs/backfill-toc-guide.md) — toc.json schema and creation instructions
 
-## Output directory
+## Data directory
 
-`backfill/output/<vol>.<iss>/` contains per-issue output: split PDFs (gitignored), HTML galleys (tracked), JATS XML (tracked), and OJS import XML (gitignored). The toc.json metadata files are also tracked. Large binaries are excluded from git.
+`backfill/output/<vol>.<iss>/` contains per-issue output: toc.json (metadata), split PDFs, HTML galleys, JATS XML, and OJS import XML. This directory is gitignored — journal-specific data lives in a separate private repository. The scripts work with any local `backfill/output/` directory regardless of where the data comes from.

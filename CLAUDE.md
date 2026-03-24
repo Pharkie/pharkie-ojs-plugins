@@ -66,7 +66,7 @@ Standalone utilities:
 - `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
 - `backfill/sheets_export.py` — publish all toc.json data to Google Sheet for review
 
-Large binaries (PDFs, OJS import XML) are gitignored. HTML galleys and JATS XML files are tracked in git.
+`backfill/output/` is gitignored — journal-specific data (toc.json, HTML galleys, JATS XML) lives in the private repo (`docs/private/backfill/`). Scripts work with any local `backfill/output/` directory.
 
 ### Fixing a bad split or HTML galley
 

@@ -128,6 +128,8 @@ services:
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro
       - ./docker/ojs/apache.conf:/etc/apache2/conf-enabled/sea-cgipassauth.conf:ro
       - ./scripts:/scripts:ro
+      # Sample issue XMLs — generated locally by the backfill pipeline (not in git).
+      # If files don't exist, setup-ojs.sh skips sample import gracefully.
       - "./backfill/output/35.2/import.xml:/data/sample-issues/35.2.xml:ro"
       - "./backfill/output/36.1/import.xml:/data/sample-issues/36.1.xml:ro"
       - "./docs/private/editorial-roles.json:/data/editorial-roles.json:ro"
