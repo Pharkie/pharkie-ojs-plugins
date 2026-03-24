@@ -38,9 +38,9 @@ init_dc --env="$ENV"
 ## Sample data is always opt-in — pass --with-sample-data explicitly.
 
 # --- Auto-generate .env if missing (dev only) ---
-if [ "$ENV" = "dev" ] && [ ! -f /workspaces/wp-ojs-sync/.env ]; then
+if [ "$ENV" = "dev" ] && [ ! -f /workspaces/pharkie-ojs-plugins/.env ]; then
   echo "--- Generating .env ---"
-  /workspaces/wp-ojs-sync/scripts/generate-env.sh
+  /workspaces/pharkie-ojs-plugins/scripts/generate-env.sh
   echo ""
 fi
 
@@ -80,10 +80,12 @@ echo ""
 echo "=== OJS setup ==="
 $DC exec -T ojs bash /scripts/setup-ojs.sh $SAMPLE_DATA
 
-# --- Assign editorial roles ---
-echo ""
-echo "=== Editorial roles ==="
-$DC exec -T ojs bash /scripts/assign-roles.sh
+# --- Assign editorial roles (prod/staging only) ---
+if [ "$ENV" != "dev" ]; then
+  echo ""
+  echo "=== Editorial roles ==="
+  $DC exec -T ojs bash /scripts/assign-roles.sh
+fi
 
 # --- Run WP setup ---
 echo ""

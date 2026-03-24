@@ -9,7 +9,7 @@
 set -eo pipefail
 
 # Network name matches docker-compose.yml "sea-net" network with project prefix.
-NETWORK="${COMPOSE_PROJECT_NAME:-wp-ojs-sync}_sea-net"
+NETWORK="${COMPOSE_PROJECT_NAME:-pharkie-ojs-plugins}_sea-net"
 CONTAINER_ID=$(cat /etc/hostname)
 
 # Connect devcontainer to the compose network (idempotent)

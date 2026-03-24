@@ -10,7 +10,7 @@ if (!existsSync(resolve(projectRoot, '.env'))) {
   throw new Error(
     `\n\nCannot find .env in ${projectRoot}\n` +
     'Run Playwright from the project root:\n' +
-    '  cd /workspaces/wp-ojs-sync && npx playwright test\n',
+    '  cd /workspaces/pharkie-ojs-plugins && npx playwright test\n',
   );
 }
 
