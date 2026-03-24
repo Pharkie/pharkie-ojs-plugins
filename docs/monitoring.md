@@ -40,6 +40,18 @@ Automated monitoring for the live OJS journal and WP membership site, using thre
 | Stripe Webhook Route | Keyword absence | "Not Found" does NOT appear (route exists) |
 | HTTPS Port | TCP | Port 443 reachable |
 
+**Heartbeats** (5 heartbeats, expect periodic pings from cron jobs/workflows):
+
+| Heartbeat | Period | Grace | What it catches |
+|-----------|--------|-------|----------------|
+| SEA: Hourly monitoring | 75 min | 30 min | GitHub Actions hourly workflow stopped running |
+| SEA: Daily monitoring | 25 hours | 2 hours | GitHub Actions daily workflow stopped running |
+| SEA: Database backup | 25 hours | 2 hours | VPS backup cron failed or stopped |
+| SEA: OJS scheduled tasks | 75 min | 30 min | OJS cron not running (container issue) |
+| SEA: GitHub backup pull | 25 hours | 2 hours | Backup pull workflow stopped |
+
+Each job pings its heartbeat URL on success, or `/fail` on failure. If no ping arrives within period + grace, Better Stack creates an incident (email + SMS, no phone calls).
+
 **Built-in**: SSL expiry alerts, response time tracking, free status page.
 
 ### Setup
@@ -226,6 +238,10 @@ Free tier limit: 2,000 min/month for private repos.
 | `BETTERSTACK_API_TOKEN` | Better Stack API token |
 | `LIVE_WP_HOME` | WP URL for Playwright |
 | `LIVE_OJS_URL` | OJS URL for Playwright |
+| `BETTERSTACK_HB_HOURLY` | Heartbeat URL for hourly workflow |
+| `BETTERSTACK_HB_DAILY` | Heartbeat URL for daily workflow |
+| `BETTERSTACK_HB_BACKUP` | Heartbeat URL for VPS backup cron |
+| `BETTERSTACK_HB_BACKUP_PULL` | Heartbeat URL for GitHub backup pull |
 
 ## Troubleshooting
 
