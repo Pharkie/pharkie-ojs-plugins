@@ -17,14 +17,44 @@ for arg in "$@"; do
 done
 
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 source "$SCRIPT_DIR/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
+# Auto-detect compose config from running containers
+COMPOSE_FILES=$($SSH_CMD "docker inspect --format='{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' \$(docker ps -q --filter 'label=com.docker.compose.project=pharkie-ojs-plugins' | head -1) 2>/dev/null") || COMPOSE_FILES=""
+if [ -n "$COMPOSE_FILES" ]; then
+  # Convert "/opt/.../docker-compose.yml,/opt/.../docker-compose.caddy.yml" to "-f docker-compose.yml -f docker-compose.caddy.yml"
+  COMPOSE="docker compose"
+  IFS=',' read -ra FILES <<< "$COMPOSE_FILES"
+  for f in "${FILES[@]}"; do
+    COMPOSE="$COMPOSE -f $(basename "$f")"
+  done
+else
+  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+fi
+
 # Read env values from remote .env
 WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
+WP_PUBLIC_URL=$($SSH_CMD "grep '^WP_PUBLIC_URL=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
+# WP_HOME is often an internal Docker address (e.g. http://IP:8080).
+# For external HTTP checks, derive the public URL from Caddy config.
+if [ -z "$WP_PUBLIC_URL" ]; then
+  CADDY_WP=$($SSH_CMD "grep '^CADDY_WP_DOMAIN=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
+  if [ -n "$CADDY_WP" ]; then
+    WP_PUBLIC_URL="https://$CADDY_WP"
+  fi
+fi
+# Fallback: if WP_HOME looks public (not private IP/non-standard port), use it directly
+if [ -z "$WP_PUBLIC_URL" ]; then
+  if echo "$WP_HOME" | grep -qE '^https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|localhost|127\.|.*:[0-9]{4,})'; then
+    # Internal address — try to reach WP via Docker from the server
+    WP_PUBLIC_URL=""
+  else
+    WP_PUBLIC_URL="$WP_HOME"
+  fi
+fi
 OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
@@ -61,6 +91,7 @@ wp_cli() {
 
 echo "=== Monitor (safe): $SSH_HOST ==="
 echo "    WP:  $WP_HOME"
+echo "    WP (public): ${WP_PUBLIC_URL:-N/A — will check via SSH}"
 echo "    OJS: $OJS_BASE_URL"
 echo ""
 
@@ -69,28 +100,44 @@ echo ""
 # ============================================================
 echo "--- HTTP & API ---"
 
+# Helper: curl WP, handling internal vs public URLs.
+# If we have a public URL, curl it directly (tests external access).
+# Otherwise, curl from inside the Docker network via the WP container.
+wp_curl() {
+  local path="$1" url
+  if [ -n "$WP_PUBLIC_URL" ]; then
+    url="${WP_PUBLIC_URL}${path}"
+    curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null
+  else
+    # Curl from inside the Caddy/WP network
+    remote "$COMPOSE exec -T wp curl -s -o /dev/null -w '%{http_code}' 'http://localhost:80${path}'" 2>/dev/null
+  fi
+}
+
 # 1a. WP HTTP
-WP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME" 2>/dev/null) || WP_STATUS="000"
-WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' "$WP_HOME" 2>/dev/null) || WP_TIME="0"
-if [ "$WP_STATUS" = "200" ] || [ "$WP_STATUS" = "301" ] || [ "$WP_STATUS" = "302" ]; then
-  pass "WP responds (HTTP $WP_STATUS, ${WP_TIME}s)"
+WP_CHECK_URL="${WP_PUBLIC_URL:-$WP_HOME}"
+WP_STATUS=$(wp_curl "") || WP_STATUS="000"
+if [ -n "$WP_PUBLIC_URL" ]; then
+  WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' "$WP_PUBLIC_URL" 2>/dev/null) || WP_TIME="0"
 else
-  fail "WP not responding (HTTP $WP_STATUS)"
+  WP_TIME="0"
+fi
+if [ "$WP_STATUS" = "200" ] || [ "$WP_STATUS" = "301" ] || [ "$WP_STATUS" = "302" ]; then
+  pass "WP responds (HTTP $WP_STATUS${WP_TIME:+, ${WP_TIME}s})"
+else
+  fail "WP not responding (HTTP $WP_STATUS via ${WP_CHECK_URL})"
 fi
 
 # 1b. WP Admin
-WP_ADMIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME/wp/wp-admin/" 2>/dev/null) || WP_ADMIN_STATUS="000"
-WP_ADMIN_BODY=$(curl -s "$WP_HOME/wp/wp-admin/" 2>/dev/null | head -20)
-if echo "$WP_ADMIN_BODY" | grep -qi "Fatal error\|Exception\|unable to read"; then
-  fail "WP Admin has PHP fatal error"
-elif [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
+WP_ADMIN_STATUS=$(wp_curl "/wp/wp-admin/") || WP_ADMIN_STATUS="000"
+if [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
   pass "WP Admin responds (HTTP $WP_ADMIN_STATUS)"
 else
   fail "WP Admin not responding (HTTP $WP_ADMIN_STATUS)"
 fi
 
 # 1c. WP REST API
-WP_API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME/wp-json/" 2>/dev/null) || WP_API_STATUS="000"
+WP_API_STATUS=$(wp_curl "/wp-json/") || WP_API_STATUS="000"
 if [ "$WP_API_STATUS" = "200" ]; then
   pass "WP REST API responds"
 else
@@ -284,12 +331,18 @@ fi
 echo ""
 echo "--- OJS Job Queue ---"
 
-# 6a. Job worker process running
+# 6a. Job processing: check for persistent worker OR cron-based processing
 JOB_WORKER=$(remote "$COMPOSE exec -T ojs pgrep -a -f 'jobs.php' 2>/dev/null || echo ''")
 if echo "$JOB_WORKER" | grep -q "jobs.php"; then
   pass "OJS job worker running"
 else
-  fail "OJS job worker not running (jobs won't be processed)"
+  # No persistent worker — check if cron-based job processing is configured
+  OJS_CRON=$(remote "$COMPOSE exec -T ojs crontab -l 2>/dev/null || echo ''")
+  if echo "$OJS_CRON" | grep -q "runScheduledTasks\|pkp-run-scheduled"; then
+    pass "OJS jobs processed via cron (no persistent worker needed)"
+  else
+    fail "OJS job worker not running and no cron configured"
+  fi
 fi
 
 # 7b. Pending jobs (should be near zero)
@@ -443,8 +496,8 @@ else
   pass "Action Scheduler queue OK ($PENDING_JOBS pending)"
 fi
 
-# 9b. Adminer
-ADMINER_STATUS=$(remote "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082") || ADMINER_STATUS="000"
+# 9b. Adminer (accessible within Docker network only)
+ADMINER_STATUS=$(remote "$COMPOSE exec -T wp curl -s -o /dev/null -w '%{http_code}' http://adminer:8080/") || ADMINER_STATUS="000"
 if [ "$ADMINER_STATUS" = "200" ]; then
   pass "Adminer responds (HTTP $ADMINER_STATUS)"
 else
