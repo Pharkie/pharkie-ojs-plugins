@@ -228,6 +228,8 @@ def _match_by_author(candidates, authors_str):
 def _normalize_title(title):
     """Normalize a title for DOI matching (lowercase, collapse whitespace, strip punctuation)."""
     title = title.strip().lower()
+    # Strip quotation marks (smart quotes and straight quotes)
+    title = re.sub(r'[\u201c\u201d\u2018\u2019"\']', '', title)
     # Collapse whitespace
     title = re.sub(r'\s+', ' ', title)
     # Strip leading/trailing punctuation

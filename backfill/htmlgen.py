@@ -102,7 +102,13 @@ BOTH sets — they are not duplicates. If the last page contains the START of
 the next article, stop before it."""
 
 BOOK_REVIEW_PROMPT = """Convert this book review PDF into clean, well-structured HTML.
-The PDF pages may contain multiple reviews — extract ONLY this one.
+
+CRITICAL: These pages may contain MULTIPLE book reviews running continuously.
+You MUST extract ONLY ONE specific review. The first page may START with
+text from a DIFFERENT review — if so, SKIP ALL of that text completely.
+Look for the target book's title in BOLD to find where YOUR review begins.
+After the reviewer's name (and any References), STOP — do not include
+the next review.
 
 """ + FORMATTING_RULES + """
 
@@ -114,20 +120,19 @@ critical content that MUST appear in the output as
 <p><strong>Name</strong></p>. This is NOT an "author byline" to skip.
 
 What to SKIP: only the book's publication details at the very top (title,
-author, publisher, year — these are already in OJS metadata).
+author, publisher, year — these are already in OJS metadata). Do NOT skip
+epigraphs/quotes that appear AFTER the publication details — these are
+part of the review body and MUST be included.
 
 What to INCLUDE (in order):
-  1. All review body paragraphs
-  2. The reviewer's name (standalone name near the end)
-  3. References section if present after the reviewer's name
+  1. Any epigraph or quote appearing after the publication details
+  2. All review body paragraphs
+  3. The reviewer's name (standalone name near the end OF THIS REVIEW)
+  4. References section if present after the reviewer's name
 
-BOUNDARIES — the PDF may have multiple reviews on the same pages:
-- STARTING: if the top of the first page has text that ends with a
-  different person's name followed by this review's book title, skip
-  everything before the book title.
-- ENDING: after the reviewer's name and any References, STOP. If you
-  see another book title/publisher line, that is the NEXT review.
-  Do not include it."""
+IMPORTANT: A name appearing BEFORE this review's book title belongs to
+the PREVIOUS review's reviewer — do NOT include it. Only include the
+reviewer name that appears AFTER the body of THIS review."""
 
 
 def load_env():
