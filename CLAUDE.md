@@ -66,7 +66,7 @@ Standalone utilities:
 - `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
 - `backfill/sheets_export.py` — publish all toc.json data to Google Sheet for review
 
-`backfill/output/` is gitignored — journal-specific data (toc.json, HTML galleys, JATS XML) lives in the private repo (`docs/private/backfill/`). Scripts work with any local `backfill/output/` directory.
+All journal-specific data lives in the private repo (`docs/private/backfill/`). The public repo has symlinks: `backfill/input`, `backfill/output`, `backfill/authors.json`, `backfill/doi-registry.json`, `backfill/reports` all point to `docs/private/backfill/`. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `docs/private/README.md` for full structure.
 
 ### Fixing a bad split or HTML galley
 

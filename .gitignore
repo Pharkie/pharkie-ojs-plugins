@@ -44,14 +44,13 @@ e2e/screenshots/
 # Rebuild logs
 logs/
 
-# Backfill data — journal-specific content lives in private repo (docs/private/backfill/)
-backfill/output/
-backfill/reports/
+# Backfill data — symlinks to private repo (docs/private/backfill/)
+# These are symlinks, not directories, so patterns must not have trailing slashes.
+backfill/output
+backfill/reports
 backfill/authors.json
 backfill/doi-registry.json
-
-# Backfill source PDFs (large)
-backfill/input/
+backfill/input
 
 # Python bytecode
 __pycache__/
