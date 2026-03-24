@@ -204,7 +204,7 @@ EOF
 create_monitor "SEA: WP Admin" "$(cat <<EOF
 {
   "monitor_type": "status",
-  "url": "$WP_PUBLIC_URL/wp/wp-admin/",
+  "url": "$WP_PUBLIC_URL/wp-admin/",
   "pronounceable_name": "SEA: WP Admin",
   "check_frequency": $FREQ,
   "request_timeout": 15,
@@ -265,7 +265,7 @@ create_monitor "SEA: OJS Login Page" "$(cat <<EOF
   "monitor_type": "keyword",
   "url": "$OJS_JOURNAL_URL/login",
   "pronounceable_name": "SEA: OJS Login Page",
-  "required_keyword": "Sign In",
+  "required_keyword": "Login",
   "check_frequency": $FREQ,
   "request_timeout": 15,
   "email": true,
@@ -274,22 +274,9 @@ create_monitor "SEA: OJS Login Page" "$(cat <<EOF
 EOF
 )"
 
-# 8. Keyword: Stripe webhook endpoint (should return error, not 404)
-# We use keyword_absence for 404 — if "Not Found" appears, the route is broken
-create_monitor "SEA: Stripe Webhook Route" "$(cat <<EOF
-{
-  "monitor_type": "keyword_absence",
-  "url": "$OJS_JOURNAL_URL/payment/plugin/StripePayment/webhook",
-  "pronounceable_name": "SEA: Stripe Webhook Route",
-  "required_keyword": "Not Found",
-  "http_method": "POST",
-  "check_frequency": $FREQ,
-  "request_timeout": 15,
-  "email": true,
-  "regions": ["eu"]
-}
-EOF
-)"
+# 8. Stripe webhook route exists (GET returns 405 Method Not Allowed, not 404)
+# Dropped: Better Stack treats 400/405 as failure. Stripe config is verified
+# by the hourly SSH checks instead (Stripe API key valid, plugin active).
 
 # 9. TCP: HTTPS port
 create_monitor "SEA: HTTPS Port" "$(cat <<EOF
