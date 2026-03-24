@@ -13,7 +13,7 @@
 # Backups stored in /opt/backups/ojs/
 #
 # Cron (installed by --install-cron from pull-ojs-backup.sh):
-#   0 3 * * * /opt/wp-ojs-sync/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1
+#   0 3 * * * /opt/pharkie-ojs-plugins/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1
 #
 # To restore:
 #   openssl enc -aes-256-cbc -d -pbkdf2 -in backup.sql.gz.enc -pass file:/path/to/.backup-key | gunzip | mariadb -u root -p"$PASS" ojs
@@ -22,7 +22,7 @@ set -eo pipefail
 BACKUP_DIR="/opt/backups/ojs"
 DAILY_DIR="$BACKUP_DIR/daily"
 WEEKLY_DIR="$BACKUP_DIR/weekly"
-PROJECT_DIR="/opt/wp-ojs-sync"
+PROJECT_DIR="/opt/pharkie-ojs-plugins"
 KEY_FILE="$BACKUP_DIR/.backup-key"
 KEEP_DAILY=7
 KEEP_WEEKLY=4

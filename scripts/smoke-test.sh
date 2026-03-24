@@ -16,7 +16,7 @@ for arg in "$@"; do
   esac
 done
 
-REMOTE_DIR="/opt/wp-ojs-sync"
+REMOTE_DIR="/opt/pharkie-ojs-plugins"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 

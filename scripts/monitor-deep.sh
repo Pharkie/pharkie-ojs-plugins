@@ -27,7 +27,7 @@ echo "================================================================"
 SAFE_EXIT=$?
 
 # Re-establish SSH connection and env vars for deep checks
-REMOTE_DIR="/opt/wp-ojs-sync"
+REMOTE_DIR="/opt/pharkie-ojs-plugins"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 
 source "$SCRIPT_DIR/lib/resolve-ssh.sh"
