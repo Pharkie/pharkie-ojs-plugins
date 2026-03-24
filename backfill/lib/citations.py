@@ -265,6 +265,86 @@ def citation_confidence(text: str, heading: str) -> int:
     return max(0, min(100, score))
 
 
+def note_confidence(text: str) -> int:
+    """Score 0-100 how confident we are this is a note/endnote."""
+    score = 50
+
+    # Strong note signals
+    note_reason = is_note(text)
+    if note_reason:
+        score += 30  # caught by a specific rule
+
+    # Numbered prefix (typical endnote)
+    if re.match(r'^\d+[\.\)\s]', text):
+        score += 10
+
+    # Prose characteristics (multiple sentences)
+    sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', text))
+    if sentence_count >= 2:
+        score += 10
+
+    # "See" / "cf." cross-references
+    if re.match(r'^(See |see |cf\.|Cf\.)', text):
+        score += 15
+
+    # Ibid
+    if re.search(r'\b(Ibid\.?|Ibidem|Op\.?\s*cit)', text, re.IGNORECASE):
+        score += 15
+
+    # Negative: looks like a reference (penalise)
+    if is_reference(text) and not note_reason:
+        score -= 30
+
+    return max(0, min(100, score))
+
+
+def bio_confidence(text: str) -> int:
+    """Score 0-100 how confident we are this is an author bio."""
+    score = 50
+
+    # Name + "is/was/has" pattern (strongest signal)
+    if re.match(r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s', text):
+        score += 35  # ALL CAPS name
+    elif re.match(r'^[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+.*?\s+(is|was|has)\s', text):
+        score += 30  # Mixed case name
+
+    # Bio phrases
+    bio_phrases = ['private practice', 'practitioner', 'works with',
+                   'academic interests', 'Research Fellow', 'currently a']
+    matches = sum(1 for p in bio_phrases if p in text)
+    score += matches * 8
+
+    # Credentials
+    if re.search(r'\b(PhD|MA|MSc|UKCP|BPS|BACP|MBPsS)\b', text):
+        score += 10
+
+    # Length: bios are typically 50-300 chars
+    if 50 < len(text) < 400:
+        score += 5
+
+    # Negative: has year in parens (more like a citation)
+    if re.search(r'\(\d{4}\)', text[:80]):
+        score -= 20
+
+    return max(0, min(100, score))
+
+
+def provenance_confidence(text: str) -> int:
+    """Score 0-100 how confident we are this is a provenance note."""
+    score = 50
+
+    if re.match(r'^This (article|paper|chapter|essay|lecture|talk)\s+(is|was)\s', text):
+        score += 40
+
+    if re.search(r'(delivered|presented|given)\s+(at|as|to)', text):
+        score += 10
+
+    if re.search(r'(revised|adapted|based on|version of)', text, re.IGNORECASE):
+        score += 10
+
+    return max(0, min(100, score))
+
+
 # ---------------------------------------------------------------
 # Item classification: junk / citation-like / bio / provenance
 # ---------------------------------------------------------------
