@@ -31,7 +31,8 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import (
     find_jats_reference_sections, is_junk, is_citation_like, is_author_bio,
-    is_provenance, classify, citation_confidence, extract_text_from_element,
+    is_provenance, classify, citation_confidence, note_confidence,
+    bio_confidence, provenance_confidence, extract_text_from_element,
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
 
@@ -331,7 +332,7 @@ def load_citations_for_sheet(volume_filter=None):
                 if p is not None and p.text and p.text.strip():
                     seq += 1
                     text = p.text.strip()
-                    confidence = citation_confidence(text, 'Notes')
+                    confidence = note_confidence(text)
                     rows.append([
                         volume, issue, date, section, title, authors,
                         seq, 'Notes', 'note', confidence,
@@ -342,10 +343,12 @@ def load_citations_for_sheet(volume_filter=None):
                 p = bio.find('{*}p')
                 if p is not None and p.text and p.text.strip():
                     seq += 1
+                    text = p.text.strip()
+                    confidence = bio_confidence(text)
                     rows.append([
                         volume, issue, date, section, title, authors,
-                        seq, '', 'author_bio', 0,
-                        p.text.strip(), '', '',
+                        seq, '', 'author_bio', confidence,
+                        text, '', '',
                     ])
 
             prov = tree.find('.//{*}notes[@notes-type="provenance"]')
@@ -353,10 +356,12 @@ def load_citations_for_sheet(volume_filter=None):
                 p = prov.find('{*}p')
                 if p is not None and p.text and p.text.strip():
                     seq += 1
+                    text = p.text.strip()
+                    confidence = provenance_confidence(text)
                     rows.append([
                         volume, issue, date, section, title, authors,
-                        seq, '', 'provenance', 0,
-                        p.text.strip(), '', '',
+                        seq, '', 'provenance', confidence,
+                        text, '', '',
                     ])
 
     return rows
