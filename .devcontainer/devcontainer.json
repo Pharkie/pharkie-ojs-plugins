@@ -1,5 +1,5 @@
 {
-  "name": "WP-OJS Sync (Claude Code)",
+  "name": "Pharkie OJS Plugins (Claude Code)",
   "build": {
     "dockerfile": "Dockerfile"
   },
@@ -9,7 +9,7 @@
   // (confirmed by binary inspection — same path as CLI, no VS Code SecretStorage).
   // Bind-mounting host ~/.claude makes this immune to rebuilds AND docker prune.
   // Official ref: https://github.com/anthropics/claude-code/tree/main/.devcontainer
-  "initializeCommand": "mkdir -p ${localEnv:HOME}/.claude ${localEnv:HOME}/.config/gh ${localEnv:HOME}/Screenshots ${localEnv:HOME}/.ssh ${localEnv:HOME}/.config/hcloud ${localEnv:HOME}/.config/ggshield ${localEnv:HOME}/.config/sops/age ${localEnv:HOME}/dev/SEA/sea-ojs-private",
+  "initializeCommand": "mkdir -p ${localEnv:HOME}/.claude ${localEnv:HOME}/.config/gh ${localEnv:HOME}/Screenshots ${localEnv:HOME}/.ssh ${localEnv:HOME}/.config/hcloud ${localEnv:HOME}/.config/ggshield ${localEnv:HOME}/.config/sops/age",
   "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,readonly",
@@ -20,7 +20,6 @@
     "source=${localEnv:HOME}/.config/hcloud,target=/home/vscode/.config/hcloud,type=bind",
     "source=${localEnv:HOME}/.config/ggshield,target=/home/vscode/.config/ggshield,type=bind",
     "source=${localEnv:HOME}/.config/sops,target=/home/vscode/.config/sops,type=bind",
-    "source=${localEnv:HOME}/dev/SEA/sea-ojs-private,target=/home/vscode/sea-ojs-private,type=bind",
     // Performance: keep heavy I/O dirs on native Linux volumes instead of VirtioFS bind mount
     "source=wpojs-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
     "source=wpojs-playwright,target=/home/vscode/.cache/ms-playwright,type=volume"
