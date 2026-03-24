@@ -262,7 +262,7 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
 
 SHEET_HEADERS = [
     'Volume', 'Issue', 'Date', 'Section', 'Article Title', 'Authors',
-    'Seq', 'Heading', 'Class', 'Confidence', 'Citation', 'Matched DOI', 'Crossref Citation',
+    'Seq', 'Heading', 'Class', 'Confidence', 'Text', 'Matched DOI', 'Crossref Citation',
 ]
 
 
