@@ -4,6 +4,8 @@ How to create `toc.json` files for the backfill pipeline. Each issue PDF needs a
 
 > **Note:** Examples in this guide reference Existential Analysis as a sample journal. Adapt section names, metadata fields, and conventions for your journal.
 
+> **Important:** If you fork this repo, do NOT put journal PDFs or article content directly into `backfill/output/` or `backfill/input/` — those directories are symlinks to a private repo (see `private/README.md`). If your fork is public, create your own private repo for journal-specific data and replicate the symlink setup. Copyrighted content must never be committed to a public repository.
+
 ## Quick version
 
 Ask Claude: "Read `backfill/input/<vol>.pdf` and create `backfill/output/<vol>/toc.json` following the schema in `docs/backfill-toc-guide.md`."
