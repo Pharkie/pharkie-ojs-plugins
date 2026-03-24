@@ -507,6 +507,16 @@ fi
 # --- Summary ---
 echo ""
 echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
+
+# Ping Better Stack heartbeat (if configured)
+if [ -n "$BETTERSTACK_HB_HOURLY" ]; then
+  if [ "$FAILED" -gt "0" ]; then
+    curl -sf -d "safe checks: $PASSED/$TOTAL passed, $FAILED failed" "$BETTERSTACK_HB_HOURLY/fail" > /dev/null 2>&1 || true
+  else
+    curl -sf "$BETTERSTACK_HB_HOURLY" > /dev/null 2>&1 || true
+  fi
+fi
+
 if [ "$FAILED" -gt "0" ]; then
   exit 1
 fi

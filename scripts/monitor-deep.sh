@@ -267,6 +267,16 @@ done
 # --- Deep Summary ---
 echo ""
 echo "=== Deep results: $PASSED/$TOTAL passed, $FAILED failed ==="
+
+# Ping Better Stack heartbeat (if configured)
+if [ -n "$BETTERSTACK_HB_DAILY" ]; then
+  if [ "$SAFE_EXIT" -ne 0 ] || [ "$FAILED" -gt 0 ]; then
+    curl -sf -d "deep checks: $PASSED/$TOTAL passed, $FAILED failed" "$BETTERSTACK_HB_DAILY/fail" > /dev/null 2>&1 || true
+  else
+    curl -sf "$BETTERSTACK_HB_DAILY" > /dev/null 2>&1 || true
+  fi
+fi
+
 if [ "$SAFE_EXIT" -ne 0 ] || [ "$FAILED" -gt 0 ]; then
   exit 1
 fi
