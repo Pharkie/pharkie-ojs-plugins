@@ -16,7 +16,7 @@ Add to `wordpress/composer.json`:
 Then run `composer update` inside the WP container:
 
 ```bash
-ssh your-server "cd /opt/wp-ojs-sync && \
+ssh your-server "cd /opt/pharkie-ojs-plugins && \
   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
   exec wp composer update --no-dev --working-dir=/var/www/html"
 ```

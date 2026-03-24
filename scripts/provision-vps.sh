@@ -24,7 +24,7 @@ else
 fi
 
 # --- App directory ---
-mkdir -p /opt/wp-ojs-sync
-echo "[ok] /opt/wp-ojs-sync ready."
+mkdir -p /opt/pharkie-ojs-plugins
+echo "[ok] /opt/pharkie-ojs-plugins ready."
 
 echo "=== Provisioning complete ==="

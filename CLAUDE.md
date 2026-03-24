@@ -100,5 +100,5 @@ Standalone utilities:
 4. Copy into the live OJS container:
    ```
    scp /tmp/galley-update.html root@$SERVER_IP:/tmp/
-   ssh root@$SERVER_IP "cd /opt/wp-ojs-sync && docker compose cp /tmp/galley-update.html ojs:/var/www/files/<path-from-step-2>"
+   ssh root@$SERVER_IP "cd /opt/pharkie-ojs-plugins && docker compose cp /tmp/galley-update.html ojs:/var/www/files/<path-from-step-2>"
    ```

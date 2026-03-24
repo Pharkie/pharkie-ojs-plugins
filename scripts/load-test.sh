@@ -24,7 +24,7 @@ for arg in "$@"; do
   esac
 done
 
-REMOTE_DIR="/opt/wp-ojs-sync"
+REMOTE_DIR="/opt/pharkie-ojs-plugins"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 source "$SCRIPT_DIR/lib/resolve-ssh.sh"

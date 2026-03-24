@@ -35,7 +35,7 @@ fi
 if [ -n "$HOST" ]; then
   source "$PROJECT_DIR/scripts/lib/resolve-ssh.sh"
   resolve_ssh "$HOST"
-  REMOTE_DIR="/opt/wp-ojs-sync"
+  REMOTE_DIR="/opt/pharkie-ojs-plugins"
   # SSH mode: base64-encode SQL to avoid escaping hell, decode inside container.
   run_db() {
     local b64

@@ -140,13 +140,13 @@ SSH to the VPS uses hcloud to resolve the IP at runtime — no SSH config needed
 source scripts/lib/resolve-ssh.sh && resolve_ssh "<your-server>"
 
 # Push code to the VPS (the normal workflow)
-$SSH_CMD "cd /opt/wp-ojs-sync && git pull"
+$SSH_CMD "cd /opt/pharkie-ojs-plugins && git pull"
 ```
 
 If PHP opcache is serving stale code (rare), restart the containers:
 
 ```bash
-$SSH_CMD "cd /opt/wp-ojs-sync && git pull && \
+$SSH_CMD "cd /opt/pharkie-ojs-plugins && git pull && \
   docker compose -f docker-compose.yml -f docker-compose.staging.yml restart wp ojs"
 ```
 
@@ -184,7 +184,7 @@ When you have domains pointing at the server:
 3. Open ports 80 and 443 in the server firewall
 4. Start with the Caddy overlay:
    ```bash
-   ssh your-server "cd /opt/wp-ojs-sync && \
+   ssh your-server "cd /opt/pharkie-ojs-plugins && \
      docker compose -f docker-compose.yml \
        -f docker-compose.staging.yml \
        -f docker-compose.caddy.yml up -d"

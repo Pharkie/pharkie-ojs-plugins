@@ -16,7 +16,7 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-REMOTE_DIR="/opt/wp-ojs-sync"
+REMOTE_DIR="/opt/pharkie-ojs-plugins"
 
 # --- Parse arguments ---
 SSH_HOST="sea-staging"

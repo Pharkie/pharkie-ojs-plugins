@@ -38,7 +38,7 @@ for arg in "$@"; do
 done
 
 REMOTE_BACKUP_DIR="/opt/backups/ojs"
-REMOTE_PROJECT_DIR="/opt/wp-ojs-sync"
+REMOTE_PROJECT_DIR="/opt/pharkie-ojs-plugins"
 CRON_SCHEDULE="0 3 * * *"
 CRON_CMD="$REMOTE_PROJECT_DIR/scripts/backup-ojs-db.sh >> $REMOTE_BACKUP_DIR/backup.log 2>&1"
 

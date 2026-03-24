@@ -43,8 +43,8 @@ for arg in "$@"; do
   esac
 done
 
-REMOTE_DIR="/opt/wp-ojs-sync"
-REPO_URL="https://github.com/Pharkie/wp-ojs-sync.git"
+REMOTE_DIR="/opt/pharkie-ojs-plugins"
+REPO_URL="https://github.com/Pharkie/pharkie-ojs-plugins.git"
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 if [ -n "$SSL" ]; then
   COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.caddy.yml"
@@ -65,7 +65,7 @@ phase_time() {
 echo "=== Deploying to $SSH_HOST (ref: $GIT_REF) ==="
 
 # --- Deploy lock ---
-LOCK_FILE="/tmp/wp-ojs-sync-deploy.lock"
+LOCK_FILE="/tmp/pharkie-ojs-plugins-deploy.lock"
 LOCK_INFO=$($SSH_CMD "
   if [ -f $LOCK_FILE ]; then
     lock_age=\$(( \$(date +%s) - \$(stat -c %Y $LOCK_FILE 2>/dev/null || echo 0) ))
@@ -269,7 +269,7 @@ $SSH_CMD "
     echo '[ok] Backup cron already installed.'
   elif [ -f $REMOTE_DIR/scripts/backup-ojs-db.sh ]; then
     mkdir -p /opt/backups/ojs/daily /opt/backups/ojs/weekly
-    (crontab -l 2>/dev/null; echo '0 3 * * * /opt/wp-ojs-sync/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | crontab -
+    (crontab -l 2>/dev/null; echo '0 3 * * * /opt/pharkie-ojs-plugins/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | crontab -
     echo '[ok] Backup cron installed (daily 03:00 UTC).'
   else
     echo '[skip] backup-ojs-db.sh not found, skipping cron.'
