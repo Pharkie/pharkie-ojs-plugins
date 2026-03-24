@@ -29,7 +29,7 @@ Docker-in-Docker in the devcontainer requires the host path for `--project-direc
 
 ## Secrets management
 
-Private docs and env files live in a **separate private GitHub repo**, cloned into `docs/private/` (which is gitignored in the public repo). The devcontainer `postCreateCommand` auto-clones it on rebuild.
+Private docs and env files live in a **separate private GitHub repo**, cloned into `private/` (which is gitignored in the public repo). The devcontainer `postCreateCommand` auto-clones it on rebuild.
 
 ### What's in the private repo
 
@@ -42,7 +42,7 @@ Private docs and env files live in a **separate private GitHub repo**, cloned in
 
 `.env.live` and `.env.staging` are encrypted with [SOPS](https://github.com/getsops/sops) using [age](https://github.com/FiloSottile/age) as the backend. The files are JSON on disk (not plaintext key=value). You cannot `cat` them and read values — you must use `sops` to decrypt.
 
-- **Encryption key**: age keypair. Public key in `docs/private/.sops.yaml`. Private key at `~/.config/sops/age/keys.txt` (bind-mounted from host into devcontainer).
+- **Encryption key**: age keypair. Public key in `private/.sops.yaml`. Private key at `~/.config/sops/age/keys.txt` (bind-mounted from host into devcontainer).
 - **SOPS auto-discovers the age key** from `~/.config/sops/age/keys.txt` — no env vars needed.
 - **If the age key is missing**, sops commands will fail with `could not decrypt`. The key must exist on the host machine at `~/.config/sops/age/` before the devcontainer is built.
 
@@ -50,50 +50,50 @@ Private docs and env files live in a **separate private GitHub repo**, cloned in
 
 ```bash
 # Read a value from encrypted env file
-sops -d docs/private/.env.live | grep OJS_ADMIN_PASSWORD
+sops -d private/.env.live | grep OJS_ADMIN_PASSWORD
 
 # Edit secrets (decrypts in $EDITOR, re-encrypts on save)
-sops docs/private/.env.live
+sops private/.env.live
 
 # Deploy (deploy.sh auto-detects SOPS and decrypts before SCP)
 scripts/deploy.sh --host=<your-server> --ssl --env-file=.env.live
 
 # Decrypt to a temp file (for manual inspection)
-sops -d docs/private/.env.live > /tmp/.env.live
+sops -d private/.env.live > /tmp/.env.live
 # ... inspect ...
 rm /tmp/.env.live
 
 # Commit changes to the private repo (it's a separate git repo!)
-cd docs/private && git add -A && git commit -m "Update env" && git push
+cd private && git add -A && git commit -m "Update env" && git push
 ```
 
 ### Important: two git repos
 
-`docs/private/` is its own git repo (cloned from your private GitHub repo). It is NOT part of the public repo. To commit changes to private docs or env files:
+`private/` is its own git repo (cloned from your private GitHub repo). It is NOT part of the public repo. To commit changes to private docs or env files:
 
 ```bash
-cd docs/private
+cd private
 git add -A && git commit -m "description" && git push
 cd /workspaces/pharkie-ojs-plugins  # back to public repo
 ```
 
-Running `git add` from the public repo root will NOT stage anything inside `docs/private/` — it's gitignored and has its own `.git/`.
+Running `git add` from the public repo root will NOT stage anything inside `private/` — it's gitignored and has its own `.git/`.
 
 ### Symlinks
 
-`.env.live` and `.env.staging` at the repo root are **symlinks** to `docs/private/.env.live` and `docs/private/.env.staging`. This lets `deploy.sh --env-file=.env.live` work without knowing about the private repo. The symlinks point to encrypted files — deploy.sh detects SOPS format and auto-decrypts.
+`.env.live` and `.env.staging` at the repo root are **symlinks** to `private/.env.live` and `private/.env.staging`. This lets `deploy.sh --env-file=.env.live` work without knowing about the private repo. The symlinks point to encrypted files — deploy.sh detects SOPS format and auto-decrypts.
 
 ### First-time setup (new machine / fresh devcontainer)
 
-If `docs/private/` is missing or `~/.config/sops/age/keys.txt` doesn't exist:
+If `private/` is missing or `~/.config/sops/age/keys.txt` doesn't exist:
 
 ```bash
 # 1. Clone private repo (if not auto-cloned by postCreateCommand)
-gh repo clone <your-org>/<private-repo> docs/private
+gh repo clone <your-org>/<private-repo> private
 
 # 2. Create symlinks
-ln -sf docs/private/.env.live .env.live
-ln -sf docs/private/.env.staging .env.staging
+ln -sf private/.env.live .env.live
+ln -sf private/.env.staging .env.staging
 
 # 3. Age key — get from password manager, save to:
 mkdir -p ~/.config/sops/age
@@ -101,5 +101,5 @@ mkdir -p ~/.config/sops/age
 #   ~/.config/sops/age/keys.txt
 
 # 4. Verify
-sops -d docs/private/.env.live | head -3
+sops -d private/.env.live | head -3
 ```

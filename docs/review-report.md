@@ -53,7 +53,7 @@ as_schedule_single_action( time(), 'wpojs_sync_password_change', array( array(
 ### I1. Password sync feature undocumented in plan.md
 
 **Agent:** Documentation
-**Files:** `docs/private/plan.md` lines 85-97, 127, 134-143
+**Files:** `private/plan.md` lines 85-97, 127, 134-143
 
 Three gaps from the recently-added password sync feature:
 1. **Missing endpoint:** `PUT /users/{userId}/password` absent from endpoint spec table
@@ -65,7 +65,7 @@ Three gaps from the recently-added password sync feature:
 ### I2. Test count outdated (56 → 61)
 
 **Agent:** Documentation
-**Files:** `docs/private/plan.md:447`, `TODO.md:80`
+**Files:** `private/plan.md:447`, `TODO.md:80`
 
 Documentation says "56 tests across 15 spec files" but actual count is 61 tests (password-sync and other additions).
 
@@ -144,7 +144,7 @@ The smoke test only tests the create path. It doesn't verify:
 
 ### M3. Admin alert specification lacks detail
 **Agent:** Documentation
-**File:** `docs/private/plan.md:67-71`
+**File:** `private/plan.md:67-71`
 **Fix:** Document which HTTP codes trigger permanent failures, email template, retry exhaustion rules.
 
 ### M4. `usleep(500ms)` workaround in `find_after_fail()`

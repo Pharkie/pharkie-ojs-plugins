@@ -206,10 +206,10 @@ else
 fi
 
 # Sync editorial roles mapping
-ROLES_FILE="$PROJECT_DIR/docs/private/editorial-roles.json"
+ROLES_FILE="$PROJECT_DIR/private/editorial-roles.json"
 if [ -f "$ROLES_FILE" ]; then
-  $SSH_CMD "mkdir -p '$REMOTE_DIR/docs/private'"
-  rsync -az -e "$RSYNC_SSH" "$ROLES_FILE" "$SCP_HOST:$REMOTE_DIR/docs/private/editorial-roles.json"
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/private'"
+  rsync -az -e "$RSYNC_SSH" "$ROLES_FILE" "$SCP_HOST:$REMOTE_DIR/private/editorial-roles.json"
   echo "[ok] Editorial roles synced."
 else
   echo "[skip] No editorial-roles.json found locally."

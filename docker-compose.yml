@@ -132,7 +132,7 @@ services:
       # If files don't exist, setup-ojs.sh skips sample import gracefully.
       - "./backfill/output/35.2/import.xml:/data/sample-issues/35.2.xml:ro"
       - "./backfill/output/36.1/import.xml:/data/sample-issues/36.1.xml:ro"
-      - "./docs/private/editorial-roles.json:/data/editorial-roles.json:ro"
+      - "./private/editorial-roles.json:/data/editorial-roles.json:ro"
     depends_on:
       ojs-db:
         condition: service_healthy
