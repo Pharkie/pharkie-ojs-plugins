@@ -1261,34 +1261,58 @@ if [ "$HEALTH_FAIL" = "1" ]; then
   exit 1
 fi
 
-# --- QA test user (non-member reader for manual testing) ---
-QA_EMAIL="${OJS_QA_USER_EMAIL:-}"
-QA_PASSWORD="${OJS_QA_USER_PASSWORD:-}"
-if [ -n "$QA_EMAIL" ] && [ -n "$QA_PASSWORD" ]; then
-  QA_USERNAME=$(echo "$QA_EMAIL" | sed 's/@.*//' | tr -cd 'a-z0-9' | head -c 30)
-  QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' OR username='$QA_USERNAME' LIMIT 1")
+# --- QA test users (for manual testing and Playwright) ---
+# Creates two users: qausernosub (non-subscriber) and qausersub (subscriber).
+# Both use TEST_OJS_PASSWORD. Stable across rebuilds.
+
+_create_qa_user() {
+  local QA_USERNAME="$1"
+  local QA_EMAIL="$2"
+  local QA_GIVEN="$3"
+  local QA_FAMILY="$4"
+  local QA_PASSWORD="$5"
+  local QA_SUBSCRIBE="$6"  # "yes" or ""
+
+  if [ -z "$QA_PASSWORD" ]; then return; fi
+
+  local QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$QA_USERNAME' LIMIT 1")
+  local QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
+
   if [ -z "$QA_EXISTS" ]; then
-    QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
     $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled, date_validated)
       VALUES ('$QA_USERNAME', '$QA_HASH', '$QA_EMAIL', NOW(), 0, 0, NOW());"
-    QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE email='$QA_EMAIL' LIMIT 1")
+    QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$QA_USERNAME' LIMIT 1")
     $MARIADB -e "INSERT INTO user_settings (user_id, setting_name, setting_value, locale) VALUES
-      ($QA_EXISTS, 'givenName', 'QA', 'en'),
-      ($QA_EXISTS, 'familyName', 'Tester', 'en')
+      ($QA_EXISTS, 'givenName', '$QA_GIVEN', 'en'),
+      ($QA_EXISTS, 'familyName', '$QA_FAMILY', 'en')
       ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
-    # Assign Reader role
-    READER_GROUP=$($MARIADB -N -e "SELECT user_group_id FROM user_groups WHERE role_id=1048576 AND context_id=$JOURNAL_ID LIMIT 1")
+    local READER_GROUP=$($MARIADB -N -e "SELECT user_group_id FROM user_groups WHERE role_id=1048576 AND context_id=$JOURNAL_ID LIMIT 1")
     if [ -n "$READER_GROUP" ]; then
       $MARIADB -e "INSERT IGNORE INTO user_user_groups (user_group_id, user_id, masthead) VALUES ($READER_GROUP, $QA_EXISTS, 0);"
     fi
-    echo "[OJS] QA test user created: $QA_EMAIL"
+    echo "[OJS] QA user created: $QA_USERNAME ($QA_EMAIL)"
   else
-    # Update password in case it changed
-    QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
     $MARIADB -e "UPDATE users SET password='$QA_HASH', must_change_password=0 WHERE user_id=$QA_EXISTS;"
-    echo "[OJS] QA test user exists: $QA_EMAIL (password updated)"
+    echo "[OJS] QA user exists: $QA_USERNAME (password updated)"
   fi
-fi
+
+  if [ "$QA_SUBSCRIBE" = "yes" ]; then
+    local SUB_TYPE=$($MARIADB -N -e "SELECT type_id FROM subscription_types WHERE journal_id=$JOURNAL_ID LIMIT 1")
+    if [ -n "$SUB_TYPE" ]; then
+      local SUB_EXISTS=$($MARIADB -N -e "SELECT subscription_id FROM subscriptions WHERE user_id=$QA_EXISTS LIMIT 1")
+      if [ -z "$SUB_EXISTS" ]; then
+        $MARIADB -e "INSERT INTO subscriptions (journal_id, user_id, type_id, date_start, date_end, status)
+          VALUES ($JOURNAL_ID, $QA_EXISTS, $SUB_TYPE, '2025-01-01', '2099-12-31', 1);"
+        echo "[OJS]   + Active subscription (until 2099)"
+      else
+        $MARIADB -e "UPDATE subscriptions SET status=1, date_end='2099-12-31' WHERE subscription_id=$SUB_EXISTS;"
+      fi
+    fi
+  fi
+}
+
+_create_qa_user "qausernosub" "qausernosub@example.com" "QA" "NoSub" "${QA_NOSUB_PASSWORD:-}" ""
+_create_qa_user "qausersub" "qausersub@example.com" "QA" "Subscriber" "${QA_SUB_PASSWORD:-}" "yes"
 
 echo ""
 echo "[OJS] [ok] OJS setup complete and healthy."
