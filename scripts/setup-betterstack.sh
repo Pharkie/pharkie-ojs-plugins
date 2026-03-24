@@ -48,8 +48,21 @@ OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
 
+# Better Stack monitors must use publicly reachable URLs.
+# WP_HOME may be an internal Docker address — derive public URL from Caddy config.
+CADDY_WP=$($SSH_CMD "grep '^CADDY_WP_DOMAIN=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
+if [ -n "$CADDY_WP" ]; then
+  WP_PUBLIC_URL="https://$CADDY_WP"
+elif echo "$WP_HOME" | grep -qE '^https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|localhost|127\.|.*:[0-9]{4,})'; then
+  echo "ERROR: WP_HOME ($WP_HOME) is internal and CADDY_WP_DOMAIN is not set."
+  echo "       Better Stack needs a public URL. Set CADDY_WP_DOMAIN in .env on the server."
+  exit 1
+else
+  WP_PUBLIC_URL="$WP_HOME"
+fi
+
 echo "=== Better Stack Monitor Setup ==="
-echo "    WP:  $WP_HOME"
+echo "    WP:  $WP_PUBLIC_URL"
 echo "    OJS: $OJS_BASE_URL"
 echo "    Server IP: $SERVER_IP"
 echo ""
@@ -163,7 +176,7 @@ echo ""
 create_monitor "SEA: WP Homepage" "$(cat <<EOF
 {
   "monitor_type": "status",
-  "url": "$WP_HOME",
+  "url": "$WP_PUBLIC_URL",
   "pronounceable_name": "SEA: WP Homepage",
   "check_frequency": $FREQ,
   "request_timeout": 15,
@@ -177,7 +190,7 @@ EOF
 create_monitor "SEA: WP REST API" "$(cat <<EOF
 {
   "monitor_type": "status",
-  "url": "$WP_HOME/wp-json/",
+  "url": "$WP_PUBLIC_URL/wp-json/",
   "pronounceable_name": "SEA: WP REST API",
   "check_frequency": $FREQ,
   "request_timeout": 15,
@@ -191,7 +204,7 @@ EOF
 create_monitor "SEA: WP Admin" "$(cat <<EOF
 {
   "monitor_type": "status",
-  "url": "$WP_HOME/wp/wp-admin/",
+  "url": "$WP_PUBLIC_URL/wp/wp-admin/",
   "pronounceable_name": "SEA: WP Admin",
   "check_frequency": $FREQ,
   "request_timeout": 15,
