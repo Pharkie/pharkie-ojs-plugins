@@ -28,10 +28,21 @@ SAFE_EXIT=$?
 
 # Re-establish SSH connection and env vars for deep checks
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 
 source "$SCRIPT_DIR/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
+
+# Auto-detect compose config from running containers
+COMPOSE_FILES=$($SSH_CMD "docker inspect --format='{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' \$(docker ps -q --filter 'label=com.docker.compose.project=pharkie-ojs-plugins' | head -1) 2>/dev/null") || COMPOSE_FILES=""
+if [ -n "$COMPOSE_FILES" ]; then
+  COMPOSE="docker compose"
+  IFS=',' read -ra FILES <<< "$COMPOSE_FILES"
+  for f in "${FILES[@]}"; do
+    COMPOSE="$COMPOSE -f $(basename "$f")"
+  done
+else
+  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+fi
 
 WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
