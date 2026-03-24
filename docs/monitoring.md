@@ -185,6 +185,26 @@ Add a check section in `scripts/monitor-deep.sh` (same pattern).
 ### To Playwright checks
 Add a test in `e2e/tests/monitoring/live-readonly.spec.ts`. **Constraint**: must be read-only — no form submissions, no user creation, no state modification.
 
+## Why not do everything in Better Stack?
+
+Evaluated March 2026. Better Stack has a Playwright monitor type and could theoretically replace the GitHub Actions browser checks, but **30 of 41 checks require SSH access to the server** (WP-CLI commands, Docker container inspection, database queries, backup verification, sync round-trips, server resource checks). Better Stack can only do external HTTP/keyword checks — it can't SSH into infrastructure.
+
+| Capability | Better Stack (free) | Better Stack (paid) | GitHub Actions |
+|------------|-------------------|-------------------|----------------|
+| HTTP ping / keyword | Yes (9 monitors) | Yes | Yes |
+| SSL expiry alerts | Yes | Yes | No |
+| Status page | Yes | Yes | No |
+| Playwright browser tests | No | $1/100 exec minutes | Yes (free tier) |
+| SSH into server | No | No | **Yes** |
+| WP-CLI / Docker checks | No | No | **Yes** |
+| Sync round-trip test | No | No | **Yes** |
+| Backup verification | No | No | **Yes** |
+| Server resource checks | No | No | **Yes** |
+
+**Decision**: Use both. Better Stack free tier for fast external pings (3-min interval, status page, SSL). GitHub Actions for everything that needs server access. Moving the 10 Playwright tests to Better Stack would cost ~$0.10–$2.40/month depending on frequency, but GitHub Actions runs them for free within the 2,000 min/month private repo allowance. Not worth the complexity of splitting browser tests across two systems for negligible benefit.
+
+**Revisit if**: GitHub Actions free minutes become insufficient, or we need sub-hourly deep checks, or Better Stack adds SSH/agent-based monitoring.
+
 ## GitHub Actions minutes budget
 
 | Workflow | Frequency | Per run | Monthly |
