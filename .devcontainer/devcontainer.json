@@ -32,7 +32,7 @@
     "HOST_PROJECT_DIR": "${localWorkspaceFolder}"
   },
 
-  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && sudo chown vscode:vscode node_modules /home/vscode/.cache /home/vscode/.cache/ms-playwright && npm install && npx playwright install chromium && pipx install ggshield && bash setup-hooks.sh && (gh repo clone Pharkie/ojs-sea-private docs/private 2>/dev/null && [ -f docs/private/.env.live ] && ln -sf docs/private/.env.live .env.live && [ -f docs/private/.env.staging ] && ln -sf docs/private/.env.staging .env.staging || echo 'Private repo not available (no gh auth?)')",
+  "postCreateCommand": "sudo groupadd -f docker && sudo usermod -aG docker vscode && sudo chown vscode:vscode node_modules /home/vscode/.cache /home/vscode/.cache/ms-playwright && npm install && npx playwright install chromium && pipx install ggshield && bash setup-hooks.sh && (gh repo clone Pharkie/sea-ojs-private private 2>/dev/null && [ -f private/.env.live ] && ln -sf private/.env.live .env.live && [ -f private/.env.staging ] && ln -sf private/.env.staging .env.staging || echo 'Private repo not available (no gh auth?)')",
   // Start socat port forwarders on every devcontainer start (DinD can't use
   // compose port mappings — socat bridges localhost to Docker network hostnames).
   // Silenced: services may not be running yet; rebuild-dev.sh re-runs this anyway.

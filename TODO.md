@@ -1,6 +1,6 @@
 # Roadmap
 
-Deployment-specific roadmap (milestones, server details, sync status) lives in `docs/private/TODO.md`.
+Deployment-specific roadmap (milestones, server details, sync status) lives in `private/TODO.md`.
 
 ## Getting started (new deployment)
 

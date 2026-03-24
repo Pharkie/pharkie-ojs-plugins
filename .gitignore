@@ -7,8 +7,8 @@
 # Test lockfile
 .playwright-lock
 
-# Private docs + env files (cloned from Pharkie/ojs-sea-private)
-docs/private/
+# Private repo (cloned from Pharkie/sea-ojs-private)
+private/
 
 # Environment
 .env

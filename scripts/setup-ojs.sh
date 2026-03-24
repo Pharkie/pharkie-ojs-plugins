@@ -435,7 +435,7 @@ $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, set
 echo "[OJS] User registration enabled."
 
 # --- Editorial team metadata ---
-# User accounts + roles are assigned by scripts/assign-roles.sh (reads docs/private/editorial-roles.json).
+# User accounts + roles are assigned by scripts/assign-roles.sh (reads private/editorial-roles.json).
 # This section only configures journal-level metadata: masthead setting, static HTML, contact info.
 echo "[OJS] Setting up editorial team..."
 

@@ -177,4 +177,4 @@ When setting page boundaries for book reviews, watch for:
 
 ## Journal-specific lessons learned
 
-See `docs/private/backfill-lessons-learned.md` for patterns discovered during the EA backfill audit (68 issues). That file covers systematic errors, red flags, back matter rules, and verification checklists specific to Existential Analysis.
+See `private/backfill-lessons-learned.md` for patterns discovered during the EA backfill audit (68 issues). That file covers systematic errors, red flags, back matter rules, and verification checklists specific to Existential Analysis.

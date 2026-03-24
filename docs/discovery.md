@@ -77,7 +77,7 @@ The initial idea behind Push-sync was simple: WP calls OJS REST API to create su
 
 However: OJS has complete internal PHP classes for subscription CRUD (`IndividualSubscriptionDAO`). They just have no HTTP interface. **The fix is a small OJS plugin that exposes these classes as REST endpoints.** This keeps the spirit of Push-sync intact — the WP side is the same, the fix requires building the OJS receiving end as a custom plugin.
 
-See `docs/private/phase0-findings.md` for full API research (private repo).
+See `private/phase0-findings.md` for full API research (private repo).
 
 ---
 

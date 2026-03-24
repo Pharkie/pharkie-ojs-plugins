@@ -10,12 +10,12 @@ Automated monitoring for the live OJS journal and WP membership site, using thre
 │  Status page: https://uptime.betterstack.com/...     │
 └──────────────────────────────────────────────────────┘
 
-┌─ GitHub Actions (hourly, ojs-sea-private repo) ──────┐
+┌─ GitHub Actions (hourly, sea-ojs-private repo) ──────┐
 │  SSH → monitor-safe.sh: API checks, plugin status,   │
 │  Stripe, server resources, container health           │
 └──────────────────────────────────────────────────────┘
 
-┌─ GitHub Actions (daily, ojs-sea-private repo) ───────┐
+┌─ GitHub Actions (daily, sea-ojs-private repo) ───────┐
 │  SSH → monitor-deep.sh: sync round-trip, backups,     │
 │  search index, reconciliation, DB sizes               │
 │  Playwright → live-readonly.spec.ts: browser checks   │
@@ -68,7 +68,7 @@ The script is idempotent — running it twice won't create duplicates.
 
 ## Tier 2: GitHub Actions hourly checks
 
-**Workflow**: `ojs-sea-private/.github/workflows/monitor-hourly.yml`
+**Workflow**: `sea-ojs-private/.github/workflows/monitor-hourly.yml`
 **Script**: `scripts/monitor-safe.sh`
 
 Runs via SSH — non-mutating, safe to run frequently.
@@ -110,12 +110,12 @@ Runs via SSH — non-mutating, safe to run frequently.
 scripts/monitor-safe.sh --host=sea-live
 
 # Trigger on GitHub
-gh workflow run monitor-hourly.yml -R Pharkie/ojs-sea-private
+gh workflow run monitor-hourly.yml -R Pharkie/sea-ojs-private
 ```
 
 ## Tier 3: GitHub Actions daily deep checks
 
-**Workflow**: `ojs-sea-private/.github/workflows/monitor-daily.yml`
+**Workflow**: `sea-ojs-private/.github/workflows/monitor-daily.yml`
 **Script**: `scripts/monitor-deep.sh` + `e2e/tests/monitoring/live-readonly.spec.ts`
 
 ### What's checked (in addition to all hourly checks)
@@ -154,7 +154,7 @@ LIVE_OJS_URL=https://journal.existentialanalysis.org.uk \
   npx playwright test --config=playwright.monitor.config.ts
 
 # Trigger on GitHub
-gh workflow run monitor-daily.yml -R Pharkie/ojs-sea-private
+gh workflow run monitor-daily.yml -R Pharkie/sea-ojs-private
 ```
 
 ## Alerts
@@ -195,7 +195,7 @@ Add a test in `e2e/tests/monitoring/live-readonly.spec.ts`. **Constraint**: must
 
 Free tier limit: 2,000 min/month for private repos.
 
-## Secrets (ojs-sea-private repo)
+## Secrets (sea-ojs-private repo)
 
 | Secret | Description |
 |--------|-------------|

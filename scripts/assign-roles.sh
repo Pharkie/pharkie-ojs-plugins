@@ -1,7 +1,7 @@
 #!/bin/bash
 # Assign editorial roles to OJS users from a JSON mapping file.
 #
-# Reads docs/private/editorial-roles.json (bind-mounted to /data/ in container) and for each entry:
+# Reads private/editorial-roles.json (bind-mounted to /data/ in container) and for each entry:
 #   1. Finds user by email (or creates with random password)
 #   2. Assigns specified OJS user group(s)
 #   3. Sets masthead flag for Editorial Masthead page
