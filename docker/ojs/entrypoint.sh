@@ -101,5 +101,15 @@ if [ "$NEEDS_INSTALL" = true ]; then
   ) &
 fi
 
+# Set up scheduled tasks cron (OJS uses cron, not a persistent job worker).
+# The base PKP image has cron commented out in pkp-start; we start it ourselves.
+CRON_LINE="0 * * * *   pkp-run-scheduled"
+if [ -n "$BETTERSTACK_HB_OJS_CRON" ]; then
+  CRON_LINE="$CRON_LINE && curl -sf $BETTERSTACK_HB_OJS_CRON > /dev/null || curl -sf $BETTERSTACK_HB_OJS_CRON/fail > /dev/null"
+fi
+echo "$CRON_LINE" | crontab -
+cron
+echo "[OJS] Cron started: $(crontab -l)"
+
 # Hand off to PKP's own startup (generates SSL certs, starts Apache)
 exec /usr/local/bin/pkp-start
