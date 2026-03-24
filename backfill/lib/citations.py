@@ -427,9 +427,12 @@ def is_author_bio(text: str) -> bool:
     has_bio_phrase = any(phrase in text for phrase in bio_phrases)
 
     bio_patterns = [
-        r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',
-        r'^[A-Z]+\s+(?:van|de|von)\s+[A-Z\-]+\s+(is|was|has)\s',
-        r'^[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+(\s+[A-Z][a-zà-ü]+)?\s+(is|was|has)\s',
+        r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
+        r'^[A-Z]+\s+(?:van|de|von)\s+[A-Z\-]+\s+(is|was|has)\s',  # ALL CAPS + prefix
+        # Mixed case name (with optional prefix: van, de, du, von):
+        r'^[A-Z][a-zà-ü]+\s+(?:(?:van|de|du|von|le|la)\s+)?[A-Z][a-zà-ü]+(?:-[A-Z][a-zà-ü]+)?(?:\s+[A-Z][a-zà-ü]+)?\s+(is|was|has)\s',
+        # Name + credentials + "is": "Bo Jacobsen, dr. phil., Ph.D., is..." / "Hans W. Cohn, PhD, is..."
+        r'^[A-Z][a-zà-ü]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-zà-ü]+.*?(?:PhD|Ph\.D\.|dr\.\s*phil|MSc|MA|UKCP|BPS|BACP).*?\b(is|was|has)\s',
         r'^All (three|four|five|six) authors',
         r'^(Dr\.?|Professor)\s+[A-Z][a-z]',
         r'^[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+\s+(PhD|MA|MSc|UKCP|BPS)',
@@ -438,8 +441,16 @@ def is_author_bio(text: str) -> bool:
     if any(re.match(p, text) for p in bio_patterns):
         return True
 
-    if has_bio_phrase and re.match(r'^[A-Z][a-zà-ü]+\s', text) and len(text) > 50:
-        if not re.search(r'\(\d{4}\)', text[:80]):
+    # Bio phrase near start + starts with person's name (not just any word)
+    # Must be: Name Name (is|was|has) — the name patterns above catch the strict cases,
+    # this catches softer ones like "Dr John Smith is a practitioner in private practice"
+    if has_bio_phrase and len(text) > 50:
+        # Must start with a plausible person name (2+ capitalised words)
+        starts_with_name = bool(re.match(
+            r'^(?:Dr\.?\s+|Professor\s+)?[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]', text))
+        # Bio phrase must appear in first 150 chars (not buried deep in prose)
+        early_bio = any(phrase in text[:150] for phrase in bio_phrases)
+        if starts_with_name and early_bio and not re.search(r'\(\d{4}\)', text[:80]):
             return True
 
     return False

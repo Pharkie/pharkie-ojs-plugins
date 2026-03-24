@@ -72,11 +72,11 @@ def extract_from_jats(jats_path: Path) -> dict:
 
         for item in sec['items']:
             if is_junk(item):
-                # Classify filtered items
-                if is_author_bio(item):
-                    bios.append(item)
-                elif is_provenance(item):
+                # Classify filtered items (provenance before bio — more specific)
+                if is_provenance(item):
                     provenance_items.append(item)
+                elif is_author_bio(item):
+                    bios.append(item)
                 else:
                     note_items.append(item)
                 continue
