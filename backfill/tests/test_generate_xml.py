@@ -303,7 +303,12 @@ class TestDoiLookup:
         assert lookup_doi(reg, 'Book Review: An existential psychoanalyst', '37', '1') == '10.65828/eee'
 
     def test_real_registry_loads(self):
-        """Verify the actual doi-registry.json loads without errors."""
+        """Verify doi-registry.json loads without errors (skipped if file not present)."""
+        import os
+        registry_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'doi-registry.json')
+        if not os.path.exists(registry_path):
+            import pytest
+            pytest.skip("doi-registry.json not present (lives in private data repo)")
         reg = load_doi_registry()
         assert len(reg) > 40  # 41 DOIs + _aliases key
 

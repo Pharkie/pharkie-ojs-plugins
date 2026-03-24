@@ -1076,7 +1076,9 @@ echo "[OJS] Caches cleared, Apache reloaded."
 # --- Sample data (dev/staging only) ---
 if [ "$SAMPLE_DATA" = true ]; then
   IMPORT_DIR="/data/sample-issues"
-  if [ ! -d "$IMPORT_DIR" ] || [ -z "$(ls "$IMPORT_DIR"/*.xml 2>/dev/null)" ]; then
+  # Check for actual XML files (not directories — Docker creates empty dirs for missing bind-mount sources)
+  XML_FILES=$(find "$IMPORT_DIR" -maxdepth 1 -name '*.xml' -type f 2>/dev/null)
+  if [ ! -d "$IMPORT_DIR" ] || [ -z "$XML_FILES" ]; then
     echo "[OJS] WARNING: No sample issue XMLs found in $IMPORT_DIR — skipping content import."
     echo "[OJS] To import: mount backfill/output/*/import.xml files and re-run setup."
   else
