@@ -719,6 +719,24 @@ $MARIADB <<SQL
   VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'inlineHtmlGalley', 'InlineHtmlGalleyPlugin', 1, 0);
 SQL
 
+# Configure inline-html-galley plugin settings (org name, membership URL, messages)
+INLINE_ORG="${OJS_INLINE_ORG_NAME:-${OJS_JOURNAL_ACRONYM:-}}"
+INLINE_MEMBERSHIP_URL="${OJS_INLINE_MEMBERSHIP_URL:-${WPOJS_WP_MEMBER_URL:-}}"
+if [ -n "$INLINE_ORG" ]; then
+  $MARIADB <<SQL
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('inlinehtmlgalleyplugin', $JOURNAL_ID, 'organisationName', '$INLINE_ORG', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$INLINE_ORG';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('inlinehtmlgalleyplugin', $JOURNAL_ID, 'membershipUrl', '$INLINE_MEMBERSHIP_URL', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='$INLINE_MEMBERSHIP_URL';
+    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('inlinehtmlgalleyplugin', $JOURNAL_ID, 'syncedMemberMessage', 'Showing article full text linked to your {orgName} membership. Thanks for your support!', 'string')
+    ON DUPLICATE KEY UPDATE setting_value='Showing article full text linked to your {orgName} membership. Thanks for your support!';
+SQL
+  echo "[OJS] Inline HTML galley configured (org: $INLINE_ORG)."
+fi
+
 # --- UI messages (stored in plugin_settings, not config.inc.php) ---
 # PHP INI files corrupt values containing " and {} (HTML with href="..." and
 # {placeholder}), so we write instance-specific messages directly to the DB.
@@ -1278,7 +1296,7 @@ _create_qa_user() {
   if [ -z "$QA_PASSWORD" ]; then return; fi
 
   local QA_EXISTS=$($MARIADB -N -e "SELECT user_id FROM users WHERE username='$QA_USERNAME' LIMIT 1")
-  local QA_HASH=$(php -r "echo password_hash('$QA_PASSWORD', PASSWORD_BCRYPT, ['cost'=>12]);")
+  local QA_HASH=$(printf '%s' "$QA_PASSWORD" | php -r "echo password_hash(file_get_contents('php://stdin'), PASSWORD_BCRYPT, ['cost'=>12]);")
 
   if [ -z "$QA_EXISTS" ]; then
     $MARIADB -e "INSERT INTO users (username, password, email, date_registered, must_change_password, disabled, date_validated)
