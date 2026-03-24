@@ -14,7 +14,7 @@ function ensureSubscriberUser(): {
 } {
   const email = 'test-subscriber@example.com';
   const username = 'testsubscriber';
-  const password = 'subscriber'; // nosemgrep: generic-password
+  const password = 'TestPass123!';
 
   let userId: number | null = null;
   const existing = ojsQuery(
