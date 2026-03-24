@@ -264,21 +264,29 @@ if [ -n "$JOURNAL_ABBREVIATION" ]; then
     ON DUPLICATE KEY UPDATE setting_value='$JOURNAL_ABBREVIATION';"
 fi
 
-# --- Footer (links + SEA logo, matching live site) ---
-# The live site has two columns of nav links + the SEA logo on the right.
-# Hide the OJS brand image (ojs_brand.png) via CSS — can't modify core templates.
+# Branding source directory (baked into Docker image from docker/ojs/branding/)
+BRANDING_SRC="/opt/ojs-branding"
+
+# --- Footer (nav links + logo, loaded from template file) ---
+# Hides the OJS brand image (ojs_brand.png) via CSS — can't modify core templates.
+# Template uses {{JPATH}} and {{FOOTER_LOGO_ALT}} placeholders.
 JPATH="${OJS_JOURNAL_PATH:-ea}"
-FOOTER_HTML="<style>.pkp_brand_footer{display:none}</style><div style=\"display:flex;justify-content:space-between;align-items:flex-start;gap:40px;\"><div style=\"display:flex;gap:40px;\"><div><a href=\"/$JPATH/issue/current\">Current</a><br><a href=\"/$JPATH/issue/archive\">Archives</a><br><a href=\"/$JPATH/about\">About</a><br><a href=\"/$JPATH/about/submissions\">Submissions</a></div><div><a href=\"/$JPATH/about/editorialMasthead\">Editorial Masthead</a><br><a href=\"/$JPATH/about/contact\">Contact</a><br><a href=\"/$JPATH/about/privacy\">Privacy Statement</a></div></div><div><img style=\"max-height:80px\" src=\"/public/site/images/sea-logo-footer.png\" alt=\"Society for Existential Analysis\" width=\"200\" height=\"87\"></div></div>"
-$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
-  VALUES ($JOURNAL_ID_META, 'en', 'pageFooter', '$(echo "$FOOTER_HTML" | sed "s/'/''/g")')
-  ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
-echo "[OJS] Footer configured."
+FOOTER_TEMPLATE="$BRANDING_SRC/footer.html"
+if [ -f "$FOOTER_TEMPLATE" ]; then
+  FOOTER_LOGO_ALT="${OJS_FOOTER_LOGO_ALT_TEXT:-}"
+  FOOTER_HTML=$(cat "$FOOTER_TEMPLATE" | sed "s|{{JPATH}}|$JPATH|g" | sed "s|{{FOOTER_LOGO_ALT}}|$FOOTER_LOGO_ALT|g")
+  $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+    VALUES ($JOURNAL_ID_META, 'en', 'pageFooter', '$(echo "$FOOTER_HTML" | sed "s/'/''/g")')
+    ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
+  echo "[OJS] Footer configured."
+else
+  echo "[OJS] No footer template at $FOOTER_TEMPLATE, skipping."
+fi
 
 # --- Branding (logo, favicon, homepage image) ---
 # Images are baked into the Docker image at /opt/ojs-branding/ (from docker/ojs/branding/).
 # This copies them to OJS's public directory and sets the DB metadata so OJS serves them.
 # Idempotent — skips if files already exist.
-BRANDING_SRC="/opt/ojs-branding"
 PUBLIC_DIR="/var/www/html/public/journals/$JOURNAL_ID_META"
 
 if [ -d "$BRANDING_SRC" ] && [ "$(ls -A "$BRANDING_SRC" 2>/dev/null)" ]; then
@@ -323,16 +331,19 @@ if [ -d "$BRANDING_SRC" ] && [ "$(ls -A "$BRANDING_SRC" 2>/dev/null)" ]; then
     echo "[OJS]   $SETTING → $UPLOAD_NAME (${WIDTH}x${HEIGHT})"
   }
 
+  LOGO_ALT="${OJS_LOGO_ALT_TEXT:-}"
+  HOMEPAGE_ALT="${OJS_HOMEPAGE_IMAGE_ALT_TEXT:-}"
+
   install_branding_image "pageHeaderLogoImage" \
     "$BRANDING_SRC/pageHeaderLogoImage_en.png" "pageHeaderLogoImage_en.png" 1173 511 \
-    "Existential Analysis journal logo"
+    "$LOGO_ALT"
 
   install_branding_image "favicon" \
     "$BRANDING_SRC/favicon_en.png" "favicon_en.png" 771 800 ""
 
   install_branding_image "homepageImage" \
     "$BRANDING_SRC/homepageImage_en.png" "homepageImage_en.png" 7175 1880 \
-    "Existential Analysis homepage banner"
+    "$HOMEPAGE_ALT"
 
   echo "[OJS] Branding images applied."
 else
@@ -504,20 +515,27 @@ if [ -f "/opt/ojs-branding/authorGuidelines.html" ]; then
   echo "[OJS]   authorGuidelines set."
 fi
 
-# Contact info (matching live site)
-$MARIADB <<SQL
-  UPDATE journal_settings SET setting_value='Richard Swann'
-    WHERE journal_id=$JOURNAL_ID_META AND setting_name='contactName';
-  UPDATE journal_settings SET setting_value='journal@existentialanalysis.org.uk'
-    WHERE journal_id=$JOURNAL_ID_META AND setting_name='contactEmail';
-  INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
-    VALUES ($JOURNAL_ID_META, 'en', 'contactAffiliation', 'Society for Existential Analysis')
-    ON DUPLICATE KEY UPDATE setting_value='Society for Existential Analysis';
-  UPDATE journal_settings SET setting_value='Richard Swann'
-    WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportName';
-  UPDATE journal_settings SET setting_value='journal@existentialanalysis.org.uk'
-    WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportEmail';
+# Contact info (from env vars — set in .env / docker-compose.yml)
+CONTACT_NAME="${OJS_JOURNAL_CONTACT_NAME:-}"
+CONTACT_EMAIL="${OJS_JOURNAL_CONTACT_EMAIL:-}"
+CONTACT_AFFILIATION="${OJS_JOURNAL_PUBLISHER:-}"
+if [ -n "$CONTACT_NAME" ] && [ -n "$CONTACT_EMAIL" ]; then
+  $MARIADB <<SQL
+    UPDATE journal_settings SET setting_value='$(echo "$CONTACT_NAME" | sed "s/'/''/g")'
+      WHERE journal_id=$JOURNAL_ID_META AND setting_name='contactName';
+    UPDATE journal_settings SET setting_value='$(echo "$CONTACT_EMAIL" | sed "s/'/''/g")'
+      WHERE journal_id=$JOURNAL_ID_META AND setting_name='contactEmail';
+    UPDATE journal_settings SET setting_value='$(echo "$CONTACT_NAME" | sed "s/'/''/g")'
+      WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportName';
+    UPDATE journal_settings SET setting_value='$(echo "$CONTACT_EMAIL" | sed "s/'/''/g")'
+      WHERE journal_id=$JOURNAL_ID_META AND setting_name='supportEmail';
 SQL
+  if [ -n "$CONTACT_AFFILIATION" ]; then
+    $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+      VALUES ($JOURNAL_ID_META, 'en', 'contactAffiliation', '$(echo "$CONTACT_AFFILIATION" | sed "s/'/''/g")')
+      ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);"
+  fi
+fi
 echo "[OJS]   Contact info configured."
 echo "[OJS] Editorial team setup complete."
 
@@ -549,15 +567,18 @@ chown -R www-data:www-data "$SITE_IMG_DIR" 2>/dev/null || true
 # Create block settings using PHP for correct JSON encoding
 # Banner links point to WP community site (env-driven, not hardcoded)
 WP_BANNER_URL="${WPOJS_WP_MEMBER_URL:-http://localhost:8080}"
+BANNER_ALT="${OJS_BANNER_ALT_TEXT:-Events}"
 php -r '
 $pdo = new PDO("mysql:host='"$OJS_DB_HOST"';dbname='"$OJS_DB_NAME"'", "'"$OJS_DB_USER"'", "'"$OJS_DB_PASSWORD"'", [PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false]);
 $ctx = '"$JOURNAL_ID_META"';
 $wpUrl = "'"$WP_BANNER_URL"'";
+$jpath = "'"$JPATH"'";
+$bannerAlt = "'"$BANNER_ALT"'";
 
 $blocks = [
-  "advertisers-link" => "<ul style=\"list-style:none;padding:0;margin:0\"><li><a href=\"/ea/advertisers\">For Advertisers</a></li></ul>",
-  "banner" => "<a href=\"" . $wpUrl . "\"><img src=\"/public/site/images/sea-events-1.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
-  "sea-events-banner" => "<a href=\"" . $wpUrl . "\"><img src=\"/public/site/images/sea-events-2.png\" alt=\"SEA Events\" style=\"max-width:100%\"></a>",
+  "advertisers-link" => "<ul style=\"list-style:none;padding:0;margin:0\"><li><a href=\"/" . $jpath . "/advertisers\">For Advertisers</a></li></ul>",
+  "banner" => "<a href=\"" . $wpUrl . "\"><img src=\"/public/site/images/sea-events-1.png\" alt=\"" . htmlspecialchars($bannerAlt) . "\" style=\"max-width:100%\"></a>",
+  "sea-events-banner" => "<a href=\"" . $wpUrl . "\"><img src=\"/public/site/images/sea-events-2.png\" alt=\"" . htmlspecialchars($bannerAlt) . "\" style=\"max-width:100%\"></a>",
 ];
 
 $stmt = $pdo->prepare("INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
@@ -592,10 +613,14 @@ $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name,
 $MARIADB -e "INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
   VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'staticPages', 'StaticPagesPlugin', 1, 0);"
 
-# Create the advertisers static page
-OJS_DB_HOST="$OJS_DB_HOST" OJS_DB_NAME="$OJS_DB_NAME" OJS_DB_USER="$OJS_DB_USER" \
-OJS_DB_PASSWORD="$OJS_DB_PASSWORD" JOURNAL_ID_META="$JOURNAL_ID_META" \
-php <<'PHPEOF'
+# Create the advertisers static page (loaded from template file if present)
+ADVERTISERS_TEMPLATE="$BRANDING_SRC/advertisers.html"
+if [ -f "$ADVERTISERS_TEMPLATE" ]; then
+  ADVERTISERS_CONTENT=$(cat "$ADVERTISERS_TEMPLATE")
+  OJS_DB_HOST="$OJS_DB_HOST" OJS_DB_NAME="$OJS_DB_NAME" OJS_DB_USER="$OJS_DB_USER" \
+  OJS_DB_PASSWORD="$OJS_DB_PASSWORD" JOURNAL_ID_META="$JOURNAL_ID_META" \
+  ADVERTISERS_CONTENT="$ADVERTISERS_CONTENT" \
+  php <<'PHPEOF'
 <?php
 $pdo = new PDO(
   "mysql:host=" . getenv("OJS_DB_HOST") . ";dbname=" . getenv("OJS_DB_NAME"),
@@ -604,7 +629,6 @@ $pdo = new PDO(
 );
 $ctx = (int) getenv("JOURNAL_ID_META");
 
-// Check if page already exists
 $check = $pdo->prepare("SELECT static_page_id FROM static_pages WHERE path = ? AND context_id = ?");
 $check->execute(["advertisers", $ctx]);
 $pageId = $check->fetchColumn();
@@ -615,63 +639,7 @@ if (!$pageId) {
     $pageId = $pdo->lastInsertId();
 }
 
-$content = <<<'HTML'
-<p>Existential Analysis reaches a specialist readership of psychotherapists, counsellors, psychologists, researchers, supervisors, trainers, and students with an interest in existential and phenomenological approaches to therapy and life.</p>
-
-<p>We accept a limited number of advertising placements that are relevant to our community, including:</p>
-
-<ul>
-<li>Training programmes and CPD events</li>
-<li>Conferences and workshops</li>
-<li>Books and journals</li>
-<li>Clinical services and supervision directories</li>
-<li>Professional organisations and member services</li>
-</ul>
-
-<h2>Advertising options</h2>
-<ul>
-<li>Website placement (sidebar / homepage placement, subject to availability)</li>
-<li>Issue-based placements (e.g., inside-cover or back-page for PDF/print, if applicable)</li>
-<li>Sponsored announcements (clearly labelled)</li>
-</ul>
-
-<h2>Audience and fit</h2>
-<p>We prioritise adverts that are aligned with the journal's ethos and likely to be of genuine interest to readers. We do not accept advertising that is misleading, sensational, or unrelated to the journal's remit.</p>
-
-<h2>Rates and booking</h2>
-<p>Rates depend on placement, duration, and format. To request the current rate card and availability, contact us with:</p>
-<ul>
-<li>What you want to promote</li>
-<li>Preferred dates / issue (if relevant)</li>
-<li>Your website link</li>
-<li>Any artwork you already have (PDF/PNG/JPG)</li>
-</ul>
-
-<h2>Further Information for Issue-based Placements</h2>
-
-<h3>Advertising rates</h3>
-<ul>
-<li>Full page (115mm width x 190mm height) <strong>£80</strong></li>
-<li>Half page (115mm width x 90mm height) <strong>£50</strong></li>
-</ul>
-
-<p><strong>10% discount</strong> when 2 adverts are booked consecutively.</p>
-
-<h3>Submission deadlines</h3>
-<ul>
-<li><strong>1st December</strong> for January issue inclusion</li>
-<li><strong>1st June</strong> for July issue inclusion</li>
-</ul>
-
-<h3>Submission details</h3>
-<ul>
-<li>As a word document</li>
-<li>By email to: <a href="mailto:journal@existentialanalysis.org.uk">journal@existentialanalysis.org.uk</a></li>
-</ul>
-
-<h2>Contact</h2>
-<p>Email: <a href="mailto:journal@existentialanalysis.org.uk">journal@existentialanalysis.org.uk</a></p>
-HTML;
+$content = getenv("ADVERTISERS_CONTENT");
 
 $stmt = $pdo->prepare("INSERT INTO static_page_settings (static_page_id, locale, setting_name, setting_value, setting_type)
   VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
@@ -679,6 +647,9 @@ $stmt->execute([$pageId, "en", "title", "For Advertisers", "string"]);
 $stmt->execute([$pageId, "en", "content", $content, "string"]);
 echo "Static page \"advertisers\" configured (id=$pageId).\n";
 PHPEOF
+else
+  echo "[OJS] No advertisers template at $ADVERTISERS_TEMPLATE, skipping static page."
+fi
 
 echo "[OJS] Static Pages plugin configured."
 
