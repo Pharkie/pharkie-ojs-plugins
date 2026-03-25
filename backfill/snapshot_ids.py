@@ -94,7 +94,19 @@ def snapshot_articles(target: str, issue_filter: str | None = None) -> list[dict
     sql = f"""
         SELECT sub.submission_id, p.publication_id,
                ps_title.setting_value AS title,
-               i.volume, i.number
+               i.volume, i.number,
+               IFNULL(
+                   (SELECT CONCAT(
+                       IFNULL(aset_g.setting_value, ''), ' ',
+                       IFNULL(aset_f.setting_value, ''))
+                    FROM authors a
+                    LEFT JOIN author_settings aset_g ON a.author_id = aset_g.author_id
+                        AND aset_g.setting_name = 'givenname' AND aset_g.locale = 'en'
+                    LEFT JOIN author_settings aset_f ON a.author_id = aset_f.author_id
+                        AND aset_f.setting_name = 'familyname' AND aset_f.locale = 'en'
+                    WHERE a.publication_id = p.publication_id
+                    ORDER BY a.seq LIMIT 1),
+                   '') AS first_author
         FROM publications p
         JOIN submissions sub ON p.submission_id = sub.submission_id
         JOIN issues i ON p.issue_id = i.issue_id
@@ -112,8 +124,10 @@ def snapshot_articles(target: str, issue_filter: str | None = None) -> list[dict
             continue
         parts = line.split('\t')
         if len(parts) >= 5:
+            first_author = parts[5].strip() if len(parts) > 5 else ''
             articles.append({
                 'title': parts[2].strip(),
+                'first_author': first_author,
                 'volume': parts[3].strip(),
                 'issue': parts[4].strip(),
                 'submission_id': int(parts[0]),

@@ -92,32 +92,52 @@ def check_connectivity(target: str) -> bool:
         return False
 
 
-def get_current_articles(target: str, volume: str, number: str) -> dict[str, dict]:
-    """Get current articles for an issue, keyed by normalised title."""
+def get_current_articles(target: str, volume: str, number: str) -> dict[str, list[dict]]:
+    """Get current articles for an issue, keyed by normalised title.
+
+    Returns {title: [list of articles]} to handle duplicate titles within
+    an issue. Each article includes first_author for disambiguation.
+    """
     sql = f"""
         SELECT sub.submission_id, p.publication_id,
-               ps_title.setting_value AS title
+               ps_title.setting_value AS title,
+               IFNULL(
+                   (SELECT CONCAT(
+                       IFNULL(aset_g.setting_value, ''), ' ',
+                       IFNULL(aset_f.setting_value, ''))
+                    FROM authors a
+                    LEFT JOIN author_settings aset_g ON a.author_id = aset_g.author_id
+                        AND aset_g.setting_name = 'givenname' AND aset_g.locale = 'en'
+                    LEFT JOIN author_settings aset_f ON a.author_id = aset_f.author_id
+                        AND aset_f.setting_name = 'familyname' AND aset_f.locale = 'en'
+                    WHERE a.publication_id = p.publication_id
+                    ORDER BY a.seq LIMIT 1),
+                   '') AS first_author
         FROM publications p
         JOIN submissions sub ON p.submission_id = sub.submission_id
         JOIN issues i ON p.issue_id = i.issue_id
             AND i.volume = '{volume}' AND i.number = '{number}'
         JOIN publication_settings ps_title ON p.publication_id = ps_title.publication_id
             AND ps_title.setting_name = 'title' AND ps_title.locale = 'en'
-        WHERE p.status = 3;
+        WHERE p.status = 3
+        ORDER BY p.seq;
     """
     out = run_sql(target, sql)
-    result = {}
+    result: dict[str, list[dict]] = {}
     for line in out.strip().splitlines():
         if not line.strip():
             continue
         parts = line.split('\t')
         if len(parts) >= 3:
             norm = parts[2].strip().lower().strip()
-            result[norm] = {
+            first_author = parts[3].strip() if len(parts) > 3 else ''
+            entry = {
                 'submission_id': int(parts[0]),
                 'publication_id': int(parts[1]),
                 'title': parts[2].strip(),
+                'first_author': first_author,
             }
+            result.setdefault(norm, []).append(entry)
     return result
 
 
@@ -248,16 +268,45 @@ def main():
         for art in arts:
             title_norm = art['title'].lower().strip()
             old_sub_id = art['submission_id']
-            if title_norm in current:
-                new_sub_id = current[title_norm]['submission_id']
-                if new_sub_id != old_sub_id:
-                    submission_remaps.append((old_sub_id, new_sub_id))
-                    matched += 1
-                else:
-                    already_correct += 1
-                    matched += 1
-            else:
+            reg_author = art.get('first_author', '').lower().strip()
+
+            if title_norm not in current:
                 unmatched.append(f'{vol}.{num}: {art["title"][:50]}')
+                continue
+
+            cur_group = current[title_norm]
+            if len(cur_group) == 1:
+                # Unique title — straightforward match
+                match = cur_group[0]
+            else:
+                # Duplicate title — disambiguate by first author
+                match = None
+                for candidate in cur_group:
+                    if candidate.get('_matched'):
+                        continue
+                    cur_author = candidate.get('first_author', '').lower().strip()
+                    if cur_author == reg_author:
+                        match = candidate
+                        break
+                if match is None:
+                    # Author didn't match; fall back to first unmatched
+                    for candidate in cur_group:
+                        if not candidate.get('_matched'):
+                            match = candidate
+                            break
+
+            if match is None:
+                unmatched.append(f'{vol}.{num}: {art["title"][:50]} (all dups consumed)')
+                continue
+
+            match['_matched'] = True
+            new_sub_id = match['submission_id']
+            if new_sub_id != old_sub_id:
+                submission_remaps.append((old_sub_id, new_sub_id))
+                matched += 1
+            else:
+                already_correct += 1
+                matched += 1
 
     # Check for collisions: would an old_id clash with another entry's new_id?
     old_sub_ids = {old for old, _ in submission_remaps}
