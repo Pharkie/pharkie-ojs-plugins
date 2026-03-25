@@ -434,29 +434,57 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
     return lines
 
 
-def _load_jats_references(pdf_path):
-    """Load references from the article's JATS XML file.
+def _load_jats_tree(pdf_path):
+    """Load and parse the JATS XML file for an article.
 
     Looks for {split_pdf_stem}.jats.xml next to the split PDF.
-    Returns a list of raw citation strings, or empty list if no JATS file.
+    Returns an ElementTree or None if no JATS file exists.
     """
     if not pdf_path or not os.path.exists(pdf_path):
-        return []
+        return None
 
     jats_path = os.path.splitext(pdf_path)[0] + '.jats.xml'
     if not os.path.exists(jats_path):
-        return []
+        return None
 
     try:
-        tree = ET.parse(jats_path)
-        refs = []
-        for ref in tree.findall('.//{*}mixed-citation'):
-            text = ref.text
-            if text and text.strip():
-                refs.append(text.strip())
-        return refs
+        return ET.parse(jats_path)
     except ET.ParseError:
+        return None
+
+
+def _load_jats_references(pdf_path):
+    """Load references from the article's JATS XML file.
+
+    Returns a list of raw citation strings, or empty list if no JATS file.
+    """
+    tree = _load_jats_tree(pdf_path)
+    if tree is None:
         return []
+
+    refs = []
+    for ref in tree.findall('.//{*}mixed-citation'):
+        text = ref.text
+        if text and text.strip():
+            refs.append(text.strip())
+    return refs
+
+
+def _load_jats_pages(pdf_path):
+    """Load page numbers from the article's JATS XML file.
+
+    JATS is the single source of truth for article content.
+    Returns (fpage, lpage) as strings, or (None, None) if not found.
+    """
+    tree = _load_jats_tree(pdf_path)
+    if tree is None:
+        return None, None
+
+    fpage_el = tree.find('.//{*}fpage')
+    lpage_el = tree.find('.//{*}lpage')
+    fpage = fpage_el.text.strip() if fpage_el is not None and fpage_el.text else None
+    lpage = lpage_el.text.strip() if lpage_el is not None and lpage_el.text else None
+    return fpage, lpage
 
 
 def load_html_galley(pdf_path):
@@ -626,9 +654,8 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
         if coverage_parts:
             lines.append(f'{i3}<coverage locale="en">{escape("; ".join(coverage_parts))}</coverage>')
 
-    # Pages
-    page_start = article.get('journal_page_start')
-    page_end = article.get('journal_page_end')
+    # Pages — from JATS (single source of truth for article content)
+    page_start, page_end = _load_jats_pages(pdf_path)
     if page_start and page_end:
         lines.append(f'{i3}<pages>{page_start}-{page_end}</pages>')
     elif page_start:
