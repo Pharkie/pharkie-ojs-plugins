@@ -65,10 +65,10 @@ Page numbers: `backfill/add_page_numbers.py` auto-detects printed page numbers f
 
 OJS IDs and DOIs: JATS stores `<article-id pub-id-type="publisher-id">` (OJS submission_id) and `<article-id pub-id-type="doi">`. These are NOT passed to OJS import XML (OJS rejects `advice="update"` on internal IDs). Instead, `restore_ids.py` remaps IDs post-import by reading JATS locally and sending SQL to the target via SSH. Issue-level DOI and ID are in toc.json (`issue_doi`, `issue_id`). To capture IDs from a running OJS instance: `python backfill/snapshot_ids.py --target live`.
 
-Full rebuild (deploy extensive content changes to live, or disaster recovery — users/subscriptions/payments are preserved):
-1. `scripts/backfill-remote.sh --host=sea-live` — syncs import XMLs to live server, runs `--wipe-articles` import
-2. `python backfill/restore_ids.py --target live --confirm` — runs **locally**, reads JATS publisher-id, sends SQL to live DB via SSH
-3. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs (safe no-op)
+Deploying article/issue updates to live (users, subscriptions, payments, journal config all preserved):
+1. `scripts/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes existing articles/issues, reimports all
+2. `python backfill/restore_ids.py --target live --confirm` — runs **locally** (reads JATS publisher-id, sends SQL to live DB via SSH). Preserves URLs, DOIs, and payment references.
+3. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs (safe no-op, same DOIs + same URLs)
 
 Standalone utilities:
 - `backfill/audit.py` — audit all source PDFs in `backfill/private/input/` for completeness
