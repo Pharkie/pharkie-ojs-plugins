@@ -19,12 +19,13 @@ import sys
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
+from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
 # Import shared utilities from generate_xml.py
 sys.path.insert(0, os.path.dirname(__file__))
 from generate_xml import (
-    parse_date, split_author_name, load_doi_registry, lookup_doi, SECTIONS,
+    parse_date, split_author_name, SECTIONS,
 )
 
 JOURNAL_TITLE = 'Existential Analysis'
@@ -511,8 +512,8 @@ def generate_article_jats(article: dict, volume: int, issue: int,
 # Main
 # ---------------------------------------------------------------
 
-def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
-                verbose: bool, id_registry: dict | None = None) -> Counter:
+def process_toc(toc_path: Path, doi_registry: dict = None, dry_run: bool = False,
+                verbose: bool = False, id_registry: dict | None = None) -> Counter:
     """Generate JATS files for all articles in a toc.json."""
     stats = Counter()
 
@@ -525,17 +526,6 @@ def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
     date_str = toc.get('date', '')
     date_published = parse_date(date_str)
 
-    # Build publisher-id lookup index: (normalised_title, first_author) -> submission_id
-    _pub_id_lookup: dict[tuple[str, str], int] = {}
-    _pub_id_title_only: dict[str, int] = {}
-    if id_registry:
-        for reg_art in id_registry.get('articles', []):
-            if reg_art['volume'] == str(volume) and reg_art['issue'] == str(issue):
-                t = reg_art['title'].lower().strip()
-                a = reg_art.get('first_author', '').lower().strip()
-                _pub_id_lookup[(t, a)] = reg_art['submission_id']
-                _pub_id_title_only.setdefault(t, reg_art['submission_id'])
-
     for article in toc.get('articles', []):
         split_pdf = article.get('split_pdf', '')
         slug = Path(split_pdf).stem if split_pdf else ''
@@ -546,13 +536,20 @@ def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
         # HTML galley path
         html_path = vol_dir / f'{slug}.html'
 
-        # DOI lookup
-        doi = lookup_doi(doi_registry, article.get('title', ''),
-                         str(volume), str(issue),
-                         authors=article.get('authors', ''))
-
         # Output path
         jats_path = vol_dir / f'{slug}.jats.xml'
+
+        # DOI and publisher-id: read from existing JATS (single source of truth)
+        existing_tree = None
+        doi = None
+        if jats_path.exists():
+            try:
+                existing_tree = ET.parse(jats_path)
+                doi_el = existing_tree.find('.//{*}article-id[@pub-id-type="doi"]')
+                if doi_el is not None and doi_el.text:
+                    doi = doi_el.text.strip()
+            except ET.ParseError:
+                pass
 
         stats['total'] += 1
         if html_path.exists():
@@ -577,20 +574,15 @@ def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
                       f'refs={has_refs} notes={has_notes} bios={has_bios}')
             continue
 
-        # Publisher ID lookup (OJS submission_id for URL preservation)
+        # Publisher ID: read from existing JATS (single source of truth)
         publisher_id = None
-        if _pub_id_lookup:
-            title_norm = article.get('title', '').lower().strip()
-            # Extract first author from toc.json authors string for disambiguation
-            authors_raw = article.get('authors', '')
-            first_author_norm = ''
-            if authors_raw:
-                # authors string is "Given Family & Given Family" — take first
-                first = authors_raw.split('&')[0].split(',')[0].strip()
-                first_author_norm = first.lower()
-            # Try (title, first_author) match first, fall back to title-only
-            key = (title_norm, first_author_norm)
-            publisher_id = _pub_id_lookup.get(key) or _pub_id_title_only.get(title_norm)
+        if existing_tree is not None:
+            pid_el = existing_tree.find('.//{*}article-id[@pub-id-type="publisher-id"]')
+            if pid_el is not None and pid_el.text:
+                try:
+                    publisher_id = int(pid_el.text.strip())
+                except ValueError:
+                    pass
 
         # Generate JATS
         jats_xml = generate_article_jats(
@@ -618,18 +610,6 @@ def main():
                         help='Print details per article')
     args = parser.parse_args()
 
-    doi_registry = load_doi_registry()
-
-    # Load ID registry for publisher-id in JATS (optional)
-    id_registry = None
-    id_registry_path = os.path.join(os.path.dirname(__file__), 'private', 'id-registry.json')
-    if os.path.exists(id_registry_path):
-        with open(id_registry_path) as f:
-            id_registry = json.load(f)
-        print(f'ID registry: {len(id_registry.get("articles", []))} articles')
-    else:
-        print('ID registry not found — publisher-id will be omitted from JATS')
-
     total_stats = Counter()
 
     for toc_file in sorted(args.toc_files):
@@ -638,8 +618,7 @@ def main():
             print(f'WARN: {toc_path} not found, skipping', file=sys.stderr)
             continue
 
-        stats = process_toc(toc_path, doi_registry, args.dry_run, args.verbose,
-                            id_registry=id_registry)
+        stats = process_toc(toc_path, dry_run=args.dry_run, verbose=args.verbose)
         total_stats += stats
 
     print(f"\n{'=' * 50}")

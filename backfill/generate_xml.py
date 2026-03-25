@@ -139,177 +139,6 @@ def split_author_name(full_name):
     return authors if authors else [('', '')]
 
 
-def _normalize_author(name):
-    """Normalize an author name for matching (lowercase, collapse whitespace)."""
-    return re.sub(r'\s+', ' ', name.strip().lower())
-
-
-def load_doi_registry(script_dir=None):
-    """Load the DOI registry (existing DOIs to preserve on reimport).
-
-    Returns a dict keyed by (normalized_title, volume, issue) -> DOI string.
-    For duplicate titles in the same issue, stores a list in '_duplicates'
-    keyed by (normalized_title, volume, issue) -> [(doi, [authors]), ...].
-    Also includes '_issue_dois' keyed by (volume, issue) -> DOI string.
-    """
-    if script_dir is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-    registry_path = os.path.join(script_dir, 'private', 'doi-registry.json')
-    if not os.path.exists(registry_path):
-        return {}
-    with open(registry_path) as f:
-        data = json.load(f)
-    lookup = {}
-    duplicates = {}
-    for entry in data.get('dois', []):
-        key = (_normalize_title(entry['title']), entry['volume'], entry['issue'])
-        authors = [_normalize_author(a) for a in entry.get('authors', [])]
-        if key in lookup:
-            # Collision — move to duplicates list for author-based disambiguation
-            if key not in duplicates:
-                # Move the first entry too (need to find its authors)
-                first_doi = lookup[key]
-                first_authors = []
-                for e2 in data['dois']:
-                    if e2['doi'] == first_doi:
-                        first_authors = [_normalize_author(a) for a in e2.get('authors', [])]
-                        break
-                duplicates[key] = [(first_doi, first_authors)]
-            duplicates[key].append((entry['doi'], authors))
-        else:
-            lookup[key] = entry['doi']
-    lookup['_duplicates'] = duplicates
-    # Load aliases (TOC title -> Crossref title) for manual overrides
-    lookup['_aliases'] = {}
-    for toc_title, crossref_title in data.get('aliases', {}).items():
-        if toc_title.startswith('_'):
-            continue
-        lookup['_aliases'][_normalize_title(toc_title)] = _normalize_title(crossref_title)
-    # Load issue-level DOIs
-    lookup['_issue_dois'] = {}
-    for entry in data.get('issue_dois', []):
-        key = (str(entry['volume']), str(entry['issue']))
-        lookup['_issue_dois'][key] = entry['doi']
-    return lookup
-
-
-def _match_by_author(candidates, authors_str):
-    """Disambiguate duplicate titles by matching author names.
-
-    candidates: [(doi, [normalized_author_names]), ...]
-    authors_str: author string from toc.json (e.g. "John Heaton & Emmy van Deurzen")
-    """
-    # Split toc.json authors string into individual names
-    toc_authors = set()
-    for name in re.split(r'\s*[&,]\s*', authors_str):
-        name = name.strip()
-        if name:
-            # Extract surname (last word) for matching
-            toc_authors.add(_normalize_author(name))
-
-    best_doi = None
-    best_score = 0
-    for doi, reg_authors in candidates:
-        # Score = number of author surname matches
-        score = 0
-        for toc_name in toc_authors:
-            toc_surname = toc_name.split()[-1] if toc_name.split() else ''
-            for reg_name in reg_authors:
-                reg_surname = reg_name.split()[-1] if reg_name.split() else ''
-                if toc_surname and reg_surname and toc_surname == reg_surname:
-                    score += 1
-                    break
-        if score > best_score:
-            best_score = score
-            best_doi = doi
-    return best_doi
-
-
-def _normalize_title(title):
-    """Normalize a title for DOI matching (lowercase, collapse whitespace, strip punctuation)."""
-    title = title.strip().lower()
-    # Strip quotation marks (smart quotes and straight quotes)
-    title = re.sub(r'[\u201c\u201d\u2018\u2019"\']', '', title)
-    # Collapse whitespace
-    title = re.sub(r'\s+', ' ', title)
-    # Strip leading/trailing punctuation
-    title = title.strip(' .,;:')
-    return title
-
-
-def lookup_doi(doi_registry, title, volume, issue, authors=None):
-    """Look up an existing DOI for an article by title + volume + issue.
-
-    Tries exact match first, then falls back to prefix matching (TOC titles
-    often include subtitles that Crossref entries omit). Also handles
-    'Book Review: ...' prefixes, editorial naming differences, and
-    author-based disambiguation for duplicate titles in the same issue.
-    """
-    vol = str(volume)
-    iss = str(issue)
-    norm = _normalize_title(title)
-
-    # Check aliases (manual title overrides)
-    aliases = doi_registry.get('_aliases', {})
-    if norm in aliases:
-        aliased = aliases[norm]
-        key = (aliased, vol, iss)
-        if key in doi_registry:
-            return doi_registry[key]
-
-    # Check for duplicate titles requiring author disambiguation
-    duplicates = doi_registry.get('_duplicates', {})
-    key = (norm, vol, iss)
-    if key in duplicates and authors:
-        return _match_by_author(duplicates[key], authors)
-
-    # Exact match
-    if key in doi_registry:
-        return doi_registry[key]
-
-    # Strip 'book review: ' prefix and try again
-    stripped = re.sub(r'^book reviews?\s*:\s*', '', norm)
-    if stripped != norm:
-        key = (stripped, vol, iss)
-        if key in doi_registry:
-            return doi_registry[key]
-
-    # Strip 'obituary: ' prefix — Crossref may use the person's name as title
-    stripped = re.sub(r'^obituary\s*:\s*', '', norm)
-    if stripped != norm:
-        key = (stripped, vol, iss)
-        if key in doi_registry:
-            return doi_registry[key]
-
-    # Prefix match: TOC title starts with registry title (subtitle after colon)
-    for key_entry, doi in doi_registry.items():
-        if not isinstance(key_entry, tuple):
-            continue
-        reg_title, reg_vol, reg_iss = key_entry
-        if reg_vol != vol or reg_iss != iss:
-            continue
-        # Registry title is a prefix of the TOC title (min 20 chars to avoid false positives)
-        if len(reg_title) >= 20 and norm.startswith(reg_title):
-            return doi
-        # TOC title (after stripping prefixes) starts with registry title
-        if len(reg_title) >= 20 and stripped != norm and stripped.startswith(reg_title):
-            return doi
-
-    # Editorial naming: 'editorial' in TOC vs '{vol}.{iss} editorial' in Crossref
-    if norm == 'editorial':
-        key = (f'{vol}.{iss} editorial', vol, iss)
-        if key in doi_registry:
-            return doi_registry[key]
-
-    # 'Book Reviews' (section header) vs 'book reviews editorial' in Crossref
-    if norm in ('book reviews', 'book review'):
-        key = ('book reviews editorial', vol, iss)
-        if key in doi_registry:
-            return doi_registry[key]
-
-    return None
-
-
 def encode_pdf(pdf_path):
     """Read a PDF file and return base64-encoded content."""
     with open(pdf_path, 'rb') as f:
@@ -470,6 +299,32 @@ def _load_jats_references(pdf_path):
     return refs
 
 
+def _load_jats_doi(pdf_path):
+    """Load DOI from the article's JATS XML file.
+
+    JATS is the single source of truth for article content.
+    Returns DOI string or None if not found.
+    """
+    tree = _load_jats_tree(pdf_path)
+    if tree is None:
+        return None
+    doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
+    return doi_el.text.strip() if doi_el is not None and doi_el.text else None
+
+
+def _load_jats_publisher_id(pdf_path):
+    """Load publisher-id (OJS submission_id) from the article's JATS XML file.
+
+    JATS is the single source of truth for article content.
+    Returns publisher-id string or None if not found.
+    """
+    tree = _load_jats_tree(pdf_path)
+    if tree is None:
+        return None
+    pid_el = tree.find('.//{*}article-id[@pub-id-type="publisher-id"]')
+    return pid_el.text.strip() if pid_el is not None and pid_el.text else None
+
+
 def _load_jats_pages(pdf_path):
     """Load page numbers from the article's JATS XML file.
 
@@ -542,12 +397,18 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     pdf_path = article.get('split_pdf')
     has_pdf = pdf_path and os.path.exists(pdf_path)
 
-    # IDs (sequential, will be ignored on import per advice="ignore")
+    # Publisher ID from JATS (OJS submission_id — preserves URLs across reimport)
+    publisher_id = _load_jats_publisher_id(pdf_path)
+
+    # Sequential IDs for file references within the XML (internal, ignored by OJS)
     file_id = 1000 + article_idx
     submission_file_id = 2000 + article_idx
-    pub_id = 3000 + article_idx
+    pub_id = int(publisher_id) if publisher_id else 3000 + article_idx
     html_file_id = 6000 + article_idx
     html_submission_file_id = 7000 + article_idx
+
+    # ID advice: "update" preserves the ID (and URL) on reimport; "ignore" lets OJS assign new
+    id_advice = "update" if publisher_id else "ignore"
 
     lines = []
 
@@ -556,7 +417,7 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
                  f' locale="en" date_submitted="{date_published}" status="3"'
                  f' submission_progress="" current_publication_id="{pub_id}"'
                  f' stage="production">')
-    lines.append(f'{i2}<id type="internal" advice="ignore">{pub_id}</id>')
+    lines.append(f'{i2}<id type="internal" advice="{id_advice}">{pub_id}</id>')
 
     # Submission file (PDF)
     if has_pdf:
@@ -603,7 +464,7 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
                  f' date_published="{date_published}"'
                  f' section_ref="{section_ref}"'
                  f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
-    lines.append(f'{i3}<id type="internal" advice="ignore">{pub_id}</id>')
+    lines.append(f'{i3}<id type="internal" advice="{id_advice}">{pub_id}</id>')
     if doi:
         lines.append(f'{i3}<id type="doi" advice="update">{escape(doi)}</id>')
     lines.append(f'{i3}<title locale="en">{title}</title>')
@@ -743,7 +604,11 @@ def load_enrichment(toc_json_path):
 
 
 def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_galley=False):
-    """Generate complete OJS Native XML for an issue."""
+    """Generate complete OJS Native XML for an issue.
+
+    DOIs and publisher-IDs are read from JATS (single source of truth).
+    The doi_registry parameter is deprecated and ignored.
+    """
     vol = toc_data.get('volume', 1)
     iss = toc_data.get('issue', 1)
     date_str = toc_data.get('date')
@@ -756,9 +621,6 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_gal
             f"Vol 1 Issue 1 date must be 1990 (founding year), not {year}. "
             f"The PDF says 1994 but that's the reprint date. Fix toc.json."
         )
-
-    if doi_registry is None:
-        doi_registry = load_doi_registry()
 
     enrichment_data = load_enrichment(toc_json_path)
 
@@ -778,9 +640,11 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_gal
     # Issue
     lines.append(f'  <issue xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
                  f' published="1" current="0" access_status="2" url_path="">')
-    # Issue-level DOI
-    issue_dois = doi_registry.get('_issue_dois', {})
-    issue_doi = issue_dois.get((str(vol), str(iss)))
+    # Issue-level IDs (from toc.json)
+    issue_id = toc_data.get('issue_id')
+    if issue_id:
+        lines.append(f'    <id type="internal" advice="update">{issue_id}</id>')
+    issue_doi = toc_data.get('issue_doi')
     if issue_doi:
         lines.append(f'    <id type="doi" advice="update">{escape(issue_doi)}</id>')
     lines.append(f'    <issue_identification>')
@@ -826,8 +690,7 @@ def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_gal
     lines.append(f'    <articles>')
     doi_count = 0
     for idx, article in enumerate(toc_data['articles']):
-        doi = lookup_doi(doi_registry, article['title'], vol, iss,
-                        authors=article.get('authors'))
+        doi = _load_jats_doi(article.get('split_pdf'))
         if doi:
             doi_count += 1
         review_id = article.get('_review_id', '')

@@ -36,10 +36,7 @@ def load_all_tocs(output_dir, doi_registry=None):
     Deduplicates by (volume, issue) — if both '<vol>/' and '<vol>.1/' exist
     for single-issue volumes, only the first one found is used.
     """
-    try:
-        from backfill.generate_xml import lookup_doi
-    except ModuleNotFoundError:
-        from generate_xml import lookup_doi
+    from xml.etree import ElementTree as _ET
 
     rows = []
     seen_vol_iss = set()
@@ -63,11 +60,19 @@ def load_all_tocs(output_dir, doi_registry=None):
                     return '; '.join(str(v) for v in val)
                 return val or ''
 
-            # Look up DOI from registry
+            # Read DOI from JATS (single source of truth)
             doi = ''
-            if doi_registry:
-                doi = lookup_doi(doi_registry, article.get('title', ''),
-                                 vol, iss, authors=article.get('authors')) or ''
+            split_pdf = article.get('split_pdf', '')
+            if split_pdf:
+                jats_path = Path(split_pdf).with_suffix('.jats.xml')
+                if jats_path.exists():
+                    try:
+                        tree = _ET.parse(jats_path)
+                        doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
+                        if doi_el is not None and doi_el.text:
+                            doi = doi_el.text.strip()
+                    except _ET.ParseError:
+                        pass
 
             row = [
                 vol, iss, date,
@@ -135,16 +140,7 @@ def main():
         print(f"Error: output directory not found: {OUTPUT_DIR}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        from backfill.generate_xml import load_doi_registry
-    except ModuleNotFoundError:
-        from generate_xml import load_doi_registry
-    doi_registry = load_doi_registry()
-    doi_count = sum(1 for k in doi_registry if isinstance(k, tuple))
-    dup_count = sum(len(v) for v in doi_registry.get('_duplicates', {}).values())
-    print(f"DOI registry loaded: {doi_count + dup_count} article DOIs")
-
-    rows = load_all_tocs(OUTPUT_DIR, doi_registry=doi_registry)
+    rows = load_all_tocs(OUTPUT_DIR)
     if not rows:
         print("No toc.json files found in output/", file=sys.stderr)
         sys.exit(1)
