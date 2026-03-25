@@ -46,6 +46,11 @@ if [ -z "$WP_PUBLIC_URL" ]; then
     WP_PUBLIC_URL="https://$CADDY_WP"
   fi
 fi
+# Staging sites behind Caddy basic auth — skip external WP checks, use Docker-internal only
+CADDY_AUTH_USER=$($SSH_CMD "grep '^CADDY_WP_AUTH_USER=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
+if [ -n "$CADDY_AUTH_USER" ]; then
+  WP_PUBLIC_URL=""  # Force Docker-internal checks (external would need auth credentials)
+fi
 # Fallback: if WP_HOME looks public (not private IP/non-standard port), use it directly
 if [ -z "$WP_PUBLIC_URL" ]; then
   if echo "$WP_HOME" | grep -qE '^https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|localhost|127\.|.*:[0-9]{4,})'; then
@@ -299,8 +304,14 @@ else
   fail "Stripe plugin not active in OJS"
 fi
 
-# 5b. Stripe API key valid
-STRIPE_KEY=$($SSH_CMD "grep '^OJS_STRIPE_SECRET_KEY=' $REMOTE_DIR/.env | cut -d= -f2")
+# 5b. Stripe API key valid (stored in OJS plugin_settings, not .env)
+STRIPE_TEST_MODE=$(echo "$STRIPE_ROWS" | grep -o 'testMode=.' | cut -d= -f2)
+if [ "$STRIPE_TEST_MODE" = "1" ]; then
+  STRIPE_KEY=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT setting_value FROM plugin_settings WHERE plugin_name LIKE CONCAT(CHAR(37), CHAR(115,116,114,105,112,101), CHAR(37)) AND setting_name = CHAR(116,101,115,116,83,101,99,114,101,116,75,101,121)\"'") || STRIPE_KEY=""
+else
+  STRIPE_KEY=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT setting_value FROM plugin_settings WHERE plugin_name LIKE CONCAT(CHAR(37), CHAR(115,116,114,105,112,101), CHAR(37)) AND setting_name = CHAR(115,101,99,114,101,116,75,101,121)\"'") || STRIPE_KEY=""
+fi
+STRIPE_KEY=$(echo "$STRIPE_KEY" | tr -d '[:space:]')
 if [ -n "$STRIPE_KEY" ]; then
   # Use checkout/sessions endpoint — restricted keys (rk_*) may not have balance access
   STRIPE_RESPONSE=$(curl -s -o /dev/null -w '%{http_code}' -u "$STRIPE_KEY:" "https://api.stripe.com/v1/checkout/sessions?limit=1" 2>/dev/null) || STRIPE_RESPONSE="000"
@@ -312,11 +323,10 @@ if [ -n "$STRIPE_KEY" ]; then
     fail "Stripe API unreachable (HTTP $STRIPE_RESPONSE)"
   fi
 else
-  fail "OJS_STRIPE_SECRET_KEY not set in .env"
+  fail "Stripe secret key not found in OJS plugin_settings"
 fi
 
 # 5c. Stripe webhook endpoint reachable
-STRIPE_TEST_MODE=$($SSH_CMD "grep '^OJS_STRIPE_TEST_MODE=' $REMOTE_DIR/.env | cut -d= -f2")
 WEBHOOK_URL="${OJS_JOURNAL_URL}/payment/plugin/StripePayment/webhook"
 WEBHOOK_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$WEBHOOK_URL" 2>/dev/null) || WEBHOOK_STATUS="000"
 # Expecting 400 (no payload) — not 404 (route missing)
