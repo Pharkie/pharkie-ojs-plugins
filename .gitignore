@@ -46,6 +46,10 @@ logs/
 
 # Backfill private data — single symlink to private repo
 backfill/private
+# Legacy symlinks (may be recreated by old scripts/devcontainers)
+backfill/input
+backfill/output
+backfill/authors.json
 
 # Python bytecode
 __pycache__/
