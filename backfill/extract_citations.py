@@ -382,8 +382,7 @@ def export_to_sheet(rows, dry_run=False):
         ws = sh.worksheet(TAB_NAME)
         ws.clear()
         needed_rows = len(rows) + 1
-        if ws.row_count < needed_rows:
-            ws.resize(rows=needed_rows)
+        ws.resize(rows=needed_rows, cols=len(SHEET_HEADERS))
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title=TAB_NAME, rows=len(rows) + 1,
                               cols=len(SHEET_HEADERS))

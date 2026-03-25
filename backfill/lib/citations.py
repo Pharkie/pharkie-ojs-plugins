@@ -426,16 +426,20 @@ def is_author_bio(text: str) -> bool:
     ]
     has_bio_phrase = any(phrase in text for phrase in bio_phrases)
 
+    # Words that start a sentence but aren't person names — exclude from bio patterns
+    _NOT_NAME = (r'(?!(?:The|This|That|What|Which|Where|When|How|Why|For|From|'
+                 r'With|About|After|Before|Between|During|Into|Through|Under)\s)')
+
     bio_patterns = [
         r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
         r'^[A-Z]+\s+(?:van|de|von)\s+[A-Z\-]+\s+(is|was|has)\s',  # ALL CAPS + prefix
         # Mixed case name (with optional prefix: van, de, du, von):
-        r'^[A-Z][a-zà-ü]+\s+(?:(?:van|de|du|von|le|la)\s+)?[A-Z][a-zà-ü]+(?:-[A-Z][a-zà-ü]+)?(?:\s+[A-Z][a-zà-ü]+)?\s+(is|was|has)\s',
+        r'^' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+(?:(?:van|de|du|von|le|la)\s+)?[A-Z][a-zà-ü]+(?:-[A-Z][a-zà-ü]+)?(?:\s+[A-Z][a-zà-ü]+)?\s+(is|was|has)\s',
         # Name + credentials + "is": "Bo Jacobsen, dr. phil., Ph.D., is..." / "Hans W. Cohn, PhD, is..."
-        r'^[A-Z][a-zà-ü]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-zà-ü]+.*?(?:PhD|Ph\.D\.|dr\.\s*phil|MSc|MA|UKCP|BPS|BACP).*?\b(is|was|has)\s',
+        r'^' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-zà-ü]+.*?(?:PhD|Ph\.D\.|dr\.\s*phil|MSc|MA|UKCP|BPS|BACP).*?\b(is|was|has)\s',
         r'^All (three|four|five|six) authors',
-        r'^(Dr\.?|Professor)\s+[A-Z][a-z]',
-        r'^[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+\s+(PhD|MA|MSc|UKCP|BPS)',
+        r'^(Dr\.?|Professor)\s+[A-Z][a-zà-ü]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-zà-ü]+.*?\s+(is|was|has)\s',
+        r'^' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+\s+(PhD|MA|MSc|UKCP|BPS)',
     ]
 
     if any(re.match(p, text) for p in bio_patterns):
@@ -447,7 +451,7 @@ def is_author_bio(text: str) -> bool:
     if has_bio_phrase and len(text) > 50:
         # Must start with a plausible person name (2+ capitalised words)
         starts_with_name = bool(re.match(
-            r'^(?:Dr\.?\s+|Professor\s+)?[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]', text))
+            r'^(?:Dr\.?\s+|Professor\s+)?' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]', text))
         # Bio phrase must appear in first 150 chars (not buried deep in prose)
         early_bio = any(phrase in text[:150] for phrase in bio_phrases)
         if starts_with_name and early_bio and not re.search(r'\(\d{4}\)', text[:80]):
@@ -487,6 +491,18 @@ def is_note(text: str) -> str | None:
         if _is_numbered_commentary(after_num):
             return 'numbered-commentary'
 
+    # Roman numeral prefix + commentary (i, ii, iii, iv, ... xvi, etc.)
+    if re.match(r'^[ivxlc]+\s', text, re.IGNORECASE):
+        after_roman = re.sub(r'^[ivxlc]+\s+', '', text, flags=re.IGNORECASE).strip()
+        if _is_numbered_commentary(after_roman):
+            return 'roman-numeral-commentary'
+
+    # Superscript numeral prefix + commentary (¹, ², ³, etc.)
+    if re.match(r'^[¹²³⁴⁵⁶⁷⁸⁹⁰]+\s', text):
+        after_super = re.sub(r'^[¹²³⁴⁵⁶⁷⁸⁹⁰]+\s+', '', text).strip()
+        if _is_numbered_commentary(after_super):
+            return 'superscript-commentary'
+
     if is_author_bio(text):
         return 'author-bio'
 
@@ -497,6 +513,10 @@ def is_note(text: str) -> str | None:
         return 'url-only'
 
     if re.match(r'^Contact:', text) or re.match(r'^https?://orcid\.org/', text):
+        return 'contact-info'
+
+    # Contact/editorial addresses
+    if re.match(r'^(Contact address|Messrs)\b', text):
         return 'contact-info'
 
     name_only = text.strip().rstrip('.')
@@ -512,6 +532,13 @@ def is_reference(text: str) -> bool:
     Must have: author pattern + year.
     """
     clean = re.sub(r'^\d+[\.\)\s]*', '', text).strip()
+
+    # Reject common English words that aren't surnames
+    if re.match(r'^(It|In|As|At|An|If|Is|Or|On|So|Do|No|My|He|We|But|Yet|For|The|This|That|'
+                r'What|Which|Where|When|How|Why|From|With|About|After|Before|Between|'
+                r'During|Into|Through|Under|There|Their|These|Those|Here|Very|Also|'
+                r'Although|However|Therefore|Furthermore|Moreover|Nevertheless)\s', clean):
+        return False
 
     # Rule 1: Author name at or near start
     has_author = bool(re.match(
@@ -568,8 +595,8 @@ def is_reference(text: str) -> bool:
 
     if not has_year_fuzzy:
         has_publisher = bool(re.search(
-            r'(Press|Publisher|Books|Routledge|Sage|Springer|Penguin|Wiley|'
-            r'Tavistock|Macmillan|Methuen|OUP|Blackwell|Faber|Harper)',
+            r'\b(Press|Publisher|Books|Routledge|Sage|Springer|Penguin|Wiley|'
+            r'Tavistock|Macmillan|Methuen|OUP|Blackwell|Faber|Harper)\b',
             clean, re.IGNORECASE))
         has_place = bool(re.search(
             r'(London|New York|Cambridge|Oxford|Paris|Berlin|Edinburgh|Boston|Chicago)',
