@@ -103,13 +103,25 @@ fi
 
 # Set up scheduled tasks cron (OJS uses cron, not a persistent job worker).
 # The base PKP image has cron commented out in pkp-start; we start it ourselves.
-CRON_LINE="0 * * * *   php /var/www/html/lib/pkp/tools/scheduler.php run 2>&1"
-if [ -n "$BETTERSTACK_HB_OJS_CRON" ]; then
-  # Always ping success: OJS 3.5 bug causes NotFoundHttpException after tasks complete
-  # (no HTTP request context), making exit code unreliable. Actual scheduler health is
-  # verified by the hourly monitoring workflow (job queue depth, failed jobs).
-  CRON_LINE="$CRON_LINE; curl -sf $BETTERSTACK_HB_OJS_CRON > /dev/null"
+CRON_LINE="0 * * * *   /usr/local/bin/ojs-scheduler-heartbeat.sh"
+# Create wrapper that distinguishes OJS 3.5 known fatal from real failures
+cat > /usr/local/bin/ojs-scheduler-heartbeat.sh <<'WRAPPER'
+#!/bin/bash
+OUTPUT=$(php /var/www/html/lib/pkp/tools/scheduler.php run 2>&1)
+EXIT=$?
+HB="${BETTERSTACK_HB_OJS_CRON:-}"
+if [ -z "$HB" ]; then exit $EXIT; fi
+if [ $EXIT -eq 0 ]; then
+  curl -sf "$HB" > /dev/null 2>&1
+elif echo "$OUTPUT" | grep -q "NotFoundHttpException"; then
+  # Known OJS 3.5 bug: tasks completed but fatal thrown after (no HTTP context)
+  curl -sf "$HB" > /dev/null 2>&1
+else
+  # Real failure
+  curl -sf -d "scheduler exit $EXIT" "$HB/fail" > /dev/null 2>&1
 fi
+WRAPPER
+chmod +x /usr/local/bin/ojs-scheduler-heartbeat.sh
 echo "$CRON_LINE" | crontab -
 cron
 echo "[OJS] Cron started: $(crontab -l)"

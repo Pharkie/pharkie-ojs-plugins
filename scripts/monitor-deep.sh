@@ -263,6 +263,28 @@ done
 
 # ============================================================
 # D6. OJS SCHEDULED TASKS
+# ============================================================
+echo ""
+echo "--- OJS Scheduled Tasks ---"
+
+# Check cron is installed inside the OJS container
+OJS_CRON=$(remote "$COMPOSE exec -T ojs crontab -l 2>/dev/null || echo ''")
+if echo "$OJS_CRON" | grep -q "scheduler\.php"; then
+  pass "OJS scheduler cron installed"
+else
+  fail "OJS scheduler cron not found in container"
+fi
+
+# Check scheduler last ran recently (jobs table updated = scheduler ran)
+LAST_JOB_AGE=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT TIMESTAMPDIFF(HOUR, MAX(reserved_at), NOW()) FROM jobs WHERE reserved_at IS NOT NULL\"'" 2>/dev/null) || LAST_JOB_AGE=""
+LAST_JOB_AGE=$(echo "$LAST_JOB_AGE" | tr -d '[:space:]')
+if [ "$LAST_JOB_AGE" = "NULL" ] || [ -z "$LAST_JOB_AGE" ]; then
+  info "No recently processed jobs (queue may be empty — OK if no pending tasks)"
+elif [ "${LAST_JOB_AGE:-0}" -gt 3 ] 2>/dev/null; then
+  fail "Last job processed ${LAST_JOB_AGE}h ago (scheduler may be stuck)"
+else
+  pass "Scheduler active (last job processed ${LAST_JOB_AGE}h ago)"
+fi
 
 # --- Deep Summary ---
 echo ""
