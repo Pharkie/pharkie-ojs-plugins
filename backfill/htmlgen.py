@@ -125,17 +125,15 @@ a person's name on its own line near the end is the REVIEWER — it is
 critical content that MUST appear in the output as
 <p><strong>Name</strong></p>. This is NOT an "author byline" to skip.
 
-What to SKIP: only the book's publication details at the very top (title,
-author, publisher, year — these are already in OJS metadata). Publication
-details STOP at the year/publisher line. Everything after that is body
-content — even if it looks like a quote, epigraph, or short italic line.
+Include EVERYTHING from this review — publication details, epigraphs,
+body paragraphs, quotes, reviewer name, references. Do not skip anything.
 
 What to INCLUDE (in order):
-  1. Any epigraph, quote, or italic text appearing after the publication
-     details — this is the FIRST body content, do NOT skip it
-  2. All review body paragraphs
-  3. The reviewer's name (standalone name near the end OF THIS REVIEW)
-  4. References section if present after the reviewer's name
+  1. The book title, author, year, publisher (publication details)
+  2. Any epigraph or quote after the publication details
+  3. All review body paragraphs
+  4. The reviewer's name (standalone name near the end OF THIS REVIEW)
+  5. References section if present after the reviewer's name
 
 IMPORTANT: A name appearing BEFORE this review's book title belongs to
 the PREVIOUS review's reviewer — do NOT include it. Only include the
