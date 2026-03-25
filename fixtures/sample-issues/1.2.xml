@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<issues xmlns="http://pkp.sfu.ca" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+  <issue xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" published="1" current="0" access_status="2" url_path="">
+    <id type="internal" advice="ignore">100</id>
+    <issue_identification>
+      <volume>1</volume>
+      <number>2</number>
+      <year>2024</year>
+      <title locale="en">Existential Analysis</title>
+    </issue_identification>
+    <date_published>2024-07-15</date_published>
+    <last_modified>2024-07-15</last_modified>
+    <sections>
+      <section ref="ED" seq="0" editor_restricted="0" meta_indexed="1" meta_reviewed="0" abstracts_not_required="1" hide_title="0" hide_author="0" abstract_word_count="0">
+        <abbrev locale="en">ED</abbrev>
+        <title locale="en">Editorial</title>
+      </section>
+      <section ref="ART" seq="1" editor_restricted="0" meta_indexed="1" meta_reviewed="1" abstracts_not_required="0" hide_title="0" hide_author="0" abstract_word_count="0">
+        <abbrev locale="en">ART</abbrev>
+        <title locale="en">Articles</title>
+      </section>
+      <section ref="BR" seq="3" editor_restricted="0" meta_indexed="1" meta_reviewed="0" abstracts_not_required="1" hide_title="0" hide_author="0" abstract_word_count="0">
+        <abbrev locale="en">BR</abbrev>
+        <title locale="en">Book Reviews</title>
+      </section>
+    </sections>
+    <issue_galleys>
+      <issue_galley locale="en">
+        <label>PDF</label>
+        <issue_file>
+          <file_name>vol-1-iss-2.pdf</file_name>
+          <file_type>application/pdf</file_type>
+          <file_size>1685</file_size>
+          <content_type>1</content_type>
+          <original_file_name>1.2.pdf</original_file_name>
+          <date_uploaded>2024-07-15</date_uploaded>
+          <date_modified>2024-07-15</date_modified>
+          <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDUwOQo+PgpzdHJlYW0KeJyNk0tv4jAUhff9FUddzUiNG9t5EHXFqxpV01HViUbq0hBDXBIbxUmBfz8OoVAoiyy8sXTuPed+9zI83fgkjLG5GaW4f6SgA+L7SBeYpu0Xo5xQH3HCSRIjzfBjulW2lrpWosBQi2Jnlf2J9P0guH9koOy8BgtJEiCOfcKifY1/pmhKCXqHP005kxXYHZjPgrM6zktwVodTQgeIWUC4vy+TilkhYRYYG91aspd6ekUfJYxEtIuSqdpULsilf/+aLg5IMNjrgFGlsqXSS6S5NNUOQmd4qcS8VnMJpfF1SGlummVen/XgSK61CBNCk0MLYFi01f6Wqs4f8GrcnGqMc6kBD1ivCajHeiUOKAk758PKOSzkN2BXAzNOgujg5sX1NaV7hVmquUv1LOvcZJdZX6WVoprnfcL6A0LjY1g3pVJYN1izOQXkHo36WA0dU/bJZlwZa71xU9RN5SxNlLNtldG23ZRzMLIS610Pr2EckeQE5q1ZKaRCi5V4wER8qKyjdAITe9zvgyZ0xHlnfGTMys3vQ8lNLzyho8rCg6dO1wa8HeqtknW3knUu8asphW4vxC27m8ItZjv8Jnh2mBrbJ3t7vdEx+7RUxQ5PRkt7wkQ9/nUTGfcJjxEM3Dp3lzaRpcFCbR0S6VTrXFQrJT3zbr110bhLOjr5D1BLMvYKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1PYmxpcXVlCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKOCAwIG9iago8PAovRm9udCA8PC9GMSA1IDAgUgovRjIgNiAwIFIKL0YzIDcgMCBSPj4KL1Byb2NTZXQgWy9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUldCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9DcmVhdGlvbkRhdGUgKEQ6MjAyNjAzMjQyMTE4MzlaKQo+PgplbmRvYmoKeHJlZgowIDEwCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDUgMDAwMDAgbiAKMDAwMDAwMDI4NSAwMDAwMCBuIAowMDAwMDAwODY2IDAwMDAwIG4gCjAwMDAwMDA5NjggMDAwMDAgbiAKMDAwMDAwMTA2NSAwMDAwMCBuIAowMDAwMDAxMTcwIDAwMDAwIG4gCjAwMDAwMDEyNzcgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSAxMAovUm9vdCAyIDAgUgovSW5mbyA5IDAgUgovSUQgWzxCNTFFODFFRDQ2N0JGMTgyMDU4RjYwMzZBRTg5NTk5OT48QjUxRTgxRUQ0NjdCRjE4MjA1OEY2MDM2QUU4OTU5OTk+XQo+PgpzdGFydHhyZWYKMTMzMgolJUVPRgo=</embed>
+        </issue_file>
+      </issue_galley>
+    </issue_galleys>
+    <articles>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-07-15" status="3" submission_progress="" current_publication_id="101" stage="production">
+        <id type="internal" advice="ignore">101</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="102" created_at="2024-07-15" file_id="103" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">00-bridging-theory-and-practice-i.pdf</name>
+          <file id="103" filesize="1664" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDQ4OAo+PgpzdHJlYW0KeJxtk01zmzAQhu/+FXt0DlYQ2MienpomnqkvcRuOuciwgFIsqZLwx7/vipq49lTDARb23XefXVLYTBK2EHCcPBXwuObAc5YkUNTwUsQQTxKW5iBWgs0pXMH0yamqUbqBokXjziB1BVsny6BKBKXh5aR8QB2U7OgT0zdteIDi46L3uE6B85sSabZgqwRELphIhxJfu6j1tleh/QI/zQ5dgG8t6hudDFa3MkIwnoGYC5bkg8xWNuiBz9K7PJ5cE38DBTPO+BIEX7DFMmZyliUrKI4wLVrlgS4JFe4NSEdddggNanQyYAW1cfTqgJ2xe2p6oBHQhwjI9s4aj57BeL4HKI0OUmlPN/bsFNGZ1Q4RbCdLbE1XobvYhR+Tq7eEszkfuooCYyVypk0g6hSpLm7GY/sdYZRBGQ3RJE3FqV0fn9kI5J/uc5FduNE+EMe/3SPUfddRR6cApoYQcYwQjqbvKpDWonTQohumL8E6U/XlUBb1QTmjI5grgwHp9nkNHt2B5iMj3UZ2HZ6hVlGXxq70fyDkiyVbrgYIgZy9bt7gffpqUcPG9E7Tvr2dafX2/v3hs1qcBfnyQeoS2d0i3i1QlrBMQJ5lLB/WYPocZ16rU+ipuRnYVrpfCmfmw89s19NP4EfBPx3a9WkKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLU9ibGlxdWUKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKOCAwIG9iago8PAovRm9udCA8PC9GMSA1IDAgUgovRjIgNiAwIFIKL0YzIDcgMCBSPj4KL1Byb2NTZXQgWy9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUldCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9DcmVhdGlvbkRhdGUgKEQ6MjAyNjAzMjQyMTE4MzlaKQo+PgplbmRvYmoKeHJlZgowIDEwCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDUgMDAwMDAgbiAKMDAwMDAwMDI4NSAwMDAwMCBuIAowMDAwMDAwODQ1IDAwMDAwIG4gCjAwMDAwMDA5NDcgMDAwMDAgbiAKMDAwMDAwMTA1MiAwMDAwMCBuIAowMDAwMDAxMTQ5IDAwMDAwIG4gCjAwMDAwMDEyNTYgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSAxMAovUm9vdCAyIDAgUgovSW5mbyA5IDAgUgovSUQgWzwwOEVFQUNEMzUwRjUwRDk5QkU1QUI1NUQ2Rjg1NUQ4Rj48MDhFRUFDRDM1MEY1MEQ5OUJFNUFCNTVENkY4NTVEOEY+XQo+PgpzdGFydHhyZWYKMTMxMQolJUVPRgo=</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="104" created_at="2024-07-15" file_id="105" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">00-bridging-theory-and-practice-i.html</name>
+          <file id="105" filesize="507" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5FZGl0b3JpYWw8L2gyPgo8cD5JbiB0aGlzIGlzc3VlIHdlIGNvbnRpbnVlIG91ciBleHBsb3JhdGlvbiBvZiBleGlzdGVudGlhbCBhcHByb2FjaGVzIHRvIHRoZXJhcHkgYW5kIHBoaWxvc29waHkuIFRoZSBjb250cmlidXRvcnMgZXhhbWluZSBwaGVub21lbm9sb2dpY2FsIG1ldGhvZCwgY3Jvc3MtY3VsdHVyYWwgcGVyc3BlY3RpdmVzLCBhbmQgdGhlIGV0aGljcyBvZiB0aGVyYXBldXRpYyBlbmNvdW50ZXIuPC9wPgo8cD5XZSBhcmUgZ3JhdGVmdWwgdG8gb3VyIHJldmlld2VycyBhbmQgY29udHJpYnV0b3JzIGZvciB0aGVpciBkZWRpY2F0aW9uIHRvIGFkdmFuY2luZyBleGlzdGVudGlhbCB0aG91Z2h0IGluIGJvdGggYWNhZGVtaWMgYW5kIGNsaW5pY2FsIGNvbnRleHRzLjwvcD4KPC9ib2R5Pgo8L2h0bWw+</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="0" access_status="1" date_published="2024-07-15" section_ref="ED" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">101</id>
+          <title locale="en">Bridging Theory and Practice in Existential Thought</title>
+          <copyrightHolder locale="en">Alice Smith</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <pages>1-2</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="106">
+              <givenname locale="en">Alice</givenname>
+              <familyname locale="en">Smith</familyname>
+              <country>GB</country>
+              <email>a.smith@demo.invalid</email>
+            </author>
+            <author include_in_browse="true" user_group_ref="Author" seq="1" id="107">
+              <givenname locale="en">Robert</givenname>
+              <familyname locale="en">Chen</familyname>
+              <country>GB</country>
+              <email>r.chen@demo.invalid</email>
+            </author>
+          </authors>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">108</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="102" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">109</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="104" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-07-15" status="3" submission_progress="" current_publication_id="110" stage="production">
+        <id type="internal" advice="ignore">110</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="111" created_at="2024-07-15" file_id="112" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">01-phenomenological-method-in-exi.pdf</name>
+          <file id="112" filesize="1808" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDYzMgo+PgpzdHJlYW0KeJxtlM1u2zAQhO95ij02QMzoz5J8bJCkbYAiaWOgl1wYaSUxpUmWpOz47buUJccyIliARXl3Z74hncDDRcSWBewubtZwfR9DnLMognUDd+uwFEf0nEKxKlhGyzV8eepQ6Q3dUrei4hJ+ou90DULB3btwHpUXtPobHXJbdZewfht7Xd8nEMez9kkesTyHIi9YkQzt153ecAc3Vu/UrDaF1by0yFhOyrKCRflBGW/RQbqI81kheYpmlWnM4hKKOGNxMRR+fXXe8sqfzTst+wfHwnxVsmUZClOWEbr1LqgWDgw3aMHiVuCOns452ZEIbAZgDsgmN0YKrMFrwBN4xu2rLhTuGfxBesU3QiH4DkeJ8GumqMzGdBKWRsmgqNLKW/Hae6GVA93A9945tPKK8rISeb94ol/sr4CrGr4JbVtx+G6sNtrhqPKovu1FjZJUOGi0PZpB60LyM2UfuoqIJemA+NQdsa5F0MUm4KdesmzcCjF5WX3QpQ+HGjcauPWikggtKrTcE76gqMYtSm2IuB98eHReqBZMb4Mfx2C6fngIdLggMJU2eyvazi8aiwhG8gqJfI32Mz8pnZVs8BMaTJNImdKeMNBKPaqZLtO/SuIX3EIQSRSmVD51HyUsGZKkSXE6ukdoeknc8N2HJH3AMUHY6V7WYR9RHEBxYIiDhxTrvhrGotoKq1UA88FgQPp0ew+0J7Z42IvQcilxD40IfQWNUZ9AWJYliw5nlVKHx4dnePnyaFDBg+6tonyf9xT1xr1cHqeFLEiX81xVyM7+Es6ONTFOC1jmCSvjYcptyLwR774ncws6V9z+FbjQb25hZN9S26nhf6VJcKIKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLU9ibGlxdWUKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKOCAwIG9iago8PAovRm9udCA8PC9GMSA1IDAgUgovRjIgNiAwIFIKL0YzIDcgMCBSPj4KL1Byb2NTZXQgWy9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUldCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9DcmVhdGlvbkRhdGUgKEQ6MjAyNjAzMjQyMTE4MzlaKQo+PgplbmRvYmoKeHJlZgowIDEwCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDUgMDAwMDAgbiAKMDAwMDAwMDI4NSAwMDAwMCBuIAowMDAwMDAwOTg5IDAwMDAwIG4gCjAwMDAwMDEwOTEgMDAwMDAgbiAKMDAwMDAwMTE5NiAwMDAwMCBuIAowMDAwMDAxMjkzIDAwMDAwIG4gCjAwMDAwMDE0MDAgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSAxMAovUm9vdCAyIDAgUgovSW5mbyA5IDAgUgovSUQgWzw4Mjk2NUI2RDNEN0Q2RkZGQzRDQkUzNUZEQTE3MDNBMj48ODI5NjVCNkQzRDdENkZGRkM0Q0JFMzVGREExNzAzQTI+XQo+PgpzdGFydHhyZWYKMTQ1NQolJUVPRgo=</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="113" created_at="2024-07-15" file_id="114" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">01-phenomenological-method-in-exi.html</name>
+          <file id="114" filesize="986" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5JbnRyb2R1Y3Rpb248L2gyPgo8cD5UaGUgcmVsYXRpb25zaGlwIGJldHdlZW4gZXhpc3RlbnRpYWwgcGhpbG9zb3BoeSBhbmQgZW1waXJpY2FsIHJlc2VhcmNoIGhhcyBsb25nIGJlZW4gYSBzb3VyY2Ugb2YgY3JlYXRpdmUgdGVuc2lvbi4gVGhpcyBwYXBlciBleGFtaW5lcyBob3cgcGhlbm9tZW5vbG9naWNhbCBtZXRob2QgY2FuIHNlcnZlIGV4aXN0ZW50aWFsIGlucXVpcnkgd2l0aG91dCByZWR1Y2luZyBsaXZlZCBleHBlcmllbmNlIHRvIG1lcmUgZGF0YS48L3A+CjxoMj5IaXN0b3JpY2FsIENvbnRleHQ8L2gyPgo8cD5IdXNzZXJsJ3MgY2FsbCB0byByZXR1cm4gInRvIHRoZSB0aGluZ3MgdGhlbXNlbHZlcyIgZXN0YWJsaXNoZWQgdGhlIGZvdW5kYXRpb24gZm9yIHBoZW5vbWVub2xvZ2ljYWwgcmVzZWFyY2guIEhpcyBtZXRob2Qgb2YgZXBvY2jDqSDigJQgYnJhY2tldGluZyBhc3N1bXB0aW9ucyDigJQgcmVtYWlucyBjZW50cmFsIHRvIGV4aXN0ZW50aWFsLXBoZW5vbWVub2xvZ2ljYWwgaW5xdWlyeS48L3A+CjxoMj5Db250ZW1wb3JhcnkgTWV0aG9kczwvaDI+CjxwPkdpb3JnaSdzIGRlc2NyaXB0aXZlIHBoZW5vbWVub2xvZ2ljYWwgbWV0aG9kIGFuZCBpbnRlcnByZXRpdmUgcGhlbm9tZW5vbG9naWNhbCBhbmFseXNpcyAoSVBBKSByZXByZXNlbnQgdHdvIG1ham9yIGFwcHJvYWNoZXMgY3VycmVudGx5IHVzZWQgaW4gZXhpc3RlbnRpYWwgcmVzZWFyY2guPC9wPgo8aDI+Q29uY2x1c2lvbjwvaDI+CjxwPlBoZW5vbWVub2xvZ2ljYWwgbWV0aG9kLCBwcm9wZXJseSBhcHBsaWVkLCBob25vdXJzIGJvdGggdGhlIHJpZ291ciBvZiByZXNlYXJjaCBhbmQgdGhlIHJpY2huZXNzIG9mIGxpdmVkIGV4cGVyaWVuY2UuPC9wPgo8L2JvZHk+CjwvaHRtbD4=</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="1" access_status="0" date_published="2024-07-15" section_ref="ART" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">110</id>
+          <title locale="en">Phenomenological Method in Existential Research</title>
+          <abstract locale="en">&lt;p&gt;This paper reviews phenomenological research methods as applied to existential psychology. We examine the contributions of Husserl, Merleau-Ponty, and Giorgi, and propose methodological guidelines for researchers in the existential tradition.&lt;/p&gt;</abstract>
+          <copyrightHolder locale="en">Thomas Brown</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <keywords locale="en">
+            <keyword>phenomenology</keyword>
+            <keyword>existential</keyword>
+            <keyword>research methods</keyword>
+            <keyword>Husserl</keyword>
+          </keywords>
+          <pages>3-16</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="115">
+              <givenname locale="en">Thomas</givenname>
+              <familyname locale="en">Brown</familyname>
+              <country>US</country>
+              <email>t.brown@demo.invalid</email>
+            </author>
+          </authors>
+          <citations>
+            <citation>Husserl, E. (1913). Ideas Pertaining to a Pure Phenomenology. Trans. F. Kersten. The Hague: Nijhoff.</citation>
+            <citation>Merleau-Ponty, M. (1945). Phenomenology of Perception. Trans. C. Smith. London: Routledge.</citation>
+            <citation>Giorgi, A. (2009). The Descriptive Phenomenological Method in Psychology. Pittsburgh: Duquesne University Press.</citation>
+            <citation>Moustakas, C. (1994). Phenomenological Research Methods. Thousand Oaks, CA: Sage.</citation>
+            <citation>van Manen, M. (1990). Researching Lived Experience. Albany, NY: SUNY Press.</citation>
+          </citations>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">116</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="111" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">117</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="113" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-07-15" status="3" submission_progress="" current_publication_id="118" stage="production">
+        <id type="internal" advice="ignore">118</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="119" created_at="2024-07-15" file_id="120" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">02-cross-cultural-dimensions-of-e.pdf</name>
+          <file id="120" filesize="1847" extension="pdf">
+            <embed encoding="base64">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</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="121" created_at="2024-07-15" file_id="122" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">02-cross-cultural-dimensions-of-e.html</name>
+          <file id="122" filesize="920" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5JbnRyb2R1Y3Rpb248L2gyPgo8cD5UaGUgYWNjdXNhdGlvbiB0aGF0IGV4aXN0ZW50aWFsIHRoZXJhcHkgaXMgZXhjbHVzaXZlbHkgYSBwcm9kdWN0IG9mIFdlc3Rlcm4gcGhpbG9zb3BoeSBvdmVybG9va3Mgc2lnbmlmaWNhbnQgY29udmVyZ2VuY2VzIGJldHdlZW4gZXhpc3RlbnRpYWwgdGhvdWdodCBhbmQgRWFzdGVybiBwaGlsb3NvcGhpY2FsIHRyYWRpdGlvbnMuPC9wPgo8aDI+UGFyYWxsZWxzIHdpdGggWmVuIEJ1ZGRoaXNtPC9oMj4KPHA+Qm90aCBleGlzdGVudGlhbCBwaGlsb3NvcGh5IGFuZCBaZW4gQnVkZGhpc20gZW1waGFzaXNlIGRpcmVjdCBlbmdhZ2VtZW50IHdpdGggZXhwZXJpZW5jZSBvdmVyIGFic3RyYWN0IHRoZW9yaXNpbmcuIFRoZSBaZW4gY29uY2VwdCBvZiBtdSAobm90aGluZ25lc3MpIHJlc29uYXRlcyB3aXRoIEhlaWRlZ2dlcidzIGFuYWx5c2lzIG9mIGRhcyBOaWNodHMuPC9wPgo8aDI+SW1wbGljYXRpb25zIGZvciBQcmFjdGljZTwvaDI+CjxwPkEgY3Jvc3MtY3VsdHVyYWwgZXhpc3RlbnRpYWwgdGhlcmFweSBjYW4gZHJhdyBvbiBkaXZlcnNlIHBoaWxvc29waGljYWwgcmVzb3VyY2VzIHdoaWxlIHJlbWFpbmluZyBhdHRlbnRpdmUgdG8gdGhlIHBhcnRpY3VsYXIgY3VsdHVyYWwgY29udGV4dCBvZiBlYWNoIGNsaWVudC48L3A+CjxoMj5Db25jbHVzaW9uPC9oMj4KPHA+RXhpc3RlbnRpYWwgdGhlcmFweSwgZW5yaWNoZWQgYnkgY3Jvc3MtY3VsdHVyYWwgZGlhbG9ndWUsIGJlY29tZXMgYSBtb3JlIGluY2x1c2l2ZSBhbmQgZ2xvYmFsbHkgcmVsZXZhbnQgYXBwcm9hY2guPC9wPgo8L2JvZHk+CjwvaHRtbD4=</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="2" access_status="0" date_published="2024-07-15" section_ref="ART" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">118</id>
+          <title locale="en">Cross-Cultural Dimensions of Existential Therapy</title>
+          <abstract locale="en">&lt;p&gt;Existential therapy is often criticised as a Western-centric approach. This paper challenges that view by examining parallels between existential philosophy and Eastern thought, particularly Zen Buddhism and Japanese concepts of impermanence.&lt;/p&gt;</abstract>
+          <copyrightHolder locale="en">Yuki Tanaka</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <keywords locale="en">
+            <keyword>existential</keyword>
+            <keyword>cross-cultural</keyword>
+            <keyword>Zen Buddhism</keyword>
+            <keyword>impermanence</keyword>
+          </keywords>
+          <pages>17-30</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="123">
+              <givenname locale="en">Yuki</givenname>
+              <familyname locale="en">Tanaka</familyname>
+              <country>JP</country>
+              <email>y.tanaka@demo.invalid</email>
+            </author>
+            <author include_in_browse="true" user_group_ref="Author" seq="1" id="124">
+              <givenname locale="en">David</givenname>
+              <familyname locale="en">Smith</familyname>
+              <country>GB</country>
+              <email>d.smith2@demo.invalid</email>
+            </author>
+          </authors>
+          <citations>
+            <citation>Nishitani, K. (1982). Religion and Nothingness. Trans. J. Van Bragt. Berkeley: University of California Press.</citation>
+            <citation>Suzuki, D. T. (1956). Zen Buddhism. New York: Doubleday.</citation>
+            <citation>van Deurzen, E. (2010). Everyday Mysteries. 2nd ed. London: Routledge.</citation>
+            <citation>Vos, J. (2018). Meaning in Life: An Evidence-Based Handbook for Practitioners. London: Palgrave.</citation>
+            <citation>Cooper, M. (2003). Existential Therapies. London: Sage Publications.</citation>
+          </citations>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">125</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="119" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">126</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="121" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-07-15" status="3" submission_progress="" current_publication_id="127" stage="production">
+        <id type="internal" advice="ignore">127</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="128" created_at="2024-07-15" file_id="129" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">03-review-of-"anxiety-and-the-hum.pdf</name>
+          <file id="129" filesize="1659" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDQ4Mwo+PgpzdHJlYW0KeJxtUsFy2jAUvPMVOzmRA4plg4WPbROmZdpJ2nDMRdjPoFRIriRD+PtKLpSGqcYzlp9n3+7btzmWo4zNBA6jjyvcLTh4ybIMqxYPq1QSGasyiEqwaaw2GP+gvaIDbIubD+ZNUThCmgZhS/jc76TBJ2saFZQ1N1gf8ZXhm3R172+xej31vFvk4PwdTV4KVlUQ8SXygedhp/QRS2voPbRA9R4pcsZziKlgWTkgn+SGPAo+KfIrJM8u0F+IxYIzPofgMzabJyxnRVZhdcB4tVUe8ZFoaGchXVC1JmzIkJOBGrTWxV970rbbkQl/TCAflNmg611nPXmG8/kSUFsTpDI+XrqjU5ttmLSOCJ2WNW2tbsid5OL76KIt42zKh7lSgzNTVGZsgEqV5qTmfLp+rVUt0wqQRCofnFr36ZudDfln+lIUJ+diEHhxmp7Q9lrHid5C2nVIdpxNONheN5BdR9JhS46ijmhU52zT1wMtmb1y1iRjLh4Mlj7dL+DJ7eOGZHJ3I7WmI1qV+qpIY/5jQjmbs3k1mJBy9rh8xsv4sSMT89E7IzWejz7Qzr/c/mVLu4i6fJCmJnaVvqsIFRkrBMqiYOUQg/F92nmr3kIfh5ug20r3U9HEvvpJp/tNbHtu+BsYtvHBCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1PYmxpcXVlCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovU3VidHlwZSAvVHlwZTEKL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZvbnQgPDwvRjEgNSAwIFIKL0YyIDYgMCBSCi9GMyA3IDAgUj4+Ci9Qcm9jU2V0IFsvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJXQo+PgplbmRvYmoKOSAwIG9iago8PAovQ3JlYXRpb25EYXRlIChEOjIwMjYwMzI0MjExODM5WikKPj4KZW5kb2JqCnhyZWYKMCAxMAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA1IDAwMDAwIG4gCjAwMDAwMDAyODUgMDAwMDAgbiAKMDAwMDAwMDg0MCAwMDAwMCBuIAowMDAwMDAwOTQyIDAwMDAwIG4gCjAwMDAwMDEwNDcgMDAwMDAgbiAKMDAwMDAwMTE0NCAwMDAwMCBuIAowMDAwMDAxMjUxIDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgMTAKL1Jvb3QgMiAwIFIKL0luZm8gOSAwIFIKL0lEIFs8MDRBMjY3NDI2QUZERjhEODhCNTZDRDc0MkE2NDQ5MjU+PDA0QTI2NzQyNkFGREY4RDg4QjU2Q0Q3NDJBNjQ0OTI1Pl0KPj4Kc3RhcnR4cmVmCjEzMDYKJSVFT0YK</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="130" created_at="2024-07-15" file_id="131" stage="proof" updated_at="2024-07-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">03-review-of-"anxiety-and-the-hum.html</name>
+          <file id="131" filesize="467" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5Cb29rIFJldmlldzwvaDI+CjxwPk1hcmN1cyBvZmZlcnMgYSB3aWRlLXJhbmdpbmcgc3VydmV5IG9mIGhvdyBhbnhpZXR5IGhhcyBiZWVuIHVuZGVyc3Rvb2QgYWNyb3NzIHRoZSBoaXN0b3J5IG9mIHBoaWxvc29waHksIGZyb20gS2llcmtlZ2FhcmQgdG8gY29udGVtcG9yYXJ5IG5ldXJvc2NpZW5jZS48L3A+CjxwPlRoZSBib29rJ3Mgc3RyZW5ndGggbGllcyBpbiBpdHMgY2FyZWZ1bCBhdHRlbnRpb24gdG8gdGhlIGRpc3RpbmN0aW9uIGJldHdlZW4gcHJvZHVjdGl2ZSBhbmQgcGF0aG9sb2dpY2FsIGFueGlldHkuIEEgdmFsdWFibGUgYWRkaXRpb24gdG8gYW55IHByYWN0aXRpb25lcidzIGxpYnJhcnkuPC9wPgo8L2JvZHk+CjwvaHRtbD4=</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="3" access_status="1" date_published="2024-07-15" section_ref="BR" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">127</id>
+          <title locale="en">Review of "Anxiety and the Human Condition" by L. Marcus</title>
+          <copyrightHolder locale="en">Emily Jones</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <pages>31-32</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="132">
+              <givenname locale="en">Emily</givenname>
+              <familyname locale="en">Jones</familyname>
+              <country>GB</country>
+              <email>e.jones@demo.invalid</email>
+            </author>
+          </authors>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">133</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="128" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">134</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="130" />
+          </article_galley>
+        </publication>
+      </article>
+    </articles>
+  </issue>
+</issues>

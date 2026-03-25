@@ -53,11 +53,13 @@ JATS is the single source of truth for article content. The pipeline direction i
 3. `backfill/extract_citations.py` — reads JATS `<body>`, finds reference sections, extracts items, writes to JATS `<back>` (ref-list, fn-group, bio, notes). Removes ref sections from body.
 4. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
 5. `backfill/jats_to_html.py` — generates HTML galley from JATS (body + notes + bios + provenance; references excluded — OJS renders those from citations table)
-6. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads citations from JATS `<ref-list>`.
+6. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads citations from JATS `<ref-list>`, page numbers from JATS `<fpage>`/`<lpage>`.
 
 Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, etc.)
 
 toc.json retains issue-level data only: PDF page splits, article ordering, section assignments, metadata.
+
+Page numbers: `backfill/add_page_numbers.py` auto-detects printed page numbers from source PDFs and writes `journal_page_start/end` to toc.json. `generate_jats.py` reads those and writes `<fpage>`/`<lpage>` to JATS. `generate_xml.py` reads page numbers from JATS only (not toc.json) — JATS is the single source of truth. To update page numbers: edit toc.json → re-run `generate_jats.py` → re-run `generate_xml.py`. To push to live without re-import: `backfill/push_page_numbers.py --target live`.
 
 Standalone utilities:
 - `backfill/audit.py` — audit all source PDFs in `backfill/input/` for completeness
@@ -65,6 +67,8 @@ Standalone utilities:
 - `backfill/export_review.py` — export toc.json entries to spreadsheet-compatible format
 - `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
 - `backfill/sheets_export.py` — publish all toc.json data to Google Sheet for review
+- `backfill/add_page_numbers.py` — auto-detect printed page numbers from source PDFs, populate toc.json
+- `backfill/push_page_numbers.py` — push page numbers to OJS database (dev or live) without re-import
 
 All journal-specific data lives in the private repo (`private/backfill/`). The public repo has symlinks: `backfill/input`, `backfill/output`, `backfill/authors.json`, `backfill/doi-registry.json`, `backfill/reports` all point to `private/backfill/`. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
 

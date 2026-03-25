@@ -130,10 +130,11 @@ services:
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro
       - ./docker/ojs/apache.conf:/etc/apache2/conf-enabled/sea-cgipassauth.conf:ro
       - ./scripts:/scripts:ro
-      # Demo issue XMLs for dev/test — copyright-free content in the public repo.
-      # Regenerate with: python fixtures/generate-sample-issues.py
-      - "./fixtures/sample-issues/1.1.xml:/data/sample-issues/1.1.xml:ro"
-      - "./fixtures/sample-issues/1.2.xml:/data/sample-issues/1.2.xml:ro"
+      # Sample issue XMLs for dev. Mounts the entire backfill output directory.
+      # Generate all: for t in backfill/output/*/toc.json; do python backfill/generate_xml.py "$t" -o "$(dirname $t)/import.xml"; done
+      # Demo fixtures (no private repo needed): python fixtures/generate-sample-issues.py
+      # Docker can't follow the backfill/output symlink — use the real path via private/.
+      - "./private/backfill/output:/data/sample-issues:ro"
       - "./private/editorial-roles.json:/data/editorial-roles.json:ro"
     depends_on:
       ojs-db:

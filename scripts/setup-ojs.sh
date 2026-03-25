@@ -1094,11 +1094,14 @@ echo "[OJS] Caches cleared, Apache reloaded."
 # --- Sample data (dev/staging only) ---
 if [ "$SAMPLE_DATA" = true ]; then
   IMPORT_DIR="/data/sample-issues"
-  # Check for actual XML files (not directories — Docker creates empty dirs for missing bind-mount sources)
-  XML_FILES=$(find "$IMPORT_DIR" -maxdepth 1 -name '*.xml' -type f 2>/dev/null)
+  # Find import XMLs: either flat *.xml files (demo fixtures) or */import.xml (backfill output dir)
+  XML_FILES=$(find "$IMPORT_DIR" -maxdepth 2 -name 'import.xml' -type f 2>/dev/null)
+  if [ -z "$XML_FILES" ]; then
+    XML_FILES=$(find "$IMPORT_DIR" -maxdepth 1 -name '*.xml' -type f 2>/dev/null)
+  fi
   if [ ! -d "$IMPORT_DIR" ] || [ -z "$XML_FILES" ]; then
     echo "[OJS] WARNING: No sample issue XMLs found in $IMPORT_DIR — skipping content import."
-    echo "[OJS] To import: mount backfill/output/*/import.xml files and re-run setup."
+    echo "[OJS] To import: mount backfill/output/ or individual XML files and re-run setup."
   else
 
   # Idempotent check: see if articles already exist
@@ -1108,8 +1111,12 @@ if [ "$SAMPLE_DATA" = true ]; then
   else
     IMPORT_COUNT=0
     IMPORT_ERRORS=0
-    for IMPORT_XML in "$IMPORT_DIR"/*.xml; do
-      ISSUE_NAME=$(basename "$IMPORT_XML" .xml)
+    for IMPORT_XML in $XML_FILES; do
+      ISSUE_NAME=$(basename "$(dirname "$IMPORT_XML")")
+      # For flat files (demo fixtures), use the filename
+      if [ "$ISSUE_NAME" = "sample-issues" ]; then
+        ISSUE_NAME=$(basename "$IMPORT_XML" .xml)
+      fi
       echo "[OJS] Importing $ISSUE_NAME..."
       IMPORT_OUTPUT=$(php -d memory_limit=512M /var/www/html/tools/importExport.php NativeImportExportPlugin import "$IMPORT_XML" "$JOURNAL_PATH" 2>&1)
       IMPORT_EXIT=$?

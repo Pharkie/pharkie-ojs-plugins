@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="utf-8"?>
+<issues xmlns="http://pkp.sfu.ca" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+  <issue xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" published="1" current="0" access_status="2" url_path="">
+    <id type="internal" advice="ignore">100</id>
+    <issue_identification>
+      <volume>1</volume>
+      <number>1</number>
+      <year>2024</year>
+      <title locale="en">Existential Analysis</title>
+    </issue_identification>
+    <date_published>2024-01-15</date_published>
+    <last_modified>2024-01-15</last_modified>
+    <sections>
+      <section ref="ED" seq="0" editor_restricted="0" meta_indexed="1" meta_reviewed="0" abstracts_not_required="1" hide_title="0" hide_author="0" abstract_word_count="0">
+        <abbrev locale="en">ED</abbrev>
+        <title locale="en">Editorial</title>
+      </section>
+      <section ref="ART" seq="1" editor_restricted="0" meta_indexed="1" meta_reviewed="1" abstracts_not_required="0" hide_title="0" hide_author="0" abstract_word_count="0">
+        <abbrev locale="en">ART</abbrev>
+        <title locale="en">Articles</title>
+      </section>
+      <section ref="BR" seq="3" editor_restricted="0" meta_indexed="1" meta_reviewed="0" abstracts_not_required="1" hide_title="0" hide_author="0" abstract_word_count="0">
+        <abbrev locale="en">BR</abbrev>
+        <title locale="en">Book Reviews</title>
+      </section>
+    </sections>
+    <issue_galleys>
+      <issue_galley locale="en">
+        <label>PDF</label>
+        <issue_file>
+          <file_name>vol-1-iss-1.pdf</file_name>
+          <file_type>application/pdf</file_type>
+          <file_size>1735</file_size>
+          <content_type>1</content_type>
+          <original_file_name>1.1.pdf</original_file_name>
+          <date_uploaded>2024-01-15</date_uploaded>
+          <date_modified>2024-01-15</date_modified>
+          <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDU1OQo+PgpzdHJlYW0KeJyNk8tu2zAQRff5ikFWLVAx4kOWiK4cJ0EbNK2RCO2atscWE4pURSqJ/76UX4lTL7QTJMzFOXNHDG7PUpLl8HJ2WcLFDQVakDSFcgnXZf+KUU5oCrnkROZQLuDT9av2AW3QysDYKrP22n+G8nE3cHHDgLLjDJYRKSDPU8JGm4zfznQ1Av0CP7t6hm3/xFImjnIiizjK4ZTQAnImCE83MaWaGQS3hImzPZL/OE9PzI8kIyO6VVno4Noo8pE/PTWXCyKKzRzALwuhQrhDZbVd9QjTShvnXVPpeVzMd/u30+36KJeDPBWbSULlLhZgbPQc4aHWofoK9y7uJsCkQguQADQNAZrwQZaCkmxLO26Dnhv8r6STkowTMdrRvG96iq1vcB70M3pwFsZd9I+f5jqsQVu4cwtsLfzQSxwinRaE5gfpW1XH1I30wVMktBhCnMU62b6WmxZx4WpQdgH36BtnvZ5ps2N87zNxnfVoTGxvAG+Wj4h8K+lOxaP5wEtlwtkg4FHsS55Y8di+aoykPXx/XGWFrWqwi0uOMkYFHXUq3QzhFRkp0gPvlXrWi/1RfUMTz2mqApoDPOeJKIacVcYKwrbBl849Ra5njS+DTivr3+473871/8151OzbaNUKIbjtRs5htoYpiStwdeOdHaAspCB5cVB+UK2q4I+ODavav12VTLL0XRrjKeE5iCwnkm+Gr7B2sNSvoWsxTjWVap80Ju7RJ43pVtoeZP8BNzVgDQplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZAovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovU3VidHlwZSAvVHlwZTEKL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLU9ibGlxdWUKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago4IDAgb2JqCjw8Ci9Gb250IDw8L0YxIDUgMCBSCi9GMiA2IDAgUgovRjMgNyAwIFI+PgovUHJvY1NldCBbL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSV0KPj4KZW5kb2JqCjkgMCBvYmoKPDwKL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDMyNDIxMTgzOFopCj4+CmVuZG9iagp4cmVmCjAgMTAKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwNSAwMDAwMCBuIAowMDAwMDAwMjg1IDAwMDAwIG4gCjAwMDAwMDA5MTYgMDAwMDAgbiAKMDAwMDAwMTAxOCAwMDAwMCBuIAowMDAwMDAxMTE1IDAwMDAwIG4gCjAwMDAwMDEyMjAgMDAwMDAgbiAKMDAwMDAwMTMyNyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDEwCi9Sb290IDIgMCBSCi9JbmZvIDkgMCBSCi9JRCBbPDIyNTU4OUU2NEM5OUE1NkNCNEM1N0JDOEYyMEVEMDVEPjwyMjU1ODlFNjRDOTlBNTZDQjRDNTdCQzhGMjBFRDA1RD5dCj4+CnN0YXJ0eHJlZgoxMzgyCiUlRU9GCg==</embed>
+        </issue_file>
+      </issue_galley>
+    </issue_galleys>
+    <articles>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-01-15" status="3" submission_progress="" current_publication_id="101" stage="production">
+        <id type="internal" advice="ignore">101</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="102" created_at="2024-01-15" file_id="103" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">00-on-the-meaning-of-philosophica.pdf</name>
+          <file id="103" filesize="1657" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDQ4MQo+PgpzdHJlYW0KeJxtkkFz2jAQhe/5Fe9IDigWBgump7YpM2GmQ1o45qLYa6xUSIokQ/j3lSiUwlTjg70evX377RthcVewicD+7ssaD3MOXrGiwLrFt3Uu8fGYiRHETLBxKjcYLA1iR/hO0iizgW3x3Cltg3WdqqXGk3nvlT/cY/120niYj8D5leyonLBZAVGJrJ5lP2tVE1ZbFbtP+GlfyUd87chc6ZSYXcsIwXgJMRasqI4yz3JDAXxY3tzjxeXiO1Kx5IxPIfiETab5JmdlMcN6j8G6UwHpkWhoayF9VLUmbMiQl5EatNanXzvS1m3JREjTIFKIGYfrvbOBAsP5PEXU1kSpTEgv7uDVpovD1hPBaVlTZ3VD/mQXP+4u3grOxvw4VRY4d0rOjI1QudKc3JyP618TRhmVNcgmVYhevfb5m52B/DN9JcoTt5SBxPHP9IS21zpN9BHzdmPGcYawt71uIJ0j6dGRp+QjgXLeNn19bEtmp7w1GcyFwRHp8+Mcgfwu7UdmuhupNR3Qqqyb1q7MfyBUkymbzo4QcuqWixVeBktHBgvbe5PytjqESNvwcv+3W95F8hWiNDWxmyDeBKgsWClQlSWrjjEYPOadt+oj9mm4IVwn/S9FQ/sWhk73myR7FvwNwgfw4gplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZAovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovU3VidHlwZSAvVHlwZTEKL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtT2JsaXF1ZQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovU3VidHlwZSAvVHlwZTEKL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago4IDAgb2JqCjw8Ci9Gb250IDw8L0YxIDUgMCBSCi9GMiA2IDAgUgovRjMgNyAwIFI+PgovUHJvY1NldCBbL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSV0KPj4KZW5kb2JqCjkgMCBvYmoKPDwKL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDMyNDIxMTgzOFopCj4+CmVuZG9iagp4cmVmCjAgMTAKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwNSAwMDAwMCBuIAowMDAwMDAwMjg1IDAwMDAwIG4gCjAwMDAwMDA4MzggMDAwMDAgbiAKMDAwMDAwMDk0MCAwMDAwMCBuIAowMDAwMDAxMDQ1IDAwMDAwIG4gCjAwMDAwMDExNDIgMDAwMDAgbiAKMDAwMDAwMTI0OSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDEwCi9Sb290IDIgMCBSCi9JbmZvIDkgMCBSCi9JRCBbPDE0MTNFRDE2OUUzRTg3MkI0NEJDRTkyMDQ4MTUyOTcxPjwxNDEzRUQxNjlFM0U4NzJCNDRCQ0U5MjA0ODE1Mjk3MT5dCj4+CnN0YXJ0eHJlZgoxMzA0CiUlRU9GCg==</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="104" created_at="2024-01-15" file_id="105" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">00-on-the-meaning-of-philosophica.html</name>
+          <file id="105" filesize="730" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5FZGl0b3JpYWwgSW50cm9kdWN0aW9uPC9oMj4KPHA+VGhpcyBpc3N1ZSBicmluZ3MgdG9nZXRoZXIgZGl2ZXJzZSBwZXJzcGVjdGl2ZXMgb24gZXhpc3RlbnRpYWwgdGhvdWdodCBhbmQgaXRzIHByYWN0aWNhbCBhcHBsaWNhdGlvbnMgaW4gdGhlcmFwZXV0aWMgc2V0dGluZ3MuIFdlIGFyZSBwbGVhc2VkIHRvIHByZXNlbnQgd29yayB0aGF0IGJyaWRnZXMgcGhpbG9zb3BoaWNhbCBpbnF1aXJ5IGFuZCBjbGluaWNhbCBwcmFjdGljZS48L3A+CjxwPlRoZSBjb250cmlidXRvcnMgZXhwbG9yZSB0aGVtZXMgb2YgYXV0aGVudGljaXR5LCBmcmVlZG9tLCByZXNwb25zaWJpbGl0eSwgYW5kIHRoZSBzZWFyY2ggZm9yIG1lYW5pbmcgaW4gY29udGVtcG9yYXJ5IGxpZmUuIEVhY2ggYXJ0aWNsZSBvZmZlcnMgYSB1bmlxdWUgbGVucyB0aHJvdWdoIHdoaWNoIHRvIGV4YW1pbmUgdGhlIGh1bWFuIGNvbmRpdGlvbi48L3A+CjxwPldlIGludml0ZSByZWFkZXJzIHRvIGVuZ2FnZSBjcml0aWNhbGx5IHdpdGggdGhlc2UgaWRlYXMgYW5kIGNvbnNpZGVyIGhvdyB0aGV5IG1pZ2h0IGluZm9ybSBib3RoIHByb2Zlc3Npb25hbCBwcmFjdGljZSBhbmQgcGVyc29uYWwgcmVmbGVjdGlvbi48L3A+CjwvYm9keT4KPC9odG1sPg==</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="0" access_status="1" date_published="2024-01-15" section_ref="ED" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">101</id>
+          <title locale="en">On the Meaning of Philosophical Inquiry</title>
+          <copyrightHolder locale="en">Alice Smith</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <pages>1-3</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="106">
+              <givenname locale="en">Alice</givenname>
+              <familyname locale="en">Smith</familyname>
+              <country>GB</country>
+              <email>a.smith@demo.invalid</email>
+            </author>
+            <author include_in_browse="true" user_group_ref="Author" seq="1" id="107">
+              <givenname locale="en">Robert</givenname>
+              <familyname locale="en">Chen</familyname>
+              <country>GB</country>
+              <email>r.chen@demo.invalid</email>
+            </author>
+          </authors>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">108</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="102" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">109</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="104" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-01-15" status="3" submission_progress="" current_publication_id="110" stage="production">
+        <id type="internal" advice="ignore">110</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="111" created_at="2024-01-15" file_id="112" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">01-existential-perspectives-on-au.pdf</name>
+          <file id="112" filesize="1857" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDY4MQo+PgpzdHJlYW0KeJxtVMtS4zAQvPMVc4QqIvyK5RzZAmo3u1tAJUcuwh7bAlvSSnIef78j45CEwpVDLHmme7pbSmB5EbE5h+3FjzXcPMQQ5yyKYF3D/TosFQXjEfAFZxmtVnB5v5POo/JSdPCE1hksvdygA63gdvBt2Cql34NU8FdXaBX8kTVewfptannzkEAcn6Ek+ZwVOfCcM56MMEvRU89VL317VprC4rySZyxPgWecRflY+SQaqsxmcXFWSJNFZ5VpzOICeJyxmI+Ft6/OW1H6L3inZf/gszBfFGxehMKULeYprLdwuW6lAyMMWsCd6KUiIqQIlFqVaDzoGsSpRMKB9CCMQWFdEAxPxDWt7LTTpqXvVEUfOrDY4UZQL/B6YgnPZ6SKbPIpYTyNR1IE7rE32gq7D2ws8RuIAJgwrCyRwZ0VW6maYOFPlBU2DdprWAnrLV6P6L8l2ndshLDVNWyRarXRDkFAbcmprbbvUGt7JHWkxCOWpKPAg6I4OE/9AtinEoCqIc96eoEt+f0hWSu6jjZCsGroP4LUUZDYwZ7TsbNsyk3M0mhx9IJ+AirsNdAssuwQGlSkgMcq0KWtDXbajNBhTI/OB25msGE8x+Dw/PLBRS+kcvTH7K1sWj+rLZIWnSix1R1R/G7+lM5XNs4/OjEhETOlPXlOK9XE5vCY4bWTpfCS/AgkKRNWvg7h/dvpo4Qlo+mEFB+SiFAPXUcT7cbc+SDHQYStHrpqyh1QIjBkTwRTq6EcYVFtpNUqCHPUYJT06e4BHNpw4kVQtwk+7aGWoS+5J9U3IszpGok+DnYw93G5gpfLR4MKlnqwitK+2lPwe/dy9YkWvCBeIS/l0fXp/vhyCZDGKYd5nrAiHlHugue13PmBhpvRWRL2XeJMv7mZ6YaG2h4a/geUNIM8CmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1PYmxpcXVlCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovU3VidHlwZSAvVHlwZTEKL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZvbnQgPDwvRjEgNSAwIFIKL0YyIDYgMCBSCi9GMyA3IDAgUj4+Ci9Qcm9jU2V0IFsvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJXQo+PgplbmRvYmoKOSAwIG9iago8PAovQ3JlYXRpb25EYXRlIChEOjIwMjYwMzI0MjExODM4WikKPj4KZW5kb2JqCnhyZWYKMCAxMAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA1IDAwMDAwIG4gCjAwMDAwMDAyODUgMDAwMDAgbiAKMDAwMDAwMTAzOCAwMDAwMCBuIAowMDAwMDAxMTQwIDAwMDAwIG4gCjAwMDAwMDEyNDUgMDAwMDAgbiAKMDAwMDAwMTM0MiAwMDAwMCBuIAowMDAwMDAxNDQ5IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgMTAKL1Jvb3QgMiAwIFIKL0luZm8gOSAwIFIKL0lEIFs8QTU0MUIzNzBDQzM3RkQ5NjkwRTQwMEI1QThCOEYyREI+PEE1NDFCMzcwQ0MzN0ZEOTY5MEU0MDBCNUE4QjhGMkRCPl0KPj4Kc3RhcnR4cmVmCjE1MDQKJSVFT0YK</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="113" created_at="2024-01-15" file_id="114" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">01-existential-perspectives-on-au.html</name>
+          <file id="114" filesize="1543" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5JbnRyb2R1Y3Rpb248L2gyPgo8cD5UaGUgcXVlc3Rpb24gb2YgYXV0aGVudGljaXR5IGhhcyBvY2N1cGllZCBleGlzdGVudGlhbCB0aGlua2VycyBzaW5jZSBLaWVya2VnYWFyZCBmaXJzdCBhcnRpY3VsYXRlZCB0aGUgY2hhbGxlbmdlIG9mIGJlY29taW5nIGEgZ2VudWluZSBzZWxmIGFtaWQgdGhlIHByZXNzdXJlcyBvZiBzb2NpYWwgY29uZm9ybWl0eS4gVGhpcyBwYXBlciB0cmFjZXMgdGhlIGRldmVsb3BtZW50IG9mIGF1dGhlbnRpY2l0eSBhcyBhIHBoaWxvc29waGljYWwgYW5kIHRoZXJhcGV1dGljIGNvbmNlcHQuPC9wPgo8aDI+VGhlb3JldGljYWwgRnJhbWV3b3JrPC9oMj4KPHA+SGVpZGVnZ2VyJ3MgY29uY2VwdCBvZiBFaWdlbnRsaWNoa2VpdCAob3duZWRuZXNzKSBwcm92aWRlcyB0aGUgZm91bmRhdGlvbiBmb3IgdW5kZXJzdGFuZGluZyBhdXRoZW50aWMgZXhpc3RlbmNlLiBGb3IgSGVpZGVnZ2VyLCBhdXRoZW50aWNpdHkgaW52b2x2ZXMgb3duaW5nIG9uZSdzIHBvc3NpYmlsaXRpZXMgaW4gdGhlIGZhY2Ugb2YgYW54aWV0eSBhbmQgdGhlIGF3YXJlbmVzcyBvZiBmaW5pdHVkZS48L3A+CjxwPlNhcnRyZSBleHRlbmRlZCB0aGlzIGFuYWx5c2lzIHRocm91Z2ggaGlzIGNvbmNlcHQgb2YgYmFkIGZhaXRoIChtYXV2YWlzZSBmb2kpLCBhcmd1aW5nIHRoYXQgaW5hdXRoZW50aWNpdHkgY29uc2lzdHMgaW4gZGVueWluZyBvbmUncyBmcmVlZG9tIGFuZCByZXNwb25zaWJpbGl0eSBmb3Igc2VsZi1jcmVhdGlvbi48L3A+CjxoMj5DbGluaWNhbCBBcHBsaWNhdGlvbnM8L2gyPgo8cD5JbiB0aGVyYXBldXRpYyBwcmFjdGljZSwgdGhlIHB1cnN1aXQgb2YgYXV0aGVudGljaXR5IG1hbmlmZXN0cyBhcyBhIHdpbGxpbmduZXNzIHRvIGNvbmZyb250IGFueGlldHkgcmF0aGVyIHRoYW4gZmxlZSBmcm9tIGl0LiBUaGUgdGhlcmFwaXN0J3Mgcm9sZSBpcyB0byBhY2NvbXBhbnkgdGhlIGNsaWVudCBpbiB0aGlzIGNvbmZyb250YXRpb24sIG5vdCB0byBwcm92aWRlIHJlYWR5LW1hZGUgYW5zd2Vycy48L3A+CjxoMj5Ob3RlczwvaDI+CjxwPjEuIFRoZSB0ZXJtICJhdXRoZW50aWNpdHkiIGlzIHVzZWQgdGhyb3VnaG91dCB0aGlzIHBhcGVyIGluIGl0cyBleGlzdGVudGlhbC1waGlsb3NvcGhpY2FsIHNlbnNlLCB3aGljaCBkaWZmZXJzIGZyb20gY29sbG9xdWlhbCB1c2FnZS48L3A+CjxwPjIuIEFsbCB0cmFuc2xhdGlvbnMgZnJvbSBHZXJtYW4gc291cmNlcyBhcmUgdGhlIGF1dGhvcidzIG93biB1bmxlc3Mgb3RoZXJ3aXNlIG5vdGVkLjwvcD4KPGgyPkNvbmNsdXNpb248L2gyPgo8cD5BdXRoZW50aWNpdHkgcmVtYWlucyBhIHZpdGFsIGNvbmNlcHQgZm9yIGV4aXN0ZW50aWFsIHRoZXJhcHksIG9mZmVyaW5nIGJvdGggYSBkaWFnbm9zdGljIGxlbnMgYW5kIGEgdGhlcmFwZXV0aWMgYXNwaXJhdGlvbi48L3A+CjwvYm9keT4KPC9odG1sPg==</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="1" access_status="0" date_published="2024-01-15" section_ref="ART" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">110</id>
+          <title locale="en">Existential Perspectives on Authenticity in Modern Life</title>
+          <abstract locale="en">&lt;p&gt;This paper examines the concept of authenticity as it appears in existential philosophy and its relevance to contemporary therapeutic practice. Drawing on Heidegger, Sartre, and Kierkegaard, we propose a framework for understanding authentic engagement with the challenges of modern life.&lt;/p&gt;</abstract>
+          <copyrightHolder locale="en">James Smith</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <keywords locale="en">
+            <keyword>existential</keyword>
+            <keyword>authenticity</keyword>
+            <keyword>Heidegger</keyword>
+            <keyword>therapeutic practice</keyword>
+          </keywords>
+          <pages>4-18</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="115">
+              <givenname locale="en">James</givenname>
+              <familyname locale="en">Smith</familyname>
+              <country>GB</country>
+              <email>j.smith@demo.invalid</email>
+            </author>
+          </authors>
+          <citations>
+            <citation>Heidegger, M. (1927). Being and Time. Trans. J. Macquarrie &amp; E. Robinson. New York: Harper &amp; Row.</citation>
+            <citation>Sartre, J.-P. (1943). Being and Nothingness. Trans. H. Barnes. New York: Philosophical Library.</citation>
+            <citation>Kierkegaard, S. (1843). Either/Or. Trans. H. V. Hong &amp; E. H. Hong. Princeton: Princeton University Press.</citation>
+            <citation>May, R. (1958). Existence: A New Dimension in Psychiatry and Psychology. New York: Basic Books.</citation>
+            <citation>Yalom, I. D. (1980). Existential Psychotherapy. New York: Basic Books.</citation>
+            <citation>Spinelli, E. (2005). The Interpreted World: An Introduction to Phenomenological Psychology. London: Sage.</citation>
+            <citation>Cooper, M. (2003). Existential Therapies. London: Sage Publications.</citation>
+            <citation>Buber, M. (1923). I and Thou. Trans. R. G. Smith. Edinburgh: T. &amp; T. Clark.</citation>
+          </citations>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">116</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="111" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">117</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="113" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-01-15" status="3" submission_progress="" current_publication_id="118" stage="production">
+        <id type="internal" advice="ignore">118</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="119" created_at="2024-01-15" file_id="120" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">02-freedom-and-responsibility-in.pdf</name>
+          <file id="120" filesize="1826" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDY1MAo+PgpzdHJlYW0KeJxtlElv2zAQhe/9FXNMgJrRYms5tk0MNECRtPExF1oaSUxpkuES2/++Q0Xe0uhiiMLMfO+9oTO4/5KwRQnbL99XcLNMIS1YksCqg7tVPKoTVmdQ1iWb02kLV0uL2OoNcNXCH3RGKyfWQgq/B6HgbiecR+UFl/BDB+VQSqH6a1i9TA1vlhmk6cWMrKhYnkBZlKzMxiG/uBUcnjbCDxelOdSXlWXGUsKblywpxspH3qODtJ7l2UUlCUsuSvOUpRWU6Zyl5Vj5be285Y3/MPC87BWOhUVdsUUVC0lLQbO3cLUahANuvWgkAu6M1JZY/IDkjEdrJN/DGv0WUUF3ZqP9z0Y8s7E52chgNVgd+gEa7hCcD61ANwHD7wu+aj4llrCsKke+OMsMQmqn6aeh3lxxuXfCfYUtEnkfkHC5hx5VECq+oOUGA0mCZuCqR4J9DSLqarTqrCZG1cNa+2EUarSbdBDYKI5OT4AnvJKw8tH3dbAtKge6gyFs+NEadgjiXNV8Pq1IShtTn1yPxkOLG330nyQQu8cWOm3p0xtKbTbk6TsVuhHcBEvI6Bgcnp8+KvNcqCjR7K3oBz+LTEABNjho2aL9TFJOF2k+SooNDpOITGk/boBqJ5rDY8JaUg5eaAURkkK3Yh3i+6fqk4xlU6aLNJ/UI3RBSlK089FDf76EWx1kC9wY5BYoy7iJZJSxug3NOBbVm6AUozEnD0ZLH2+X4NC+xRyjuz2XEvfQidiXLqZQn5iwqCqWvN/huA4P90/wfPVgaOHvdbC0bfC0p83euOfr47SYBXE5z1WD7MNfxYf7Th7nJSyKjFXpOOU2Zt6JnQ8kbkbrze1fgTP94mZGhp7aHhr+A7lCfDIKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLU9ibGlxdWUKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL1N1YnR5cGUgL1R5cGUxCi9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKOCAwIG9iago8PAovRm9udCA8PC9GMSA1IDAgUgovRjIgNiAwIFIKL0YzIDcgMCBSPj4KL1Byb2NTZXQgWy9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUldCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9DcmVhdGlvbkRhdGUgKEQ6MjAyNjAzMjQyMTE4MzhaKQo+PgplbmRvYmoKeHJlZgowIDEwCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDUgMDAwMDAgbiAKMDAwMDAwMDI4NSAwMDAwMCBuIAowMDAwMDAxMDA3IDAwMDAwIG4gCjAwMDAwMDExMDkgMDAwMDAgbiAKMDAwMDAwMTIxNCAwMDAwMCBuIAowMDAwMDAxMzExIDAwMDAwIG4gCjAwMDAwMDE0MTggMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSAxMAovUm9vdCAyIDAgUgovSW5mbyA5IDAgUgovSUQgWzw5NUI3NTVCODdGRkZDNkEzNTVFRUUwRERBMDBDMjJFOT48OTVCNzU1Qjg3RkZGQzZBMzU1RUVFMEREQTAwQzIyRTk+XQo+PgpzdGFydHhyZWYKMTQ3MwolJUVPRgo=</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="121" created_at="2024-01-15" file_id="122" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">02-freedom-and-responsibility-in.html</name>
+          <file id="122" filesize="1129" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5JbnRyb2R1Y3Rpb248L2gyPgo8cD5GcmVlZG9tIGlzIGJvdGggdGhlIGZvdW5kYXRpb24gYW5kIHRoZSBjZW50cmFsIGNoYWxsZW5nZSBvZiBleGlzdGVudGlhbCBjb3Vuc2VsbGluZy4gQ2xpZW50cyBvZnRlbiBlbnRlciB0aGVyYXB5IHNlZWtpbmcgcmVsaWVmIGZyb20gdGhlIGFueGlldHkgdGhhdCBhY2NvbXBhbmllcyB0aGUgcmVjb2duaXRpb24gb2YgdGhlaXIgb3duIGZyZWVkb20gdG8gY2hvb3NlLjwvcD4KPGgyPlRoZSBQYXJhZG94IG9mIEZyZWVkb208L2gyPgo8cD5TYXJ0cmUgZmFtb3VzbHkgZGVjbGFyZWQgdGhhdCB3ZSBhcmUgImNvbmRlbW5lZCB0byBiZSBmcmVlLiIgVGhpcyBwYXJhZG94IOKAlCB0aGF0IGZyZWVkb20gaXMgaW5lc2NhcGFibGUgYW5kIHlldCBleHBlcmllbmNlZCBhcyBhIGJ1cmRlbiDigJQgbGllcyBhdCB0aGUgaGVhcnQgb2YgZXhpc3RlbnRpYWwgdGhlcmFwZXV0aWMgd29yay48L3A+CjxwPkZyYW5rbCBjb21wbGVtZW50ZWQgdGhpcyB2aWV3IGJ5IGVtcGhhc2lzaW5nIHRoZSB3aWxsIHRvIG1lYW5pbmc6IGZyZWVkb20gZmluZHMgaXRzIGRpcmVjdGlvbiB0aHJvdWdoIHRoZSBkaXNjb3Zlcnkgb2YgcHVycG9zZS48L3A+CjxoMj5DYXNlIFN0dWRpZXM8L2gyPgo8cD5UaGUgZm9sbG93aW5nIGNhc2VzIGlsbHVzdHJhdGUgaG93IHRoZSBmcmVlZG9tLXJlc3BvbnNpYmlsaXR5IGRpYWxlY3RpYyBtYW5pZmVzdHMgaW4gY2xpbmljYWwgcHJhY3RpY2UgYW5kIGhvdyB0aGVyYXBpc3RzIGNhbiB3b3JrIHdpdGggdGhlc2UgdGhlbWVzIGVmZmVjdGl2ZWx5LjwvcD4KPGgyPkNvbmNsdXNpb248L2gyPgo8cD5FeGlzdGVudGlhbCBjb3Vuc2VsbGluZyBpbnZpdGVzIGNsaWVudHMgdG8gZW1icmFjZSB0aGVpciBmcmVlZG9tIG5vdCBhcyBhbiBhYnN0cmFjdCBwaGlsb3NvcGhpY2FsIGNvbmNlcHQgYnV0IGFzIGEgbGl2ZWQgcmVhbGl0eSB3aXRoIGNvbmNyZXRlIGltcGxpY2F0aW9ucyBmb3IgaG93IHRoZXkgY29uZHVjdCB0aGVpciBsaXZlcy48L3A+CjwvYm9keT4KPC9odG1sPg==</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="2" access_status="0" date_published="2024-01-15" section_ref="ART" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">118</id>
+          <title locale="en">Freedom and Responsibility in Existential Counselling</title>
+          <abstract locale="en">&lt;p&gt;This article explores the interplay between freedom and responsibility in existential counselling. Through case studies and philosophical analysis, we argue that genuine therapeutic change requires confronting both the possibilities and the burdens of human freedom.&lt;/p&gt;</abstract>
+          <copyrightHolder locale="en">Maria Smith</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <keywords locale="en">
+            <keyword>existential</keyword>
+            <keyword>freedom</keyword>
+            <keyword>responsibility</keyword>
+            <keyword>counselling</keyword>
+          </keywords>
+          <pages>19-32</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="123">
+              <givenname locale="en">Maria</givenname>
+              <familyname locale="en">Smith</familyname>
+              <country>US</country>
+              <email>m.smith@demo.invalid</email>
+            </author>
+          </authors>
+          <citations>
+            <citation>Frankl, V. E. (1946). Man's Search for Meaning. Boston: Beacon Press.</citation>
+            <citation>Sartre, J.-P. (1946). Existentialism Is a Humanism. Trans. C. Macomber. New Haven: Yale University Press.</citation>
+            <citation>May, R. (1969). Love and Will. New York: W. W. Norton.</citation>
+            <citation>van Deurzen, E. (2002). Existential Counselling and Psychotherapy in Practice. London: Sage.</citation>
+            <citation>Frankl, V. E. (1969). The Will to Meaning. New York: Plume.</citation>
+            <citation>Cooper, M. (2003). Existential Therapies. London: Sage Publications.</citation>
+          </citations>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">124</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="119" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">125</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="121" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-01-15" status="3" submission_progress="" current_publication_id="126" stage="production">
+        <id type="internal" advice="ignore">126</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="127" created_at="2024-01-15" file_id="128" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">03-existential-anxiety-and-the-th.pdf</name>
+          <file id="128" filesize="1836" extension="pdf">
+            <embed encoding="base64">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</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="129" created_at="2024-01-15" file_id="130" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">03-existential-anxiety-and-the-th.html</name>
+          <file id="130" filesize="1203" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5JbnRyb2R1Y3Rpb248L2gyPgo8cD5BbnhpZXR5IG9jY3VwaWVzIGEgcHJpdmlsZWdlZCBwb3NpdGlvbiBpbiBleGlzdGVudGlhbCB0aG91Z2h0LiBVbmxpa2UgY2xpbmljYWwgYXBwcm9hY2hlcyB0aGF0IHZpZXcgYW54aWV0eSBwcmltYXJpbHkgYXMgcGF0aG9sb2d5LCB0aGUgZXhpc3RlbnRpYWwgdHJhZGl0aW9uIHVuZGVyc3RhbmRzIGl0IGFzIGEgZnVuZGFtZW50YWwgZGlzY2xvc3VyZSBvZiB0aGUgaHVtYW4gY29uZGl0aW9uLjwvcD4KPGgyPkFueGlldHkgYXMgUmV2ZWxhdGlvbjwvaDI+CjxwPlRpbGxpY2ggZGlzdGluZ3Vpc2hlZCBiZXR3ZWVuIGV4aXN0ZW50aWFsIGFueGlldHkgKG9udG9sb2dpY2FsLCBpbmhlcmVudCB0byBiZWluZykgYW5kIG5ldXJvdGljIGFueGlldHkgKHBhdGhvbG9naWNhbCwgYXZvaWRhbnQpLiBUaGUgdGhlcmFwZXV0aWMgdGFzayBpbnZvbHZlcyBoZWxwaW5nIGNsaWVudHMgZGlzdGluZ3Vpc2ggYmV0d2VlbiB0aGVzZSBhbmQgZW5nYWdlIGNvbnN0cnVjdGl2ZWx5IHdpdGggZXhpc3RlbnRpYWwgYW54aWV0eS48L3A+CjxoMj5UaGUgVGhlcmFwZXV0aWMgRW5jb3VudGVyPC9oMj4KPHA+V2hlbiBib3RoIHRoZXJhcGlzdCBhbmQgY2xpZW50IGNhbiB0b2xlcmF0ZSBleGlzdGVudGlhbCBhbnhpZXR5IHdpdGhvdXQgZmxlZWluZyBpbnRvIHRlY2huaXF1ZSBvciByZWFzc3VyYW5jZSwgYSBnZW51aW5lIGVuY291bnRlciBiZWNvbWVzIHBvc3NpYmxlLiBUaGlzIGVuY291bnRlciBpcyBpdHNlbGYgdGhlcmFwZXV0aWMuPC9wPgo8aDI+Tm90ZXM8L2gyPgo8cD4xLiBXZSB1c2UgImFueGlldHkiIHRocm91Z2hvdXQgaW4gaXRzIGV4aXN0ZW50aWFsIHNlbnNlIChBbmdzdCksIGRpc3RpbmN0IGZyb20gdGhlIGNsaW5pY2FsIGRpc29yZGVyIGNhdGVnb3J5LjwvcD4KPGgyPkNvbmNsdXNpb248L2gyPgo8cD5FeGlzdGVudGlhbCBhbnhpZXR5LCBwcm9wZXJseSB1bmRlcnN0b29kIGFuZCBoZWxkIHdpdGhpbiB0aGUgdGhlcmFwZXV0aWMgcmVsYXRpb25zaGlwLCBiZWNvbWVzIGEgY2F0YWx5c3QgZm9yIGdyb3d0aCByYXRoZXIgdGhhbiBhIHByb2JsZW0gdG8gYmUgc29sdmVkLjwvcD4KPC9ib2R5Pgo8L2h0bWw+</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="3" access_status="0" date_published="2024-01-15" section_ref="ART" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">126</id>
+          <title locale="en">Existential Anxiety and the Therapeutic Relationship</title>
+          <abstract locale="en">&lt;p&gt;This paper investigates the role of existential anxiety in the therapeutic relationship. We argue that anxiety, rather than being merely a symptom to be eliminated, serves as a gateway to deeper self-understanding and authentic encounter between therapist and client.&lt;/p&gt;</abstract>
+          <copyrightHolder locale="en">David Smith</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <keywords locale="en">
+            <keyword>existential</keyword>
+            <keyword>anxiety</keyword>
+            <keyword>therapeutic relationship</keyword>
+            <keyword>encounter</keyword>
+          </keywords>
+          <pages>33-48</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="131">
+              <givenname locale="en">David</givenname>
+              <familyname locale="en">Smith</familyname>
+              <country>GB</country>
+              <email>d.smith@demo.invalid</email>
+            </author>
+            <author include_in_browse="true" user_group_ref="Author" seq="1" id="132">
+              <givenname locale="en">Helen</givenname>
+              <familyname locale="en">Patel</familyname>
+              <country>GB</country>
+              <email>h.patel@demo.invalid</email>
+            </author>
+          </authors>
+          <citations>
+            <citation>Tillich, P. (1952). The Courage to Be. New Haven: Yale University Press.</citation>
+            <citation>May, R. (1950). The Meaning of Anxiety. New York: Ronald Press.</citation>
+            <citation>Boss, M. (1963). Psychoanalysis and Daseinsanalysis. Trans. L. Lefebre. New York: Basic Books.</citation>
+            <citation>Bugental, J. F. T. (1981). The Search for Authenticity. New York: Irvington.</citation>
+            <citation>van Deurzen, E. (1997). Everyday Mysteries: Existential Dimensions of Psychotherapy. London: Routledge.</citation>
+            <citation>Yalom, I. D. (1980). Existential Psychotherapy. New York: Basic Books.</citation>
+            <citation>Spinelli, E. (2007). Practising Existential Psychotherapy. London: Sage.</citation>
+          </citations>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">133</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="127" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">134</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="129" />
+          </article_galley>
+        </publication>
+      </article>
+      <article xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" date_submitted="2024-01-15" status="3" submission_progress="" current_publication_id="135" stage="production">
+        <id type="internal" advice="ignore">135</id>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="136" created_at="2024-01-15" file_id="137" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">04-review-of-"the-courage-to-exis.pdf</name>
+          <file id="137" filesize="1656" extension="pdf">
+            <embed encoding="base64">JVBERi0xLjMKJenr8b8KMSAwIG9iago8PAovQ291bnQgMQovS2lkcyBbMyAwIFJdCi9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9UeXBlIC9QYWdlcwo+PgplbmRvYmoKMiAwIG9iago8PAovT3BlbkFjdGlvbiBbMyAwIFIgL0ZpdEggbnVsbF0KL1BhZ2VMYXlvdXQgL09uZUNvbHVtbgovUGFnZXMgMSAwIFIKL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0NvbnRlbnRzIDQgMCBSCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyA4IDAgUgovVHlwZSAvUGFnZQo+PgplbmRvYmoKNCAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDQ4MAo+PgpzdHJlYW0KeJxtUk2P2jAUvPMrRntiD3hjAglc212kcllaIvWyF0NeiLfGdm2Hj39fO4JSUC0f4hfNvJl5b4zlIGPTEsfBlwovCw5esCxD1eCtSiWexfcY5bxkk1iuMfxBB0lHmAZPVUv4ajondoRg8HaSPjxhc8aKoWrN3nqjn1F9XrheFmNwfkc/LjI2L1EWJSvHPf1aONHip1RKir2/Q+eY34PLMeNR26RkWdGDV1GJx2Q+mmYPSJ7doL8RizlnfIaST9l0lrCc5dkc1RHDqpUe8QrUtDcQLsitIuxIkxOBajTGxV8HUsbuSQcIXSOQD1LvYDtnjSfPcD3fArZGByG1jx/27OSuDaPGEcEqsaXWqJrcRS6+D27aMs4mvPeVCK6dojJtAmSq1Bc112O7jZJbEaTRSCLjPJzcdOnNroH8474o80tycQd4fnFPaDqloqNTSFMOKY5rCEfTqRrCWhIOLTmKOmJQ1pm62/ZtSR+kMzoFc8ugj3T1uoAnd4gTEindnVCKzmhk4pWxjf5PCMV0xmbzPoQQlb0v1/gYvlvSWMbF00JhffaB9v7j+W+3NIuoyweht8QeFvBhhfKM5SWKPGdFvwbD1zTzRp5CF82NYFvhfkkamU8/sqrbRdor4R/IhO/OCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1PYmxpcXVlCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9TdWJ0eXBlIC9UeXBlMQovVHlwZSAvRm9udAo+PgplbmRvYmoKNyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovU3VidHlwZSAvVHlwZTEKL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZvbnQgPDwvRjEgNSAwIFIKL0YyIDYgMCBSCi9GMyA3IDAgUj4+Ci9Qcm9jU2V0IFsvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJXQo+PgplbmRvYmoKOSAwIG9iago8PAovQ3JlYXRpb25EYXRlIChEOjIwMjYwMzI0MjExODM5WikKPj4KZW5kb2JqCnhyZWYKMCAxMAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA1IDAwMDAwIG4gCjAwMDAwMDAyODUgMDAwMDAgbiAKMDAwMDAwMDgzNyAwMDAwMCBuIAowMDAwMDAwOTM5IDAwMDAwIG4gCjAwMDAwMDEwNDQgMDAwMDAgbiAKMDAwMDAwMTE0MSAwMDAwMCBuIAowMDAwMDAxMjQ4IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgMTAKL1Jvb3QgMiAwIFIKL0luZm8gOSAwIFIKL0lEIFs8RDlBRUZEOUQ5MTExRDczRUM3QzdGRkQ0NEFERjFBOUM+PEQ5QUVGRDlEOTExMUQ3M0VDN0M3RkZENDRBREYxQTlDPl0KPj4Kc3RhcnR4cmVmCjEzMDMKJSVFT0YK</embed>
+          </file>
+        </submission_file>
+        <submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="138" created_at="2024-01-15" file_id="139" stage="proof" updated_at="2024-01-15" viewable="false" genre="Article Text" uploader="admin" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <name locale="en">04-review-of-"the-courage-to-exis.html</name>
+          <file id="139" filesize="599" extension="html">
+            <embed encoding="base64">PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5GdWxsIFRleHQ8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CjxoMj5Cb29rIFJldmlldzwvaDI+CjxwPlRob21wc29uJ3MgbGF0ZXN0IHdvcmsgb2ZmZXJzIGEgY29tcGVsbGluZyBleHBsb3JhdGlvbiBvZiBleGlzdGVudGlhbCBjb3VyYWdlIGluIGV2ZXJ5ZGF5IGxpZmUuIERyYXdpbmcgb24gYm90aCBwaGlsb3NvcGhpY2FsIHNvdXJjZXMgYW5kIHBlcnNvbmFsIG5hcnJhdGl2ZSwgdGhlIGJvb2sgc3VjY2VlZHMgaW4gbWFraW5nIGNvbXBsZXggaWRlYXMgYWNjZXNzaWJsZSB0byBhIGdlbmVyYWwgcmVhZGVyc2hpcC48L3A+CjxwPlRoZSBjaGFwdGVycyBvbiBmYWNpbmcgbW9ydGFsaXR5IGFuZCBlbWJyYWNpbmcgdW5jZXJ0YWludHkgYXJlIHBhcnRpY3VsYXJseSBzdHJvbmcsIGNvbWJpbmluZyBwaGlsb3NvcGhpY2FsIHJpZ291ciB3aXRoIGdlbnVpbmUgd2FybXRoIGFuZCBodW1hbml0eS48L3A+CjxwPlJlY29tbWVuZGVkIGZvciBwcmFjdGl0aW9uZXJzIGFuZCBnZW5lcmFsIHJlYWRlcnMgYWxpa2UuPC9wPgo8L2JvZHk+CjwvaHRtbD4=</embed>
+          </file>
+        </submission_file>
+        <publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1" status="3" url_path="" seq="4" access_status="1" date_published="2024-01-15" section_ref="BR" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+          <id type="internal" advice="ignore">135</id>
+          <title locale="en">Review of "The Courage to Exist" by P. Thompson</title>
+          <copyrightHolder locale="en">Sarah Williams</copyrightHolder>
+          <copyrightYear>2024</copyrightYear>
+          <pages>49-50</pages>
+          <authors xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <author include_in_browse="true" user_group_ref="Author" seq="0" id="140">
+              <givenname locale="en">Sarah</givenname>
+              <familyname locale="en">Williams</familyname>
+              <country>GB</country>
+              <email>s.williams@demo.invalid</email>
+            </author>
+          </authors>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">141</id>
+            <name locale="en">PDF</name>
+            <seq>0</seq>
+            <submission_file_ref id="136" />
+          </article_galley>
+          <article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" locale="en" approved="false" xsi:schemaLocation="http://pkp.sfu.ca native.xsd">
+            <id type="internal" advice="ignore">142</id>
+            <name locale="en">Full Text</name>
+            <seq>1</seq>
+            <submission_file_ref id="138" />
+          </article_galley>
+        </publication>
+      </article>
+    </articles>
+  </issue>
+</issues>
