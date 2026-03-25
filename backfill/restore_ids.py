@@ -3,11 +3,13 @@
 Restore OJS submission/issue IDs after a rebuild.
 
 After a fresh import (which assigns new auto-increment IDs), this script
-remaps submission_id and issue_id back to the original values captured
-by snapshot_ids.py. This preserves URLs, DOIs, and payment records.
+remaps submission_id and issue_id back to the original values stored in
+JATS (publisher-id) and toc.json (issue_id). This preserves URLs, DOIs,
+and payment records.
 
-Articles are matched by normalised title within the correct issue
-(volume + number), same approach as push_page_numbers.py.
+Normally generate_xml.py includes IDs with advice="update" so OJS
+preserves them on import. This script is a safety net for when that
+doesn't work or when IDs need correcting after the fact.
 
 Uses a two-pass remap to avoid primary key collisions:
   Pass 1: remap all IDs to temporary high values (original + offset)
@@ -28,13 +30,15 @@ Usage:
 """
 
 import argparse
+import glob
 import json
 import os
 import subprocess
 import sys
+from xml.etree import ElementTree as ET
 
 BACKFILL_DIR = os.path.dirname(__file__)
-REGISTRY_PATH = os.path.join(BACKFILL_DIR, 'private', 'id-registry.json')
+OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'output')
 
 # Temporary ID offset for two-pass remap (avoids PK collisions)
 TEMP_OFFSET = 10_000_000
@@ -192,8 +196,6 @@ def main():
     parser.add_argument('--confirm', action='store_true',
                         help='Required for live execution (safety gate)')
     parser.add_argument('--issue', help='Process only this issue (e.g. 35.2)')
-    parser.add_argument('--registry', default=REGISTRY_PATH,
-                        help=f'Path to id-registry.json (default: {REGISTRY_PATH})')
     parser.add_argument('--verbose', '-v', action='store_true')
     args = parser.parse_args()
 
@@ -203,15 +205,6 @@ def main():
         print('  Run with --dry-run first to preview changes.', file=sys.stderr)
         sys.exit(1)
 
-    # Load registry
-    if not os.path.exists(args.registry):
-        print(f'ERROR: Registry not found: {args.registry}', file=sys.stderr)
-        print('  Run snapshot_ids.py first to capture current IDs.', file=sys.stderr)
-        sys.exit(1)
-
-    with open(args.registry) as f:
-        registry = json.load(f)
-
     if args.dry_run:
         print('=== DRY RUN (no changes will be made) ===\n')
 
@@ -220,23 +213,56 @@ def main():
         sys.exit(1)
     print('Connected.\n')
 
-    # Filter registry entries by issue if specified
-    reg_articles = registry.get('articles', [])
-    reg_issues = registry.get('issues', [])
-    if args.issue:
-        vol, num = args.issue.split('.')
-        reg_articles = [a for a in reg_articles
-                        if a['volume'] == vol and a['issue'] == num]
-        reg_issues = [i for i in reg_issues
-                      if i['volume'] == vol and i['issue'] == num]
+    # Load IDs from JATS and toc.json (single source of truth)
+    reg_articles = []
+    reg_issues = []
+    for toc_path in sorted(glob.glob(os.path.join(OUTPUT_DIR, '*/toc.json'))):
+        with open(toc_path) as f:
+            toc = json.load(f)
+        vol = str(toc['volume'])
+        iss = str(toc['issue'])
 
-    # Group registry articles by issue
+        if args.issue:
+            fv, fn = args.issue.split('.')
+            if vol != fv or iss != fn:
+                continue
+
+        # Issue ID from toc.json
+        if toc.get('issue_id'):
+            reg_issues.append({
+                'volume': vol, 'issue': iss,
+                'issue_id': toc['issue_id'],
+            })
+
+        # Article IDs from JATS publisher-id
+        for art in toc.get('articles', []):
+            sp = art.get('split_pdf', '')
+            if not sp:
+                continue
+            jats_name = os.path.splitext(os.path.basename(sp))[0] + '.jats.xml'
+            jats_path = os.path.join(os.path.dirname(toc_path), jats_name)
+            if not os.path.exists(jats_path):
+                continue
+            try:
+                tree = ET.parse(jats_path)
+                pid_el = tree.find('.//{*}article-id[@pub-id-type="publisher-id"]')
+                if pid_el is not None and pid_el.text:
+                    reg_articles.append({
+                        'title': art.get('title', ''),
+                        'first_author': art.get('authors', '').split('&')[0].split(',')[0].strip() if art.get('authors') else '',
+                        'volume': vol, 'issue': iss,
+                        'submission_id': int(pid_el.text.strip()),
+                    })
+            except (ET.ParseError, ValueError):
+                continue
+
+    print(f'Loaded from JATS/toc.json: {len(reg_articles)} articles, {len(reg_issues)} issues')
+
+    # Group articles by issue
     issues_seen = {}
     for art in reg_articles:
         key = (art['volume'], art['issue'])
-        if key not in issues_seen:
-            issues_seen[key] = []
-        issues_seen[key].append(art)
+        issues_seen.setdefault(key, []).append(art)
 
     # Build remap plan
     submission_remaps = []  # (old_id, new_id)
