@@ -103,7 +103,7 @@ fi
 
 # Set up scheduled tasks cron (OJS uses cron, not a persistent job worker).
 # The base PKP image has cron commented out in pkp-start; we start it ourselves.
-CRON_LINE="0 * * * *   pkp-run-scheduled"
+CRON_LINE="0 * * * *   php /var/www/html/lib/pkp/tools/scheduler.php run"
 if [ -n "$BETTERSTACK_HB_OJS_CRON" ]; then
   CRON_LINE="$CRON_LINE && curl -sf $BETTERSTACK_HB_OJS_CRON > /dev/null || curl -sf $BETTERSTACK_HB_OJS_CRON/fail > /dev/null"
 fi
