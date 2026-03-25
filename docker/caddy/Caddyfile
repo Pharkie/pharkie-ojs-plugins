@@ -1,4 +1,8 @@
 {$CADDY_WP_DOMAIN} {
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	basicauth {
+		{$CADDY_WP_AUTH_USER} {$CADDY_WP_AUTH_HASH}
+	}
 	reverse_proxy wp:80
 }
 
