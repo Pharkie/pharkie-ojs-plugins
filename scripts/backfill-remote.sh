@@ -97,11 +97,11 @@ if ! $SSH_CMD "docker ps --format '{{.Names}}' | grep -qE '\-ojs-?1?\$'"; then
   exit 1
 fi
 
-# Full backfill always starts clean (wipes existing issues/articles) unless --force is used
-# --force implies adding to existing data; without --force, --clean ensures a fresh start
+# Full backfill wipes existing issues/articles (not users/subs/payments) unless --force is used
+# --force implies adding to existing data; without --force, --wipe-articles ensures a fresh start
 CLEAN_FLAG=""
 if [ -z "$FORCE" ]; then
-  CLEAN_FLAG="--clean"
+  CLEAN_FLAG="--wipe-articles"
 fi
 $SSH_CMD "cd $REMOTE_DIR && bash backfill/import.sh backfill/private/output/* $FORCE $CLEAN_FLAG"
 
