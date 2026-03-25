@@ -25,12 +25,14 @@ Deployment-specific roadmap (milestones, server details, sync status) lives in `
 - Backfill pipeline for importing journal back-issues into OJS
 - DOI assignment + Crossref deposit
 - Automated database backups (encrypted, rotated, off-server)
-- Citation extraction + classification (15,182 references, 2,031 notes, 57 author bios)
+- Citation extraction + classification (14,874 references, 2,123 notes, 37 author bios, 4 provenance)
 - JATS 1.3 XML generation — 1,398 article files, single source of truth for article content
 
 ### JATS quality improvements
 
-- [ ] Extract journal page numbers from split PDFs (first page of each article PDF has printed page number) → populate `<fpage>`/`<lpage>` in JATS
+- [x] Extract journal page numbers from source PDFs → `journal_page_start/end` in toc.json (all 68 issues, 1,403 articles) + `<fpage>`/`<lpage>` in JATS
+- [ ] Push page numbers to live OJS (`python backfill/push_page_numbers.py --target live`) — 1,401/1,402 matched in dry-run
+- [ ] Regenerate dev demo fixtures with page numbers (`python fixtures/generate-sample-issues.py` + rebuild)
 - [ ] AI-generate abstracts for 372 research articles that lack them (flag as `abstract-type="AI-generated"`)
 - [ ] Parse `<mixed-citation>` into `<element-citation>` (structured author/year/title/publisher fields) — improves Crossref reference linking accuracy (Crossref can fuzzy-match raw strings but structured data gets better results)
 
@@ -47,7 +49,7 @@ Deployment-specific roadmap (milestones, server details, sync status) lives in `
 - [ ] Test on-hold / failed payment scenario
 - [ ] Mobile testing
 - [ ] Security audit (file uploads, rate limiting, CSP headers, pen test)
-- [ ] Monitoring (uptime checks, sync health, SSL expiry)
+- [x] Monitoring — see [`docs/monitoring.md`](docs/monitoring.md)
 - [ ] SEO and discoverability (citation meta tags, sitemap, Google Scholar)
 - [ ] Analytics
 
