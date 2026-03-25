@@ -312,18 +312,6 @@ def _load_jats_doi(pdf_path):
     return doi_el.text.strip() if doi_el is not None and doi_el.text else None
 
 
-def _load_jats_publisher_id(pdf_path):
-    """Load publisher-id (OJS submission_id) from the article's JATS XML file.
-
-    JATS is the single source of truth for article content.
-    Returns publisher-id string or None if not found.
-    """
-    tree = _load_jats_tree(pdf_path)
-    if tree is None:
-        return None
-    pid_el = tree.find('.//{*}article-id[@pub-id-type="publisher-id"]')
-    return pid_el.text.strip() if pid_el is not None and pid_el.text else None
-
 
 def _load_jats_pages(pdf_path):
     """Load page numbers from the article's JATS XML file.
@@ -397,22 +385,13 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     pdf_path = article.get('split_pdf')
     has_pdf = pdf_path and os.path.exists(pdf_path)
 
-    # Publisher ID from JATS (OJS submission_id — preserves URLs across reimport)
-    publisher_id = _load_jats_publisher_id(pdf_path)
-
-    # Sequential IDs for file references within the XML (internal, ignored by OJS)
+    # Sequential IDs for file references within the XML (placeholders, OJS assigns its own)
+    # Publisher-id (OJS submission_id) lives in JATS only — restore_ids.py applies it post-import
     file_id = 1000 + article_idx
     submission_file_id = 2000 + article_idx
-    try:
-        pub_id = int(publisher_id) if publisher_id else 3000 + article_idx
-    except (ValueError, TypeError):
-        publisher_id = None
-        pub_id = 3000 + article_idx
+    pub_id = 3000 + article_idx
     html_file_id = 6000 + article_idx
     html_submission_file_id = 7000 + article_idx
-
-    # ID advice: "update" preserves the ID (and URL) on reimport; "ignore" lets OJS assign new
-    id_advice = "update" if publisher_id else "ignore"
 
     lines = []
 
@@ -421,7 +400,7 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
                  f' locale="en" date_submitted="{date_published}" status="3"'
                  f' submission_progress="" current_publication_id="{pub_id}"'
                  f' stage="production">')
-    lines.append(f'{i2}<id type="internal" advice="{id_advice}">{pub_id}</id>')
+    lines.append(f'{i2}<id type="internal" advice="ignore">{pub_id}</id>')
 
     # Submission file (PDF)
     if has_pdf:
@@ -468,7 +447,7 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
                  f' date_published="{date_published}"'
                  f' section_ref="{section_ref}"'
                  f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
-    lines.append(f'{i3}<id type="internal" advice="{id_advice}">{pub_id}</id>')
+    lines.append(f'{i3}<id type="internal" advice="ignore">{pub_id}</id>')
     if doi:
         lines.append(f'{i3}<id type="doi" advice="update">{escape(doi)}</id>')
     lines.append(f'{i3}<title locale="en">{title}</title>')
@@ -646,7 +625,7 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
     # Issue-level IDs (from toc.json)
     issue_id = toc_data.get('issue_id')
     if issue_id:
-        lines.append(f'    <id type="internal" advice="update">{issue_id}</id>')
+        lines.append(f'    <id type="internal" advice="ignore">{issue_id}</id>')
     issue_doi = toc_data.get('issue_doi')
     if issue_doi:
         lines.append(f'    <id type="doi" advice="update">{escape(issue_doi)}</id>')

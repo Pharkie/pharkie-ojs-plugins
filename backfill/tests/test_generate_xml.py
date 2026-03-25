@@ -309,8 +309,8 @@ class TestDoiInXml:
         doi_ids = [i for i in ids if i.get('type') == 'doi']
         assert len(doi_ids) == 0
 
-    def test_publisher_id_advice_update(self, tmp_path):
-        """Publisher-ID in JATS should produce advice='update' in XML."""
+    def test_publisher_id_not_in_xml(self, tmp_path):
+        """Publisher-ID in JATS should NOT appear in OJS XML (restore_ids.py handles it)."""
         pdf_path = tmp_path / '01-test.pdf'
         pdf_path.write_bytes(b'%PDF-fake')
         jats_path = tmp_path / '01-test.jats.xml'
@@ -330,12 +330,11 @@ class TestDoiInXml:
         xml_str = generate_xml(toc)
         root = ET.fromstring(xml_str)
         ns = {'ojs': 'http://pkp.sfu.ca'}
-        # Both article and publication IDs should be "update"
+        # Internal IDs should be placeholders with advice="ignore", not publisher-id
         all_ids = root.findall('.//ojs:id[@type="internal"]', ns)
-        article_ids = [i for i in all_ids if i.text == '1234']
-        assert len(article_ids) >= 2  # article + publication
-        for aid in article_ids:
-            assert aid.get('advice') == 'update'
+        for aid in all_ids:
+            assert aid.get('advice') == 'ignore'
+            assert aid.text != '1234'  # publisher-id should not leak into XML
 
     def test_no_publisher_id_advice_ignore(self):
         """Without publisher-ID, advice should be 'ignore'."""
@@ -373,7 +372,7 @@ class TestDoiInXml:
         assert issue_ids[0].get('advice') == 'update'
 
     def test_issue_id_from_toc(self):
-        """Issue ID in toc_data should appear with advice='update'."""
+        """Issue ID in toc_data should appear with advice='ignore' (OJS assigns its own)."""
         toc = {
             'volume': 36, 'issue': 2, 'date': 'July 2025',
             'issue_id': 475,
@@ -388,4 +387,4 @@ class TestDoiInXml:
         issue_ids = root.findall('.//ojs:issue/ojs:id[@type="internal"]', ns)
         assert len(issue_ids) == 1
         assert issue_ids[0].text == '475'
-        assert issue_ids[0].get('advice') == 'update'
+        assert issue_ids[0].get('advice') == 'ignore'
