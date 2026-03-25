@@ -308,3 +308,84 @@ class TestDoiInXml:
         ids = root.findall('.//ojs:publication/ojs:id', ns)
         doi_ids = [i for i in ids if i.get('type') == 'doi']
         assert len(doi_ids) == 0
+
+    def test_publisher_id_advice_update(self, tmp_path):
+        """Publisher-ID in JATS should produce advice='update' in XML."""
+        pdf_path = tmp_path / '01-test.pdf'
+        pdf_path.write_bytes(b'%PDF-fake')
+        jats_path = tmp_path / '01-test.jats.xml'
+        jats_path.write_text(
+            '<?xml version="1.0"?>'
+            '<article><front><article-meta>'
+            '<article-id pub-id-type="publisher-id">1234</article-id>'
+            '</article-meta></front></article>')
+        toc = {
+            'volume': 37, 'issue': 1, 'date': 'January 2026',
+            'articles': [{
+                'title': 'Test', 'authors': 'A B', 'section': 'Articles',
+                'split_pdf': str(pdf_path),
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        xml_str = generate_xml(toc)
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        # Both article and publication IDs should be "update"
+        all_ids = root.findall('.//ojs:id[@type="internal"]', ns)
+        article_ids = [i for i in all_ids if i.text == '1234']
+        assert len(article_ids) >= 2  # article + publication
+        for aid in article_ids:
+            assert aid.get('advice') == 'update'
+
+    def test_no_publisher_id_advice_ignore(self):
+        """Without publisher-ID, advice should be 'ignore'."""
+        toc = {
+            'volume': 1, 'issue': 1, 'date': 'January 1990',
+            'articles': [{
+                'title': 'Old', 'authors': None, 'section': 'Articles',
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        xml_str = generate_xml(toc)
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        all_ids = root.findall('.//ojs:article/ojs:id[@type="internal"]', ns)
+        assert len(all_ids) >= 1
+        for aid in all_ids:
+            assert aid.get('advice') == 'ignore'
+
+    def test_issue_doi_from_toc(self):
+        """Issue DOI in toc_data should appear in XML."""
+        toc = {
+            'volume': 36, 'issue': 2, 'date': 'July 2025',
+            'issue_doi': '10.65828/test-issue-doi',
+            'articles': [{
+                'title': 'Article', 'authors': 'A B', 'section': 'Articles',
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        xml_str = generate_xml(toc)
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        issue_ids = root.findall('.//ojs:issue/ojs:id[@type="doi"]', ns)
+        assert len(issue_ids) == 1
+        assert issue_ids[0].text == '10.65828/test-issue-doi'
+        assert issue_ids[0].get('advice') == 'update'
+
+    def test_issue_id_from_toc(self):
+        """Issue ID in toc_data should appear with advice='update'."""
+        toc = {
+            'volume': 36, 'issue': 2, 'date': 'July 2025',
+            'issue_id': 475,
+            'articles': [{
+                'title': 'Article', 'authors': 'A B', 'section': 'Articles',
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        xml_str = generate_xml(toc)
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        issue_ids = root.findall('.//ojs:issue/ojs:id[@type="internal"]', ns)
+        assert len(issue_ids) == 1
+        assert issue_ids[0].text == '475'
+        assert issue_ids[0].get('advice') == 'update'

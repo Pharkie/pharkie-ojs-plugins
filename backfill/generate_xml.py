@@ -403,7 +403,11 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     # Sequential IDs for file references within the XML (internal, ignored by OJS)
     file_id = 1000 + article_idx
     submission_file_id = 2000 + article_idx
-    pub_id = int(publisher_id) if publisher_id else 3000 + article_idx
+    try:
+        pub_id = int(publisher_id) if publisher_id else 3000 + article_idx
+    except (ValueError, TypeError):
+        publisher_id = None
+        pub_id = 3000 + article_idx
     html_file_id = 6000 + article_idx
     html_submission_file_id = 7000 + article_idx
 
@@ -603,11 +607,10 @@ def load_enrichment(toc_json_path):
     return data.get('articles', {})
 
 
-def generate_xml(toc_data, doi_registry=None, toc_json_path=None, skip_issue_galley=False):
+def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwargs):
     """Generate complete OJS Native XML for an issue.
 
     DOIs and publisher-IDs are read from JATS (single source of truth).
-    The doi_registry parameter is deprecated and ignored.
     """
     vol = toc_data.get('volume', 1)
     iss = toc_data.get('issue', 1)

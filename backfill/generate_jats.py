@@ -512,8 +512,8 @@ def generate_article_jats(article: dict, volume: int, issue: int,
 # Main
 # ---------------------------------------------------------------
 
-def process_toc(toc_path: Path, doi_registry: dict = None, dry_run: bool = False,
-                verbose: bool = False, id_registry: dict | None = None) -> Counter:
+def process_toc(toc_path: Path, dry_run: bool = False,
+                verbose: bool = False, **_kwargs) -> Counter:
     """Generate JATS files for all articles in a toc.json."""
     stats = Counter()
 

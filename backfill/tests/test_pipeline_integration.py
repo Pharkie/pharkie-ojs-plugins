@@ -92,7 +92,7 @@ class TestFullXmlGeneration:
 
     def setup_method(self):
         self.toc_data = make_toc_data()
-        self.xml_str = generate_xml(self.toc_data, doi_registry={})
+        self.xml_str = generate_xml(self.toc_data, )
         self.root = ET.fromstring(self.xml_str)
 
     def test_xml_is_valid(self):
@@ -205,7 +205,7 @@ class TestXmlWithEnrichment:
     def test_subjects_emitted(self):
         toc_data = make_toc_data()
         toc_data['articles'][1]['subjects'] = ['Existential Therapy', 'Clinical Practice']
-        xml_str = generate_xml(toc_data, doi_registry={})
+        xml_str = generate_xml(toc_data, )
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)
         subjects = articles[1].findall('.//pkp:subject', NS)
@@ -216,7 +216,7 @@ class TestXmlWithEnrichment:
     def test_disciplines_emitted(self):
         toc_data = make_toc_data()
         toc_data['articles'][1]['disciplines'] = ['Psychotherapy', 'Philosophy']
-        xml_str = generate_xml(toc_data, doi_registry={})
+        xml_str = generate_xml(toc_data, )
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)
         disciplines = articles[1].findall('.//pkp:discipline', NS)
@@ -233,7 +233,7 @@ class TestXmlWithEnrichment:
         pdf_file = tmp_path / '02-article.pdf'
         pdf_file.write_bytes(b'')
         toc_data['articles'][1]['split_pdf'] = str(pdf_file)
-        xml_str = generate_xml(toc_data, doi_registry={})
+        xml_str = generate_xml(toc_data, )
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)
         pages = articles[1].find('.//pkp:pages', NS)
@@ -242,7 +242,7 @@ class TestXmlWithEnrichment:
 
     def test_no_subjects_without_data(self):
         toc_data = make_toc_data()
-        xml_str = generate_xml(toc_data, doi_registry={})
+        xml_str = generate_xml(toc_data, )
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)
         # Article 0 (editorial) has no subjects
@@ -273,7 +273,7 @@ class TestXmlWithEnrichment:
             with open(toc_path, 'w') as f:
                 json.dump(toc_data, f)
 
-            xml_str = generate_xml(toc_data, doi_registry={}, toc_json_path=toc_path)
+            xml_str = generate_xml(toc_data, toc_json_path=toc_path)
             root = ET.fromstring(xml_str)
             articles = root.findall('.//pkp:article', NS)
             citations = articles[1].findall('.//pkp:citation', NS)
@@ -319,6 +319,86 @@ class TestXmlWithDois:
             doi_ids = [e for e in pub.findall('pkp:id', NS) if e.get('type') == 'doi']
             assert len(doi_ids) == 0
 
+
+
+class TestJatsPreservation:
+    """Test that generate_jats preserves DOI and publisher-id from existing JATS."""
+
+    def test_doi_preserved_on_regeneration(self, tmp_path):
+        """Regenerating JATS should preserve existing DOI."""
+        from pathlib import Path
+        from backfill.generate_jats import process_toc
+
+        # Create toc.json
+        toc = {
+            'volume': 99, 'issue': 1, 'date': 'January 2026',
+            'articles': [{
+                'title': 'Test Article',
+                'authors': 'John Doe',
+                'section': 'Articles',
+                'split_pdf': str(tmp_path / '01-test.pdf'),
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        toc_path = tmp_path / 'toc.json'
+        import json
+        toc_path.write_text(json.dumps(toc))
+
+        # Create split PDF (needed for slug)
+        (tmp_path / '01-test.pdf').write_bytes(b'%PDF-fake')
+
+        # Create existing JATS with DOI and publisher-id
+        jats_path = tmp_path / '01-test.jats.xml'
+        jats_path.write_text(
+            '<?xml version="1.0"?>\n'
+            '<article><front><article-meta>'
+            '<article-id pub-id-type="publisher-id">5678</article-id>'
+            '<article-id pub-id-type="doi">10.65828/preserved</article-id>'
+            '</article-meta></front></article>')
+
+        # Create HTML file (needed for body content)
+        (tmp_path / '01-test.html').write_text('<p>Test body</p>')
+
+        # Regenerate
+        stats = process_toc(Path(toc_path))
+
+        # Read regenerated JATS
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(jats_path)
+        doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
+        pid_el = tree.find('.//{*}article-id[@pub-id-type="publisher-id"]')
+        assert doi_el is not None and doi_el.text == '10.65828/preserved'
+        assert pid_el is not None and pid_el.text == '5678'
+
+    def test_no_doi_for_new_article(self, tmp_path):
+        """New article without existing JATS should have no DOI."""
+        from pathlib import Path
+        from backfill.generate_jats import process_toc
+
+        toc = {
+            'volume': 99, 'issue': 1, 'date': 'January 2026',
+            'articles': [{
+                'title': 'Brand New',
+                'authors': 'Jane Doe',
+                'section': 'Articles',
+                'split_pdf': str(tmp_path / '01-brand-new.pdf'),
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        toc_path = tmp_path / 'toc.json'
+        import json
+        toc_path.write_text(json.dumps(toc))
+        (tmp_path / '01-brand-new.pdf').write_bytes(b'%PDF-fake')
+        (tmp_path / '01-brand-new.html').write_text('<p>New content</p>')
+
+        stats = process_toc(Path(toc_path))
+
+        import xml.etree.ElementTree as ET
+        jats_path = tmp_path / '01-brand-new.jats.xml'
+        assert jats_path.exists()
+        tree = ET.parse(jats_path)
+        doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
+        assert doi_el is None  # No DOI for brand new article
 
 
 class TestVerifySplitIntegration:

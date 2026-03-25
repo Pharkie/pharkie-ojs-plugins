@@ -30,7 +30,7 @@ HEADERS = [
 ]
 
 
-def load_all_tocs(output_dir, doi_registry=None):
+def load_all_tocs(output_dir):
     """Load and sort all toc.json files by volume/issue.
 
     Deduplicates by (volume, issue) — if both '<vol>/' and '<vol>.1/' exist
@@ -64,7 +64,8 @@ def load_all_tocs(output_dir, doi_registry=None):
             doi = ''
             split_pdf = article.get('split_pdf', '')
             if split_pdf:
-                jats_path = Path(split_pdf).with_suffix('.jats.xml')
+                jats_name = Path(split_pdf).stem + '.jats.xml'
+                jats_path = toc_file.parent / jats_name
                 if jats_path.exists():
                     try:
                         tree = _ET.parse(jats_path)
