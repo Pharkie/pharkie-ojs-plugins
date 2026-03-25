@@ -576,7 +576,7 @@ def main():
                   f"{fa['title'][:60]} ({fa['pages']}pp)")
 
     # Write report JSON (append to existing if present)
-    report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output', 'htmlgen-report.json')
+    report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'private', 'output', 'htmlgen-report.json')
     report = {}
     if os.path.exists(report_path):
         with open(report_path) as f:
