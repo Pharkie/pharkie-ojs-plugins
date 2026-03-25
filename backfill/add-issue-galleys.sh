@@ -8,9 +8,9 @@
 #   backfill/add-issue-galleys.sh [--host=sea-live] [--dry-run] [issue_dir...]
 #
 # Examples:
-#   backfill/add-issue-galleys.sh backfill/output/*           # dev (local docker)
-#   backfill/add-issue-galleys.sh --host=sea-live backfill/output/*  # live
-#   backfill/add-issue-galleys.sh --dry-run backfill/output/*  # preview only
+#   backfill/add-issue-galleys.sh backfill/private/output/*           # dev (local docker)
+#   backfill/add-issue-galleys.sh --host=sea-live backfill/private/output/*  # live
+#   backfill/add-issue-galleys.sh --dry-run backfill/private/output/*  # preview only
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -111,9 +111,9 @@ print(f'{vol} {iss} {date}')
   fi
 
   # Find source PDF
-  SOURCE_PDF="$PROJECT_DIR/backfill/input/${VOL_ISS}.pdf"
+  SOURCE_PDF="$PROJECT_DIR/backfill/private/input/${VOL_ISS}.pdf"
   if [ ! -f "$SOURCE_PDF" ]; then
-    SOURCE_PDF="$PROJECT_DIR/backfill/input/${VOL}.pdf"
+    SOURCE_PDF="$PROJECT_DIR/backfill/private/input/${VOL}.pdf"
   fi
   if [ ! -f "$SOURCE_PDF" ]; then
     echo "SKIP: No source PDF for $VOL_ISS"

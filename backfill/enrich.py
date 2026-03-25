@@ -11,22 +11,22 @@ Runs after split + basic human review, before XML generation:
 
 Usage:
     # Enrich all issues
-    python3 backfill/enrich.py backfill/output/*/toc.json
+    python3 backfill/enrich.py backfill/private/output/*/toc.json
 
     # Dry run -- estimate cost without calling API
-    python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+    python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
 
     # Force re-enrichment
-    python3 backfill/enrich.py backfill/output/37.1/toc.json --force
+    python3 backfill/enrich.py backfill/private/output/37.1/toc.json --force
 
     # Model override (default: claude-sonnet-4-20250514)
-    python3 backfill/enrich.py backfill/output/*/toc.json --model=claude-opus-4-20250514
+    python3 backfill/enrich.py backfill/private/output/*/toc.json --model=claude-opus-4-20250514
 
     # Concurrency (default: 8 parallel API calls)
-    python3 backfill/enrich.py backfill/output/*/toc.json --concurrency=16
+    python3 backfill/enrich.py backfill/private/output/*/toc.json --concurrency=16
 
     # Vocabulary report -- list all unique values across corpus
-    python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+    python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 """
 
 import sys
@@ -476,14 +476,14 @@ def main():
 
     if args.report:
         if not args.files:
-            print("Usage: python3 backfill/enrich.py --report backfill/output/*/enrichment.json",
+            print("Usage: python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json",
                   file=sys.stderr)
             sys.exit(1)
         do_report(args.files)
         return
 
     if not args.files:
-        print("Usage: python3 backfill/enrich.py backfill/output/*/toc.json [--dry-run] [--force]",
+        print("Usage: python3 backfill/enrich.py backfill/private/output/*/toc.json [--dry-run] [--force]",
               file=sys.stderr)
         sys.exit(1)
 

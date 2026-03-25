@@ -13,50 +13,50 @@ Technical reference for the backfill pipeline. For the process overview and revi
 backfill/split-issue.sh path/to/37.1.pdf
 
 # Step 2: Human review (see Backfill Pipeline for what to check)
-# 2a: Check split PDFs -- open backfill/output/37.1/*.pdf
+# 2a: Check split PDFs -- open backfill/private/output/37.1/*.pdf
 #     Verify page alignment, article boundaries, book review splits
 # 2b: Review metadata in spreadsheet
-python3 backfill/export_review.py backfill/output/37.1/toc.json -o review.csv
+python3 backfill/export_review.py backfill/private/output/37.1/toc.json -o review.csv
 # ... edit review.csv in Google Sheets ...
 python3 backfill/import_review.py review.csv --dry-run
 python3 backfill/import_review.py review.csv
 
 # Step 3: Enrich metadata (optional but recommended)
-python3 backfill/enrich.py backfill/output/37.1/toc.json --dry-run
-python3 backfill/enrich.py backfill/output/37.1/toc.json
+python3 backfill/enrich.py backfill/private/output/37.1/toc.json --dry-run
+python3 backfill/enrich.py backfill/private/output/37.1/toc.json
 # ... optionally re-export CSV to review enrichment, then import corrections ...
 
 # Step 4: Generate XML and import into OJS
 backfill/split-issue.sh path/to/37.1.pdf --only=generate_xml
-backfill/import.sh backfill/output/37.1
+backfill/import.sh backfill/private/output/37.1
 
 # Step 5: Verify the import
-backfill/verify.py backfill/output/37.1/toc.json --docker
+backfill/verify.py backfill/private/output/37.1/toc.json --docker
 
 # Optional: Generate archive manifest
-python3 backfill/manifest.py backfill/output/*/toc.json
+python3 backfill/manifest.py backfill/private/output/*/toc.json
 ```
 
 ### Batch workflows
 
 ```bash
 # Export all issues for review at once
-python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
+python3 backfill/export_review.py backfill/private/output/*/toc.json -o review.csv
 
 # Enrich all issues
-python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
-python3 backfill/enrich.py backfill/output/*/toc.json
+python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
+python3 backfill/enrich.py backfill/private/output/*/toc.json
 
 # Re-export after enrichment (includes subjects, disciplines, keywords_enriched)
-python3 backfill/export_review.py backfill/output/*/toc.json -o review-enriched.csv
+python3 backfill/export_review.py backfill/private/output/*/toc.json -o review-enriched.csv
 python3 backfill/import_review.py review-enriched.csv --dry-run
 python3 backfill/import_review.py review-enriched.csv
 
 # Normalize authors across all issues
-python3 backfill/author_normalize.py backfill/output/*/toc.json
+python3 backfill/author_normalize.py backfill/private/output/*/toc.json
 
 # Vocabulary report (after enrichment)
-python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 ```
 
 ### Re-running after corrections
@@ -71,17 +71,17 @@ backfill/split-issue.sh path/to/issue.pdf --only=generate_xml
 python3 backfill/import_review.py review.csv --restore
 
 # Re-run normalization after changing author names in review
-python3 backfill/author_normalize.py backfill/output/*/toc.json
+python3 backfill/author_normalize.py backfill/private/output/*/toc.json
 ```
 
 ---
 
 ## Output structure
 
-After `split-issue.sh` completes, each issue gets a directory under `backfill/output/`:
+After `split-issue.sh` completes, each issue gets a directory under `backfill/private/output/`:
 
 ```
-backfill/output/37.1/
+backfill/private/output/37.1/
     toc.json                          # Structured TOC with all metadata
     enrichment.json                   # Deep enrichment sidecar (from enrich.py)
     import.xml                        # OJS Native XML (large, base64 PDFs)
@@ -174,22 +174,22 @@ Each article object:
 
 ```bash
 # Dry run: estimate cost without calling API
-python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
 
 # Enrich all issues (8 parallel workers by default)
-python3 backfill/enrich.py backfill/output/*/toc.json
+python3 backfill/enrich.py backfill/private/output/*/toc.json
 
 # More parallelism (if not hitting rate limits)
-python3 backfill/enrich.py backfill/output/*/toc.json --concurrency=16
+python3 backfill/enrich.py backfill/private/output/*/toc.json --concurrency=16
 
 # Force re-enrichment of already-processed articles
-python3 backfill/enrich.py backfill/output/37.1/toc.json --force
+python3 backfill/enrich.py backfill/private/output/37.1/toc.json --force
 
 # Use a different model
-python3 backfill/enrich.py backfill/output/*/toc.json --model=claude-opus-4-20250514
+python3 backfill/enrich.py backfill/private/output/*/toc.json --model=claude-opus-4-20250514
 
 # Vocabulary report (flags near-duplicates)
-python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 ```
 
 Enrichment is resumable -- if interrupted, re-running picks up where it left off (articles already in `enrichment.json` are skipped). The `--report` flag gives an overview of extracted vocabulary, useful for spotting inconsistencies before building anything on top.
@@ -198,7 +198,7 @@ Enrichment is resumable -- if interrupted, re-running picks up where it left off
 
 ## Author registry
 
-`backfill/authors.json` is a persistent registry that maps canonical author names to known variants. It is checked into git and grows as you process issues.
+`backfill/private/authors.json` is a persistent registry that maps canonical author names to known variants. It is checked into git and grows as you process issues.
 
 Structure:
 
@@ -216,12 +216,12 @@ Structure:
 1. **Exact match** -- after normalizing (strip accents, lowercase, collapse whitespace)
 2. **Surname + first initial** -- matches "E. van Deurzen" to "Emmy van Deurzen" if surname and first initial agree and there is exactly one candidate
 3. **Fuzzy match** -- SequenceMatcher similarity >= 0.85 (catches typos)
-4. **Ambiguous** -- multiple candidates with same surname + initial. Written to `backfill/authors-review.json` for human review.
+4. **Ambiguous** -- multiple candidates with same surname + initial. Written to `backfill/private/authors-review.json` for human review.
 5. **New** -- no match found. Added to registry as a new canonical entry.
 
 ### Review file
 
-When the normalizer encounters ambiguous matches, it writes them to `backfill/authors-review.json` with the raw name, candidate matches, article title, and source issue. Resolve these manually, then re-run normalization.
+When the normalizer encounters ambiguous matches, it writes them to `backfill/private/authors-review.json` with the raw name, candidate matches, article title, and source issue. Resolve these manually, then re-run normalization.
 
 ### Registry commands
 
@@ -233,7 +233,7 @@ python3 backfill/author_normalize.py --stats
 python3 backfill/author_normalize.py --list
 
 # Process all issues at once
-python3 backfill/author_normalize.py backfill/output/*/toc.json
+python3 backfill/author_normalize.py backfill/private/output/*/toc.json
 ```
 
 ---
@@ -272,7 +272,7 @@ Articles that already have DOIs registered at Crossref (prefix `10.65828`) need 
 
 ### How it works
 
-1. **Registry file** (`backfill/doi-registry.json`): Contains all DOIs fetched from the Crossref API, with title, volume, issue, and author metadata. Also includes manual `aliases` for articles where the TOC title differs significantly from the Crossref title.
+1. **Registry file** (`backfill/private/doi-registry.json`): Contains all DOIs fetched from the Crossref API, with title, volume, issue, and author metadata. Also includes manual `aliases` for articles where the TOC title differs significantly from the Crossref title.
 
 2. **Lookup** (`generate_xml.py`): For each article, the generator tries to match against the registry using a fuzzy matching chain:
    - Manual aliases (TOC title → Crossref title)
@@ -290,7 +290,7 @@ To refresh the registry from Crossref:
 
 ```bash
 curl -s "https://api.crossref.org/prefixes/10.65828/works?rows=100" | \
-  python3 -c "import sys, json; ..." > backfill/doi-registry.json
+  python3 -c "import sys, json; ..." > backfill/private/doi-registry.json
 ```
 
 The `aliases` section is preserved manually for titles that can't be matched automatically.
@@ -394,7 +394,7 @@ python3 backfill/test_review.py
 | Argument | Default | Description |
 |---|---|---|
 | `toc.json files` | (required) | One or more toc.json files |
-| `-o`, `--output` | `backfill/output/MANIFEST.md` | Output path |
+| `-o`, `--output` | `backfill/private/output/MANIFEST.md` | Output path |
 
 ### verify.py
 
@@ -415,7 +415,7 @@ Each Python script can be run standalone. This is useful for debugging a specifi
 python3 backfill/preflight.py path/to/issue.pdf
 
 # Parse TOC, write to specific file
-python3 backfill/parse_toc.py path/to/issue.pdf -o backfill/output/37.1/toc.json
+python3 backfill/parse_toc.py path/to/issue.pdf -o backfill/private/output/37.1/toc.json
 
 # Parse TOC with manual page offset
 python3 backfill/parse_toc.py path/to/issue.pdf -o toc.json --page-offset=2
@@ -424,16 +424,16 @@ python3 backfill/parse_toc.py path/to/issue.pdf -o toc.json --page-offset=2
 python3 backfill/parse_toc.py path/to/issue.pdf --no-metadata -o toc.json
 
 # Split PDF using existing toc.json
-python3 backfill/split.py backfill/output/37.1/toc.json -o backfill/output
+python3 backfill/split.py backfill/private/output/37.1/toc.json -o backfill/private/output
 
 # Verify split PDFs match their TOC titles
-python3 backfill/verify_split.py backfill/output/37.1/toc.json
+python3 backfill/verify_split.py backfill/private/output/37.1/toc.json
 
 # Normalize authors across all processed issues
-python3 backfill/author_normalize.py backfill/output/*/toc.json
+python3 backfill/author_normalize.py backfill/private/output/*/toc.json
 
 # Export metadata for review
-python3 backfill/export_review.py backfill/output/*/toc.json -o review.csv
+python3 backfill/export_review.py backfill/private/output/*/toc.json -o review.csv
 
 # Preview review corrections (dry run)
 python3 backfill/import_review.py review.csv --dry-run
@@ -445,25 +445,25 @@ python3 backfill/import_review.py review.csv
 python3 backfill/import_review.py review.csv --restore
 
 # Enrich metadata (dry run)
-python3 backfill/enrich.py backfill/output/*/toc.json --dry-run
+python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
 
 # Enrich metadata
-python3 backfill/enrich.py backfill/output/*/toc.json
+python3 backfill/enrich.py backfill/private/output/*/toc.json
 
 # Vocabulary report
-python3 backfill/enrich.py --report backfill/output/*/enrichment.json
+python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 
 # Archive manifest
-python3 backfill/manifest.py backfill/output/*/toc.json
+python3 backfill/manifest.py backfill/private/output/*/toc.json
 
 # Generate XML without PDFs (fast, for testing)
-python3 backfill/generate_xml.py backfill/output/37.1/toc.json -o import.xml --no-pdfs
+python3 backfill/generate_xml.py backfill/private/output/37.1/toc.json -o import.xml --no-pdfs
 
 # Generate XML with embedded PDFs
-python3 backfill/generate_xml.py backfill/output/37.1/toc.json -o import.xml
+python3 backfill/generate_xml.py backfill/private/output/37.1/toc.json -o import.xml
 
 # Verify import against OJS database
-python3 backfill/verify.py backfill/output/37.1/toc.json --docker
+python3 backfill/verify.py backfill/private/output/37.1/toc.json --docker
 ```
 
 To re-run a single step via `split-issue.sh` (uses the same orchestration logic but skips other steps):

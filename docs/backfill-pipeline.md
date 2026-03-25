@@ -4,7 +4,7 @@ A process guide for reviewing and importing journal back-issues into OJS. This g
 
 ## What you'll need
 
-- Access to the output directory (`backfill/output/`) -- each issue gets its own folder with split PDFs and metadata
+- Access to the output directory (`backfill/private/output/`) -- each issue gets its own folder with split PDFs and metadata
 - A PDF viewer to check the split articles
 - Google Sheets (or any spreadsheet editor) for reviewing metadata
 - A copy of each issue's CONTENTS page for cross-referencing

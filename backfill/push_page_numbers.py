@@ -29,7 +29,7 @@ import sys
 from xml.etree import ElementTree as ET
 
 BACKFILL_DIR = os.path.dirname(__file__)
-OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'output')
+OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
 
 # How to run mysql for each target
 TARGETS = {

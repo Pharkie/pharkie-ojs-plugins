@@ -305,7 +305,7 @@ class TestDoiLookup:
     def test_real_registry_loads(self):
         """Verify doi-registry.json loads without errors (skipped if file not present)."""
         import os
-        registry_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'doi-registry.json')
+        registry_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'private', 'doi-registry.json')
         if not os.path.exists(registry_path):
             import pytest
             pytest.skip("doi-registry.json not present (lives in private data repo)")

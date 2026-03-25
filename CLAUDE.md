@@ -34,7 +34,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 Imports journal back-issues (whole-issue PDFs) into OJS. Three steps:
 
-1. **Create `toc.json`** — Claude reads the PDF and writes `backfill/output/<vol>.<iss>/toc.json` with article metadata. See `docs/backfill-toc-guide.md` for schema.
+1. **Create `toc.json`** — Claude reads the PDF and writes `backfill/private/output/<vol>.<iss>/toc.json` with article metadata. See `docs/backfill-toc-guide.md` for schema.
 2. **`backfill/split-issue.sh <issue.pdf>`** — split the PDF into per-article PDFs + OJS Native XML. Requires toc.json to already exist.
 3. **`backfill/import.sh <issue-dir>`** — load the split output into OJS via Docker CLI.
 
@@ -49,7 +49,7 @@ Pipeline scripts (called by `split-issue.sh`):
 JATS is the single source of truth for article content. The pipeline direction is **PDF → JATS → HTML**:
 
 1. `backfill/htmlgen.py` — sends split PDFs to Claude API, generates initial HTML body content
-2. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + HTML body. Output: `backfill/output/<vol.iss>/<seq>-<slug>.jats.xml`
+2. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + HTML body. Output: `backfill/private/output/<vol.iss>/<seq>-<slug>.jats.xml`
 3. `backfill/extract_citations.py` — reads JATS `<body>`, finds reference sections, extracts items, writes to JATS `<back>` (ref-list, fn-group, bio, notes). Removes ref sections from body.
 4. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
 5. `backfill/jats_to_html.py` — generates HTML galley from JATS (body + notes + bios + provenance; references excluded — OJS renders those from citations table)
@@ -62,7 +62,7 @@ toc.json retains issue-level data only: PDF page splits, article ordering, secti
 Page numbers: `backfill/add_page_numbers.py` auto-detects printed page numbers from source PDFs and writes `journal_page_start/end` to toc.json. `generate_jats.py` reads those and writes `<fpage>`/`<lpage>` to JATS. `generate_xml.py` reads page numbers from JATS only (not toc.json) — JATS is the single source of truth. To update page numbers: edit toc.json → re-run `generate_jats.py` → re-run `generate_xml.py`. To push to live without re-import: `backfill/push_page_numbers.py --target live`.
 
 Standalone utilities:
-- `backfill/audit.py` — audit all source PDFs in `backfill/input/` for completeness
+- `backfill/audit.py` — audit all source PDFs in `backfill/private/input/` for completeness
 - `backfill/compare_archive.py` — compare PDF sources
 - `backfill/export_review.py` — export toc.json entries to spreadsheet-compatible format
 - `backfill/import_review.py` — import reviewed/corrected spreadsheet data back into toc.json
@@ -70,22 +70,22 @@ Standalone utilities:
 - `backfill/add_page_numbers.py` — auto-detect printed page numbers from source PDFs, populate toc.json
 - `backfill/push_page_numbers.py` — push page numbers to OJS database (dev or live) without re-import
 
-All journal-specific data lives in the private repo (`private/backfill/`). The public repo has symlinks: `backfill/input`, `backfill/output`, `backfill/authors.json`, `backfill/doi-registry.json`, `backfill/reports` all point to `private/backfill/`. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
+All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, `backfill/private/doi-registry.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
 
 ### Fixing a bad split or HTML galley
 
-1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/output/<vol>.<iss>/toc.json`
-2. Re-split: `backfill/split-issue.sh backfill/input/<vol>.<iss>.pdf`
-3. Delete the affected `.html` file(s): `rm backfill/output/<vol>.<iss>/<seq>-<slug>.html`
-4. Re-generate HTML: `python3 backfill/htmlgen.py backfill/output/<vol>.<iss>/toc.json --yes`
-5. Re-generate XML: `python3 backfill/generate_xml.py backfill/output/<vol>.<iss>/toc.json -o backfill/output/<vol>.<iss>/import.xml`
-6. Re-import: `backfill/import.sh backfill/output/<vol>.<iss> --force`
+1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`
+2. Re-split: `backfill/split-issue.sh backfill/private/input/<vol>.<iss>.pdf`
+3. Delete the affected `.html` file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.html`
+4. Re-generate HTML: `python3 backfill/htmlgen.py backfill/private/output/<vol>.<iss>/toc.json --yes`
+5. Re-generate XML: `python3 backfill/generate_xml.py backfill/private/output/<vol>.<iss>/toc.json -o backfill/private/output/<vol>.<iss>/import.xml`
+6. Re-import: `backfill/import.sh backfill/private/output/<vol>.<iss> --force`
 
 ### Fixing an HTML galley on live
 
 **Never re-import on live** — it risks duplicates and ID changes. Instead, update the galley file in place:
 
-1. Edit the `.html` file in `backfill/output/<vol>.<iss>/` and commit
+1. Edit the `.html` file in `backfill/private/output/<vol>.<iss>/` and commit
 2. Find the galley file path on live:
    ```
    docker compose exec -T ojs-db bash -c 'mysql -u root -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE -e "
@@ -99,7 +99,7 @@ All journal-specific data lives in the private repo (`private/backfill/`). The p
    ```
 3. Build the full HTML file (repo files are body-only, live files need the DOCTYPE wrapper):
    ```
-   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/output/<vol>.<iss>/<seq>-<slug>.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
+   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/private/output/<vol>.<iss>/<seq>-<slug>.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
    ```
 4. Copy into the live OJS container:
    ```

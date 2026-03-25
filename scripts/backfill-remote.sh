@@ -10,7 +10,7 @@
 #
 # Prerequisites:
 #   - hcloud CLI with active context
-#   - backfill/output/*/import.xml files exist locally (run split-issue.sh first)
+#   - backfill/private/output/*/import.xml files exist locally (run split-issue.sh first)
 #   - OJS running on the remote server
 set -eo pipefail
 
@@ -50,12 +50,12 @@ echo "=== Backfill remote: $SSH_HOST ==="
 
 # --- Sync import XMLs ---
 if [ -z "$IMPORT_ONLY" ]; then
-  BACKFILL_OUTPUT="$PROJECT_DIR/backfill/output"
+  BACKFILL_OUTPUT="$PROJECT_DIR/backfill/private/output"
 
   # Count import XMLs locally
   XML_COUNT=$(find "$BACKFILL_OUTPUT" -name 'import.xml' 2>/dev/null | wc -l)
   if [ "$XML_COUNT" -eq 0 ]; then
-    echo "ERROR: No import.xml files found in backfill/output/"
+    echo "ERROR: No import.xml files found in backfill/private/output/"
     echo "Run split-issue.sh first."
     exit 1
   fi
@@ -74,8 +74,8 @@ if [ -z "$IMPORT_ONLY" ]; then
   $SCP_CMD "$TARBALL" "$SCP_HOST:/tmp/backfill-import-xmls.tar.gz"
 
   echo "--- Extracting on $SSH_HOST ---"
-  $SSH_CMD "mkdir -p '$REMOTE_DIR/backfill/output' && \
-    tar xzf /tmp/backfill-import-xmls.tar.gz -C '$REMOTE_DIR/backfill/output' && \
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/backfill/private/output' && \
+    tar xzf /tmp/backfill-import-xmls.tar.gz -C '$REMOTE_DIR/backfill/private/output' && \
     rm /tmp/backfill-import-xmls.tar.gz"
   rm -f "$TARBALL"
 
@@ -103,7 +103,7 @@ CLEAN_FLAG=""
 if [ -z "$FORCE" ]; then
   CLEAN_FLAG="--clean"
 fi
-$SSH_CMD "cd $REMOTE_DIR && bash backfill/import.sh backfill/output/* $FORCE $CLEAN_FLAG"
+$SSH_CMD "cd $REMOTE_DIR && bash backfill/import.sh backfill/private/output/* $FORCE $CLEAN_FLAG"
 
 echo ""
 echo "$(phase_time) === Backfill complete ==="

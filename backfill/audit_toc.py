@@ -17,7 +17,7 @@ Checks learned from auditing all 68 issues:
 Usage:
     python backfill/audit_toc.py                    # Audit all issues
     python backfill/audit_toc.py --fix              # Auto-fix safe issues (back matter)
-    python backfill/audit_toc.py backfill/output/4  # Audit single issue
+    python backfill/audit_toc.py backfill/private/output/4  # Audit single issue
 """
 
 import sys
@@ -604,7 +604,7 @@ def audit_issue(issue_dir, fix=False):
 
 def find_all_issue_dirs():
     """Find all issue directories with toc.json files, sorted by volume.issue."""
-    output_dir = os.path.join(os.path.dirname(__file__), 'output')
+    output_dir = os.path.join(os.path.dirname(__file__), 'private', 'output')
     dirs = [
         os.path.join(output_dir, name)
         for name in os.listdir(output_dir)

@@ -154,7 +154,7 @@ def load_doi_registry(script_dir=None):
     """
     if script_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-    registry_path = os.path.join(script_dir, 'doi-registry.json')
+    registry_path = os.path.join(script_dir, 'private', 'doi-registry.json')
     if not os.path.exists(registry_path):
         return {}
     with open(registry_path) as f:
@@ -341,7 +341,7 @@ def generate_cover_image(toc_json_path, vol, iss):
 
 
 def find_issue_pdf(toc_json_path, vol, iss):
-    """Find the source whole-issue PDF in backfill/input/.
+    """Find the source whole-issue PDF in backfill/private/input/.
 
     Returns the path or None if not found.
     """
@@ -361,7 +361,7 @@ def find_issue_pdf(toc_json_path, vol, iss):
 def generate_issue_galley(toc_json_path, vol, iss, date_published):
     """Generate XML lines for an issue galley (whole-issue PDF).
 
-    Uses pre-saved cleaned PDFs from backfill/output/issue-galleys/ if available,
+    Uses pre-saved cleaned PDFs from backfill/private/output/issue-galleys/ if available,
     otherwise falls back to re-saving through PyMuPDF.
     Returns list of XML lines or empty list.
     """

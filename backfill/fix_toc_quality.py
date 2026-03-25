@@ -17,7 +17,7 @@ import json
 import re
 from pathlib import Path
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent / "private" / "output"
 
 # Track all changes for reporting
 changes: list[str] = []

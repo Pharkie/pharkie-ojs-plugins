@@ -7,7 +7,7 @@ formatting consistency across the full backfill dataset.
 
 Usage:
     python backfill/audit_html.py                              # Audit all
-    python backfill/audit_html.py backfill/output/30.1         # Single volume
+    python backfill/audit_html.py backfill/private/output/30.1         # Single volume
     python backfill/audit_html.py --fix                        # Auto-fix safe issues
     python backfill/audit_html.py --fix --dry-run              # Preview fixes
 """

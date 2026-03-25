@@ -111,8 +111,8 @@ def split_pdf(toc_data, output_dir):
 def main():
     parser = argparse.ArgumentParser(description='Split issue PDF into article PDFs')
     parser.add_argument('toc_json', help='TOC JSON file see docs/backfill-toc-guide.md')
-    parser.add_argument('--output-dir', '-o', default='./backfill/output',
-                        help='Output directory (default: ./backfill/output)')
+    parser.add_argument('--output-dir', '-o', default='./backfill/private/output',
+                        help='Output directory (default: ./backfill/private/output)')
     args = parser.parse_args()
 
     with open(args.toc_json) as f:

@@ -33,8 +33,8 @@ except ImportError:
     sys.exit(1)
 
 BACKFILL_DIR = os.path.join(os.path.dirname(__file__))
-INPUT_DIR = os.path.join(BACKFILL_DIR, 'input')
-OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'output')
+INPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'input')
+OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
 
 
 def detect_page_offset(pdf_path: str, first_pdf_page: int, scan_range: int = 5) -> int | None:

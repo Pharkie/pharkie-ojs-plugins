@@ -1,14 +1,14 @@
 # Backfill TOC Guide
 
-How to create `toc.json` files for the backfill pipeline. Each issue PDF needs a `toc.json` in `backfill/output/<vol>.<iss>/` before `split-issue.sh` can process it.
+How to create `toc.json` files for the backfill pipeline. Each issue PDF needs a `toc.json` in `backfill/private/output/<vol>.<iss>/` before `split-issue.sh` can process it.
 
 > **Note:** Examples in this guide reference Existential Analysis as a sample journal. Adapt section names, metadata fields, and conventions for your journal.
 
-> **Important:** If you fork this repo, do NOT put journal PDFs or article content directly into `backfill/output/` or `backfill/input/` — those directories are symlinks to a private repo (see `private/README.md`). If your fork is public, create your own private repo for journal-specific data and replicate the symlink setup. Copyrighted content must never be committed to a public repository.
+> **Important:** If you fork this repo, do NOT put journal PDFs or article content directly into `backfill/private/output/` or `backfill/private/input/` — the `backfill/private` directory is a symlink to a private repo (see `private/README.md`). If your fork is public, create your own private repo for journal-specific data and replicate the symlink setup. Copyrighted content must never be committed to a public repository.
 
 ## Quick version
 
-Ask Claude: "Read `backfill/input/<vol>.pdf` and create `backfill/output/<vol>/toc.json` following the schema in `docs/backfill-toc-guide.md`."
+Ask Claude: "Read `backfill/private/input/<vol>.pdf` and create `backfill/private/output/<vol>/toc.json` following the schema in `docs/backfill-toc-guide.md`."
 
 ## toc.json schema
 
@@ -78,7 +78,7 @@ Open the PDF with PyMuPDF and find the CONTENTS/TOC page (usually within the fir
 
 ```python
 import fitz
-doc = fitz.open('backfill/input/23.1.pdf')
+doc = fitz.open('backfill/private/input/23.1.pdf')
 for i in range(min(10, len(doc))):
     text = doc[i].get_text()
     if 'CONTENTS' in text.upper():
@@ -132,8 +132,8 @@ The CONTENTS page is the primary source for titles and authors. However:
 - Book review sections on the CONTENTS page don't list individual reviews.
 
 ### Output directory naming
-- Volumes 1-5 (single-issue): `backfill/output/<vol>/` (e.g. `output/3/`)
-- Volumes 6+: `backfill/output/<vol>.<iss>/` (e.g. `output/23.1/`)
+- Volumes 1-5 (single-issue): `backfill/private/output/<vol>/` (e.g. `output/3/`)
+- Volumes 6+: `backfill/private/output/<vol>.<iss>/` (e.g. `output/23.1/`)
 
 ## Example entries
 

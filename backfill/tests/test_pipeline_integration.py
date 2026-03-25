@@ -223,8 +223,16 @@ class TestXmlWithEnrichment:
         assert len(disciplines) == 2
         assert disciplines[0].text == 'Psychotherapy'
 
-    def test_pages_emitted(self):
+    def test_pages_emitted(self, tmp_path):
         toc_data = make_toc_data()
+        # Create a JATS file with page numbers for article[1]
+        jats_content = '<?xml version="1.0"?><article><front><article-meta><fpage>5</fpage><lpage>20</lpage></article-meta></front></article>'
+        jats_file = tmp_path / '02-article.jats.xml'
+        jats_file.write_text(jats_content)
+        # Point split_pdf at a matching path so _load_jats_tree finds the JATS
+        pdf_file = tmp_path / '02-article.pdf'
+        pdf_file.write_bytes(b'')
+        toc_data['articles'][1]['split_pdf'] = str(pdf_file)
         xml_str = generate_xml(toc_data, doi_registry={})
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)

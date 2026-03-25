@@ -18,8 +18,8 @@ Checks per PDF:
   - Preflight compatibility (would preflight.py pass?)
 
 Outputs:
-  backfill/output/audit-report.md   — human-readable markdown
-  backfill/output/audit-report.json — machine-readable
+  backfill/private/output/audit-report.md   — human-readable markdown
+  backfill/private/output/audit-report.json — machine-readable
 """
 
 import sys
@@ -513,7 +513,7 @@ def main():
         print(file=sys.stderr)
 
     # Output files
-    output_dir = os.path.join(os.path.dirname(__file__), "output")
+    output_dir = os.path.join(os.path.dirname(__file__), "private", "output")
     os.makedirs(output_dir, exist_ok=True)
 
     json_path = os.path.join(output_dir, "audit-report.json")

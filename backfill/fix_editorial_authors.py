@@ -43,7 +43,7 @@ def get_editors(vol: int, iss: int) -> str | None:
 
 
 def main():
-    output_dir = Path(__file__).parent / "output"
+    output_dir = Path(__file__).parent / "private" / "output"
     updated = 0
     skipped = 0
 

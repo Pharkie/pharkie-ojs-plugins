@@ -18,53 +18,53 @@ OUTPUT_DIR = "/tmp/html-quality-test"
 SAMPLES = [
     {
         "label": "v01-editorial",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/input/1.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/input/1.pdf",
         "pages": (4, 4),  # 0-based
         "desc": "Vol 1 Editorial (1994, early, short)",
     },
     {
         "label": "v25-editorial",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/25.1/01-editorial.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/25.1/01-editorial.pdf",
         "desc": "Vol 25.1 Editorial (2014, born-digital)",
     },
     {
         "label": "v33-editorial",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/33.2/01-editorial.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/33.2/01-editorial.pdf",
         "desc": "Vol 33.2 Editorial (2022, 2-page)",
     },
     {
         "label": "v26-bookreview-ed",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/26.1/16-book-reviews.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/26.1/16-book-reviews.pdf",
         "desc": "Vol 26.1 Book Review Editorial (2015, 4 pages)",
     },
     {
         "label": "v30-article",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/30.1/02-facing-an-uncertain-future-the-next-30-years-of-existential-therapy.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/30.1/02-facing-an-uncertain-future-the-next-30-years-of-existential-therapy.pdf",
         "desc": "Vol 30.1 Article (2019, born-digital, 14 pages)",
     },
     {
         "label": "v22-article",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/22.2/02-de-beauvoir-bridget-jones-pants-and-vaginismus.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/22.2/02-de-beauvoir-bridget-jones-pants-and-vaginismus.pdf",
         "desc": "Vol 22.2 Article (2011, medium length)",
     },
     {
         "label": "v10-article",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/10.1/01-reculer-pour-mieux-sauter.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/10.1/01-reculer-pour-mieux-sauter.pdf",
         "desc": "Vol 10.1 Article (1999, older format)",
     },
     {
         "label": "v13-article",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/13.1/02-death-a-philosophical-perspective.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/13.1/02-death-a-philosophical-perspective.pdf",
         "desc": "Vol 13.1 Article (2002, scanned/OCR)",
     },
     {
         "label": "v06-article",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/6.2/02-husserl-phenomenology-and-psychology.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/6.2/02-husserl-phenomenology-and-psychology.pdf",
         "desc": "Vol 6.2 Article (1995, scanned/OCR)",
     },
     {
         "label": "v37-article",
-        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/output/37.1/02-therapy-for-the-revolution-lessons-from-the-front-line.pdf",
+        "pdf": "/workspaces/pharkie-ojs-plugins/backfill/private/output/37.1/02-therapy-for-the-revolution-lessons-from-the-front-line.pdf",
         "desc": "Vol 37.1 Article (2026, most recent)",
     },
 ]

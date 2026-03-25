@@ -51,7 +51,7 @@ class AuditResult:
 
 def audit_toc_integrity(result):
     """Check all toc.json files for structural issues."""
-    toc_files = sorted(glob.glob('backfill/output/*/toc.json'))
+    toc_files = sorted(glob.glob('backfill/private/output/*/toc.json'))
     result.stats['toc_files'] = len(toc_files)
     total_articles = 0
 
@@ -153,7 +153,7 @@ def audit_toc_integrity(result):
 
 def audit_html_quality(result):
     """Check all HTML galley files for quality issues."""
-    html_files = sorted(glob.glob('backfill/output/*/*.html'))
+    html_files = sorted(glob.glob('backfill/private/output/*/*.html'))
     result.stats['html_files'] = len(html_files)
 
     for html_path in html_files:
@@ -234,7 +234,7 @@ def audit_html_quality(result):
 
 def audit_cross_consistency(result):
     """Check consistency between toc.json and HTML files."""
-    toc_files = sorted(glob.glob('backfill/output/*/toc.json'))
+    toc_files = sorted(glob.glob('backfill/private/output/*/toc.json'))
 
     for toc_path in toc_files:
         issue_dir = os.path.dirname(toc_path)
@@ -263,7 +263,7 @@ def audit_cross_consistency(result):
 
 def audit_known_artefacts(result):
     """Scan for known Haiku/PyMuPDF artefacts across all HTML files."""
-    html_files = sorted(glob.glob('backfill/output/*/*.html'))
+    html_files = sorted(glob.glob('backfill/private/output/*/*.html'))
 
     # Known OCR errors to scan for
     artefact_patterns = [
@@ -284,7 +284,7 @@ def audit_known_artefacts(result):
                 result.warn('artefact', html_path, f'{prefix}: {desc}')
 
     # Also check toc.json abstracts
-    for toc_path in sorted(glob.glob('backfill/output/*/toc.json')):
+    for toc_path in sorted(glob.glob('backfill/private/output/*/toc.json')):
         issue_name = os.path.basename(os.path.dirname(toc_path))
         toc = load_toc(toc_path)
         for art in toc['articles']:
@@ -296,7 +296,7 @@ def audit_known_artefacts(result):
 
 def audit_duplicate_content(result):
     """Check for content that appears in both abstract and HTML body (duplicate display risk)."""
-    toc_files = sorted(glob.glob('backfill/output/*/toc.json'))
+    toc_files = sorted(glob.glob('backfill/private/output/*/toc.json'))
 
     for toc_path in toc_files:
         issue_dir = os.path.dirname(toc_path)
@@ -333,7 +333,7 @@ def audit_duplicate_content(result):
 
 def audit_section_stats(result):
     """Aggregate statistics for reporting."""
-    toc_files = sorted(glob.glob('backfill/output/*/toc.json'))
+    toc_files = sorted(glob.glob('backfill/private/output/*/toc.json'))
     section_counts = defaultdict(int)
     with_abstract = 0
     with_keywords = 0

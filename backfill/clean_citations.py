@@ -20,7 +20,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent / "private" / "output"
 
 
 def should_remove(text: str) -> str | None:

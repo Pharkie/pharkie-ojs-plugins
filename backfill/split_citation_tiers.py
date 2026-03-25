@@ -21,7 +21,7 @@ from xml.etree import ElementTree as ET
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import is_note, is_reference, classify
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent / "private" / "output"
 
 
 def split_jats_citations(jats_path: Path, dry_run: bool = False,

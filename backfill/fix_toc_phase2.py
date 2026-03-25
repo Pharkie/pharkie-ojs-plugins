@@ -19,8 +19,8 @@ from pathlib import Path
 
 import fitz  # PyMuPDF
 
-BASE = Path("backfill/output")
-PDF_BASE = Path("backfill/input")
+BASE = Path("backfill/private/output")
+PDF_BASE = Path("backfill/private/input")
 DRY_RUN = "--dry-run" in sys.argv
 changes = []
 

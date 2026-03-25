@@ -4,7 +4,7 @@
 Usage:
     python3 backfill/sheets_export.py [--dry-run]
 
-Reads all backfill/output/*/toc.json files and publishes a flat row-per-article
+Reads all backfill/private/output/*/toc.json files and publishes a flat row-per-article
 spreadsheet to the configured Google Sheet.
 """
 
@@ -17,7 +17,7 @@ from pathlib import Path
 SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
 CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data-export',
                           'sea-journal-87a19feadadd.json')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'private', 'output')
 
 HEADERS = [
     'Volume', 'Issue', 'Date', 'Section', 'Title', 'Authors', 'DOI',

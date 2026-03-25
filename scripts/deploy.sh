@@ -187,13 +187,13 @@ else
 fi
 
 # Sync sample issue XMLs for staging (backfill-generated, with correct per-article galleys)
-SAMPLE_ISSUES=("$PROJECT_DIR/backfill/output/35.2/import.xml" "$PROJECT_DIR/backfill/output/36.1/import.xml")
+SAMPLE_ISSUES=("$PROJECT_DIR/backfill/private/output/35.2/import.xml" "$PROJECT_DIR/backfill/private/output/36.1/import.xml")
 HAVE_SAMPLES=false
 for f in "${SAMPLE_ISSUES[@]}"; do
   [ -f "$f" ] && HAVE_SAMPLES=true
 done
 if [ "$HAVE_SAMPLES" = true ]; then
-  $SSH_CMD "mkdir -p '$REMOTE_DIR/backfill/output/35.2' '$REMOTE_DIR/backfill/output/36.1'"
+  $SSH_CMD "mkdir -p '$REMOTE_DIR/backfill/private/output/35.2' '$REMOTE_DIR/backfill/private/output/36.1'"
   for f in "${SAMPLE_ISSUES[@]}"; do
     if [ -f "$f" ]; then
       RELPATH="${f#$PROJECT_DIR/}"

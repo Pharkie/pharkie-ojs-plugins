@@ -1,7 +1,7 @@
 #!/bin/bash
 # Split a whole-issue PDF into per-article PDFs and OJS import XML.
 #
-# Requires toc.json to already exist in backfill/output/<vol>.<iss>/.
+# Requires toc.json to already exist in backfill/private/output/<vol>.<iss>/.
 # See docs/backfill-toc-guide.md for how to create toc.json files.
 #
 # Usage:
@@ -18,12 +18,12 @@
 #   normalize    — normalize author names
 #   generate_xml — generate OJS Native XML with base64-embedded PDFs
 #
-# Output: backfill/output/<vol>.<iss>/
+# Output: backfill/private/output/<vol>.<iss>/
 #   toc.json (pre-existing), per-article PDFs, import.xml
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-OUTPUT_DIR="$SCRIPT_DIR/output"
+OUTPUT_DIR="$SCRIPT_DIR/private/output"
 
 CLEANUP_FILES=()
 cleanup() { rm -f "${CLEANUP_FILES[@]}"; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare journal PDFs across three local directories:
 - securepdfs-mirror/ (downloaded from live WP)
-- backfill/input/ (pipeline-ready copies)
+- backfill/private/input/ (pipeline-ready copies)
 - journal archive/ (our original archive)
 
 Maps filenames to issue numbers, compares sizes and page counts.

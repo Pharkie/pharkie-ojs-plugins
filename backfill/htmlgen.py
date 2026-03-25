@@ -9,11 +9,11 @@ next to the split PDF.
 Resumable: skips articles that already have an .html file.
 
 Usage:
-    python backfill/htmlgen.py backfill/output/10.1/toc.json                    # one issue
-    python backfill/htmlgen.py backfill/output/*/toc.json                       # all issues
-    python backfill/htmlgen.py backfill/output/10.1/toc.json --dry-run          # cost estimate
-    python backfill/htmlgen.py backfill/output/10.1/toc.json --article=3        # single article (1-indexed)
-    python backfill/htmlgen.py backfill/output/10.1/toc.json --workers=5        # concurrent API calls
+    python backfill/htmlgen.py backfill/private/output/10.1/toc.json                    # one issue
+    python backfill/htmlgen.py backfill/private/output/*/toc.json                       # all issues
+    python backfill/htmlgen.py backfill/private/output/10.1/toc.json --dry-run          # cost estimate
+    python backfill/htmlgen.py backfill/private/output/10.1/toc.json --article=3        # single article (1-indexed)
+    python backfill/htmlgen.py backfill/private/output/10.1/toc.json --workers=5        # concurrent API calls
 
 Requires ANTHROPIC_API_KEY environment variable (or .env file).
 """

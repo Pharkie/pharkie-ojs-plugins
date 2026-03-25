@@ -6,10 +6,10 @@ Book reviews share PDF pages — split PDFs include full pages, so Haiku
 may extract text from adjacent reviews. This script audits and trims bleed.
 
 Usage:
-    python backfill/fix_html_bleed.py --report backfill/output/*/toc.json
-    python backfill/fix_html_bleed.py --trim --dry-run backfill/output/*/toc.json
-    python backfill/fix_html_bleed.py --trim backfill/output/*/toc.json
-    python backfill/fix_html_bleed.py --clean-headers backfill/output/*/toc.json
+    python backfill/fix_html_bleed.py --report backfill/private/output/*/toc.json
+    python backfill/fix_html_bleed.py --trim --dry-run backfill/private/output/*/toc.json
+    python backfill/fix_html_bleed.py --trim backfill/private/output/*/toc.json
+    python backfill/fix_html_bleed.py --clean-headers backfill/private/output/*/toc.json
 """
 
 import sys
