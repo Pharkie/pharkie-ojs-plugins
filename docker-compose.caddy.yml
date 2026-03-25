@@ -13,6 +13,8 @@ services:
       - "443:443"
     environment:
       CADDY_WP_DOMAIN: ${CADDY_WP_DOMAIN:-:8080}
+      CADDY_WP_AUTH_USER: ${CADDY_WP_AUTH_USER:-staging}
+      CADDY_WP_AUTH_HASH: ${CADDY_WP_AUTH_HASH:-}
       CADDY_OJS_DOMAIN: ${CADDY_OJS_DOMAIN:?Set CADDY_OJS_DOMAIN in .env}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
