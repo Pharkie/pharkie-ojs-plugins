@@ -68,13 +68,42 @@ function findOpenAccessArticleWithHtmlGalley(): {
   };
 }
 
+/**
+ * Find an issue that has articles with page numbers set.
+ * Returns { issueId, articleCount } or null.
+ */
+function findIssueWithPageNumbers(): {
+  issueId: number;
+  articleCount: number;
+} | null {
+  const out = ojsQuery(`
+    SELECT p.issue_id, COUNT(*) AS cnt
+    FROM publications p
+    JOIN publication_settings ps ON p.publication_id = ps.publication_id
+      AND ps.setting_name = 'pages'
+    WHERE p.status = 3
+    GROUP BY p.issue_id
+    HAVING cnt >= 3
+    ORDER BY cnt DESC
+    LIMIT 1
+  `);
+  const parts = out.trim().split('\t');
+  if (parts.length < 2 || !parts[0]) return null;
+  return {
+    issueId: parseInt(parts[0], 10),
+    articleCount: parseInt(parts[1], 10),
+  };
+}
+
 test.describe('JATS round-trip: article content from JATS → OJS', () => {
   let articleWithCitations: ReturnType<typeof findArticleWithCitations>;
   let openAccessArticle: ReturnType<typeof findOpenAccessArticleWithHtmlGalley>;
+  let issueWithPages: ReturnType<typeof findIssueWithPageNumbers>;
 
   test.beforeAll(() => {
     articleWithCitations = findArticleWithCitations();
     openAccessArticle = findOpenAccessArticleWithHtmlGalley();
+    issueWithPages = findIssueWithPageNumbers();
   });
 
   test('OJS citations table has references from JATS ref-list', async () => {
@@ -179,5 +208,25 @@ test.describe('JATS round-trip: article content from JATS → OJS', () => {
     // Just check the page loaded without error
     const pageContent = await page.content();
     expect(pageContent).toContain('References');
+  });
+
+  test('issue TOC shows page numbers from JATS fpage/lpage', async ({
+    page,
+  }) => {
+    test.skip(!issueWithPages, 'No issue with page numbers found in DB');
+
+    await page.goto(
+      `${OJS_BASE}/ea/issue/view/${issueWithPages!.issueId}`,
+    );
+    await page.waitForLoadState('domcontentloaded');
+
+    // OJS displays page ranges in .pages elements on the issue TOC
+    const pageElements = page.locator('.obj_article_summary .pages');
+    const count = await pageElements.count();
+    expect(count).toBeGreaterThan(0);
+
+    // Verify at least one shows a valid page range (e.g. "215-217")
+    const firstPages = await pageElements.first().textContent();
+    expect(firstPages).toMatch(/\d+\s*[-–]\s*\d+/);
   });
 });

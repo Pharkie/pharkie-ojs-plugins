@@ -139,15 +139,15 @@ def load_jats_pages(toc_path: str) -> dict[str, str]:
     articles = data.get('articles', [])
     desired = {}
 
+    issue_dir = os.path.dirname(toc_path)
     for art in articles:
         split_pdf = art.get('split_pdf')
         if not split_pdf:
             continue
-        # split_pdf paths are relative to project root
-        if not os.path.isabs(split_pdf):
-            project_root = os.path.join(os.path.dirname(__file__), '..')
-            split_pdf = os.path.normpath(os.path.join(project_root, split_pdf))
-        jats_path = os.path.splitext(split_pdf)[0] + '.jats.xml'
+        # Derive JATS path from the toc.json directory + split_pdf filename
+        # (avoids stale absolute/relative paths in toc.json after refactors)
+        basename = os.path.splitext(os.path.basename(split_pdf))[0]
+        jats_path = os.path.join(issue_dir, basename + '.jats.xml')
         if not os.path.exists(jats_path):
             continue
         try:
