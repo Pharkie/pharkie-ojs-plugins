@@ -36,7 +36,7 @@ from lib.citations import (
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent / "private" / "output"
 
 
 # ---------------------------------------------------------------

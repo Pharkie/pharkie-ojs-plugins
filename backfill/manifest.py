@@ -6,7 +6,7 @@ Reads toc.json and enrichment.json files and outputs a MANIFEST.md with
 issue-level stats, coverage percentages, and gap analysis.
 
 Usage:
-    python3 backfill/manifest.py backfill/output/*/toc.json
+    python3 backfill/manifest.py backfill/private/output/*/toc.json
 """
 
 import sys
@@ -66,8 +66,8 @@ def pct(n, total):
 def main():
     parser = argparse.ArgumentParser(description='Generate archive manifest')
     parser.add_argument('toc_files', nargs='+', help='toc.json files')
-    parser.add_argument('-o', '--output', default='backfill/output/MANIFEST.md',
-                        help='Output path (default: backfill/output/MANIFEST.md)')
+    parser.add_argument('-o', '--output', default='backfill/private/output/MANIFEST.md',
+                        help='Output path (default: backfill/private/output/MANIFEST.md)')
     args = parser.parse_args()
 
     issues = []

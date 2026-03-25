@@ -39,4 +39,4 @@ Issue PDF → toc.json (metadata) → split PDFs → HTML galleys (AI) → JATS 
 
 ## Data directory
 
-`backfill/output/<vol>.<iss>/` contains per-issue output: toc.json (metadata), split PDFs, HTML galleys, JATS XML, and OJS import XML. This directory is gitignored — journal-specific data lives in a separate private repository. The scripts work with any local `backfill/output/` directory regardless of where the data comes from.
+`backfill/private/output/<vol>.<iss>/` contains per-issue output: toc.json (metadata), split PDFs, HTML galleys, JATS XML, and OJS import XML. This directory is gitignored — journal-specific data lives in a separate private repository (accessed via the `backfill/private` symlink). The scripts work with any local `backfill/private/output/` directory regardless of where the data comes from.

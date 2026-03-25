@@ -1101,7 +1101,7 @@ if [ "$SAMPLE_DATA" = true ]; then
   fi
   if [ ! -d "$IMPORT_DIR" ] || [ -z "$XML_FILES" ]; then
     echo "[OJS] WARNING: No sample issue XMLs found in $IMPORT_DIR — skipping content import."
-    echo "[OJS] To import: mount backfill/output/ or individual XML files and re-run setup."
+    echo "[OJS] To import: mount backfill/private/output/ or individual XML files and re-run setup."
   else
 
   # Idempotent check: see if articles already exist

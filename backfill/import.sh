@@ -5,8 +5,8 @@
 # and loads it into OJS via the Native Import/Export CLI.
 #
 # Usage:
-#   backfill/import.sh backfill/output/37.1       # Import one issue
-#   backfill/import.sh backfill/output/*                  # Import all prepared issues
+#   backfill/import.sh backfill/private/output/37.1       # Import one issue
+#   backfill/import.sh backfill/private/output/*                  # Import all prepared issues
 #
 # Requires: OJS running in Docker (auto-detected), or --container=<name>.
 #
@@ -62,8 +62,8 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --force             Reimport issues that already exist in OJS"
   echo "  --clean             Wipe all existing issues/articles before importing"
   echo
-  echo "Example: backfill/import.sh backfill/output/37.1"
-  echo "         backfill/import.sh backfill/output/*"
+  echo "Example: backfill/import.sh backfill/private/output/37.1"
+  echo "         backfill/import.sh backfill/private/output/*"
   exit 1
 fi
 
@@ -112,7 +112,7 @@ unset IFS
 if [ ${#SORTED_DIRS[@]} -ge 5 ] && [ "$CLEAN" = "0" ]; then
   echo "WARNING: Importing ${#SORTED_DIRS[@]} issues without --clean."
   echo "  Existing issues will be skipped unless you also pass --force."
-  echo "  For a full re-import, use: backfill/import.sh backfill/output/* --clean"
+  echo "  For a full re-import, use: backfill/import.sh backfill/private/output/* --clean"
   echo
 fi
 

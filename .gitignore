@@ -44,13 +44,8 @@ e2e/screenshots/
 # Rebuild logs
 logs/
 
-# Backfill data — symlinks to private repo (docs/private/backfill/)
-# These are symlinks, not directories, so patterns must not have trailing slashes.
-backfill/output
-backfill/reports
-backfill/authors.json
-backfill/doi-registry.json
-backfill/input
+# Backfill private data — single symlink to private repo
+backfill/private
 
 # Python bytecode
 __pycache__/

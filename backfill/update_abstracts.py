@@ -167,9 +167,9 @@ def main():
     group.add_argument('--apply', action='store_true', help='Update toc.json files')
     args = parser.parse_args()
 
-    toc_files = sorted(glob.glob('backfill/output/*/toc.json'))
+    toc_files = sorted(glob.glob('backfill/private/output/*/toc.json'))
     if not toc_files:
-        print("No toc.json files found in backfill/output/*/", file=sys.stderr)
+        print("No toc.json files found in backfill/private/output/*/", file=sys.stderr)
         sys.exit(1)
 
     stats = {

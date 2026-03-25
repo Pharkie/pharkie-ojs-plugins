@@ -5,9 +5,9 @@ JATS → HTML is the correct direction. HTML galleys are a derived format
 for OJS display, generated from the canonical JATS representation.
 
 Usage:
-    python3 backfill/jats_to_html.py backfill/output/10.1/toc.json          # one issue
-    python3 backfill/jats_to_html.py backfill/output/*/toc.json             # all issues
-    python3 backfill/jats_to_html.py backfill/output/*/toc.json --dry-run   # count only
+    python3 backfill/jats_to_html.py backfill/private/output/10.1/toc.json          # one issue
+    python3 backfill/jats_to_html.py backfill/private/output/*/toc.json             # all issues
+    python3 backfill/jats_to_html.py backfill/private/output/*/toc.json --dry-run   # count only
 """
 
 import argparse

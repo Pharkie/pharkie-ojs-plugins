@@ -11,12 +11,12 @@ Usage:
     python backfill/author_normalize.py toc1.json toc2.json ...
 
     # Process all TOC JSONs in the output directory
-    python backfill/author_normalize.py backfill/output/*/toc.json
+    python backfill/author_normalize.py backfill/private/output/*/toc.json
 
     # Just show the current registry stats
     python backfill/author_normalize.py --stats
 
-Registry file: backfill/authors.json
+Registry file: backfill/private/authors.json
 - Checked into git, grows as you process issues
 - Each entry maps a canonical name to known variants
 - Ambiguous matches are flagged for human review in authors-review.json
@@ -33,8 +33,8 @@ import unicodedata
 from difflib import SequenceMatcher
 
 
-REGISTRY_PATH = os.path.join(os.path.dirname(__file__), 'authors.json')
-REVIEW_PATH = os.path.join(os.path.dirname(__file__), 'authors-review.json')
+REGISTRY_PATH = os.path.join(os.path.dirname(__file__), 'private', 'authors.json')
+REVIEW_PATH = os.path.join(os.path.dirname(__file__), 'private', 'authors-review.json')
 
 
 def normalize_key(name):

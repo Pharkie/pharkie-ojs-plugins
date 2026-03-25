@@ -2,9 +2,9 @@
 """Reconstruct toc.json files from Google Sheet data.
 
 Reads the backfill review spreadsheet and recreates toc.json files in
-backfill/output/<vol>.<iss>/ with all available metadata.
+backfill/private/output/<vol>.<iss>/ with all available metadata.
 
-Also derives source_pdf and total_pdf_pages from backfill/input/ PDFs.
+Also derives source_pdf and total_pdf_pages from backfill/private/input/ PDFs.
 
 Usage:
     python3 backfill/reconstruct_toc.py --dry-run    # Preview without writing
@@ -19,8 +19,8 @@ from collections import defaultdict
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-OUTPUT_DIR = SCRIPT_DIR / 'output'
-PREPARED_DIR = SCRIPT_DIR / 'input'
+OUTPUT_DIR = SCRIPT_DIR / 'private' / 'output'
+PREPARED_DIR = SCRIPT_DIR / 'private' / 'input'
 CREDS_FILE = SCRIPT_DIR.parent / 'data-export' / 'sea-journal-87a19feadadd.json'
 SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
 
@@ -137,7 +137,7 @@ def reconstruct_tocs(headers, rows):
             articles.append(article)
 
         toc = {
-            'source_pdf': pdf_path or f'backfill/input/{issue_dir_name(vol, iss)}.pdf',
+            'source_pdf': pdf_path or f'backfill/private/input/{issue_dir_name(vol, iss)}.pdf',
             'volume': vol,
             'issue': iss,
             'date': date,

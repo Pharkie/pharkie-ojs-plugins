@@ -131,9 +131,9 @@ services:
       - ./docker/ojs/apache.conf:/etc/apache2/conf-enabled/sea-cgipassauth.conf:ro
       - ./scripts:/scripts:ro
       # Sample issue XMLs for dev. Mounts the entire backfill output directory.
-      # Generate all: for t in backfill/output/*/toc.json; do python backfill/generate_xml.py "$t" -o "$(dirname $t)/import.xml"; done
+      # Generate all: for t in backfill/private/output/*/toc.json; do python backfill/generate_xml.py "$t" -o "$(dirname $t)/import.xml"; done
       # Demo fixtures (no private repo needed): python fixtures/generate-sample-issues.py
-      # Docker can't follow the backfill/output symlink — use the real path via private/.
+      # Docker can't follow the backfill/private symlink — use the real path.
       - "./private/backfill/output:/data/sample-issues:ro"
       - "./private/editorial-roles.json:/data/editorial-roles.json:ro"
     depends_on:

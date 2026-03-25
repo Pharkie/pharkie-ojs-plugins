@@ -11,7 +11,7 @@ Usage:
     python3 backfill/audit_citations.py --verbose
 
 Output:
-    backfill/output/citations-audit-report.json
+    backfill/private/output/citations-audit-report.json
     stdout: human-readable summary
 """
 
@@ -24,7 +24,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from html.parser import HTMLParser
 
-OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR = Path(__file__).parent / "private" / "output"
 REPORT_PATH = OUTPUT_DIR / "citations-audit-report.json"
 
 

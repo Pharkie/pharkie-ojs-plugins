@@ -6,9 +6,9 @@ JATS becomes the single source of truth for article content — metadata,
 body text, references, notes, author bios, and provenance in one file.
 
 Usage:
-    python3 backfill/generate_jats.py backfill/output/25.1/toc.json         # one issue
-    python3 backfill/generate_jats.py backfill/output/*/toc.json            # all issues
-    python3 backfill/generate_jats.py backfill/output/*/toc.json --dry-run  # count only
+    python3 backfill/generate_jats.py backfill/private/output/25.1/toc.json         # one issue
+    python3 backfill/generate_jats.py backfill/private/output/*/toc.json            # all issues
+    python3 backfill/generate_jats.py backfill/private/output/*/toc.json --dry-run  # count only
 """
 
 import argparse

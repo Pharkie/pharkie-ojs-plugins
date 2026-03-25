@@ -11,8 +11,8 @@ stored in toc.json. This survives row reordering, title edits, and
 re-exports.
 
 Usage:
-    python backfill/export_review.py backfill/output/37.1/toc.json -o review.csv
-    python backfill/export_review.py backfill/output/*/toc.json -o review.csv
+    python backfill/export_review.py backfill/private/output/37.1/toc.json -o review.csv
+    python backfill/export_review.py backfill/private/output/*/toc.json -o review.csv
 """
 
 import sys
