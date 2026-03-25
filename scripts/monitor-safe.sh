@@ -46,10 +46,12 @@ if [ -z "$WP_PUBLIC_URL" ]; then
     WP_PUBLIC_URL="https://$CADDY_WP"
   fi
 fi
-# Staging sites behind Caddy basic auth — skip external WP checks, use Docker-internal only
+# Basic auth credentials for staging sites behind Caddy
 CADDY_AUTH_USER=$($SSH_CMD "grep '^CADDY_WP_AUTH_USER=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
-if [ -n "$CADDY_AUTH_USER" ]; then
-  WP_PUBLIC_URL=""  # Force Docker-internal checks (external would need auth credentials)
+CADDY_AUTH_PASS=$($SSH_CMD "grep '^CADDY_WP_AUTH_PASS=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
+WP_CURL_AUTH=""
+if [ -n "$CADDY_AUTH_USER" ] && [ -n "$CADDY_AUTH_PASS" ]; then
+  WP_CURL_AUTH="-u ${CADDY_AUTH_USER}:${CADDY_AUTH_PASS}"
 fi
 # Fallback: if WP_HOME looks public (not private IP/non-standard port), use it directly
 if [ -z "$WP_PUBLIC_URL" ]; then
@@ -112,7 +114,7 @@ wp_curl() {
   local path="$1" url
   if [ -n "$WP_PUBLIC_URL" ]; then
     url="${WP_PUBLIC_URL}${path}"
-    curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null
+    curl -s -o /dev/null -w '%{http_code}' $WP_CURL_AUTH "$url" 2>/dev/null
   else
     # Curl from inside the Caddy/WP network
     remote "$COMPOSE exec -T wp curl -s -o /dev/null -w '%{http_code}' 'http://localhost:80${path}'" 2>/dev/null
@@ -123,7 +125,7 @@ wp_curl() {
 WP_CHECK_URL="${WP_PUBLIC_URL:-$WP_HOME}"
 WP_STATUS=$(wp_curl "") || WP_STATUS="000"
 if [ -n "$WP_PUBLIC_URL" ]; then
-  WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' "$WP_PUBLIC_URL" 2>/dev/null) || WP_TIME="0"
+  WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' $WP_CURL_AUTH "$WP_PUBLIC_URL" 2>/dev/null) || WP_TIME="0"
 else
   WP_TIME="0"
 fi
