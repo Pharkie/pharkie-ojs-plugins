@@ -13,7 +13,7 @@ from xml.etree import ElementTree as ET
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.generate_xml import generate_xml, lookup_doi, SECTIONS
+from backfill.generate_xml import generate_xml, SECTIONS
 from backfill.verify_split import extract_title_words, verify_split
 
 # Namespace for OJS XML
@@ -283,27 +283,35 @@ class TestXmlWithEnrichment:
 
 
 class TestXmlWithDois:
-    """Test DOI preservation through the XML generation chain."""
+    """Test DOI reading from JATS through XML generation."""
 
-    def test_doi_emitted_in_xml(self):
+    def test_doi_from_jats_in_xml(self, tmp_path):
+        """DOI in JATS file should appear in generated XML."""
         toc_data = make_toc_data()
-        registry = {
-            ('existential therapy in practice: a clinical perspective', '37', '1'):
-                '10.65828/test-doi-123',
-        }
-        xml_str = generate_xml(toc_data, doi_registry=registry)
+        # Create a JATS file with a DOI for the second article
+        pdf_name = '02-existential-therapy-in-practice.pdf'
+        pdf_path = tmp_path / pdf_name
+        pdf_path.write_bytes(b'%PDF-fake')
+        jats_path = tmp_path / '02-existential-therapy-in-practice.jats.xml'
+        jats_path.write_text(
+            '<?xml version="1.0"?>'
+            '<article><front><article-meta>'
+            '<article-id pub-id-type="doi">10.65828/test-doi-123</article-id>'
+            '</article-meta></front></article>')
+        toc_data['articles'][1]['split_pdf'] = str(pdf_path)
+        xml_str = generate_xml(toc_data)
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)
-        # Article at index 1 should have the DOI
         pub = articles[1].find('.//pkp:publication', NS)
         doi_ids = [e for e in pub.findall('pkp:id', NS) if e.get('type') == 'doi']
         assert len(doi_ids) == 1
         assert doi_ids[0].text == '10.65828/test-doi-123'
         assert doi_ids[0].get('advice') == 'update'
 
-    def test_no_doi_when_not_in_registry(self):
+    def test_no_doi_when_no_jats(self):
+        """No DOI when no JATS file exists."""
         toc_data = make_toc_data()
-        xml_str = generate_xml(toc_data, doi_registry={})
+        xml_str = generate_xml(toc_data)
         root = ET.fromstring(xml_str)
         articles = root.findall('.//pkp:article', NS)
         for article in articles:
@@ -311,20 +319,6 @@ class TestXmlWithDois:
             doi_ids = [e for e in pub.findall('pkp:id', NS) if e.get('type') == 'doi']
             assert len(doi_ids) == 0
 
-    def test_editorial_doi_lookup_variant(self):
-        """'Editorial' in TOC should match '37.1 editorial' in registry."""
-        registry = {
-            ('37.1 editorial', '37', '1'): '10.65828/editorial-doi',
-        }
-        doi = lookup_doi(registry, 'Editorial', 37, 1)
-        assert doi == '10.65828/editorial-doi'
-
-    def test_book_review_prefix_stripped(self):
-        registry = {
-            ('the meaning of life revisited', '37', '1'): '10.65828/br-doi',
-        }
-        doi = lookup_doi(registry, 'Book Review: The Meaning of Life Revisited', 37, 1)
-        assert doi == '10.65828/br-doi'
 
 
 class TestVerifySplitIntegration:
