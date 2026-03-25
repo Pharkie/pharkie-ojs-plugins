@@ -178,6 +178,7 @@ def build_issue_remap_sql(old_id: int, new_id: int) -> list[str]:
         f"UPDATE issue_galleys SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE publications SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE custom_issue_orders SET issue_id = {old_id} WHERE issue_id = {new_id};",
+        f"UPDATE journals SET current_issue_id = {old_id} WHERE current_issue_id = {new_id};",
     ]
 
 
