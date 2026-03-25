@@ -33,7 +33,8 @@ for arg in "$@"; do
     --journal=*) JOURNAL_PATH="${arg#--journal=}" ;;
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
     --force) FORCE=1 ;;
-    --clean) CLEAN=1 ;;
+    --wipe-articles) CLEAN=1 ;;
+    --clean) CLEAN=1 ;;  # legacy alias
     --help|-h)
       sed -n '2,/^set -eo/p' "$0" | head -n -1 | sed 's/^# \?//'
       exit 0
@@ -60,7 +61,7 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --journal=<path>    Journal URL path (default: ea)"
   echo "  --admin=<user>      Admin username (default: admin)"
   echo "  --force             Reimport issues that already exist in OJS"
-  echo "  --clean             Wipe all existing issues/articles before importing"
+  echo "  --wipe-articles     Wipe all existing issues/articles before importing (users/subs/payments kept)"
   echo
   echo "Example: backfill/import.sh backfill/private/output/37.1"
   echo "         backfill/import.sh backfill/private/output/*"
@@ -108,11 +109,11 @@ IFS=$'\n' SORTED_DIRS=($(for d in "${DIRS[@]}"; do
 done | sort -t. -k1,1n -k2,2n | cut -f2))
 unset IFS
 
-# --- Suggest --clean for bulk imports ---
+# --- Suggest --wipe-articles for bulk imports ---
 if [ ${#SORTED_DIRS[@]} -ge 5 ] && [ "$CLEAN" = "0" ]; then
-  echo "WARNING: Importing ${#SORTED_DIRS[@]} issues without --clean."
+  echo "WARNING: Importing ${#SORTED_DIRS[@]} issues without --wipe-articles."
   echo "  Existing issues will be skipped unless you also pass --force."
-  echo "  For a full re-import, use: backfill/import.sh backfill/private/output/* --clean"
+  echo "  For a full re-import, use: backfill/import.sh backfill/private/output/* --wipe-articles"
   echo
 fi
 
@@ -325,12 +326,12 @@ if [ $SUCCEEDED -gt 0 ]; then
   echo "  OK: Search index complete"
 fi
 
-# --- Reminder: restore IDs after clean import ---
+# --- Reminder: restore IDs after wipe-articles import ---
 if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ]; then
   echo ""
-  echo "NOTE: This was a --clean import. If restoring from a snapshot, run:"
+  echo "NOTE: This was a --wipe-articles import. Restore IDs to preserve URLs/DOIs:"
   echo "  python backfill/restore_ids.py --target dev"
-  echo "to remap submission/issue IDs back to their original values."
+  echo "(runs locally, reads JATS publisher-id, sends SQL to target via SSH)"
 fi
 
 [ $FAILED -eq 0 ] || exit 1
