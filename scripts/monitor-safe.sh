@@ -457,9 +457,11 @@ for CONTAINER in wp ojs wp-db ojs-db; do
 done
 
 # 8c. Docker log errors (last hour)
+# Excludes OJS scheduler NotFoundHttpException — known OJS 3.5 bug where
+# runScheduledTasks.php triggers a fatal because there's no HTTP request context.
 TOTAL_ERRORS=0
 for CONTAINER in wp ojs; do
-  ERROR_COUNT=$(remote "docker logs --since=1h \$(docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null) 2>&1 | grep -ciE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory'" 2>/dev/null) || ERROR_COUNT="0"
+  ERROR_COUNT=$(remote "docker logs --since=1h \$(docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null) 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -cv 'NotFoundHttpException.*PKPRouter'" 2>/dev/null) || ERROR_COUNT="0"
   ERROR_COUNT=$(echo "$ERROR_COUNT" | tr -d '[:space:]')
   TOTAL_ERRORS=$((TOTAL_ERRORS + ${ERROR_COUNT:-0}))
 done
