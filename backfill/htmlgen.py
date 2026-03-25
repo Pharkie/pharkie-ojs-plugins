@@ -110,6 +110,12 @@ Look for the target book's title in BOLD to find where YOUR review begins.
 After the reviewer's name (and any References), STOP — do not include
 the next review.
 
+Sometimes a reviewer writes a shared introduction covering several books
+before reviewing each one individually. If you see such an introduction,
+SKIP IT — start from where THIS specific book's review begins (usually
+after its title/publication details or after the shared intro transitions
+to discussing this particular book).
+
 """ + FORMATTING_RULES + """
 
 This is a BOOK REVIEW, not a regular article. The rules are different:
@@ -224,12 +230,14 @@ def strip_code_fences(html):
     return html
 
 
-def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None):
+def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None, reviewer=None):
     """Select the right prompt for this article type."""
     if is_book_review:
         prompt = BOOK_REVIEW_PROMPT
         if book_title:
             prompt += f'\n\nThe book being reviewed is: "{book_title}"\nExtract ONLY the review of THIS specific book. Ignore content reviewing any other book.'
+        if reviewer:
+            prompt += f'\n\nThe reviewer is: {reviewer}. Your output MUST end with <p><strong>{reviewer}</strong></p> (or close variant). If it does not, you have extracted the wrong review.'
         return prompt
     elif has_shared_pages:
         return ARTICLE_SHARED_PAGE_PROMPT
@@ -238,7 +246,8 @@ def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None):
 
 
 def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8,
-                               is_book_review=False, has_shared_pages=False, book_title=None):
+                               is_book_review=False, has_shared_pages=False, book_title=None,
+                               reviewer=None):
     """Send all pages of a split PDF to Claude, return (html, input_tokens, output_tokens, num_pages, truncated).
 
     All pages sent in a single message for full article context.
@@ -264,7 +273,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
 
     content.append({
         'type': 'text',
-        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages, book_title=book_title),
+        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages, book_title=book_title, reviewer=reviewer),
     })
 
     for attempt in range(max_retries):
@@ -460,11 +469,13 @@ def main():
         label = f"Vol {vol}.{iss} #{idx+1}"
 
         try:
+            reviewer = article.get('reviewer', '') if article.get('_is_book_review') else None
             html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(
                 client, split_pdf, model_name,
                 is_book_review=article.get('_is_book_review', False),
                 has_shared_pages=article.get('_has_shared_pages', False),
-                book_title=article.get('book_title', '') if article.get('_is_book_review') else None)
+                book_title=article.get('book_title', '') if article.get('_is_book_review') else None,
+                reviewer=reviewer)
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback
@@ -483,6 +494,30 @@ def main():
                     fb = ' (PyMuPDF fallback saved)' if fallback else ' (no fallback)'
                     print(f"  FILTERED {label} ({basename}){fb}", flush=True)
                 return
+
+            # Validate reviewer name for book reviews (retry once if wrong)
+            if reviewer and html:
+                strong_names = re.findall(r'<strong>([^<]+)</strong>', html)
+                last_strong = strong_names[-1].strip() if strong_names else ''
+                expected = reviewer.strip().lower()
+                actual = last_strong.lower()
+                if expected not in actual and actual not in expected:
+                    print(f"  RETRY {label}: reviewer mismatch (expected '{reviewer}', got '{last_strong}')", flush=True)
+                    html2, inp2, out2, _, _ = generate_html_for_article(
+                        client, split_pdf, model_name,
+                        is_book_review=True, has_shared_pages=article.get('_has_shared_pages', False),
+                        book_title=article.get('book_title', ''),
+                        reviewer=reviewer)
+                    if html2:
+                        inp_tok += inp2
+                        out_tok += out2
+                        strong2 = re.findall(r'<strong>([^<]+)</strong>', html2)
+                        last2 = strong2[-1].strip() if strong2 else ''
+                        if expected in last2.lower() or last2.lower() in expected:
+                            html = html2
+                            print(f"  RETRY OK {label}: got '{last2}'", flush=True)
+                        else:
+                            print(f"  RETRY FAIL {label}: still got '{last2}', keeping first attempt", flush=True)
 
             # Save HTML body content
             with open(out_path, 'w', encoding='utf-8') as f:
