@@ -7,7 +7,7 @@ Automated monitoring for the live OJS journal and WP membership site, using thre
 ```
 ┌─ Better Stack Uptime (external, every 3 min) ───────┐
 │  HTTP pings, keyword checks, SSL, TCP port, alerts   │
-│  Status page: https://uptime.betterstack.com/...     │
+│  Status page: https://status.existentialanalysis.org.uk │
 └──────────────────────────────────────────────────────┘
 
 ┌─ Better Stack Collector (on-server, continuous) ─────┐
