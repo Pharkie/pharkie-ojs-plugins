@@ -358,7 +358,8 @@ def _sort_notes_by_number(notes: list[str]) -> list[str]:
 
 def generate_article_jats(article: dict, volume: int, issue: int,
                           date_published: str, html_path: Path | None,
-                          doi: str | None) -> str:
+                          doi: str | None,
+                          publisher_id: int | None = None) -> str:
     """Generate complete JATS XML for a single article."""
     section = article.get('section', 'Articles')
     article_type = ARTICLE_TYPES.get(section, 'research-article')
@@ -386,6 +387,10 @@ def generate_article_jats(article: dict, volume: int, issue: int,
 
     # Article metadata
     lines.append('<article-meta>')
+
+    # Publisher ID (OJS submission_id — preserves URLs across reimport)
+    if publisher_id is not None:
+        lines.append(f'<article-id pub-id-type="publisher-id">{publisher_id}</article-id>')
 
     # DOI
     if doi:
@@ -507,7 +512,7 @@ def generate_article_jats(article: dict, volume: int, issue: int,
 # ---------------------------------------------------------------
 
 def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
-                verbose: bool) -> Counter:
+                verbose: bool, id_registry: dict | None = None) -> Counter:
     """Generate JATS files for all articles in a toc.json."""
     stats = Counter()
 
@@ -519,6 +524,17 @@ def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
     issue = toc.get('issue', 0)
     date_str = toc.get('date', '')
     date_published = parse_date(date_str)
+
+    # Build publisher-id lookup index: (normalised_title, first_author) -> submission_id
+    _pub_id_lookup: dict[tuple[str, str], int] = {}
+    _pub_id_title_only: dict[str, int] = {}
+    if id_registry:
+        for reg_art in id_registry.get('articles', []):
+            if reg_art['volume'] == str(volume) and reg_art['issue'] == str(issue):
+                t = reg_art['title'].lower().strip()
+                a = reg_art.get('first_author', '').lower().strip()
+                _pub_id_lookup[(t, a)] = reg_art['submission_id']
+                _pub_id_title_only.setdefault(t, reg_art['submission_id'])
 
     for article in toc.get('articles', []):
         split_pdf = article.get('split_pdf', '')
@@ -561,9 +577,25 @@ def process_toc(toc_path: Path, doi_registry: dict, dry_run: bool,
                       f'refs={has_refs} notes={has_notes} bios={has_bios}')
             continue
 
+        # Publisher ID lookup (OJS submission_id for URL preservation)
+        publisher_id = None
+        if _pub_id_lookup:
+            title_norm = article.get('title', '').lower().strip()
+            # Extract first author from toc.json authors string for disambiguation
+            authors_raw = article.get('authors', '')
+            first_author_norm = ''
+            if authors_raw:
+                # authors string is "Given Family & Given Family" — take first
+                first = authors_raw.split('&')[0].split(',')[0].strip()
+                first_author_norm = first.lower()
+            # Try (title, first_author) match first, fall back to title-only
+            key = (title_norm, first_author_norm)
+            publisher_id = _pub_id_lookup.get(key) or _pub_id_title_only.get(title_norm)
+
         # Generate JATS
         jats_xml = generate_article_jats(
-            article, volume, issue, date_published, html_path, doi)
+            article, volume, issue, date_published, html_path, doi,
+            publisher_id=publisher_id)
 
         with open(jats_path, 'w', encoding='utf-8') as f:
             f.write(jats_xml)
@@ -587,6 +619,17 @@ def main():
     args = parser.parse_args()
 
     doi_registry = load_doi_registry()
+
+    # Load ID registry for publisher-id in JATS (optional)
+    id_registry = None
+    id_registry_path = os.path.join(os.path.dirname(__file__), 'private', 'id-registry.json')
+    if os.path.exists(id_registry_path):
+        with open(id_registry_path) as f:
+            id_registry = json.load(f)
+        print(f'ID registry: {len(id_registry.get("articles", []))} articles')
+    else:
+        print('ID registry not found — publisher-id will be omitted from JATS')
+
     total_stats = Counter()
 
     for toc_file in sorted(args.toc_files):
@@ -595,7 +638,8 @@ def main():
             print(f'WARN: {toc_path} not found, skipping', file=sys.stderr)
             continue
 
-        stats = process_toc(toc_path, doi_registry, args.dry_run, args.verbose)
+        stats = process_toc(toc_path, doi_registry, args.dry_run, args.verbose,
+                            id_registry=id_registry)
         total_stats += stats
 
     print(f"\n{'=' * 50}")
