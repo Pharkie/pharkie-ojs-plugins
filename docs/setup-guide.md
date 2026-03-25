@@ -52,8 +52,21 @@ Private docs and env files live in a **separate private GitHub repo**, cloned in
 # Read a value from encrypted env file
 sops -d private/.env.live | grep OJS_ADMIN_PASSWORD
 
-# Edit secrets (decrypts in $EDITOR, re-encrypts on save)
+# Edit secrets interactively (decrypts in $EDITOR, re-encrypts on save)
 sops private/.env.live
+
+# Add/update a secret programmatically (4 steps):
+#   1. Decrypt to temp file
+sops -d private/.env.live > /tmp/.env.live.plain
+#   2. Edit the plaintext (append, sed, etc.)
+echo 'NEW_VAR=value' >> /tmp/.env.live.plain
+#   3. Re-encrypt (input file MUST match .sops.yaml path_regex: .env.live or .env.staging)
+cp /tmp/.env.live.plain /tmp/.env.live
+sops -e --config private/.sops.yaml --input-type binary --output-type json /tmp/.env.live > /tmp/.env.live.enc
+cp /tmp/.env.live.enc private/.env.live
+#   4. Verify and clean up
+sops -d private/.env.live | grep NEW_VAR
+rm /tmp/.env.live*
 
 # Deploy (deploy.sh auto-detects SOPS and decrypts before SCP)
 scripts/deploy.sh --host=<your-server> --ssl --env-file=.env.live
