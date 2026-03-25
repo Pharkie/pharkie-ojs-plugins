@@ -30,6 +30,14 @@ if (file_exists($root_dir . '/.env')) {
 $env = env('WP_ENV') ?: 'production';
 
 /**
+ * Reverse proxy — trust X-Forwarded-Proto from Caddy so WP knows
+ * the request arrived over HTTPS even though it sees plain HTTP.
+ */
+if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+    $_SERVER['HTTPS'] = 'on';
+}
+
+/**
  * URLs
  */
 Config::define('WP_HOME', env('WP_HOME'));
