@@ -322,6 +322,32 @@ Free tier limit: 2,000 min/month for private repos.
 
 **Playwright fails on "pages load within 10 seconds"**: Server may be under load. Check load average in hourly results. If persistent, investigate slow queries or PHP performance.
 
+**WP monitors flapping (up/down/up)**: WP response times are ~2.5s on Krystal shared hosting (benchmarked 2026-03-25). Better Stack monitors with `confirmation_period=0` will flap on any transient slowdown. See "WP response time baseline" below for root cause.
+
+### WP response time baseline (2026-03-25)
+
+Live WP is on **Krystal shared hosting** (77.72.2.79), not Hetzner. The Hetzner WP container is staging/dev only.
+
+| Endpoint | Krystal (live) | Hetzner (staging, internal) |
+|----------|---------------|---------------------------|
+| WP Homepage | **2.2–3.1s** | 60–79ms |
+| WP REST API | **2.5–2.9s** | 149–196ms |
+| WP Admin | **2.1–2.7s** | 56–174ms |
+| OJS Homepage (Hetzner) | **0.1–0.15s** | 18–27ms |
+
+**Root cause: OPcache was not enabled on Krystal.** The opcache module was installed (`/opt/alt/php83/usr/lib64/php/modules/opcache.so`) and configured (`php.d.all/opcache.ini`) but not symlinked into the active config directory (`/opt/alt/php83/link/conf/`). Every request recompiled all PHP. CloudLinux/LiteSpeed manages extensions via cPanel PHP Selector.
+
+**Fixed 2026-03-25:** Enabled opcache via Krystal cPanel → PHP Selector → Extensions.
+
+| Endpoint | Before (no opcache) | After (opcache enabled) | Hetzner staging |
+|----------|-------------------|----------------------|----------------|
+| WP Homepage | 2.2–3.1s | **0.8–0.9s** | 60–79ms |
+| WP REST API | 2.5–2.9s | **0.9–1.0s** | 149–196ms |
+
+Remaining gap vs Hetzner is expected — Krystal is shared hosting (CloudLinux resource limits, LiteSpeed vs Apache, shared CPU). Further options if needed:
+1. Enable a page cache plugin (LiteSpeed Cache, WP Super Cache) — serves static HTML, bypasses PHP for anonymous visitors
+2. Set Better Stack `confirmation_period=180` on WP monitors — extra insurance against flapping
+
 **Collector not sending data**: Check `docker exec better-stack-collector cat /var/lib/better-stack/logs/collector/updater.out.log` — look for "Successfully promoted to current". If config hasn't promoted, wait ~5–10 minutes after start. Check `docker exec better-stack-collector ls -la /versions/current` for the config symlink.
 
 **Dashboard says "source isn't eligible"**: Metrics haven't flowed yet — wait a few more minutes after collector start. If the source was recreated in Better Stack, verify the collector config still points to the correct ingesting host.
