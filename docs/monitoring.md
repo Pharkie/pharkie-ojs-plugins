@@ -11,8 +11,7 @@ Automated monitoring for the live OJS journal and WP membership site, using thre
 └──────────────────────────────────────────────────────┘
 
 ┌─ Better Stack Collector (on-server, continuous) ─────┐
-│  eBPF agent: host/container metrics, DB discovery     │
-│  Vector pipeline: logs, metrics, traces → Telemetry   │
+│  Vector pipeline: host metrics, logs → Telemetry      │
 │  Pre-built dashboards, threshold alerts               │
 └──────────────────────────────────────────────────────┘
 
@@ -207,28 +206,23 @@ Add a test in `e2e/tests/monitoring/live-readonly.spec.ts`. **Constraint**: must
 
 **Dashboard**: Better Stack → Telemetry → Dashboards
 
-The Better Stack Collector runs on the live server as two Docker containers, collecting host/container metrics, logs, and traces via eBPF. Data is shipped to Better Stack Telemetry for dashboards and alerting.
+The Better Stack Collector runs on the live server as a single Docker container, collecting host metrics and logs via Vector. Data is shipped to Better Stack Telemetry for dashboards and alerting.
 
 ### Architecture
 
 ```
-better-stack-ebpf (host network, privileged)
-├── OBI — eBPF observer, intercepts kernel-level traffic (no app credentials needed)
-├── Node Agent — host CPU, memory, disk, network metrics
-├── Docker Probe — discovers containers, maps PIDs to container names
-├── Cluster Agent — discovers databases (MySQL auto-detected)
-└── Pushes metrics → localhost:39090 (prometheus remote write)
-
 better-stack-collector (host network)
-├── Vector — data pipeline, receives metrics/logs, ships to Better Stack
+├── Vector — data pipeline, collects host metrics/logs, ships to Better Stack
 ├── Updater — downloads config from Better Stack API, reloads Vector
 ├── Watchmon — health monitoring, restarts Vector if stuck
 └── Sends to → s2319705.eu-fsn-3.betterstackdata.com
 ```
 
+**eBPF agent removed (March 2026)**: The eBPF container (`collector-ebpf`) provided kernel-level tracing of all containers, DB discovery, and per-container metrics. It was consuming too much Better Stack quota — hit 80% of plan limit within 24 hours of deployment. For a single-server setup the collector alone (host CPU, memory, disk, network, logs) provides sufficient visibility. If deeper container-level metrics are needed in future, re-add the `ebpf` service from git history and upgrade the Better Stack plan.
+
 ### Deployment
 
-Both containers are managed by `docker-compose.collector.yml` (project name: `better-stack`), separate from the main app stack. The collector joins `pharkie-ojs-plugins_sea-net` so it can reach DB containers.
+Managed by `docker-compose.collector.yml` (project name: `better-stack`), separate from the main app stack.
 
 ```bash
 # Deploy / update (from /opt/pharkie-ojs-plugins on live):
@@ -252,14 +246,14 @@ docker exec better-stack-collector ls -la /versions/current
 
 ### Pre-built dashboards
 
-Recreating the source in Better Stack auto-generates pre-built dashboards (Host overview, Containers, etc.). If dashboards show "source isn't eligible", the container resource metrics haven't started flowing yet — wait ~5 minutes after collector start, then retry.
+Recreating the source in Better Stack auto-generates pre-built dashboards (Host overview, etc.). If dashboards show "source isn't eligible", metrics haven't started flowing yet — wait ~5 minutes after collector start, then retry.
 
 ### Key design decisions
 
-- **Collector, not standalone Vector**: The Collector (Docker + eBPF) is what pre-built dashboards expect. Standalone Vector was tried first and removed. Don't reinstall it.
-- **Both containers use host networking**: Vector binds to `127.0.0.1:39090` for prometheus remote write. The eBPF agent pushes metrics to this port. Both must be on the host network for this localhost communication to work. Bridge networking with port mapping does NOT work because Docker proxies to the container's bridge IP, which Vector ignores.
+- **Collector, not standalone Vector**: The Collector is what pre-built dashboards expect. Standalone Vector was tried first and removed. Don't reinstall it.
+- **Host networking**: Vector uses host network mode for direct access to host metrics.
 - **Separate compose project**: Uses `name: better-stack` to avoid orphan warnings with the main `pharkie-ojs-plugins` project.
-- **DB discovery works via eBPF**: The cluster-agent (in the eBPF container, host network) can reach Docker bridge networks through the host routing table. No need to put the collector on `sea-net`.
+- **No eBPF**: Removed due to excessive data volume for plan quota. The collector alone provides adequate host-level monitoring. See git history for the full eBPF config if needed.
 
 ## Why not do everything in Better Stack?
 
@@ -330,6 +324,4 @@ Free tier limit: 2,000 min/month for private repos.
 
 **Collector not sending data**: Check `docker exec better-stack-collector cat /var/lib/better-stack/logs/collector/updater.out.log` — look for "Successfully promoted to current". If config hasn't promoted, wait ~5–10 minutes after start. Check `docker exec better-stack-collector ls -la /versions/current` for the config symlink.
 
-**Dashboard says "source isn't eligible"**: Container resource metrics haven't flowed yet. Check dockerprobe is detecting containers: `docker exec better-stack-ebpf cat /var/lib/better-stack/logs/ebpf/dockerprobe.out.log`. If it shows "Mapped N PIDs to container", the data pipeline is working — wait a few more minutes. If the source was recreated in Better Stack, verify the collector config still points to the correct ingesting host.
-
-**MySQL "Access denied" in cluster-agent logs**: Expected — the eBPF approach intercepts traffic at kernel level and doesn't need DB credentials. The cluster-agent probes are opportunistic. MySQL metrics come from eBPF/OBI, not from direct connections.
+**Dashboard says "source isn't eligible"**: Metrics haven't flowed yet — wait a few more minutes after collector start. If the source was recreated in Better Stack, verify the collector config still points to the correct ingesting host.
