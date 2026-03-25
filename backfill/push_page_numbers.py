@@ -25,6 +25,7 @@ import json
 import os
 import subprocess
 import sys
+from xml.etree import ElementTree as ET
 
 BACKFILL_DIR = os.path.dirname(__file__)
 OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'output')
@@ -116,22 +117,35 @@ def process_issue(toc_path: str, target: str | None, dry_run: bool) -> dict:
     if not articles:
         return {'issue': vol_iss, 'status': 'skip', 'reason': 'no articles'}
 
-    # Check toc.json has page numbers
-    if not any('journal_page_start' in a for a in articles):
-        return {'issue': vol_iss, 'status': 'skip', 'reason': 'no journal_page_start in toc.json'}
-
-    # Build desired pages from toc.json
+    # Build desired pages from JATS (single source of truth)
+    issue_dir = os.path.dirname(toc_path)
     desired = {}
     for art in articles:
-        jp_start = art.get('journal_page_start')
-        jp_end = art.get('journal_page_end')
-        if jp_start is None or jp_end is None:
+        split_pdf = art.get('split_pdf')
+        if not split_pdf:
+            continue
+        # split_pdf paths are relative to project root (e.g. ./backfill/output/35.2/01-editorial.pdf)
+        if not os.path.isabs(split_pdf):
+            project_root = os.path.join(os.path.dirname(__file__), '..')
+            split_pdf = os.path.normpath(os.path.join(project_root, split_pdf))
+        jats_path = os.path.splitext(split_pdf)[0] + '.jats.xml'
+        if not os.path.exists(jats_path):
+            continue
+        try:
+            tree = ET.parse(jats_path)
+            fpage_el = tree.find('.//{*}fpage')
+            lpage_el = tree.find('.//{*}lpage')
+            fpage = fpage_el.text.strip() if fpage_el is not None and fpage_el.text else None
+            lpage = lpage_el.text.strip() if lpage_el is not None and lpage_el.text else None
+        except ET.ParseError:
+            continue
+        if not fpage or not lpage:
             continue
         title_norm = art.get('title', '').lower().strip()
-        desired[title_norm] = f'{jp_start}-{jp_end}'
+        desired[title_norm] = f'{fpage}-{lpage}'
 
     if not desired:
-        return {'issue': vol_iss, 'status': 'skip', 'reason': 'no page data'}
+        return {'issue': vol_iss, 'status': 'skip', 'reason': 'no page data in JATS files'}
 
     if dry_run and not target:
         # Pure dry-run: just show what we'd set
