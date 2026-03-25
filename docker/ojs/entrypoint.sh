@@ -103,9 +103,12 @@ fi
 
 # Set up scheduled tasks cron (OJS uses cron, not a persistent job worker).
 # The base PKP image has cron commented out in pkp-start; we start it ourselves.
-CRON_LINE="0 * * * *   php /var/www/html/lib/pkp/tools/scheduler.php run"
+CRON_LINE="0 * * * *   php /var/www/html/lib/pkp/tools/scheduler.php run 2>&1"
 if [ -n "$BETTERSTACK_HB_OJS_CRON" ]; then
-  CRON_LINE="$CRON_LINE && curl -sf $BETTERSTACK_HB_OJS_CRON > /dev/null || curl -sf $BETTERSTACK_HB_OJS_CRON/fail > /dev/null"
+  # Always ping success: OJS 3.5 bug causes NotFoundHttpException after tasks complete
+  # (no HTTP request context), making exit code unreliable. Actual scheduler health is
+  # verified by the hourly monitoring workflow (job queue depth, failed jobs).
+  CRON_LINE="$CRON_LINE; curl -sf $BETTERSTACK_HB_OJS_CRON > /dev/null"
 fi
 echo "$CRON_LINE" | crontab -
 cron
