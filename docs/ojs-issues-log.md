@@ -293,6 +293,23 @@ Patch is idempotent (safe to re-run). Verified on live — error details now vis
 2. Wraps workers in `timeout` (default 30 min) so they can't live forever
 3. Added `--kill` flag for manual cleanup (`blast-queue.sh --host=<your-server> --kill`)
 
+## Scheduler
+
+### 21. `runScheduledTasks.php` throws PHP Fatal on every invocation (OJS 3.5)
+
+`runScheduledTasks.php` (the CLI cron entry point) triggers a `NotFoundHttpException` in `PKPRouter::getContext()` on every run. The call chain: `PKPScheduler::registerPluginSchedules()` → `PluginRegistry::loadAllPlugins()` → `PKPApplication::getEnabledProducts()` → `PKPRouter::getContext()`. `getContext()` expects an HTTP request to resolve the journal context, but there is no request in CLI mode.
+
+```
+PHP Fatal error: Uncaught Symfony\Component\HttpKernel\Exception\NotFoundHttpException
+  in /var/www/html/lib/pkp/classes/core/PKPRouter.php:205
+```
+
+The error fires hourly (matching the OJS cron schedule). Despite the "Fatal", the scheduled tasks appear to complete — the heartbeat ping after `pkp-run-scheduled` succeeds. The exception is thrown during plugin loading, not during task execution itself, so core tasks (e.g. usage stats processing) still run.
+
+- **Not reported upstream** — likely introduced by the Slim→Laravel router migration in 3.5. The old `PKPRouter` had a fallback for missing request context; the new one throws.
+- **Impact:** Log noise. One PHP Fatal per hour in the OJS container. No functional impact on scheduled tasks.
+- **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `NotFoundHttpException.*PKPRouter` to avoid false alerts.
+
 ## Import/Export
 
 ### 20. Native XML import always creates new IDs — no idempotent import/update
