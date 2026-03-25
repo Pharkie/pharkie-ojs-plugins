@@ -342,7 +342,7 @@ if echo "$JOB_WORKER" | grep -q "jobs.php"; then
 else
   # No persistent worker — check if cron-based job processing is configured
   OJS_CRON=$(remote "$COMPOSE exec -T ojs crontab -l 2>/dev/null || echo ''")
-  if echo "$OJS_CRON" | grep -q "runScheduledTasks\|pkp-run-scheduled"; then
+  if echo "$OJS_CRON" | grep -q "runScheduledTasks\|pkp-run-scheduled\|scheduler\.php"; then
     pass "OJS jobs processed via cron (no persistent worker needed)"
   else
     fail "OJS job worker not running and no cron configured"
