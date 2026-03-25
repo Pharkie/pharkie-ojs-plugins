@@ -110,6 +110,10 @@ fi
 echo "$CRON_LINE" | crontab -
 cron
 echo "[OJS] Cron started: $(crontab -l)"
+# Ping heartbeat on startup to prevent false alerts after container restart
+if [ -n "$BETTERSTACK_HB_OJS_CRON" ]; then
+  curl -sf "$BETTERSTACK_HB_OJS_CRON" > /dev/null && echo "[OJS] Heartbeat pinged." || true
+fi
 
 # Hand off to PKP's own startup (generates SSL certs, starts Apache)
 exec /usr/local/bin/pkp-start
