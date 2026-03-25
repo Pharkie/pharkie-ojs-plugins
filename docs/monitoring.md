@@ -5,17 +5,23 @@ Automated monitoring for the live OJS journal and WP membership site, using thre
 ## Architecture
 
 ```
-┌─ Better Stack (external, every 3 min) ──────────────┐
+┌─ Better Stack Uptime (external, every 3 min) ───────┐
 │  HTTP pings, keyword checks, SSL, TCP port, alerts   │
 │  Status page: https://uptime.betterstack.com/...     │
 └──────────────────────────────────────────────────────┘
 
-┌─ GitHub Actions (hourly, sea-ojs-private repo) ──────┐
+┌─ Better Stack Collector (on-server, continuous) ─────┐
+│  eBPF agent: host/container metrics, DB discovery     │
+│  Vector pipeline: logs, metrics, traces → Telemetry   │
+│  Pre-built dashboards, threshold alerts               │
+└──────────────────────────────────────────────────────┘
+
+┌─ GitHub Actions (hourly, ojs-sea-private repo) ──────┐
 │  SSH → monitor-safe.sh: API checks, plugin status,   │
 │  Stripe, server resources, container health           │
 └──────────────────────────────────────────────────────┘
 
-┌─ GitHub Actions (daily, sea-ojs-private repo) ───────┐
+┌─ GitHub Actions (daily, ojs-sea-private repo) ───────┐
 │  SSH → monitor-deep.sh: sync round-trip, backups,     │
 │  search index, reconciliation, DB sizes               │
 │  Playwright → live-readonly.spec.ts: browser checks   │
@@ -197,6 +203,64 @@ Add a check section in `scripts/monitor-deep.sh` (same pattern).
 ### To Playwright checks
 Add a test in `e2e/tests/monitoring/live-readonly.spec.ts`. **Constraint**: must be read-only — no form submissions, no user creation, no state modification.
 
+## Tier 4: Better Stack Collector (server telemetry)
+
+**Dashboard**: Better Stack → Telemetry → Dashboards
+
+The Better Stack Collector runs on the live server as two Docker containers, collecting host/container metrics, logs, and traces via eBPF. Data is shipped to Better Stack Telemetry for dashboards and alerting.
+
+### Architecture
+
+```
+better-stack-ebpf (host network, privileged)
+├── OBI — eBPF observer, intercepts kernel-level traffic (no app credentials needed)
+├── Node Agent — host CPU, memory, disk, network metrics
+├── Docker Probe — discovers containers, maps PIDs to container names
+├── Cluster Agent — discovers databases (MySQL auto-detected)
+└── Pushes metrics → localhost:39090 (prometheus remote write)
+
+better-stack-collector (host network)
+├── Vector — data pipeline, receives metrics/logs, ships to Better Stack
+├── Updater — downloads config from Better Stack API, reloads Vector
+├── Watchmon — health monitoring, restarts Vector if stuck
+└── Sends to → s2319705.eu-fsn-3.betterstackdata.com
+```
+
+### Deployment
+
+Both containers are managed by `docker-compose.collector.yml` (project name: `better-stack`), separate from the main app stack. The collector joins `pharkie-ojs-plugins_sea-net` so it can reach DB containers.
+
+```bash
+# Deploy / update (from /opt/pharkie-ojs-plugins on live):
+docker compose -f docker-compose.collector.yml up -d
+
+# View logs:
+docker exec better-stack-collector tail -f /var/lib/better-stack/logs/collector/vector.out.log
+docker exec better-stack-collector cat /var/lib/better-stack/logs/collector/updater.out.log
+
+# Check config promotion:
+docker exec better-stack-collector ls -la /versions/current
+```
+
+`COLLECTOR_SECRET` is in `.env` on live. The secret authenticates with Better Stack's API to download config and ship telemetry.
+
+### Source
+
+- **Name**: SEA Server
+- **Platform**: collector
+- **Region**: eu-fsn-3
+
+### Pre-built dashboards
+
+Recreating the source in Better Stack auto-generates pre-built dashboards (Host overview, Containers, etc.). If dashboards show "source isn't eligible", the container resource metrics haven't started flowing yet — wait ~5 minutes after collector start, then retry.
+
+### Key design decisions
+
+- **Collector, not standalone Vector**: The Collector (Docker + eBPF) is what pre-built dashboards expect. Standalone Vector was tried first and removed. Don't reinstall it.
+- **Both containers use host networking**: Vector binds to `127.0.0.1:39090` for prometheus remote write. The eBPF agent pushes metrics to this port. Both must be on the host network for this localhost communication to work. Bridge networking with port mapping does NOT work because Docker proxies to the container's bridge IP, which Vector ignores.
+- **Separate compose project**: Uses `name: better-stack` to avoid orphan warnings with the main `pharkie-ojs-plugins` project.
+- **DB discovery works via eBPF**: The cluster-agent (in the eBPF container, host network) can reach Docker bridge networks through the host routing table. No need to put the collector on `sea-net`.
+
 ## Why not do everything in Better Stack?
 
 Evaluated March 2026. Better Stack has a Playwright monitor type and could theoretically replace the GitHub Actions browser checks, but **30 of 41 checks require SSH access to the server** (WP-CLI commands, Docker container inspection, database queries, backup verification, sync round-trips, server resource checks). Better Stack can only do external HTTP/keyword checks — it can't SSH into infrastructure.
@@ -243,6 +307,13 @@ Free tier limit: 2,000 min/month for private repos.
 | `BETTERSTACK_HB_BACKUP` | Heartbeat URL for VPS backup cron |
 | `BETTERSTACK_HB_BACKUP_PULL` | Heartbeat URL for GitHub backup pull |
 
+**On live server (`.env`)**:
+
+| Variable | Description |
+|----------|-------------|
+| `BETTERSTACK_HB_OJS_CRON` | Heartbeat URL for OJS scheduled tasks |
+| `COLLECTOR_SECRET` | Better Stack Collector authentication secret |
+
 ## Troubleshooting
 
 **Hourly workflow fails with SSH timeout**: Server may be down or firewall blocking. Check Better Stack for HTTP status. If Better Stack shows up but SSH fails, check Hetzner firewall rules.
@@ -256,3 +327,9 @@ Free tier limit: 2,000 min/month for private repos.
 **Action Scheduler queue > 50**: May indicate failed sync jobs piling up. Check: `wp action-scheduler list --status=failed --per-page=5`.
 
 **Playwright fails on "pages load within 10 seconds"**: Server may be under load. Check load average in hourly results. If persistent, investigate slow queries or PHP performance.
+
+**Collector not sending data**: Check `docker exec better-stack-collector cat /var/lib/better-stack/logs/collector/updater.out.log` — look for "Successfully promoted to current". If config hasn't promoted, wait ~5–10 minutes after start. Check `docker exec better-stack-collector ls -la /versions/current` for the config symlink.
+
+**Dashboard says "source isn't eligible"**: Container resource metrics haven't flowed yet. Check dockerprobe is detecting containers: `docker exec better-stack-ebpf cat /var/lib/better-stack/logs/ebpf/dockerprobe.out.log`. If it shows "Mapped N PIDs to container", the data pipeline is working — wait a few more minutes. If the source was recreated in Better Stack, verify the collector config still points to the correct ingesting host.
+
+**MySQL "Access denied" in cluster-agent logs**: Expected — the eBPF approach intercepts traffic at kernel level and doesn't need DB credentials. The cluster-agent probes are opportunistic. MySQL metrics come from eBPF/OBI, not from direct connections.
