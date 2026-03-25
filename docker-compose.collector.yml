@@ -1,13 +1,14 @@
-# Better Stack Collector + eBPF agent.
+# Better Stack Collector (host metrics + logs).
 # Deployed separately from the main app stack.
 #
 # Usage (from /opt/pharkie-ojs-plugins on live):
 #   docker compose -f docker-compose.collector.yml up -d
 #
 # Requires COLLECTOR_SECRET in .env file.
-# Both containers use host networking so the eBPF agent can push metrics to the
-# collector's prometheus remote write endpoint on localhost:39090 (Vector binds
-# to 127.0.0.1 inside the container, so bridge networking + port mapping won't work).
+#
+# eBPF agent removed — kernel-level tracing of all containers was consuming
+# too much Better Stack quota for a single-server setup. The collector alone
+# provides host metrics (CPU, memory, disk, network) and log forwarding.
 
 name: better-stack
 
@@ -28,27 +29,3 @@ services:
     volumes:
       - /var/lib/better-stack:/var/lib/better-stack
       - /:/host:ro
-
-  ebpf:
-    image: ghcr.io/betterstackhq/collector-ebpf:latest
-    container_name: better-stack-ebpf
-    hostname: sea-live
-    restart: always
-    privileged: true
-    pid: host
-    network_mode: host
-    security_opt:
-      - label=disable
-    environment:
-      INSTALLED_AS: docker
-      HOSTNAME: sea-live
-      ENABLE_DOCKERPROBE: "true"
-      GOMEMLIMIT: 1400MiB
-    volumes:
-      - /sys/kernel/security:/sys/kernel/security:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/better-stack:/var/lib/better-stack
-      - /:/host:ro
-      - /sys/kernel/tracing:/sys/kernel/tracing:rw
-      - /sys/kernel/debug:/sys/kernel/debug:rw

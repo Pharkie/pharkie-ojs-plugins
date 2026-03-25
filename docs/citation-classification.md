@@ -6,10 +6,10 @@ How extracted items from article reference sections are classified into four cat
 
 | Category | JATS element | OJS rendering | Count |
 |---|---|---|---|
-| **Reference** | `<ref-list><ref><mixed-citation>` | OJS citations table → "References" section (rendered by OJS natively) | 15,182 |
-| **Note** | `<fn-group><fn>` | HTML galley body → "Notes" section (rendered inline) | 2,031 |
-| **Author bio** | `<bio>` | HTML galley body → paragraph at end | 57 |
-| **Provenance** | `<notes notes-type="provenance">` | HTML galley body → italicised paragraph at end | 1 |
+| **Reference** | `<ref-list><ref><mixed-citation>` | OJS citations table → "References" section (rendered by OJS natively) | 14,874 |
+| **Note** | `<fn-group><fn>` | HTML galley body → "Notes" section (rendered inline) | 2,123 |
+| **Author bio** | `<bio>` | HTML galley body → paragraph at end | 37 |
+| **Provenance** | `<notes notes-type="provenance">` | HTML galley body → italicised paragraph at end | 4 |
 
 ## Classification order
 
@@ -45,7 +45,7 @@ Matches: `^This (article|paper|chapter|essay|lecture|talk) (is|was) ...`
 
 ## Note rules (`is_note`) — checked first as negative filter
 
-9 rules, checked in order. First match wins → classified as note.
+12 rules, checked in order. First match wins → classified as note.
 
 | # | Rule | Example | Regex/logic |
 |---|---|---|---|
@@ -53,11 +53,13 @@ Matches: `^This (article|paper|chapter|essay|lecture|talk) (is|was) ...`
 | 2 | Ibid/Op cit | "Ibid., p.300" | Short (<80 chars) + `\b(Ibid\|Ibidem\|Op\.?\s*cit)` |
 | 3 | Short surname+year only | "Heidegger 1927: 45" | Surname + year + optional page, nothing else |
 | 4 | Numbered commentary | "8 Freud maintains that..." | Starts with digit, text after number doesn't start with author pattern (prose with embedded citations) |
-| 5 | Author bio | "SCOTT is Professor..." | Same as `is_author_bio()` above |
-| 6 | Provenance | "This paper was first..." | Same as `is_provenance()` above |
-| 7 | Standalone URL | "https://example.com" | `^https?://` with no author/title |
-| 8 | Contact info | "Contact: email@..." | `^Contact:` or ORCID URL |
-| 9 | Name only | "Simon du Plock" | Single name (<40 chars), no citation content |
+| 5 | Roman numeral commentary | "xii Tourette reportedly..." | Starts with roman numeral (i, ii, ..., xvi), text is commentary not citation |
+| 6 | Superscript commentary | "¹ Readers interested..." | Starts with superscript digit, text is commentary not citation |
+| 7 | Author bio | "SCOTT is Professor..." | Same as `is_author_bio()` above |
+| 8 | Provenance | "This paper was first..." | Same as `is_provenance()` above |
+| 9 | Standalone URL | "https://example.com" | `^https?://` with no author/title |
+| 10 | Contact info | "Contact: email@..." | `^Contact:`, `^Contact address`, `^Messrs`, or ORCID URL |
+| 11 | Name only | "Simon du Plock" | Single name (<40 chars), no citation content |
 
 **Rule 4 detail** (most complex): A numbered item like "4 Binswanger, L. (1968)..." is a legitimate reference (number prefix + author pattern). But "8 Freud maintains that this view..." is commentary (number prefix + prose). The test: after stripping the number, does the text start with an author pattern (Surname, Initial)?
 
