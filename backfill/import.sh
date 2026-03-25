@@ -325,4 +325,12 @@ if [ $SUCCEEDED -gt 0 ]; then
   echo "  OK: Search index complete"
 fi
 
+# --- Reminder: restore IDs after clean import ---
+if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ]; then
+  echo ""
+  echo "NOTE: This was a --clean import. If restoring from a snapshot, run:"
+  echo "  python backfill/restore_ids.py --target dev"
+  echo "to remap submission/issue IDs back to their original values."
+fi
+
 [ $FAILED -eq 0 ] || exit 1

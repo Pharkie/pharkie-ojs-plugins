@@ -69,6 +69,8 @@ Standalone utilities:
 - `backfill/sheets_export.py` — publish all toc.json data to Google Sheet for review
 - `backfill/add_page_numbers.py` — auto-detect printed page numbers from source PDFs, populate toc.json
 - `backfill/push_page_numbers.py` — push page numbers to OJS database (dev or live) without re-import
+- `backfill/snapshot_ids.py` — snapshot submission/issue IDs from OJS database for idempotent rebuild
+- `backfill/restore_ids.py` — restore original IDs after a fresh import (preserves URLs, DOIs, payments)
 
 All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, `backfill/private/doi-registry.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
 
