@@ -92,7 +92,10 @@ detect_compose() {
       COMPOSE="$COMPOSE -f $(basename "$f")"
     done
   else
-    COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+    # Auto-detect failed — use bare docker compose (uses docker-compose.yml only).
+    # This may miss services in overlay files (caddy, staging) but is safer than
+    # guessing which overlay is active.
+    COMPOSE="docker compose"
   fi
 }
 
