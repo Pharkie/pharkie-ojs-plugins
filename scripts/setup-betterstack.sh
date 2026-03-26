@@ -7,6 +7,9 @@
 #   scripts/setup-betterstack.sh --host=sea-live --dry-run       # Show what would be created
 #   scripts/setup-betterstack.sh --host=sea-live --delete-all    # Remove all SEA monitors
 #
+# Public status page: https://status.existentialanalysis.org.uk/
+# Admin dashboard:    https://uptime.betterstack.com
+#
 # Requires:
 #   BETTERSTACK_API_TOKEN env var (from Better Stack → Settings → API tokens)
 set -o pipefail
