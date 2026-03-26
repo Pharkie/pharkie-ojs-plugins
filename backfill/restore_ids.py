@@ -38,7 +38,7 @@ import sys
 from xml.etree import ElementTree as ET
 
 BACKFILL_DIR = os.path.dirname(__file__)
-OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'output')
+OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
 
 # Temporary ID offset for two-pass remap (avoids PK collisions)
 TEMP_OFFSET = 10_000_000
