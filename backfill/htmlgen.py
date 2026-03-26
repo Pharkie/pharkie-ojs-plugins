@@ -75,20 +75,23 @@ ARTICLE_PROMPT = """Convert these journal article pages into clean, well-structu
 
 """ + FORMATTING_RULES + """
 
-SKIP ONLY: the article title, subtitle, author byline, abstract, and
-keywords at the very top of the first page (these are already in OJS
-metadata). Start from the FIRST body paragraph after the abstract/keywords.
+SKIP ONLY these items at the very top of the first page (already in OJS
+metadata — do NOT include them):
+  - Article title and subtitle
+  - Author name(s) / byline
+  - Abstract paragraph
+  - Keywords line
 
-Do NOT skip opening body paragraphs just because they come before the
-first <h2> heading. Many articles begin with several paragraphs of body
-text before any heading — these MUST be included.
+Start your output from the FIRST body content after the keywords. This is
+usually an Introduction heading or the first body paragraph.
 
-KEEP EVERYTHING after abstract/keywords, in order:
-  1. ALL body text (including paragraphs before the first heading)
-  2. ALL section headings and their content
-  3. Author bio/about paragraph (often at the end, before references)
-  4. Contact details / ORCID (if present)
-  5. References section — include EVERY reference, do not stop early
+CRITICAL — do NOT skip any of these:
+  - Introduction section (heading + paragraphs) — this IS body content
+  - Body paragraphs that appear before the first heading
+  - ANY section heading (Introduction, Method, Discussion, Conclusion, etc.)
+  - Author bio paragraph (usually near the end, describes who the author is)
+  - Contact email / ORCID
+  - References or Bibliography — include EVERY entry, do not stop early
 
 If references appear in multiple scripts (e.g. Cyrillic then transliterated
 Latin), include BOTH sets — they are not duplicates."""
@@ -99,23 +102,26 @@ The first and/or last page may contain content from an adjacent article
 
 """ + FORMATTING_RULES + """
 
-SKIP ONLY: the article title, subtitle, author byline, abstract, and
-keywords at the very top of the first page (these are already in OJS
-metadata). Start from the FIRST body paragraph after the abstract/keywords.
+SKIP ONLY these items at the very top of the first page (already in OJS
+metadata — do NOT include them):
+  - Article title and subtitle
+  - Author name(s) / byline
+  - Abstract paragraph
+  - Keywords line
 
 If the first page starts with the END of a previous article, skip that
 content and start from THIS article's body text.
 
-Do NOT skip opening body paragraphs just because they come before the
-first <h2> heading. Many articles begin with several paragraphs of body
-text before any heading — these MUST be included.
+Start your output from the FIRST body content after the keywords. This is
+usually an Introduction heading or the first body paragraph.
 
-KEEP EVERYTHING after abstract/keywords, in order:
-  1. ALL body text (including paragraphs before the first heading)
-  2. ALL section headings and their content
-  3. Author bio/about paragraph (often at the end, before references)
-  4. Contact details / ORCID (if present)
-  5. References section — include EVERY reference, do not stop early
+CRITICAL — do NOT skip any of these:
+  - Introduction section (heading + paragraphs) — this IS body content
+  - Body paragraphs that appear before the first heading
+  - ANY section heading (Introduction, Method, Discussion, Conclusion, etc.)
+  - Author bio paragraph (usually near the end, describes who the author is)
+  - Contact email / ORCID
+  - References or Bibliography — include EVERY entry, do not stop early
 
 If references appear in multiple scripts (e.g. Cyrillic then transliterated
 Latin), include BOTH sets — they are not duplicates. If the last page
