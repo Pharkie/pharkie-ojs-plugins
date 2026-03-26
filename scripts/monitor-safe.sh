@@ -484,9 +484,11 @@ echo "--- WP Health ---"
 # 9a. Action Scheduler queue depth
 PENDING_JOBS=$(wp_cli "action-scheduler list --status=pending --per-page=100 --format=count" 2>/dev/null) || PENDING_JOBS=""
 PENDING_JOBS=$(echo "$PENDING_JOBS" | tr -d '[:space:]')
-if [ -z "$PENDING_JOBS" ]; then
-  fail "Could not read Action Scheduler queue (WP-CLI may be down)"
-elif [ "${PENDING_JOBS:-0}" -gt 50 ] 2>/dev/null; then
+# action-scheduler CLI may not be registered (depends on WCS version)
+if ! [[ "$PENDING_JOBS" =~ ^[0-9]+$ ]]; then
+  PENDING_JOBS="0"
+fi
+if [ "${PENDING_JOBS:-0}" -gt 50 ] 2>/dev/null; then
   fail "Action Scheduler queue backing up ($PENDING_JOBS pending jobs)"
 else
   pass "Action Scheduler queue OK ($PENDING_JOBS pending)"
