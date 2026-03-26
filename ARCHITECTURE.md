@@ -22,6 +22,12 @@ See [`docs/discovery.md`](docs/discovery.md) for the decision trail: what approa
 | **XML user import** | OJS built-in XML import (users only, not subscriptions) | Eliminated |
 | **Janeway migration** | Replace OJS with Janeway + custom paywall | Genuine backup |
 
+## Live URLs
+
+- **Journal:** https://journal.existentialanalysis.org.uk/
+- **Membership site:** https://community.existentialanalysis.org.uk/
+- **Status page:** https://status.existentialanalysis.org.uk/
+
 ## Hard constraints
 
 - **WP is source of truth** for membership. OJS is downstream.
