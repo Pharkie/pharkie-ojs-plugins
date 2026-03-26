@@ -269,7 +269,7 @@ echo "--- OJS Scheduled Tasks ---"
 
 # Check cron is installed inside the OJS container
 OJS_CRON=$(remote "$COMPOSE exec -T ojs crontab -l 2>/dev/null || echo ''")
-if echo "$OJS_CRON" | grep -q "scheduler\.php"; then
+if echo "$OJS_CRON" | grep -q "scheduler\.php\|ojs-scheduler-heartbeat"; then
   pass "OJS scheduler cron installed"
 else
   fail "OJS scheduler cron not found in container"
