@@ -28,6 +28,9 @@ case "$CMD" in
   "crontab -l"*)                        ;; # Cron listing
   "dmesg"*)                             ;; # OOM detection
   "journalctl -k "*)                    ;; # OOM detection (kernel messages only)
+  "test -f /opt/backups/"*)             ;; # Backup file existence checks
+  "ls -t /opt/backups/"*)              ;; # Backup file listing
+  "echo "*)                             ;; # Backup age calculation
   "stat -c"*)                           ;; # Backup file stats
   *)
     echo "Rejected: command not allowed: ${CMD:0:80}"
