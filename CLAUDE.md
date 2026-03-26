@@ -57,7 +57,7 @@ JATS is the single source of truth for article content. The pipeline direction i
 
 Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, etc.)
 
-toc.json retains issue-level data: PDF page splits, article ordering, section assignments, metadata, `issue_doi`, `issue_id`.
+toc.json retains issue-level data: PDF page splits, article ordering, section assignments, metadata, `issue_doi`, `issue_id`. Articles with `_manual_html` in toc.json have hand-corrected HTML galleys (same-page bleed the AI can't handle). `htmlgen.py` skips these automatically — delete the HTML file to force regeneration.
 
 **JATS is the single source of truth** for all per-article data. There are no registries — DOIs, publisher-IDs (OJS submission_id), page numbers, citations, and body content all live in JATS. `generate_xml.py` reads everything from JATS. `generate_jats.py` preserves existing values (DOI, publisher-id) when regenerating.
 
