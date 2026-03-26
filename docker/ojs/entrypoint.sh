@@ -103,7 +103,8 @@ fi
 
 # Set up scheduled tasks cron (OJS uses cron, not a persistent job worker).
 # The base PKP image has cron commented out in pkp-start; we start it ourselves.
-CRON_LINE="0 * * * *   /usr/local/bin/ojs-scheduler-heartbeat.sh"
+# Cron doesn't inherit Docker env vars — pass heartbeat URL inline
+CRON_LINE="0 * * * *   BETTERSTACK_HB_OJS_CRON=${BETTERSTACK_HB_OJS_CRON:-} /usr/local/bin/ojs-scheduler-heartbeat.sh"
 # Create wrapper that distinguishes OJS 3.5 known fatal from real failures
 cat > /usr/local/bin/ojs-scheduler-heartbeat.sh <<'WRAPPER'
 #!/bin/bash
