@@ -16,85 +16,48 @@ for arg in "$@"; do
   esac
 done
 
-REMOTE_DIR="/opt/pharkie-ojs-plugins"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 source "$SCRIPT_DIR/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
-# Auto-detect compose config from running containers
-COMPOSE_FILES=$($SSH_CMD "docker inspect --format='{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' \$(docker ps -q --filter 'label=com.docker.compose.project=pharkie-ojs-plugins' | head -1) 2>/dev/null") || COMPOSE_FILES=""
-if [ -n "$COMPOSE_FILES" ]; then
-  # Convert "/opt/.../docker-compose.yml,/opt/.../docker-compose.caddy.yml" to "-f docker-compose.yml -f docker-compose.caddy.yml"
-  COMPOSE="docker compose"
-  IFS=',' read -ra FILES <<< "$COMPOSE_FILES"
-  for f in "${FILES[@]}"; do
-    COMPOSE="$COMPOSE -f $(basename "$f")"
-  done
-else
-  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
-fi
+source "$SCRIPT_DIR/lib/monitor-helpers.sh"
 
-# Read env values from remote .env
-WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
-WP_PUBLIC_URL=$($SSH_CMD "grep '^WP_PUBLIC_URL=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
-# WP_HOME is often an internal Docker address (e.g. http://IP:8080).
-# For external HTTP checks, derive the public URL from Caddy config.
+# --- Initialise: read env, detect compose ---
+detect_compose
+
+# Required env vars — abort if SSH is broken
+OJS_BASE_URL=$(require_env "OJS_BASE_URL")
+OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH")
+OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
+API_KEY=$(require_env "WPOJS_API_KEY_SECRET")
+
+# Optional env vars
+WP_HOME=$(read_env "WP_HOME")
+WP_PUBLIC_URL=$(read_env "WP_PUBLIC_URL")
 if [ -z "$WP_PUBLIC_URL" ]; then
-  CADDY_WP=$($SSH_CMD "grep '^CADDY_WP_DOMAIN=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
+  CADDY_WP=$(read_env "CADDY_WP_DOMAIN")
   if [ -n "$CADDY_WP" ]; then
     WP_PUBLIC_URL="https://$CADDY_WP"
   fi
 fi
+
 # Basic auth credentials for staging sites behind Caddy
-CADDY_AUTH_USER=$($SSH_CMD "grep '^CADDY_WP_AUTH_USER=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
-CADDY_AUTH_PASS=$($SSH_CMD "grep '^CADDY_WP_AUTH_PASS=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
-WP_CURL_AUTH=""
+CADDY_AUTH_USER=$(read_env "CADDY_WP_AUTH_USER")
+CADDY_AUTH_PASS=$(read_env "CADDY_WP_AUTH_PASS")
+WP_CURL_AUTH_ARGS=()
 if [ -n "$CADDY_AUTH_USER" ] && [ -n "$CADDY_AUTH_PASS" ]; then
-  WP_CURL_AUTH="-u ${CADDY_AUTH_USER}:${CADDY_AUTH_PASS}"
+  WP_CURL_AUTH_ARGS=(-u "${CADDY_AUTH_USER}:${CADDY_AUTH_PASS}")
 fi
+
 # Fallback: if WP_HOME looks public (not private IP/non-standard port), use it directly
 if [ -z "$WP_PUBLIC_URL" ]; then
   if echo "$WP_HOME" | grep -qE '^https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|localhost|127\.|.*:[0-9]{4,})'; then
-    # Internal address — try to reach WP via Docker from the server
     WP_PUBLIC_URL=""
   else
     WP_PUBLIC_URL="$WP_HOME"
   fi
 fi
-OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
-OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
-OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
-API_KEY=$($SSH_CMD "grep '^WPOJS_API_KEY_SECRET=' $REMOTE_DIR/.env | cut -d= -f2")
-
-PASSED=0
-FAILED=0
-TOTAL=0
-
-pass() {
-  PASSED=$((PASSED + 1))
-  TOTAL=$((TOTAL + 1))
-  echo "  [PASS] $1"
-}
-
-fail() {
-  FAILED=$((FAILED + 1))
-  TOTAL=$((TOTAL + 1))
-  echo "  [FAIL] $1"
-  [ -n "$2" ] && echo "         $2"
-}
-
-info() {
-  echo "  [INFO] $1"
-}
-
-remote() {
-  $SSH_CMD "cd $REMOTE_DIR && $*" 2>&1
-}
-
-wp_cli() {
-  remote "$COMPOSE exec -T wp wp --allow-root $*"
-}
 
 echo "=== Monitor (safe): $SSH_HOST ==="
 echo "    WP:  $WP_HOME"
@@ -108,15 +71,12 @@ echo ""
 echo "--- HTTP & API ---"
 
 # Helper: curl WP, handling internal vs public URLs.
-# If we have a public URL, curl it directly (tests external access).
-# Otherwise, curl from inside the Docker network via the WP container.
 wp_curl() {
   local path="$1" url
   if [ -n "$WP_PUBLIC_URL" ]; then
     url="${WP_PUBLIC_URL}${path}"
-    curl -s -o /dev/null -w '%{http_code}' $WP_CURL_AUTH "$url" 2>/dev/null
+    curl -s -o /dev/null -w '%{http_code}' "${WP_CURL_AUTH_ARGS[@]}" "$url" 2>/dev/null
   else
-    # Curl from inside the Caddy/WP network
     remote "$COMPOSE exec -T wp curl -s -o /dev/null -w '%{http_code}' 'http://localhost:80${path}'" 2>/dev/null
   fi
 }
@@ -125,7 +85,7 @@ wp_curl() {
 WP_CHECK_URL="${WP_PUBLIC_URL:-$WP_HOME}"
 WP_STATUS=$(wp_curl "") || WP_STATUS="000"
 if [ -n "$WP_PUBLIC_URL" ]; then
-  WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' $WP_CURL_AUTH "$WP_PUBLIC_URL" 2>/dev/null) || WP_TIME="0"
+  WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' "${WP_CURL_AUTH_ARGS[@]}" "$WP_PUBLIC_URL" 2>/dev/null) || WP_TIME="0"
 else
   WP_TIME="0"
 fi
@@ -196,7 +156,7 @@ PING=$(remote "$COMPOSE exec -T ojs curl -sf http://localhost:80/index.php/$OJS_
 if echo "$PING" | grep -q '"status":"ok"'; then
   pass "OJS plugin responds to ping"
 else
-  fail "OJS plugin ping failed" "$PING"
+  fail "OJS plugin ping failed" "${PING:-<empty — SSH or container may be down>}"
 fi
 
 # 2b. OJS preflight
@@ -205,7 +165,7 @@ if echo "$PREFLIGHT" | grep -q '"compatible":true'; then
   CHECKS=$(echo "$PREFLIGHT" | grep -o '"ok":true' | wc -l)
   pass "Preflight passes ($CHECKS checks OK)"
 else
-  fail "Preflight failed" "$PREFLIGHT"
+  fail "Preflight failed" "${PREFLIGHT:-<empty — SSH or container may be down>}"
 fi
 
 # 2c. WP-CLI test-connection
@@ -213,7 +173,7 @@ TC_OUTPUT=$(wp_cli "ojs-sync test-connection") || TC_OUTPUT=""
 if echo "$TC_OUTPUT" | grep -q "Connection test passed"; then
   pass "test-connection passes"
 else
-  fail "test-connection failed" "$(echo "$TC_OUTPUT" | tail -3)"
+  fail "test-connection failed" "$(echo "${TC_OUTPUT:-<empty>}" | tail -3)"
 fi
 
 # ============================================================
@@ -223,13 +183,17 @@ echo ""
 echo "--- Required Plugins ---"
 
 PLUGINS=$(wp_cli "plugin list --status=active --format=csv --fields=name") || PLUGINS=""
-for PLUGIN in woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync; do
-  if echo "$PLUGINS" | grep -q "^$PLUGIN$"; then
-    pass "$PLUGIN active"
-  else
-    fail "$PLUGIN not active"
-  fi
-done
+if [ -z "$PLUGINS" ]; then
+  fail "Could not retrieve plugin list (SSH or WP-CLI may be down)"
+else
+  for PLUGIN in woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync; do
+    if echo "$PLUGINS" | grep -q "^$PLUGIN$"; then
+      pass "$PLUGIN active"
+    else
+      fail "$PLUGIN not active"
+    fi
+  done
+fi
 
 # ============================================================
 # 4. SUBSCRIPTION TYPES & MAPPING
@@ -242,7 +206,7 @@ TYPE_COUNT=$(echo "$SUB_TYPES" | grep -o '"id"' | wc -l)
 if [ "$TYPE_COUNT" -gt "0" ]; then
   pass "$TYPE_COUNT subscription type(s) configured"
 else
-  fail "No subscription types found" "$SUB_TYPES"
+  fail "No subscription types found" "${SUB_TYPES:-<empty — SSH or API may be down>}"
 fi
 
 # Product-to-type mapping
@@ -297,16 +261,19 @@ echo ""
 echo "--- Stripe ---"
 
 # 5a. Stripe plugin active in OJS
-# Dump all stripe plugin settings, grep for enabled=1.
-# Uses bash -c + single-quote wrapping to preserve $MYSQL_* env vars through SSH.
+# CHAR(61) = '=', CHAR(37,115,116,114,105,112,101,37) = '%stripe%'
 STRIPE_ROWS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT CONCAT(setting_name, CHAR(61), setting_value) FROM plugin_settings WHERE plugin_name LIKE CONCAT(CHAR(37), CHAR(115,116,114,105,112,101), CHAR(37))\"'") || STRIPE_ROWS=""
-if echo "$STRIPE_ROWS" | grep -q "enabled=1"; then
+if [ -z "$STRIPE_ROWS" ]; then
+  fail "Stripe plugin settings not found (remote command returned empty)"
+elif echo "$STRIPE_ROWS" | grep -q "enabled=1"; then
   pass "Stripe plugin active in OJS"
 else
   fail "Stripe plugin not active in OJS"
 fi
 
 # 5b. Stripe API key valid (stored in OJS plugin_settings, not .env)
+# CHAR(116,101,115,116,83,101,99,114,101,116,75,101,121) = 'testSecretKey'
+# CHAR(115,101,99,114,101,116,75,101,121) = 'secretKey'
 STRIPE_TEST_MODE=$(echo "$STRIPE_ROWS" | grep -o 'testMode=.' | cut -d= -f2)
 if [ "$STRIPE_TEST_MODE" = "1" ]; then
   STRIPE_KEY=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT setting_value FROM plugin_settings WHERE plugin_name LIKE CONCAT(CHAR(37), CHAR(115,116,114,105,112,101), CHAR(37)) AND setting_name = CHAR(116,101,115,116,83,101,99,114,101,116,75,101,121)\"'") || STRIPE_KEY=""
@@ -352,7 +319,6 @@ JOB_WORKER=$(remote "$COMPOSE exec -T ojs pgrep -a -f 'jobs.php' 2>/dev/null || 
 if echo "$JOB_WORKER" | grep -q "jobs.php"; then
   pass "OJS job worker running"
 else
-  # No persistent worker — check if cron-based job processing is configured
   OJS_CRON=$(remote "$COMPOSE exec -T ojs crontab -l 2>/dev/null || echo ''")
   if echo "$OJS_CRON" | grep -q "runScheduledTasks\|pkp-run-scheduled\|scheduler\.php\|ojs-scheduler-heartbeat"; then
     pass "OJS jobs processed via cron (no persistent worker needed)"
@@ -361,22 +327,24 @@ else
   fi
 fi
 
-# 7b. Pending jobs (should be near zero)
-PENDING_OJS_JOBS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM jobs\"'") || PENDING_OJS_JOBS=""
-PENDING_OJS_JOBS=$(echo "$PENDING_OJS_JOBS" | tr -d '[:space:]')
-if [ "${PENDING_OJS_JOBS:-0}" -gt 50 ] 2>/dev/null; then
-  fail "OJS job queue backing up ($PENDING_OJS_JOBS pending)"
-else
-  pass "OJS job queue OK ($PENDING_OJS_JOBS pending)"
+# 6b. Pending jobs (should be near zero)
+PENDING_OJS_JOBS=$(require_remote "OJS pending jobs count" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM jobs\"'") || PENDING_OJS_JOBS=""
+if [ -n "$PENDING_OJS_JOBS" ]; then
+  if [ "${PENDING_OJS_JOBS:-0}" -gt 50 ] 2>/dev/null; then
+    fail "OJS job queue backing up ($PENDING_OJS_JOBS pending)"
+  else
+    pass "OJS job queue OK ($PENDING_OJS_JOBS pending)"
+  fi
 fi
 
-# 7c. Failed jobs
-FAILED_OJS_JOBS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM failed_jobs\"'") || FAILED_OJS_JOBS=""
-FAILED_OJS_JOBS=$(echo "$FAILED_OJS_JOBS" | tr -d '[:space:]')
-if [ "${FAILED_OJS_JOBS:-0}" -gt 0 ] 2>/dev/null; then
-  fail "$FAILED_OJS_JOBS failed OJS jobs (check failed_jobs table)"
-else
-  pass "No failed OJS jobs"
+# 6c. Failed jobs
+FAILED_OJS_JOBS=$(require_remote "OJS failed jobs count" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM failed_jobs\"'") || FAILED_OJS_JOBS=""
+if [ -n "$FAILED_OJS_JOBS" ]; then
+  if [ "${FAILED_OJS_JOBS:-0}" -gt 0 ] 2>/dev/null; then
+    fail "$FAILED_OJS_JOBS failed OJS jobs (check failed_jobs table)"
+  else
+    pass "No failed OJS jobs"
+  fi
 fi
 
 # ============================================================
@@ -386,47 +354,54 @@ echo ""
 echo "--- Server Resources ---"
 
 # 7a. Load average
-LOAD=$($SSH_CMD "cat /proc/loadavg") || LOAD=""
-LOAD_5MIN=$(echo "$LOAD" | awk '{print $2}')
-NPROC=$($SSH_CMD "nproc") || NPROC="3"
-LOAD_THRESHOLD=$(( NPROC * 2 ))
-info "Load average: $LOAD (threshold: $LOAD_THRESHOLD)"
-# Compare as integers (multiply by 100 to handle decimals)
-LOAD_5MIN_INT=$(echo "$LOAD_5MIN" | awk '{printf "%d", $1 * 100}')
-LOAD_THRESH_INT=$((LOAD_THRESHOLD * 100))
-if [ "$LOAD_5MIN_INT" -gt "$LOAD_THRESH_INT" ] 2>/dev/null; then
-  fail "Load average too high (5min: $LOAD_5MIN > $LOAD_THRESHOLD)"
-else
-  pass "Load average OK (5min: $LOAD_5MIN)"
+LOAD=$(require_ssh "Load average" "cat /proc/loadavg") || LOAD=""
+if [ -n "$LOAD" ]; then
+  LOAD_5MIN=$(echo "$LOAD" | awk '{print $2}')
+  NPROC=$($SSH_CMD "nproc") || NPROC="3"
+  LOAD_THRESHOLD=$(( NPROC * 2 ))
+  info "Load average: $LOAD (threshold: $LOAD_THRESHOLD)"
+  LOAD_5MIN_INT=$(echo "$LOAD_5MIN" | awk '{printf "%d", $1 * 100}')
+  LOAD_THRESH_INT=$((LOAD_THRESHOLD * 100))
+  if [ "$LOAD_5MIN_INT" -gt "$LOAD_THRESH_INT" ] 2>/dev/null; then
+    fail "Load average too high (5min: $LOAD_5MIN > $LOAD_THRESHOLD)"
+  else
+    pass "Load average OK (5min: $LOAD_5MIN)"
+  fi
 fi
 
 # 7b. Memory
-MEM_INFO=$($SSH_CMD "free -m | grep '^Mem:'") || MEM_INFO=""
-MEM_AVAILABLE=$(echo "$MEM_INFO" | awk '{print $NF}')
-MEM_TOTAL=$(echo "$MEM_INFO" | awk '{print $2}')
-if [ "${MEM_AVAILABLE:-0}" -lt 256 ] 2>/dev/null; then
-  fail "Low memory (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
-else
-  pass "Memory OK (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
+MEM_INFO=$(require_ssh "Memory info" "free -m | grep '^Mem:'") || MEM_INFO=""
+if [ -n "$MEM_INFO" ]; then
+  MEM_AVAILABLE=$(echo "$MEM_INFO" | awk '{print $NF}')
+  MEM_TOTAL=$(echo "$MEM_INFO" | awk '{print $2}')
+  if [ "${MEM_AVAILABLE:-0}" -lt 256 ] 2>/dev/null; then
+    fail "Low memory (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
+  else
+    pass "Memory OK (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
+  fi
 fi
 
 # 7c. Swap
-SWAP_INFO=$($SSH_CMD "free -m | grep '^Swap:'") || SWAP_INFO=""
-SWAP_USED=$(echo "$SWAP_INFO" | awk '{print $3}')
-if [ "${SWAP_USED:-0}" -gt 100 ] 2>/dev/null; then
-  fail "High swap usage (${SWAP_USED}MB — indicates memory pressure)"
-else
-  pass "Swap OK (${SWAP_USED}MB used)"
+SWAP_INFO=$(require_ssh "Swap info" "free -m | grep '^Swap:'") || SWAP_INFO=""
+if [ -n "$SWAP_INFO" ]; then
+  SWAP_USED=$(echo "$SWAP_INFO" | awk '{print $3}')
+  if [ "${SWAP_USED:-0}" -gt 100 ] 2>/dev/null; then
+    fail "High swap usage (${SWAP_USED}MB — indicates memory pressure)"
+  else
+    pass "Swap OK (${SWAP_USED}MB used)"
+  fi
 fi
 
 # 7d. Disk space
-DISK_INFO=$($SSH_CMD "df -h / | tail -1") || DISK_INFO=""
-DISK_PERCENT=$(echo "$DISK_INFO" | awk '{print $5}' | tr -d '%')
-DISK_AVAIL=$(echo "$DISK_INFO" | awk '{print $4}')
-if [ "${DISK_PERCENT:-0}" -gt 85 ] 2>/dev/null; then
-  fail "Disk usage high (${DISK_PERCENT}%, ${DISK_AVAIL} available)"
-else
-  pass "Disk OK (${DISK_PERCENT}% used, ${DISK_AVAIL} available)"
+DISK_INFO=$(require_ssh "Disk info" "df -h / | tail -1") || DISK_INFO=""
+if [ -n "$DISK_INFO" ]; then
+  DISK_PERCENT=$(echo "$DISK_INFO" | awk '{print $5}' | tr -d '%')
+  DISK_AVAIL=$(echo "$DISK_INFO" | awk '{print $4}')
+  if [ "${DISK_PERCENT:-0}" -gt 85 ] 2>/dev/null; then
+    fail "Disk usage high (${DISK_PERCENT}%, ${DISK_AVAIL} available)"
+  else
+    pass "Disk OK (${DISK_PERCENT}% used, ${DISK_AVAIL} available)"
+  fi
 fi
 
 # 7e. Server uptime
@@ -443,24 +418,27 @@ echo "--- Container Health ---"
 CONTAINERS=$(remote "$COMPOSE ps --format '{{.Name}}:{{.State}}'") || CONTAINERS=""
 CONTAINER_COUNT=0
 CONTAINER_DOWN=0
-while IFS= read -r line; do
-  [ -z "$line" ] && continue
-  NAME=$(echo "$line" | cut -d: -f1)
-  STATE=$(echo "$line" | cut -d: -f2)
-  CONTAINER_COUNT=$((CONTAINER_COUNT + 1))
-  if [ "$STATE" != "running" ]; then
-    fail "Container $NAME is $STATE"
-    CONTAINER_DOWN=$((CONTAINER_DOWN + 1))
+if [ -z "$CONTAINERS" ]; then
+  fail "Could not list containers (SSH or Docker may be down)"
+else
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    NAME=$(echo "$line" | cut -d: -f1)
+    STATE=$(echo "$line" | cut -d: -f2)
+    CONTAINER_COUNT=$((CONTAINER_COUNT + 1))
+    if [ "$STATE" != "running" ]; then
+      fail "Container $NAME is $STATE"
+      CONTAINER_DOWN=$((CONTAINER_DOWN + 1))
+    fi
+  done <<< "$CONTAINERS"
+  if [ "$CONTAINER_DOWN" -eq 0 ] && [ "$CONTAINER_COUNT" -gt 0 ]; then
+    pass "All $CONTAINER_COUNT containers running"
   fi
-done <<< "$CONTAINERS"
-if [ "$CONTAINER_DOWN" -eq 0 ] && [ "$CONTAINER_COUNT" -gt 0 ]; then
-  pass "All $CONTAINER_COUNT containers running"
 fi
 
 # 8b. Container restart count (alert if any restarted in last hour)
 for CONTAINER in wp ojs wp-db ojs-db; do
   STARTED_AT=$(remote "$COMPOSE exec -T $CONTAINER cat /proc/1/stat 2>/dev/null | awk '{print \$22}'" 2>/dev/null) || true
-  # Simpler approach: check docker inspect
   RESTART_COUNT=$(remote "docker inspect --format='{{.RestartCount}}' \$(docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null) 2>/dev/null") || RESTART_COUNT="0"
   RESTART_COUNT=$(echo "$RESTART_COUNT" | tr -d '[:space:]')
   if [ "${RESTART_COUNT:-0}" -gt 0 ] 2>/dev/null; then
@@ -484,13 +462,11 @@ else
 fi
 
 # 8d. OOM detection (last 24h only — dmesg accumulates since boot)
-# dmesg timestamps are seconds since boot; filter to last 86400s
 UPTIME_SECS=$($SSH_CMD "cat /proc/uptime | cut -d. -f1") || UPTIME_SECS="0"
 CUTOFF=$((UPTIME_SECS - 86400))
 if [ "$CUTOFF" -lt 0 ]; then CUTOFF=0; fi
 OOM_RECENT=$($SSH_CMD "dmesg -T 2>/dev/null | tail -500 | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_RECENT="0"
 OOM_RECENT=$(echo "$OOM_RECENT" | tr -d '[:space:]')
-# Only check recent OOM via journalctl if available
 OOM_24H=$($SSH_CMD "journalctl -k --since '24 hours ago' 2>/dev/null | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_24H="$OOM_RECENT"
 OOM_24H=$(echo "$OOM_24H" | tr -d '[:space:]')
 if [ "${OOM_24H:-0}" -gt 0 ] 2>/dev/null; then
@@ -506,9 +482,11 @@ echo ""
 echo "--- WP Health ---"
 
 # 9a. Action Scheduler queue depth
-PENDING_JOBS=$(wp_cli "action-scheduler list --status=pending --per-page=100 --format=count" 2>/dev/null) || PENDING_JOBS="0"
+PENDING_JOBS=$(wp_cli "action-scheduler list --status=pending --per-page=100 --format=count" 2>/dev/null) || PENDING_JOBS=""
 PENDING_JOBS=$(echo "$PENDING_JOBS" | tr -d '[:space:]')
-if [ "${PENDING_JOBS:-0}" -gt 50 ] 2>/dev/null; then
+if [ -z "$PENDING_JOBS" ]; then
+  fail "Could not read Action Scheduler queue (WP-CLI may be down)"
+elif [ "${PENDING_JOBS:-0}" -gt 50 ] 2>/dev/null; then
   fail "Action Scheduler queue backing up ($PENDING_JOBS pending jobs)"
 else
   pass "Action Scheduler queue OK ($PENDING_JOBS pending)"
@@ -526,14 +504,7 @@ fi
 echo ""
 echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
 
-# Ping Better Stack heartbeat (if configured)
-if [ -n "$BETTERSTACK_HB_HOURLY" ]; then
-  if [ "$FAILED" -gt "0" ]; then
-    curl -sf -d "safe checks: $PASSED/$TOTAL passed, $FAILED failed" "$BETTERSTACK_HB_HOURLY/fail" > /dev/null 2>&1 || true
-  else
-    curl -sf "$BETTERSTACK_HB_HOURLY" > /dev/null 2>&1 || true
-  fi
-fi
+ping_heartbeat "$BETTERSTACK_HB_HOURLY" "$FAILED" "$PASSED" "$TOTAL"
 
 if [ "$FAILED" -gt "0" ]; then
   exit 1

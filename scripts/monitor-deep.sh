@@ -27,57 +27,18 @@ echo "================================================================"
 SAFE_EXIT=$?
 
 # Re-establish SSH connection and env vars for deep checks
-REMOTE_DIR="/opt/pharkie-ojs-plugins"
-
 source "$SCRIPT_DIR/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
-# Auto-detect compose config from running containers
-COMPOSE_FILES=$($SSH_CMD "docker inspect --format='{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' \$(docker ps -q --filter 'label=com.docker.compose.project=pharkie-ojs-plugins' | head -1) 2>/dev/null") || COMPOSE_FILES=""
-if [ -n "$COMPOSE_FILES" ]; then
-  COMPOSE="docker compose"
-  IFS=',' read -ra FILES <<< "$COMPOSE_FILES"
-  for f in "${FILES[@]}"; do
-    COMPOSE="$COMPOSE -f $(basename "$f")"
-  done
-else
-  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
-fi
+source "$SCRIPT_DIR/lib/monitor-helpers.sh"
 
-WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
-OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
-OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
+detect_compose
+
+WP_HOME=$(read_env "WP_HOME")
+OJS_BASE_URL=$(require_env "OJS_BASE_URL")
+OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH")
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
-API_KEY=$($SSH_CMD "grep '^WPOJS_API_KEY_SECRET=' $REMOTE_DIR/.env | cut -d= -f2")
-
-PASSED=0
-FAILED=0
-TOTAL=0
-
-pass() {
-  PASSED=$((PASSED + 1))
-  TOTAL=$((TOTAL + 1))
-  echo "  [PASS] $1"
-}
-
-fail() {
-  FAILED=$((FAILED + 1))
-  TOTAL=$((TOTAL + 1))
-  echo "  [FAIL] $1"
-  [ -n "$2" ] && echo "         $2"
-}
-
-info() {
-  echo "  [INFO] $1"
-}
-
-remote() {
-  $SSH_CMD "cd $REMOTE_DIR && $*" 2>&1
-}
-
-wp_cli() {
-  remote "$COMPOSE exec -T wp wp --allow-root $*"
-}
+API_KEY=$(require_env "WPOJS_API_KEY_SECRET")
 
 echo ""
 echo "================================================================"
@@ -89,6 +50,16 @@ echo "================================================================"
 # ============================================================
 echo ""
 echo "--- Sync Round-Trip ---"
+
+# Cleanup stale monitor users from previous failed runs
+STALE_IDS=$(wp_cli "user list --search=monitor-*@test.invalid --field=ID" 2>/dev/null) || STALE_IDS=""
+if [ -n "$STALE_IDS" ]; then
+  echo "$STALE_IDS" | while read uid; do
+    [ -z "$uid" ] && continue
+    wp_cli "user delete $uid --yes" > /dev/null 2>&1 || true
+  done
+  info "Cleaned up $(echo "$STALE_IDS" | wc -w) stale monitor user(s)"
+fi
 
 TEST_EMAIL="monitor-$(date +%s)@test.invalid"
 TEST_LOGIN="monitor_$(date +%s)"
@@ -133,11 +104,11 @@ if [ "$SYNC_OK" = true ]; then
       if echo "$OJS_SUBS" | grep -q '"status"'; then
         pass "OJS subscription created"
       else
-        fail "OJS subscription not found" "$OJS_SUBS"
+        fail "OJS subscription not found" "${OJS_SUBS:-<empty>}"
       fi
     fi
   else
-    fail "User not found in OJS after sync" "$OJS_USER"
+    fail "User not found in OJS after sync" "${OJS_USER:-<empty>}"
   fi
 
   # Cleanup
@@ -198,15 +169,17 @@ fi
 echo ""
 echo "--- Search Index ---"
 
-SEARCH_OBJECTS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM submission_search_objects\"'") || SEARCH_OBJECTS="0"
-SEARCH_OBJECTS=$(echo "$SEARCH_OBJECTS" | tr -d '[:space:]')
-if [ "$SEARCH_OBJECTS" -gt "0" ] 2>/dev/null; then
-  pass "Search index has $SEARCH_OBJECTS objects"
-else
-  fail "Search index is empty"
+SEARCH_OBJECTS=$(require_remote "Search index count" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM submission_search_objects\"'") || SEARCH_OBJECTS=""
+if [ -n "$SEARCH_OBJECTS" ]; then
+  if [ "$SEARCH_OBJECTS" -gt "0" ] 2>/dev/null; then
+    pass "Search index has $SEARCH_OBJECTS objects"
+  else
+    fail "Search index is empty"
+  fi
 fi
 
 # HTTP search test
+# CHAR(102,97,109,105,108,121,78,97,109,101) = 'familyName'
 SEARCH_AUTHOR=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
   SELECT asv.setting_value FROM author_settings asv
   JOIN authors a ON a.author_id = asv.author_id
@@ -239,7 +212,7 @@ RECON_OUTPUT=$(wp_cli "ojs-sync reconcile") || RECON_OUTPUT=""
 if echo "$RECON_OUTPUT" | grep -q "Reconciliation complete"; then
   pass "Reconciliation completes successfully"
 else
-  fail "Reconciliation failed" "$(echo "$RECON_OUTPUT" | tail -3)"
+  fail "Reconciliation failed" "$(echo "${RECON_OUTPUT:-<empty>}" | tail -3)"
 fi
 
 # ============================================================
@@ -249,8 +222,7 @@ echo ""
 echo "--- Database ---"
 
 for DB_CONTAINER in wp-db ojs-db; do
-  DB_SIZE=$(remote "$COMPOSE exec -T $DB_CONTAINER bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) FROM information_schema.tables WHERE table_schema = DATABASE()\"'" 2>/dev/null) || DB_SIZE=""
-  DB_SIZE=$(echo "$DB_SIZE" | tr -d '[:space:]')
+  DB_SIZE=$(require_remote "$DB_CONTAINER database size" "$COMPOSE exec -T $DB_CONTAINER bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) FROM information_schema.tables WHERE table_schema = DATABASE()\"'") || DB_SIZE=""
   if [ -n "$DB_SIZE" ]; then
     DB_SIZE_INT=$(echo "$DB_SIZE" | cut -d. -f1)
     if [ "${DB_SIZE_INT:-0}" -gt 2048 ] 2>/dev/null; then
@@ -267,7 +239,6 @@ done
 echo ""
 echo "--- OJS Scheduled Tasks ---"
 
-# Check cron is installed inside the OJS container
 OJS_CRON=$(remote "$COMPOSE exec -T ojs crontab -l 2>/dev/null || echo ''")
 if echo "$OJS_CRON" | grep -q "scheduler\.php\|ojs-scheduler-heartbeat"; then
   pass "OJS scheduler cron installed"
@@ -290,14 +261,7 @@ fi
 echo ""
 echo "=== Deep results: $PASSED/$TOTAL passed, $FAILED failed ==="
 
-# Ping Better Stack heartbeat (if configured)
-if [ -n "$BETTERSTACK_HB_DAILY" ]; then
-  if [ "$SAFE_EXIT" -ne 0 ] || [ "$FAILED" -gt 0 ]; then
-    curl -sf -d "deep checks: $PASSED/$TOTAL passed, $FAILED failed" "$BETTERSTACK_HB_DAILY/fail" > /dev/null 2>&1 || true
-  else
-    curl -sf "$BETTERSTACK_HB_DAILY" > /dev/null 2>&1 || true
-  fi
-fi
+ping_heartbeat "$BETTERSTACK_HB_DAILY" "$((FAILED + (SAFE_EXIT > 0 ? 1 : 0)))" "$PASSED" "$TOTAL"
 
 if [ "$SAFE_EXIT" -ne 0 ] || [ "$FAILED" -gt 0 ]; then
   exit 1
