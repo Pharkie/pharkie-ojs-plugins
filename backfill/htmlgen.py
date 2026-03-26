@@ -75,13 +75,23 @@ ARTICLE_PROMPT = """Convert these journal article pages into clean, well-structu
 
 """ + FORMATTING_RULES + """
 
-SKIP the article title and author name at the TOP of the first page (already
-in OJS metadata). Start from the first paragraph of body text or abstract.
+SKIP ONLY: the article title, subtitle, author byline, abstract, and
+keywords at the very top of the first page (these are already in OJS
+metadata). Start from the FIRST body paragraph after the abstract/keywords.
 
-KEEP: Abstract, Keywords, all body text, footnotes/endnotes, References.
-Include ALL content through to the very last reference/footnote — do not
-stop early. If references appear in multiple scripts (e.g. Cyrillic then
-transliterated Latin), include BOTH sets — they are not duplicates."""
+Do NOT skip opening body paragraphs just because they come before the
+first <h2> heading. Many articles begin with several paragraphs of body
+text before any heading — these MUST be included.
+
+KEEP EVERYTHING after abstract/keywords, in order:
+  1. ALL body text (including paragraphs before the first heading)
+  2. ALL section headings and their content
+  3. Author bio/about paragraph (often at the end, before references)
+  4. Contact details / ORCID (if present)
+  5. References section — include EVERY reference, do not stop early
+
+If references appear in multiple scripts (e.g. Cyrillic then transliterated
+Latin), include BOTH sets — they are not duplicates."""
 
 ARTICLE_SHARED_PAGE_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
 The first and/or last page may contain content from an adjacent article
@@ -89,17 +99,27 @@ The first and/or last page may contain content from an adjacent article
 
 """ + FORMATTING_RULES + """
 
-SKIP the article title and author name at the TOP of the first page (already
-in OJS metadata). Start from the first paragraph of body text or abstract.
+SKIP ONLY: the article title, subtitle, author byline, abstract, and
+keywords at the very top of the first page (these are already in OJS
+metadata). Start from the FIRST body paragraph after the abstract/keywords.
 
 If the first page starts with the END of a previous article, skip that
 content and start from THIS article's body text.
 
-KEEP: Abstract, Keywords, all body text, footnotes/endnotes, References.
-Include ALL content through to the very last reference/footnote. If references
-appear in multiple scripts (e.g. Cyrillic then transliterated Latin), include
-BOTH sets — they are not duplicates. If the last page contains the START of
-the next article, stop before it."""
+Do NOT skip opening body paragraphs just because they come before the
+first <h2> heading. Many articles begin with several paragraphs of body
+text before any heading — these MUST be included.
+
+KEEP EVERYTHING after abstract/keywords, in order:
+  1. ALL body text (including paragraphs before the first heading)
+  2. ALL section headings and their content
+  3. Author bio/about paragraph (often at the end, before references)
+  4. Contact details / ORCID (if present)
+  5. References section — include EVERY reference, do not stop early
+
+If references appear in multiple scripts (e.g. Cyrillic then transliterated
+Latin), include BOTH sets — they are not duplicates. If the last page
+contains the START of the next article, stop before it."""
 
 BOOK_REVIEW_PROMPT = """Convert this book review PDF into clean, well-structured HTML.
 
@@ -229,7 +249,8 @@ def strip_code_fences(html):
     return html
 
 
-def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None, reviewer=None):
+def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None, reviewer=None,
+                 title=None, authors=None):
     """Select the right prompt for this article type."""
     if is_book_review:
         prompt = BOOK_REVIEW_PROMPT
@@ -239,14 +260,23 @@ def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None, 
             prompt += f'\n\nThe reviewer is: {reviewer}. Your output MUST end with <p><strong>{reviewer}</strong></p> (or close variant). If it does not, you have extracted the wrong review.'
         return prompt
     elif has_shared_pages:
-        return ARTICLE_SHARED_PAGE_PROMPT
+        prompt = ARTICLE_SHARED_PAGE_PROMPT
     else:
-        return ARTICLE_PROMPT
+        prompt = ARTICLE_PROMPT
+
+    # Tell the AI exactly what title/author to skip so it doesn't over-skip
+    if title:
+        prompt += f'\n\nThe article title is: "{title}"'
+        if authors:
+            prompt += f'\nThe author(s): {authors}'
+        prompt += '\nSkip ONLY these at the top of the first page. Start from the very next paragraph (abstract, keywords, or body text). Do NOT skip any body content.'
+
+    return prompt
 
 
 def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8,
                                is_book_review=False, has_shared_pages=False, book_title=None,
-                               reviewer=None):
+                               reviewer=None, title=None, authors=None):
     """Send all pages of a split PDF to Claude, return (html, input_tokens, output_tokens, num_pages, truncated).
 
     All pages sent in a single message for full article context.
@@ -272,7 +302,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
 
     content.append({
         'type': 'text',
-        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages, book_title=book_title, reviewer=reviewer),
+        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages, book_title=book_title, reviewer=reviewer, title=title, authors=authors),
     })
 
     for attempt in range(max_retries):
@@ -481,7 +511,9 @@ def main():
                 is_book_review=article.get('_is_book_review', False),
                 has_shared_pages=article.get('_has_shared_pages', False),
                 book_title=article.get('book_title', '') if article.get('_is_book_review') else None,
-                reviewer=reviewer)
+                reviewer=reviewer,
+                title=article.get('title', ''),
+                authors=article.get('authors', ''))
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback
