@@ -44,7 +44,7 @@ resolve_ssh() {
     }
   fi
 
-  local ssh_opts="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i $ssh_key"
+  local ssh_opts="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=/tmp/ssh-%r@%h:%p -o ControlPersist=5m -i $ssh_key"
   SSH_CMD="ssh $ssh_opts root@$SERVER_IP"
   SCP_CMD="scp $ssh_opts"
   SCP_HOST="root@$SERVER_IP"
