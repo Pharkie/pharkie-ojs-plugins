@@ -108,7 +108,7 @@ CRON_LINE="0 * * * *   BETTERSTACK_HB_OJS_CRON=${BETTERSTACK_HB_OJS_CRON:-} /usr
 # Create wrapper that distinguishes OJS 3.5 known fatal from real failures
 cat > /usr/local/bin/ojs-scheduler-heartbeat.sh <<'WRAPPER'
 #!/bin/bash
-OUTPUT=$(php /var/www/html/lib/pkp/tools/scheduler.php run 2>&1)
+OUTPUT=$(/usr/local/bin/php /var/www/html/lib/pkp/tools/scheduler.php run 2>&1)
 EXIT=$?
 HB="${BETTERSTACK_HB_OJS_CRON:-}"
 if [ -z "$HB" ]; then exit $EXIT; fi
