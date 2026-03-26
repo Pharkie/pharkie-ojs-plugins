@@ -449,13 +449,20 @@ def main():
 
     # Filter to only articles that need processing
     to_process = []
+    manual_skipped = 0
     for item in articles:
         _, _, _, _, article = item
         out_path = html_output_path(article['split_pdf'])
+        if article.get('_manual_html') and os.path.exists(out_path):
+            manual_skipped += 1
+            skipped += 1
+            continue
         if os.path.exists(out_path):
             skipped += 1
             continue
         to_process.append(item)
+    if manual_skipped:
+        print(f"  Skipping {manual_skipped} manually-corrected HTML(s) (delete file to force regeneration)")
 
     total_to_do = len(to_process)
 
