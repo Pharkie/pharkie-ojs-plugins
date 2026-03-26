@@ -171,6 +171,8 @@ Built a custom Stripe Checkout plugin instead (`plugins/stripe-payment/`). Redir
 
 **Security:** Uses a restricted Stripe API key scoped to Checkout Sessions only (write), rather than an unrestricted secret key. No OAuth available for custom integrations (unlike WooCommerce's Stripe plugin which uses Stripe Connect).
 
+**Test webhook removed (2026-03-26):** Stripe test mode webhook was pointing at the live OJS URL, causing failed delivery emails (36 failures since 2026-03-23). Removed because: (1) there's no staging OJS instance for it to hit, (2) the live plugin runs in live mode (`testMode=0`) so it rejects test-signed events, (3) making the plugin accept both secrets would allow test events to trigger real actions on live. For future testing, use a Stripe Sandbox with its own isolated webhook pointing at a dev/staging OJS instance with `testMode=1`.
+
 PayPal has been removed as a payment option. Manual Payment remains as a fallback for edge cases.
 
 ---
