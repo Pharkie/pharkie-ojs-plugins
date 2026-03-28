@@ -292,7 +292,7 @@ def _find_book_publication_details(html, book_title, search_start=0):
     Returns (start_pos, end_pos) or (None, None).
     """
     clean_book = re.sub(r'^Book Review:\s*', '', book_title, flags=re.IGNORECASE)
-    # Handle multi-book reviews: "Title A / Title B" — match either part
+    # Handle multi-book reviews: "Title A / Title B" — find earliest part
     book_parts = [p.strip() for p in clean_book.split('/') if p.strip()]
     rx_parts = [_text_to_regex(p) for p in book_parts if p]
     rx_parts = [r for r in rx_parts if r is not None]
@@ -306,25 +306,28 @@ def _find_book_publication_details(html, book_title, search_start=0):
         + PUBLISHER_NAMES +
         r'|Oxford|Cambridge|London|New York)', re.IGNORECASE)
 
+    # Find the earliest block matching ANY part with publication details
+    earliest = None
     for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
         block_text = _clean(_strip_tags(m.group()))
         raw_block = _strip_tags(m.group())
-        # Does this block contain the book title?
         has_title = any(rx.search(block_text) for rx in rx_parts)
         if not has_title:
             continue
-        # Does it also have publication markers (or is it very short like a heading)?
         has_pub = bool(pub_markers.search(raw_block))
         is_short_heading = len(block_text.split()) <= 10
         if has_pub or is_short_heading:
-            return (search_start + m.start(), search_start + m.end())
+            earliest = (search_start + m.start(), search_start + m.end())
+            break  # first match = earliest
 
-    # Fallback: just find the title block without requiring pub markers
-    for part_rx in rx_parts:
-        for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
-            block_text = _clean(_strip_tags(m.group()))
-            if part_rx.search(block_text):
-                return (search_start + m.start(), search_start + m.end())
+    if earliest:
+        return earliest
+
+    # Fallback: find earliest block matching any part without pub markers
+    for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
+        block_text = _clean(_strip_tags(m.group()))
+        if any(rx.search(block_text) for rx in rx_parts):
+            return (search_start + m.start(), search_start + m.end())
 
     return None, None
 
@@ -520,9 +523,11 @@ def verify_postprocessed(raw_html, final_html, article):
         if not any(h in raw_text.lower() for h in _SECTION_HEADINGS):
             warnings.append(f'TITLE_NOT_IN_RAW: "{stripped_title[:50]}" not found in raw HTML')
 
-    # CHECK 2: For book reviews, the book title SHOULD be in final HTML
+    # CHECK 2: For book reviews, the book title SHOULD be in final HTML.
+    # For multi-book titles ("Title A / Title B"), any part matching is sufficient.
     if is_book_review and stripped_title:
-        if not _title_in_text_fuzzy(stripped_title, final_text):
+        parts = [p.strip() for p in stripped_title.split('/') if p.strip()]
+        if not any(_title_in_text_fuzzy(p, final_text) for p in parts):
             warnings.append(f'BOOK_TITLE_MISSING: "{stripped_title[:50]}" not in final HTML')
 
     # CHECK 3: Final HTML should not be empty
