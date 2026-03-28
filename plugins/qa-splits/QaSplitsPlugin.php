@@ -198,31 +198,39 @@ class QaSplitsPlugin extends GenericPlugin
 </head>
 <body>
     <div class="qa-layout">
-        <!-- Top bar: single row -->
+        <!-- Top bar: two rows -->
         <div class="qa-top">
-            <span class="qa-app-name">QA</span>
-            <span class="qa-title" id="qa-title">Loading...</span>
-            <span class="qa-authors" id="qa-authors"></span>
-            <span id="qa-section" style="display:none"></span>
-            <span id="qa-issue" style="display:none"></span>
-            <span id="qa-pages" style="display:none"></span>
-            <span class="qa-badge" id="qa-status"></span>
-            <span class="qa-spacer"></span>
-            <div class="qa-progress" id="qa-progress"></div>
-            <button id="btn-last-seen" class="qa-btn qa-btn-nav" title="Return to previous article">Back</button>
-            <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">&lsaquo;</button>
-            <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">&rsaquo;</button>
-            <button id="btn-random" class="qa-btn qa-btn-nav" title="Random unreviewed">Rnd</button>
-            <button id="btn-problem" class="qa-btn qa-btn-nav" title="Next problem case">Prob</button>
-            <input type="text" id="reject-comment" class="qa-input" placeholder="Reason..." style="display:none">
-            <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">OK</button>
-            <div class="qa-btn-wrap">
-                <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">&check;</button>
-                <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
+            <div class="qa-row-1">
+                <span class="qa-app-name">QA Splits</span>
+                <span class="qa-title" id="qa-title">Loading...</span>
+                <span class="qa-authors" id="qa-authors"></span>
+                <span id="qa-section" style="display:none"></span>
+                <span id="qa-issue" style="display:none"></span>
+                <span id="qa-pages" style="display:none"></span>
             </div>
-            <div class="qa-btn-wrap">
-                <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">&cross;</button>
-                <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
+            <div class="qa-row-2">
+                <div class="qa-progress" id="qa-progress"></div>
+                <span class="qa-row-spacer"></span>
+                <button id="btn-last-seen" class="qa-btn qa-btn-nav" title="Return to previous article">Go Back</button>
+                <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">&lsaquo; Prev</button>
+                <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">Next &rsaquo;</button>
+                <button id="btn-random" class="qa-btn qa-btn-nav" title="Random unreviewed">Random</button>
+                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Next problem case">Problem</button>
+                <input type="text" id="reject-comment" class="qa-input" placeholder="Rejection reason..." style="display:none">
+                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">Submit</button>
+                <div class="qa-action-group">
+                    <span class="qa-badge" id="qa-status"></span>
+                    <div class="qa-action-buttons">
+                        <div class="qa-btn-wrap">
+                            <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approve</button>
+                            <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
+                        </div>
+                        <div class="qa-btn-wrap">
+                            <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">Reject</button>
+                            <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
