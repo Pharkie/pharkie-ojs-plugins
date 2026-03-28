@@ -217,8 +217,8 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-next" class="qa-btn qa-btn-nav" title="Next article (Right arrow)">Next &rsaquo;</button>
                 <button id="btn-random" class="qa-btn qa-btn-nav" title="Jump to a random unreviewed article">Random</button>
                 <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next rejected article">Next Rejected</button>
-                <input type="text" id="reject-comment" class="qa-input" placeholder="Rejection reason..." style="display:none">
-                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">Submit</button>
+                <textarea id="reject-comment" class="qa-textarea" placeholder="Rejection reason..." rows="3" style="display:none"></textarea>
+                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none" title="Submit rejection (Ctrl+Enter)">Submit</button>
                 <div class="qa-btn-wrap">
                     <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approve</button>
                     <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
