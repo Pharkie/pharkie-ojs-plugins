@@ -224,11 +224,11 @@ BIO_PHRASE_SEARCH_WINDOW = 150
 # is the longest common format at ~60 chars. 80 gives margin.
 AUTHOR_YEAR_SEARCH_WINDOW = 80
 #
-# SHORT_TEXT_THRESHOLD: items shorter than this can't be a meaningful
+# MIN_CLASSIFIABLE_LENGTH: items shorter than this can't be a meaningful
 # reference or note classification candidate. Shortest real note in
 # dataset is "Ibid." (5 chars), but the is_note function has specific
 # Ibid detection. Below 15 chars, general classification is unreliable.
-SHORT_TEXT_THRESHOLD = 15
+MIN_CLASSIFIABLE_LENGTH = 15
 #
 # NOTE_MAX_SENTENCES / NOTE_LONG_TEXT: notes are typically 1-2 sentences.
 # A 2+ sentence text over 350 chars is more likely a body paragraph that
@@ -404,7 +404,7 @@ def provenance_confidence(text: str) -> int:
 
 def is_junk(text: str) -> bool:
     """Filter out non-citation junk from reference sections."""
-    if len(text) < SHORT_TEXT_THRESHOLD:
+    if len(text) < MIN_CLASSIFIABLE_LENGTH:
         return True
 
     has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
@@ -438,7 +438,7 @@ def is_citation_like(text: str) -> bool:
     Used to filter Notes/Endnotes — keep items with year + author pattern,
     skip pure commentary.
     """
-    if len(text) < SHORT_TEXT_THRESHOLD:
+    if len(text) < MIN_CLASSIFIABLE_LENGTH:
         return False
 
     has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
