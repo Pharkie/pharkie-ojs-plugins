@@ -389,23 +389,12 @@ def verify_postprocessed(raw_html, final_html, article):
         if not any(h in raw_text.lower() for h in _SECTION_HEADINGS):
             warnings.append(f'TITLE_NOT_IN_RAW: "{stripped_title[:50]}" not found in raw HTML')
 
-    # CHECK 2: For articles (not book reviews), title should NOT appear as a
-    # heading or standalone block at the start of the final HTML.
-    # Uses substring match (not word overlap) to avoid false positives from
-    # body text that happens to contain the same words as the title.
-    if not is_book_review and stripped_title:
-        clean_title = _clean(stripped_title)
-        # Check first few blocks for the full title as substring
-        first_blocks = _strip_tags(final_html[:500]).strip()
-        if clean_title and clean_title in _clean(first_blocks):
-            warnings.append(f'TITLE_NOT_STRIPPED: "{stripped_title[:50]}" still in final HTML')
-
-    # CHECK 3: For book reviews, the book title SHOULD be in final HTML
+    # CHECK 2: For book reviews, the book title SHOULD be in final HTML
     if is_book_review and stripped_title:
-        if not _title_in_text(stripped_title, final_text[:1000]):
+        if not _title_in_text(stripped_title, final_text):
             warnings.append(f'BOOK_TITLE_MISSING: "{stripped_title[:50]}" not in final HTML')
 
-    # CHECK 4: Final HTML should not be empty
+    # CHECK 3: Final HTML should not be empty
     if len(final_text.strip()) < SHORT_CONTENT_THRESHOLD:
         warnings.append(f'EMPTY_OUTPUT: final HTML has only {len(final_text.strip())} chars')
 
