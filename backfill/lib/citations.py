@@ -200,14 +200,47 @@ def _local(tag: str) -> str:
 # These control behaviour in is_reference, is_note, is_author_bio, etc.
 # Named here so they can be tuned without hunting through functions.
 
-LONG_REF_THRESHOLD = 300      # References longer than this get extra validation
-BIO_MIN_LENGTH = 50           # Bio phrases in text shorter than this are ignored
-BIO_PHRASE_SEARCH_WINDOW = 150  # Bio phrase must appear within first N chars
-AUTHOR_YEAR_SEARCH_WINDOW = 80  # Author+year pattern must be within first N chars
-SHORT_TEXT_THRESHOLD = 15     # Texts shorter than this are rejected outright
-NOTE_MAX_SENTENCES = 2        # Notes with more sentences than this + long text are rejected
-NOTE_LONG_TEXT = 350          # "Long text" threshold for sentence-count checks
-REF_MIN_TITLE_WORDS = 1      # References must have at least N title words after stripping author+year
+# --- Classification thresholds with justification ---
+#
+# LONG_REF_THRESHOLD: body paragraphs are typically 200-800 chars; references
+# rarely exceed 300 chars (dataset 95th percentile: ~280). Texts longer than
+# this get extra validation (must have author+year at start) to avoid
+# classifying body paragraphs as references.
+LONG_REF_THRESHOLD = 300
+#
+# BIO_MIN_LENGTH: the "is a" bio phrase check has false positives on short
+# fragments. Real bios are at least a sentence (~50+ chars). Below this,
+# the phrase check is skipped (pattern-only matching still applies).
+BIO_MIN_LENGTH = 50
+#
+# BIO_PHRASE_SEARCH_WINDOW: bio phrases like "is a practitioner" must appear
+# near the start of the text (within a sentence or two). At 150 chars,
+# that's roughly the first 1-2 sentences. A bio phrase buried at char 300
+# is likely body text, not a bio.
+BIO_PHRASE_SEARCH_WINDOW = 150
+#
+# AUTHOR_YEAR_SEARCH_WINDOW: in references, the author and (year) always
+# appear within the first ~80 chars. "Surname, I. and Surname, I. (YYYY)"
+# is the longest common format at ~60 chars. 80 gives margin.
+AUTHOR_YEAR_SEARCH_WINDOW = 80
+#
+# SHORT_TEXT_THRESHOLD: items shorter than this can't be a meaningful
+# reference or note classification candidate. Shortest real note in
+# dataset is "Ibid." (5 chars), but the is_note function has specific
+# Ibid detection. Below 15 chars, general classification is unreliable.
+SHORT_TEXT_THRESHOLD = 15
+#
+# NOTE_MAX_SENTENCES / NOTE_LONG_TEXT: notes are typically 1-2 sentences.
+# A 2+ sentence text over 350 chars is more likely a body paragraph that
+# leaked into the back-matter. These work together as a compound check.
+NOTE_MAX_SENTENCES = 2
+NOTE_LONG_TEXT = 350
+#
+# REF_MIN_TITLE_WORDS: after stripping author(s) and year, the remainder
+# must have at least 1 word that looks like a title. Prevents matching
+# on author-name-only fragments. Set to 1 because minimal references
+# like "Author. Title. Place. Year" legitimately have 1 title word.
+REF_MIN_TITLE_WORDS = 1
 
 # ---------------------------------------------------------------
 # Confidence scoring (informational, for review/QA)

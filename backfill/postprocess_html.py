@@ -29,11 +29,15 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 from citations import REFERENCE_HEADING_RE
 
-# Minimum abstract length worth stripping (shorter abstracts risk false matches).
-# Derived from data: shortest real abstract in dataset is 152 chars. Anything
-# under 30 chars is likely a fragment, not a real abstract.
+# Minimum abstract length worth stripping. Shortest real abstract in dataset
+# is 152 chars. Below 30 chars, a toc.json "abstract" is likely a fragment
+# or metadata artefact — stripping it risks removing real body content.
 MIN_ABSTRACT_LENGTH = 30
-# Final HTML shorter than this (in chars) is flagged as empty/broken
+#
+# Final HTML shorter than this is flagged as empty/broken. Shortest
+# legitimate book review in the dataset is ~80 chars of body text.
+# Shortest legitimate article is ~200 chars. 100 catches broken
+# extractions while allowing very short book reviews.
 SHORT_CONTENT_THRESHOLD = 100
 
 
