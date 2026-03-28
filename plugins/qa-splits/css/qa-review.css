@@ -236,14 +236,8 @@ body {
     white-space: nowrap;
     letter-spacing: 0.02em;
     padding: 6px 12px;
-    cursor: pointer;
-    transition: color 0.15s, background 0.15s;
     background: rgba(255,255,255,0.06);
     border-radius: 4px;
-}
-.qa-progress:hover {
-    color: var(--text-inverse);
-    background: rgba(255,255,255,0.12);
 }
 
 .qa-progress-link {

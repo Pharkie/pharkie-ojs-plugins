@@ -70,7 +70,7 @@
         els['btn-last-seen'].addEventListener('click', goToLastSeen);
         els['btn-random'].addEventListener('click', goToRandom);
         els['btn-problem'].addEventListener('click', goToProblem);
-        els['qa-progress'].addEventListener('click', showDashboard);
+        // Dashboard opened via "View stats" link inside progress, not container click
 
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -630,6 +630,14 @@
             }
             els['qa-progress'].appendChild(span);
         });
+
+        // "View stats" link at the end
+        els['qa-progress'].appendChild(document.createTextNode(' / '));
+        const statsLink = document.createElement('span');
+        statsLink.textContent = 'View stats';
+        statsLink.className = 'qa-progress-link';
+        statsLink.addEventListener('click', (e) => { e.stopPropagation(); showDashboard(); });
+        els['qa-progress'].appendChild(statsLink);
     }
 
     function showFilteredList(status) {
