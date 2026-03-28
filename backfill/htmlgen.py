@@ -43,7 +43,7 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from postprocess_html import strip_abstract, check_missing_refs, detect_bad_split
-from split import title_on_first_page
+from split import title_in_split_pdf
 
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -538,7 +538,7 @@ def main():
 
         try:
             # Deterministic bad-split check (free, no API call)
-            if not title_on_first_page(split_pdf, article.get('title', '')):
+            if not title_in_split_pdf(split_pdf, article.get('title', '')):
                 print(f"  ⚠ BAD_SPLIT {label}: title not found on page 1 of split PDF — skipping", flush=True)
                 article['_bad_split'] = True
                 # Write updated toc.json

@@ -32,13 +32,38 @@ def _clean_for_match(text):
     return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', text.lower())).strip()
 
 
-def title_on_first_page(pdf_path, title):
-    """Check if the article title appears on page 1 of the split PDF.
+def _title_matches_text(title, text):
+    """Check if title appears in text. Fuzzy: substring match or 80% word overlap."""
+    clean_title = _clean_for_match(title)
+    clean_text = _clean_for_match(text)
 
-    Returns True if found, False if not. Uses two strategies:
-    1. Exact substring match (cleaned text)
-    2. Word overlap — at least 80% of significant title words found on page 1
-       (handles line breaks splitting the title across lines in PDF text)
+    if not clean_title:
+        return True
+
+    # Strategy 1: exact substring
+    if clean_title in clean_text:
+        return True
+
+    # Strategy 2: word overlap (handles line breaks in title)
+    title_words = [w for w in clean_title.split() if len(w) > 2]
+    if not title_words:
+        return True
+    # Check both exact word match AND substring match (PDF extraction
+    # often fuses words across line breaks: "2002knowing" instead of
+    # "2002 knowing")
+    found = 0
+    for w in title_words:
+        if w in clean_text:
+            found += 1
+    return found / len(title_words) >= 0.8
+
+
+def title_in_split_pdf(pdf_path, title):
+    """Check if the article title appears anywhere in the split PDF.
+
+    Checks all pages (not just page 1) because shared-page articles
+    may start on the previous article's last page. Returns True if
+    the title is found on any page within the first 5 pages.
     """
     if not title:
         return True  # Can't check without a title
@@ -46,33 +71,30 @@ def title_on_first_page(pdf_path, title):
     if len(doc) == 0:
         doc.close()
         return False
-    page1_text = doc[0].get_text()
-    doc.close()
 
     # Strip toc.json prefixes that don't appear in the PDF
-    title = re.sub(r'^(Book Review|Film Review|Exhibition Report|Poem|Personally Speaking|Obituary|Essay Review|Letter to the Editors?):\s*', '', title)
-    clean_title = _clean_for_match(title)
-    clean_page = _clean_for_match(page1_text)
+    title = re.sub(
+        r'^(Book Reviews?|Film Review|Exhibition Report|Poem'
+        r'|Personally Speaking|Obituary|Essay Review'
+        r'|Letter to the Editors?|Responses?( to)?'
+        r'|Prof(\.|essor)?)\s*:?\s*',
+        '', title, flags=re.IGNORECASE
+    ).strip()
 
-    # Strategy 1: exact substring
-    if clean_title in clean_page:
-        return True
+    # Also strip "(second review)" etc. — parenthetical suffixes not in PDF
+    title = re.sub(r'\s*\([^)]*review[^)]*\)\s*$', '', title, flags=re.IGNORECASE)
 
-    # Strategy 2: word overlap (handles line breaks in title)
-    title_words = [w for w in clean_title.split() if len(w) > 2]
-    if not title_words:
-        return True
-    page_words = set(clean_page.split())
-    # Check both exact word match AND substring match (PDF extraction
-    # often fuses words across line breaks: "2002knowing" instead of
-    # "2002 knowing")
-    found = 0
-    for w in title_words:
-        if w in page_words:
-            found += 1
-        elif w in clean_page:  # substring of the full text
-            found += 1
-    return found / len(title_words) >= 0.8
+    # Check all pages — book reviews on shared pages may have
+    # the title deep in the PDF
+    pages_to_check = len(doc)
+    for i in range(pages_to_check):
+        page_text = doc[i].get_text()
+        if _title_matches_text(title, page_text):
+            doc.close()
+            return True
+
+    doc.close()
+    return False
 
 
 def slugify(text, max_len=80):
@@ -130,7 +152,7 @@ def split_pdf(toc_data, output_dir):
         pages = end - start + 1
 
         # Verify article title appears on first page of split PDF
-        if not title_on_first_page(filepath, article.get('title', '')):
+        if not title_in_split_pdf(filepath, article.get('title', '')):
             print(f"  ⚠ {filename} ({pages}pp) — WARNING: title not found on first page", file=sys.stderr)
             article['_split_warning'] = True
         else:

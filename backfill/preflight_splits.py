@@ -17,7 +17,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from split import title_on_first_page
+from split import title_in_split_pdf
 
 BACKFILL_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
@@ -53,7 +53,7 @@ def main():
             title = art.get('title', '')
             total += 1
 
-            if title_on_first_page(pdf_path, title):
+            if title_in_split_pdf(pdf_path, title):
                 ok += 1
             else:
                 section = art.get('section', '')
