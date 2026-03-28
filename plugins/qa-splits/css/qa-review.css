@@ -954,9 +954,9 @@ body {
 
 .qa-filtered-comment {
     font-family: var(--font-ui);
-    font-size: 13px;
-    color: var(--text-muted);
-    font-style: italic;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 2px;
 }
 
 .qa-filtered-empty {
