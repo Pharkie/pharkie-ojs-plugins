@@ -242,6 +242,16 @@ body {
 .qa-progress:hover {
     color: var(--text-inverse);
     background: rgba(255,255,255,0.12);
+}
+
+.qa-progress-link {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.qa-progress-link:hover {
+    text-decoration-style: solid;
     border-left: 1px solid rgba(255,255,255,0.15);
 }
 
@@ -906,4 +916,50 @@ body {
     color: var(--text-muted);
     width: 32px;
     text-align: right;
+}
+
+/* ── Filtered article list (drill-down from progress) ── */
+
+.qa-filtered-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.qa-filtered-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--divider);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+}
+
+.qa-filtered-item:hover {
+    background: rgba(0,0,0,0.04);
+}
+
+.qa-filtered-item:last-child {
+    border-bottom: none;
+}
+
+.qa-filtered-title {
+    font-family: var(--font-display);
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+.qa-filtered-comment {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.qa-filtered-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
 }

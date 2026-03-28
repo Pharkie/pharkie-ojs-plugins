@@ -25,6 +25,10 @@
     let loadGeneration = 0;     // Incremented per loadArticle to cancel stale fetches
     let scrollHandler = null;   // Stored ref for cleanup
 
+    // Prefetch cache: submissionId → { pdf: Blob|null, html: string|null, classification: object|null }
+    const PREFETCH_AHEAD = 3;
+    const prefetchCache = new Map();
+
     // DOM refs
     const els = {};
     const elIds = [
@@ -162,6 +166,47 @@
         loadPdf(article.submission_id, gen);
         loadHtml(article.submission_id, gen);
         loadClassification(article.submission_id, gen);
+
+        // Prefetch nearby articles in background
+        prefetchNearby(index);
+    }
+
+    /**
+     * Prefetch PDF, HTML and classification for articles near the current index.
+     * Fetches are fire-and-forget — results cached for instant display on navigation.
+     */
+    function prefetchNearby(index) {
+        for (let offset = 1; offset <= PREFETCH_AHEAD; offset++) {
+            for (const i of [index + offset, index - offset]) {
+                if (i >= 0 && i < articles.length) {
+                    const id = articles[i].submission_id;
+                    if (!prefetchCache.has(id)) {
+                        prefetchCache.set(id, { pdf: null, html: null, classification: null });
+                        // Fire and forget — don't await
+                        fetch(API + '/articles/' + id + '/pdf', { credentials: 'same-origin' })
+                            .then(r => r.ok ? r.blob() : null)
+                            .then(blob => { if (prefetchCache.has(id)) prefetchCache.get(id).pdf = blob; })
+                            .catch(() => {});
+                        fetch(API + '/articles/' + id + '/html', { credentials: 'same-origin' })
+                            .then(r => r.ok ? r.text() : null)
+                            .then(html => { if (prefetchCache.has(id)) prefetchCache.get(id).html = html; })
+                            .catch(() => {});
+                        fetch(API + '/articles/' + id + '/classification', { credentials: 'same-origin' })
+                            .then(r => r.ok ? r.json() : null)
+                            .then(data => { if (prefetchCache.has(id)) prefetchCache.get(id).classification = data; })
+                            .catch(() => {});
+                    }
+                }
+            }
+        }
+
+        // Evict entries far from current position to limit memory
+        for (const [id] of prefetchCache) {
+            const artIndex = articles.findIndex(a => a.submission_id === id);
+            if (artIndex >= 0 && Math.abs(artIndex - index) > PREFETCH_AHEAD + 2) {
+                prefetchCache.delete(id);
+            }
+        }
     }
 
     // ── PDF rendering ──
@@ -183,9 +228,16 @@
         els['pdf-page-info'].textContent = 'Loading...';
 
         try {
-            const url = API + '/articles/' + submissionId + '/pdf';
-            const loadingTask = pdfjsLib.getDocument({ url, withCredentials: true });
-            const doc = await loadingTask.promise;
+            // Check prefetch cache first
+            const cached = prefetchCache.get(submissionId);
+            let doc;
+            if (cached && cached.pdf) {
+                const arrayBuffer = await cached.pdf.arrayBuffer();
+                doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            } else {
+                const url = API + '/articles/' + submissionId + '/pdf';
+                doc = await pdfjsLib.getDocument({ url, withCredentials: true }).promise;
+            }
 
             // Stale check: if user navigated away, discard
             if (gen !== loadGeneration) {
@@ -253,14 +305,19 @@
         els['html-content'].innerHTML = '<div class="qa-loading">Loading HTML...</div>';
 
         try {
-            const res = await fetch(API + '/articles/' + submissionId + '/html', { credentials: 'same-origin' });
-            if (gen !== loadGeneration) return;
-
-            if (!res.ok) {
-                els['html-content'].innerHTML = '<div class="qa-loading">HTML galley not available</div>';
-                return;
+            let html;
+            const cached = prefetchCache.get(submissionId);
+            if (cached && cached.html) {
+                html = cached.html;
+            } else {
+                const res = await fetch(API + '/articles/' + submissionId + '/html', { credentials: 'same-origin' });
+                if (gen !== loadGeneration) return;
+                if (!res.ok) {
+                    els['html-content'].innerHTML = '<div class="qa-loading">HTML galley not available</div>';
+                    return;
+                }
+                html = await res.text();
             }
-            const html = await res.text();
             if (gen !== loadGeneration) return;
 
             // Strip any script tags for safety (server CSP also blocks scripts)
@@ -297,10 +354,15 @@
         els['endmatter-items'].innerHTML = '';
 
         try {
-            const res = await fetch(API + '/articles/' + submissionId + '/classification', { credentials: 'same-origin' });
-            if (gen !== loadGeneration) return;
-
-            const data = await res.json();
+            let data;
+            const cached = prefetchCache.get(submissionId);
+            if (cached && cached.classification) {
+                data = cached.classification;
+            } else {
+                const res = await fetch(API + '/articles/' + submissionId + '/classification', { credentials: 'same-origin' });
+                if (gen !== loadGeneration) return;
+                data = await res.json();
+            }
             if (gen !== loadGeneration) return;
 
             renderClassification(data);
@@ -495,7 +557,87 @@
         if (counts.rejected) parts.push(counts.rejected + ' rejected');
         parts.push(counts.total + ' total');
         if (remaining > 0) parts.push(remaining + ' remaining');
-        els['qa-progress'].textContent = parts.join(' / ');
+
+        // Build as HTML with clickable status links
+        els['qa-progress'].innerHTML = '';
+        parts.forEach((part, i) => {
+            if (i > 0) els['qa-progress'].appendChild(document.createTextNode(' / '));
+            const span = document.createElement('span');
+            span.textContent = part;
+            // Make approved/rejected/remaining clickable to filter
+            if (part.includes('approved')) {
+                span.className = 'qa-progress-link';
+                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList('approved'); });
+            } else if (part.includes('rejected')) {
+                span.className = 'qa-progress-link';
+                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList('rejected'); });
+            } else if (part.includes('remaining')) {
+                span.className = 'qa-progress-link';
+                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList('unreviewed'); });
+            }
+            els['qa-progress'].appendChild(span);
+        });
+    }
+
+    function showFilteredList(status) {
+        const existing = document.querySelector('.qa-dashboard-overlay');
+        if (existing) existing.remove();
+
+        const label = status === 'unreviewed' ? 'Remaining' : status.charAt(0).toUpperCase() + status.slice(1);
+        const filtered = articles.filter(a => {
+            if (status === 'unreviewed') return a.status === 'unreviewed' || a.status === 'invalidated';
+            return a.status === status;
+        });
+
+        const overlay = document.createElement('div');
+        overlay.className = 'qa-dashboard-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        document.addEventListener('keydown', function dismiss(e) {
+            if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', dismiss); }
+        });
+
+        let html = '<div class="qa-dashboard">'
+            + '<div class="qa-dash-header">'
+            + '<h2>' + label + ' Articles (' + filtered.length + ')</h2>'
+            + '<button class="qa-dash-close" id="qa-dash-close">&times;</button>'
+            + '</div>'
+            + '<div class="qa-filtered-list">';
+
+        if (filtered.length === 0) {
+            html += '<p class="qa-filtered-empty">None</p>';
+        } else {
+            filtered.forEach(a => {
+                const comment = (a.comment && status === 'rejected') ? '<span class="qa-filtered-comment">' + escapeHtml(a.comment) + '</span>' : '';
+                html += '<div class="qa-filtered-item" data-sid="' + a.submission_id + '">'
+                    + '<span class="qa-filtered-title">'
+                    + a.volume + '.' + a.number + ' #' + a.seq + ' ' + escapeHtml(a.title)
+                    + '</span>'
+                    + comment
+                    + '</div>';
+            });
+        }
+
+        html += '</div></div>';
+        overlay.innerHTML = html;
+        document.body.appendChild(overlay);
+
+        // Close button
+        const closeBtn = overlay.querySelector('#qa-dash-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => overlay.remove());
+
+        // Click article to navigate
+        overlay.querySelectorAll('.qa-filtered-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const sid = parseInt(item.dataset.sid, 10);
+                const idx = articles.findIndex(a => a.submission_id === sid);
+                if (idx >= 0) {
+                    overlay.remove();
+                    loadArticle(idx);
+                }
+            });
+        });
     }
 
     function recalculateProgress() {
