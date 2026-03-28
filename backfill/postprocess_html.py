@@ -39,6 +39,12 @@ MIN_ABSTRACT_LENGTH = 30
 # Shortest legitimate article is ~200 chars. 100 catches broken
 # extractions while allowing very short book reviews.
 SHORT_CONTENT_THRESHOLD = 100
+# Avoid matching single words or fragments
+MIN_TARGET_TEXT_LEN = 5
+# Title block should be roughly title-length, not longer
+TITLE_BLOCK_MAX_RATIO = 2
+# Require matching at least half the title words
+TITLE_WORD_MATCH_RATIO = 0.5
 
 
 def _clean(text):
@@ -103,7 +109,7 @@ def _find_block_by_text(html, target_text, search_start=0, search_end=None):
     Uses ordered word-sequence matching (no threshold).
     Returns (start_pos, end_pos) of the matching block, or (None, None).
     """
-    if not target_text or len(target_text) < 5:
+    if not target_text or len(target_text) < MIN_TARGET_TEXT_LEN:
         return None, None
     if search_end is None:
         search_end = len(html)
@@ -173,7 +179,7 @@ def strip_title(html, title):
         # Only consume if: block has title word overlap AND is short
         # enough to be a title/subtitle element (not a body paragraph).
         # A title block should be roughly title-length, not 10x longer.
-        is_title_sized = len(block_text) <= title_len * 2
+        is_title_sized = len(block_text) <= title_len * TITLE_BLOCK_MAX_RATIO
         is_heading = block.group().startswith('<h')
 
         if overlap and (is_title_sized or is_heading):
@@ -182,7 +188,7 @@ def strip_title(html, title):
         else:
             break
 
-    if matched_words and len(matched_words) > len(title_words) // 2:
+    if matched_words and len(matched_words) > len(title_words) * TITLE_WORD_MATCH_RATIO:
         html = html[best_end:].lstrip()
 
     return html
@@ -211,7 +217,7 @@ def strip_authors(html, authors):
 def strip_conference_note(html):
     """Remove 'Based on (a) presentation/keynote...' lines."""
     html = re.sub(
-        r'<p[^>]*>\s*(?:<em>)?\s*Based on (?:a )?(?:keynote )?presentation\s.*?</p>\s*',
+        r'<p[^>]*>\s*(?:<em>)?\s*Based\s+on\s+(?:a\s+)?(?:keynote\s+)?presentation\b.*?</p>\s*',
         '', html, count=1, flags=re.DOTALL | re.IGNORECASE
     )
     return html
@@ -463,7 +469,7 @@ def _strip_toc_prefixes(title):
         r'^(Book Reviews?|Film Review|Exhibition Report|Poem'
         r'|Personally Speaking|Obituary|Essay Review'
         r'|Letter to the Editors?|Responses?( to)?'
-        r'|Prof\.?|Professor)\s*:?\s*',
+        r'|Professor|Prof\.?)\s*:?\s*',
         '', title, flags=re.IGNORECASE
     ).strip()
     title = re.sub(
@@ -474,10 +480,12 @@ def _strip_toc_prefixes(title):
     return title
 
 
-def _title_in_text(title, text):
+def _title_in_text_fuzzy(title, text):
     """Check if title appears in text using fuzzy matching.
 
-    Substring match or 80% word overlap (handles line breaks, fused words).
+    Uses substring match or 80% word overlap — different from the ordered-
+    sequence _title_in_text used elsewhere, because verification needs to
+    tolerate PDF extraction artefacts (fused words, reordered fragments).
     """
     clean_title = _clean(title)
     clean_text = _clean(text)
@@ -506,14 +514,14 @@ def verify_postprocessed(raw_html, final_html, article):
     final_text = _strip_tags(final_html)
 
     # CHECK 1: Title must appear in raw HTML (Haiku extracted the right content)
-    if stripped_title and not _title_in_text(stripped_title, raw_text):
+    if stripped_title and not _title_in_text_fuzzy(stripped_title, raw_text):
         # Fallback for letters/editorials: accept section heading
         if not any(h in raw_text.lower() for h in _SECTION_HEADINGS):
             warnings.append(f'TITLE_NOT_IN_RAW: "{stripped_title[:50]}" not found in raw HTML')
 
     # CHECK 2: For book reviews, the book title SHOULD be in final HTML
     if is_book_review and stripped_title:
-        if not _title_in_text(stripped_title, final_text):
+        if not _title_in_text_fuzzy(stripped_title, final_text):
             warnings.append(f'BOOK_TITLE_MISSING: "{stripped_title[:50]}" not in final HTML')
 
     # CHECK 3: Final HTML should not be empty

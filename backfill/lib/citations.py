@@ -237,10 +237,13 @@ NOTE_MAX_SENTENCES = 2
 NOTE_LONG_TEXT = 350
 #
 # REF_MIN_TITLE_WORDS: after stripping author(s) and year, the remainder
-# must have at least 1 word that looks like a title. Prevents matching
-# on author-name-only fragments. Set to 1 because minimal references
-# like "Author. Title. Place. Year" legitimately have 1 title word.
+# must have at least 1 word with 3+ characters that looks like a title.
+# Prevents matching on author-name-only fragments like 'Smith, J. 1995'.
 REF_MIN_TITLE_WORDS = 1
+#
+# SUBLABEL_MAX_LENGTH: section sublabels like 'English-language references:'
+# are typically 10-50 chars. Longer text is prose.
+SUBLABEL_MAX_LENGTH = 50
 
 # ---------------------------------------------------------------
 # Confidence scoring (informational, for review/QA)
@@ -516,7 +519,6 @@ def is_author_bio(text: str) -> bool:
 
 def is_section_sublabel(text: str) -> bool:
     """Detect section sub-labels like 'English-language references:' within back-matter."""
-    SUBLABEL_MAX_LENGTH = 50
     return len(text) < SUBLABEL_MAX_LENGTH and text.rstrip().endswith(':')
 
 
@@ -675,7 +677,6 @@ def is_reference(text: str) -> bool:
     # Long texts: require author-like start + year to avoid classifying
     # body paragraphs as references. Accept multiple author formats:
     # "Surname, I. (YYYY)", "Surname I. and Surname, I. (YYYY)", etc.
-    LONG_REF_THRESHOLD = 300
     if len(clean) > LONG_REF_THRESHOLD:
         has_author_year_start = bool(re.match(
             r'^[A-ZÀ-Ž][a-zà-ž\u015b\u0107\u017c\u0142\u0144]+[,\s]+[A-Z]\.?.*?\(\d{4}\)',
