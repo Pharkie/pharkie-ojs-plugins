@@ -12,6 +12,12 @@
 - **No raw SQL in plugin code.** Plugins use their respective frameworks (WordPress HTTP API, OJS DAOs/services, REST endpoints). Direct DB queries are only acceptable in setup/migration scripts (dev environment bootstrapping), never in runtime plugin code.
 - **Setup scripts are infrastructure automation** — they bootstrap dev/staging environments with direct DB calls where APIs don't exist (OJS subscription types, plugin settings). This is acceptable because they run once, not on every request.
 
+## Backfill pipeline rules
+
+- **Haiku prompt is frozen.** Once the extraction prompt produces good raw HTML, never modify it. All content fixes go in `postprocess_html.py`.
+- **No magic numbers.** Thresholds must be named constants (e.g. `MATCH_THRESHOLD`). Search boundaries must use structural landmarks (e.g. "up to the first body heading"), not arbitrary percentages like "first 20% of HTML".
+- **Raw HTML is preserved.** `htmlgen.py` saves `.raw.html` (full extraction) and `.html` (post-processed). Post-processing can be rerun from raw without API calls.
+
 ## Don't
 
 - Modify OJS source code
