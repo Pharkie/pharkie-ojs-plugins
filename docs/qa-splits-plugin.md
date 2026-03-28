@@ -167,11 +167,36 @@ Articles without a publisher-id in their JATS file are flagged as warnings in th
 
 - All endpoints verify Manager or Site Admin role via OJS session auth
 - Per-article endpoints validate `context_id` (IDOR protection)
-- HTML galley rendered in a sandboxed `<iframe sandbox="allow-same-origin">` (XSS protection)
+- HTML galley script tags stripped client-side before rendering
 - HTML endpoint returns `Content-Security-Policy: script-src 'none'`
 - CSRF token validated on review submission
 - File paths validated with `realpath()` to prevent traversal
 - Rejection comments limited to 5000 characters
+
+## CLI Flagging Tool
+
+`backfill/qa_flag.py` lets you flag articles as problem cases from the command line (e.g. from another Claude session) without needing the browser UI. Flagged articles appear in the "Next Problem" navigation.
+
+Articles can be specified three ways:
+- **Backfill path**: `29.2/03-on-the-phenomenon` (looks up publisher-id from JATS)
+- **Submission ID**: `9494` (direct)
+- **Title search**: `"embracing vulnerability"` (searched in OJS DB, must match exactly 1)
+
+```bash
+# Flag an article:
+python3 backfill/qa_flag.py 29.2/03-on-the-phenomenon "references mixed with notes"
+python3 backfill/qa_flag.py 9494 "bad split on page 5"
+python3 backfill/qa_flag.py "embracing vulnerability" "footnotes in wrong section"
+
+# Flag on live:
+python3 backfill/qa_flag.py --target live 9494 "needs re-review"
+
+# List current flags:
+python3 backfill/qa_flag.py --list
+
+# Clear a flag:
+python3 backfill/qa_flag.py --clear 9494
+```
 
 ## E2E Tests
 
