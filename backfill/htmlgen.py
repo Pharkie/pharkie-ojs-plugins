@@ -298,7 +298,10 @@ def collect_articles(toc_paths, article_filter=None):
             if idx > 0:
                 article['_prev_title'] = all_articles[idx - 1].get('title', '')
             if idx < len(all_articles) - 1:
-                article['_next_title'] = all_articles[idx + 1].get('title', '')
+                nxt = all_articles[idx + 1]
+                article['_next_title'] = nxt.get('title', '')
+                article['_next_page_start'] = nxt.get('pdf_page_start')
+                article['_next_page_end'] = nxt.get('pdf_page_end')
             articles.append((toc_path, vol, iss, idx, article))
     return articles
 

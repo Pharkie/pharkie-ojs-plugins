@@ -143,9 +143,10 @@ def strip_start_bleed(html, own_title):
 def strip_title(html, title):
     """Remove the article's own title from the HTML.
 
-    Handles multi-element titles (h1/h2 + subtitle paragraphs). Removes
-    consecutive blocks from the top whose words collectively form an
-    ordered subsequence of the title. Stops when a block has no title words.
+    Handles multi-element titles (h1/h2 + subtitle paragraphs). Only
+    consumes blocks from the top that are short enough to be title/subtitle
+    elements (headings or short paragraphs). Stops at the first long
+    body paragraph regardless of word overlap.
     """
     if not title:
         return html
@@ -153,12 +154,14 @@ def strip_title(html, title):
     if not title_clean:
         return html
 
-    # Look at blocks from the start of the HTML — title is always first
+    title_words = set(title_clean.split())
+    title_len = len(title_clean)
+
+    # Look at blocks from the start of the HTML
     blocks = list(re.finditer(r'<(h[1-6]|p)[^>]*>.*?</\1>', html, re.DOTALL))
     if not blocks:
         return html
 
-    title_words = set(title_clean.split())
     best_end = 0
     matched_words = set()
 
@@ -166,13 +169,19 @@ def strip_title(html, title):
         block_text = _clean(_strip_tags(block.group()))
         block_words = set(block_text.split())
         overlap = title_words & block_words
-        if overlap:
+
+        # Only consume if: block has title word overlap AND is short
+        # enough to be a title/subtitle element (not a body paragraph).
+        # A title block should be roughly title-length, not 10x longer.
+        is_title_sized = len(block_text) <= title_len * 2
+        is_heading = block.group().startswith('<h')
+
+        if overlap and (is_title_sized or is_heading):
             matched_words |= overlap
             best_end = block.end()
         else:
             break
 
-    # Require that we matched most of the title words
     if matched_words and len(matched_words) > len(title_words) // 2:
         html = html[best_end:].lstrip()
 
@@ -267,40 +276,110 @@ def strip_end_bleed(html, next_title):
 # Book review post-processing
 # ---------------------------------------------------------------
 
-def extract_book_review(html, book_title, next_book_title=None, reviewer=None):
-    """Extract a single book review from full-page HTML extraction."""
+def _find_book_publication_details(html, book_title, search_start=0):
+    """Find where a book review's publication details start.
+
+    Looks for the book title in a block that also contains publication
+    markers (publisher, year, page count, price). This distinguishes
+    the actual review from an editorial intro that merely mentions the title.
+
+    Returns (start_pos, end_pos) or (None, None).
+    """
+    clean_book = re.sub(r'^Book Review:\s*', '', book_title, flags=re.IGNORECASE)
+    # Handle multi-book reviews: "Title A / Title B" — match either part
+    book_parts = [p.strip() for p in clean_book.split('/') if p.strip()]
+    rx_parts = [_text_to_regex(p) for p in book_parts if p]
+    rx_parts = [r for r in rx_parts if r is not None]
+    if not rx_parts:
+        return None, None
+
+    # Publication detail markers: publisher names, year in parens, pp, price
+    pub_markers = re.compile(
+        r'(?:\d{4}|pp\.?\s*\d|ISBN|\$|£|Routledge|Sage|Springer|Press|'
+        r'Publisher|Continuum|Wiley|Penguin|Karnac|Palgrave|Norton|'
+        r'Oxford|Cambridge|London|New York|Duckworth|Blackwell)', re.IGNORECASE)
+
+    for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
+        block_text = _clean(_strip_tags(m.group()))
+        raw_block = _strip_tags(m.group())
+        # Does this block contain the book title?
+        has_title = any(rx.search(block_text) for rx in rx_parts)
+        if not has_title:
+            continue
+        # Does it also have publication markers (or is it very short like a heading)?
+        has_pub = bool(pub_markers.search(raw_block))
+        is_short_heading = len(block_text.split()) <= 10
+        if has_pub or is_short_heading:
+            return (search_start + m.start(), search_start + m.end())
+
+    # Fallback: just find the title block without requiring pub markers
+    for part_rx in rx_parts:
+        for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
+            block_text = _clean(_strip_tags(m.group()))
+            if part_rx.search(block_text):
+                return (search_start + m.start(), search_start + m.end())
+
+    return None, None
+
+
+def extract_book_review(html, book_title, next_book_title=None, reviewer=None,
+                        is_combined_review=False):
+    """Extract a single book review from full-page HTML extraction.
+
+    Handles:
+    - Editorial intros that mention book titles before the actual reviews
+    - Multi-book reviews ("Title A / Title B" in one piece)
+    - Combined reviews (consecutive entries sharing same pages)
+    - Shared pages with adjacent reviews
+
+    For combined reviews (is_combined_review=True), the "next" title is
+    the first non-combined review, not the next entry in the same group.
+    """
     if not book_title:
         return html
 
-    # Strip "Book Review:" prefix for matching
-    clean_book = re.sub(r'^Book Review:\s*', '', book_title, flags=re.IGNORECASE)
-
-    # Find the target book title
-    start, _ = _find_block_by_text(html, clean_book)
-    if start is None:
-        # Try harder — search for first few significant words
-        words = [w for w in _clean(clean_book).split() if len(w) > 3][:4]
-        if words:
-            pattern = r'<(p|h[1-6])[^>]*>[^<]*' + r'[^<]*'.join(re.escape(w) for w in words) + r'[^<]*</\1>'
-            m = re.search(pattern, html.lower())
-            if m:
-                start = m.start()
+    # Find the actual review start (publication details, not editorial mention)
+    start, _ = _find_book_publication_details(html, book_title)
 
     if start is None:
         return html
 
     # Find where this review ends
     review_end = len(html)
-    if next_book_title:
-        clean_next = re.sub(r'^Book Review:\s*', '', next_book_title, flags=re.IGNORECASE)
-        # Search for next book after the current title block (skip past it)
-        _, current_end = _find_block_by_text(html, clean_book, search_start=start)
-        search_after = current_end if current_end else start + len(clean_book)
-        next_start, _ = _find_block_by_text(html, clean_next, search_start=search_after)
+    if next_book_title and not is_combined_review:
+        next_start, _ = _find_book_publication_details(html, next_book_title, search_start=start + 1)
         if next_start is not None:
             review_end = next_start
 
     return html[start:review_end].strip()
+
+
+# ---------------------------------------------------------------
+# Editorial post-processing
+# ---------------------------------------------------------------
+
+def postprocess_editorial(html, article):
+    """Post-process an editorial: strip title, keep body."""
+    html = strip_start_bleed(html, article.get('title', ''))
+    html = strip_title(html, article.get('title', ''))
+    html = strip_authors(html, article.get('authors', ''))
+    html = strip_end_bleed(html, article.get('_next_title', ''))
+    return html
+
+
+def postprocess_book_review_editorial(html, article):
+    """Post-process a book review editorial (section intro).
+
+    Strip the "BOOK REVIEWS" heading, keep the editorial body.
+    """
+    html = strip_start_bleed(html, article.get('title', ''))
+    # Remove "BOOK REVIEWS" heading
+    html = re.sub(
+        r'<h[1-3][^>]*>\s*BOOK\s+REVIEWS?\s*</h[1-3]>\s*',
+        '', html, count=1, flags=re.IGNORECASE
+    )
+    html = strip_end_bleed(html, article.get('_next_title', ''))
+    return html
 
 
 # ---------------------------------------------------------------
@@ -309,6 +388,12 @@ def extract_book_review(html, book_title, next_book_title=None, reviewer=None):
 
 def postprocess_article(html, article, pdf_path=None):
     """Run the full post-processing pipeline on raw HTML.
+
+    Routes to the appropriate pipeline based on article section type:
+    - Articles: strip title, authors, abstract, keywords, conference note, bleed
+    - Book Reviews: extract target review from shared pages
+    - Editorial: strip title, keep body
+    - Book Review Editorial: strip heading, keep editorial body
 
     Args:
         html: raw HTML from Haiku (full extraction)
@@ -320,16 +405,30 @@ def postprocess_article(html, article, pdf_path=None):
     if '<!-- AUTO-EXTRACTED:' in html[:100]:
         return html
 
-    is_book_review = article.get('section', '') in ('Book Reviews', 'Book Review')
+    section = article.get('section', '')
 
-    if is_book_review:
+    if section in ('Book Reviews', 'Book Review'):
+        # Detect combined reviews: consecutive book review entries that overlap
+        # in page range. These are one review covering multiple books —
+        # don't cut at the next entry's title.
+        is_combined = (
+            article.get('pdf_page_start') is not None
+            and article.get('_next_page_start') is not None
+            and article.get('_next_page_start') <= article.get('pdf_page_end', -1)
+        )
         html = extract_book_review(
             html,
             book_title=article.get('title', ''),
             next_book_title=article.get('_next_title', ''),
             reviewer=article.get('reviewer', ''),
+            is_combined_review=is_combined,
         )
+    elif section == 'Book Review Editorial':
+        html = postprocess_book_review_editorial(html, article)
+    elif section == 'Editorial':
+        html = postprocess_editorial(html, article)
     else:
+        # Standard article
         html = strip_start_bleed(html, article.get('title', ''))
         html = strip_title(html, article.get('title', ''))
         html = strip_authors(html, article.get('authors', ''))
