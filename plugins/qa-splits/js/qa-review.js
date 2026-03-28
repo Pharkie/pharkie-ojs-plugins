@@ -276,26 +276,46 @@
         const scale = containerWidth / viewport.width;
         const scaledViewport = page.getViewport({ scale });
 
+        // Wrapper holds canvas + text layer in position
+        const wrapper = document.createElement('div');
+        wrapper.className = 'qa-pdf-page';
+        wrapper.dataset.page = pageNum;
+        wrapper.style.width = scaledViewport.width + 'px';
+        wrapper.style.height = scaledViewport.height + 'px';
+
         const canvas = document.createElement('canvas');
-        canvas.dataset.page = pageNum;
         canvas.width = scaledViewport.width;
         canvas.height = scaledViewport.height;
+        wrapper.appendChild(canvas);
 
-        els['pdf-container'].appendChild(canvas);
+        // Text layer for selectable/copyable text
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'qa-pdf-text-layer';
+        wrapper.appendChild(textLayerDiv);
+
+        els['pdf-container'].appendChild(wrapper);
 
         const ctx = canvas.getContext('2d');
         await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+
+        // Render text layer
+        const textContent = await page.getTextContent();
+        pdfjsLib.renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: scaledViewport,
+        });
     }
 
     function updatePageIndicator() {
         const container = els['pdf-container'];
-        const canvases = container.querySelectorAll('canvas');
+        const pages = container.querySelectorAll('.qa-pdf-page');
         const scrollTop = container.scrollTop;
         let currentPage = 1;
 
-        canvases.forEach((canvas) => {
-            if (canvas.offsetTop <= scrollTop + 50) {
-                currentPage = parseInt(canvas.dataset.page, 10);
+        pages.forEach((page) => {
+            if (page.offsetTop <= scrollTop + 50) {
+                currentPage = parseInt(page.dataset.page, 10);
             }
         });
 
