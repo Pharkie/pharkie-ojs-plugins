@@ -134,9 +134,8 @@ test.describe('QA Splits plugin', () => {
     expect(title).toBeTruthy();
     expect(title).not.toBe('Loading...');
 
-    // Issue info should be present
-    const issue = await page.locator('#qa-issue').textContent();
-    expect(issue).toMatch(/Vol \d+ No \d+/);
+    // Title should include issue prefix (e.g. "37.1 #0 (2026) Article Title [editorial]")
+    expect(title).toMatch(/\d+\.\d+ #\d+ \(\d{4}\) /);
 
     // Status badge should be visible
     await expect(page.locator('#qa-status')).toBeVisible();
