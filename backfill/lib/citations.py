@@ -212,6 +212,11 @@ REF_MIN_TITLE_WORDS = 3      # References must have at least N title words after
 # ---------------------------------------------------------------
 # Confidence scoring (informational, for review/QA)
 # ---------------------------------------------------------------
+# These scoring functions produce a 0-100 confidence score for QA review.
+# They do NOT control matching or categorisation — that's done by
+# is_reference, is_note, is_author_bio, which use the named constants
+# above. The numeric weights here (+12, -15, etc.) are heuristic tuning
+# for a diagnostic score, not behavioural thresholds.
 
 def citation_confidence(text: str, heading: str) -> int:
     """Score 0-100 how confident we are this is a single, clean citation."""
