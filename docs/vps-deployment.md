@@ -34,6 +34,24 @@ OJS and WordPress both run PHP — they benefit from CPU and RAM more than disk.
 
 ---
 
+## Security hardening
+
+`provision-vps.sh` (run via `deploy.sh --provision`) applies OS-level hardening automatically. All steps are idempotent.
+
+| What | How | Detail |
+|---|---|---|
+| SSH hardening | Drop-in config `/etc/ssh/sshd_config.d/hardening.conf` | Password auth disabled, root login key-only, MaxAuthTries 3, idle timeout 10 min |
+| fail2ban | Default install + enable | Protects SSH against brute force. Docker services not covered (logs not in host syslog). |
+| Unattended upgrades | `unattended-upgrades` package | Security-only patches applied automatically (Ubuntu 24.04 default). |
+| Host firewall (ufw) | Allow 22, 80, 443, 8080, 8081; default deny | Backup to Hetzner cloud firewall. |
+
+To verify after provisioning:
+```bash
+ssh root@$IP "systemctl status fail2ban --no-pager; ufw status; cat /etc/ssh/sshd_config.d/hardening.conf"
+```
+
+---
+
 ## Scripts
 
 All scripts run **from your local machine** (or devcontainer) via SSH to the VPS. Nothing needs to be installed on the VPS beyond Docker and Git.
