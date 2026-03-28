@@ -955,7 +955,7 @@ body {
 .qa-filtered-comment {
     font-family: var(--font-ui);
     font-size: 14px;
-    color: var(--text-secondary);
+    color: var(--color-reject);
     margin-top: 2px;
 }
 
