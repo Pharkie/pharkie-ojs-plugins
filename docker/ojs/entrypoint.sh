@@ -21,6 +21,21 @@ VARS="$VARS "'$WPOJS_WP_MEMBER_URL $WPOJS_SUPPORT_EMAIL'
 # UI messages are stored in plugin_settings (DB), not config.inc.php.
 # See setup-ojs.sh for how instance-specific defaults are written.
 
+# Wait for the database to be ready before checking install status.
+# On server reboot, containers start simultaneously — OJS can beat the DB.
+echo "[OJS] Waiting for database..."
+for i in $(seq 1 30); do
+  if mysql --skip-ssl -h "$OJS_DB_HOST" -u "$OJS_DB_USER" -p"$OJS_DB_PASSWORD" "$OJS_DB_NAME" \
+      -e "SELECT 1" &>/dev/null; then
+    echo "[OJS] Database ready."
+    break
+  fi
+  if [ "$i" = "30" ]; then
+    echo "[OJS] ERROR: Database not ready after 60s. Proceeding without install."
+  fi
+  sleep 2
+done
+
 # Check the DATABASE to determine if OJS is already installed.
 # Don't trust the config file — it gets overwritten by the template on every start.
 NEEDS_INSTALL=true
@@ -60,6 +75,17 @@ APACHE
 fi
 chown www-data:www-data "$CONFIG" 2>/dev/null || true
 chmod 640 "$CONFIG"
+
+# Fix cache directories — Laravel's file cache writes to cache/opcache/XX/XX/
+# (hex-prefixed subdirectories). These don't survive container restart because the
+# ojs_data volume only has the base content. Pre-create all 256 two-char hex dirs.
+mkdir -p /var/www/html/cache/opcache
+for prefix in $(printf '%02x\n' $(seq 0 255)); do
+  mkdir -p "/var/www/html/cache/opcache/$prefix"
+done
+# Fix ownership — CLI tools or cron running as root can create
+# subdirectories owned by root, preventing Apache (www-data) from writing.
+chown -R www-data:www-data /var/www/html/cache 2>/dev/null || true
 
 # Auto-install in background (after Apache starts)
 if [ "$NEEDS_INSTALL" = true ]; then
