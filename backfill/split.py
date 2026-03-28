@@ -58,12 +58,14 @@ def _title_matches_text(title, text):
     return found / len(title_words) >= 0.8
 
 
-def title_in_split_pdf(pdf_path, title):
-    """Check if the article title appears anywhere in the split PDF.
+def title_in_split_pdf(pdf_path, title, section=''):
+    """Check if the article title appears on page 1 of the split PDF.
 
-    Checks all pages (not just page 1) because shared-page articles
-    may start on the previous article's last page. Returns True if
-    the title is found on any page within the first 5 pages.
+    If not on page 1, the split start page is wrong. Uses fuzzy matching
+    with prefix stripping for toc.json conventions.
+
+    For letters/editorials where the toc.json title may not appear in the
+    PDF at all, falls back to checking for the section heading.
     """
     if not title:
         return True  # Can't check without a title
@@ -71,29 +73,45 @@ def title_in_split_pdf(pdf_path, title):
     if len(doc) == 0:
         doc.close()
         return False
+    page1_text = doc[0].get_text()
+    doc.close()
 
-    # Strip toc.json prefixes that don't appear in the PDF
+    # Strip toc.json prefixes that don't appear in the PDF.
+    # Applied repeatedly to handle chained prefixes like "Obituary: Professor X"
     title = re.sub(
         r'^(Book Reviews?|Film Review|Exhibition Report|Poem'
         r'|Personally Speaking|Obituary|Essay Review'
         r'|Letter to the Editors?|Responses?( to)?'
-        r'|Prof(\.|essor)?)\s*:?\s*',
+        r'|Prof\.?|Professor)\s*:?\s*',
+        '', title, flags=re.IGNORECASE
+    ).strip()
+    # Second pass for chained prefixes (e.g. "Obituary: Professor X" -> "X")
+    title = re.sub(
+        r'^(Professor|Prof\.?)\s*:?\s*',
         '', title, flags=re.IGNORECASE
     ).strip()
 
-    # Also strip "(second review)" etc. — parenthetical suffixes not in PDF
-    title = re.sub(r'\s*\([^)]*review[^)]*\)\s*$', '', title, flags=re.IGNORECASE)
+    # Strip trailing parentheticals — "(second review)", "(with author response)", etc.
+    # These are toc.json annotations not present in the PDF
+    title = re.sub(r'\s*\([^)]+\)\s*$', '', title)
 
-    # Check all pages — book reviews on shared pages may have
-    # the title deep in the PDF
-    pages_to_check = len(doc)
-    for i in range(pages_to_check):
-        page_text = doc[i].get_text()
-        if _title_matches_text(title, page_text):
-            doc.close()
+    # Primary check: title on page 1
+    if _title_matches_text(title, page1_text):
+        return True
+
+    # Fallback for letters/editorials: the toc.json title may be descriptive
+    # (e.g. "Response to Henderson's Review") while the PDF just has a section
+    # heading like "LETTERS TO THE EDITORS". Accept if the section heading appears.
+    SECTION_HEADINGS = {
+        'letters to the editors', 'letters to the editor', 'letter to the editors',
+        'letter to the editor', 'letters', 'editorial', 'book reviews',
+        'book review editorial', 'obituary',
+    }
+    page1_lower = page1_text.lower()
+    for heading in SECTION_HEADINGS:
+        if heading in page1_lower:
             return True
 
-    doc.close()
     return False
 
 
