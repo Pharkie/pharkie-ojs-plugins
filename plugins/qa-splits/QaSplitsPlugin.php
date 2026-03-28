@@ -36,6 +36,7 @@ class QaSplitsPlugin extends GenericPlugin
         }
 
         Hook::add('LoadHandler', $this->handlePageRequest(...));
+        Hook::add('TemplateManager::display', $this->addDashboardLink(...));
 
         return $success;
     }
@@ -53,6 +54,72 @@ class QaSplitsPlugin extends GenericPlugin
     public function getDescription()
     {
         return __('plugins.generic.qaSplits.description');
+    }
+
+    /**
+     * Add "Open QA Splits" action in the plugin's admin listing.
+     */
+    public function getActions($request, $actionArgs)
+    {
+        $actions = parent::getActions($request, $actionArgs);
+        if (!$this->getEnabled()) return $actions;
+
+        $qaUrl = $request->getBaseUrl() . '/index.php/'
+            . ($request->getContext() ? $request->getContext()->getPath() : '')
+            . '/qa-splits';
+
+        array_unshift($actions,
+            new \PKP\linkAction\LinkAction(
+                'openQaSplits',
+                new \PKP\linkAction\request\OpenWindowAction($qaUrl),
+                'Open QA Splits'
+            ),
+        );
+
+        return $actions;
+    }
+
+    /**
+     * Inject a link to QA Splits on the OJS dashboard/submissions page.
+     */
+    public function addDashboardLink(string $hookName, array $args): bool
+    {
+        $templateMgr = $args[0];
+        $template = $args[1] ?? '';
+
+        // Only add on the submissions/dashboard pages
+        if (!str_contains($template, 'dashboard') && !str_contains($template, 'submissions')) {
+            return Hook::CONTINUE;
+        }
+
+        $request = Application::get()->getRequest();
+        $user = $request->getUser();
+        if (!$user || !$this->userIsManager($user, $request)) {
+            return Hook::CONTINUE;
+        }
+
+        $qaUrl = $request->getBaseUrl() . '/index.php/'
+            . ($request->getContext() ? $request->getContext()->getPath() : '')
+            . '/qa-splits';
+
+        $templateMgr->addHeader('qa-splits-link', '
+            <style>
+            .qa-splits-dashboard-link {
+                position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+                background: #1a1a1e; color: #faf8f4; padding: 10px 18px;
+                border-radius: 6px; font-size: 13px; font-weight: 600;
+                text-decoration: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                transition: background 0.15s;
+            }
+            .qa-splits-dashboard-link:hover { background: #2a2a30; color: #faf8f4; }
+            </style>
+            <a href="' . htmlspecialchars($qaUrl) . '" class="qa-splits-dashboard-link" target="_blank">
+                QA Splits
+            </a>
+        ');
+
+        return Hook::CONTINUE;
     }
 
     /**
@@ -75,9 +142,9 @@ class QaSplitsPlugin extends GenericPlugin
         }
 
         if (!$this->userIsManager($user, $request)) {
-            header('HTTP/1.1 403 Forbidden');
-            echo 'Access denied. Journal Manager or Site Admin role required.';
-            exit;
+            // Redirect to dashboard with a message rather than a bare 403
+            $request->redirect(null, 'dashboard');
+            return true;
         }
 
         $this->serveQaPage($request);
