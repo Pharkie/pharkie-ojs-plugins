@@ -38,10 +38,7 @@
     function init() {
         elIds.forEach(id => els[id] = document.getElementById(id));
 
-        els['qa-authors'].setAttribute('data-label', 'Authors:');
-        els['qa-section'].setAttribute('data-label', 'Section:');
-        els['qa-issue'].setAttribute('data-label', 'Issue:');
-        els['qa-pages'].setAttribute('data-label', 'ID:');
+        // No labels — metadata is self-evident from context
 
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = PLUGIN_URL + '/js/pdf.worker.min.js';
@@ -140,12 +137,15 @@
         localStorage.setItem('qa-last-seen', article.submission_id);
         lastSeenId = article.submission_id;
 
-        // Update metadata
-        els['qa-title'].textContent = article.title;
-        els['qa-authors'].textContent = article.authors.join(', ');
-        els['qa-section'].textContent = article.section;
-        els['qa-issue'].textContent = 'Vol ' + article.volume + ' No ' + article.number + ' (' + article.year + ')';
-        els['qa-pages'].textContent = '#' + article.submission_id;
+        // Compact title: 37.1 #14 (2026) Title [section]
+        const sectionTag = article.section ? ' [' + article.section.toLowerCase() + ']' : '';
+        els['qa-title'].textContent = article.volume + '.' + article.number
+            + ' #' + article.seq + ' (' + article.year + ') '
+            + article.title + sectionTag;
+        els['qa-authors'].textContent = article.authors.length ? 'by ' + article.authors.join(', ') : '';
+        els['qa-section'].textContent = '';
+        els['qa-issue'].textContent = '';
+        els['qa-pages'].textContent = 'ID ' + article.submission_id;
 
         updateStatusBadge(article.status, article.reviewer, article.reviewed_at, article.comment);
         hideRejectInput();
@@ -472,8 +472,10 @@
 
         let label = status.charAt(0).toUpperCase() + status.slice(1);
         if (reviewer && reviewedAt) {
-            const date = new Date(reviewedAt).toLocaleDateString();
-            label += ' by ' + reviewer + ' on ' + date;
+            const d = new Date(reviewedAt);
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const date = String(d.getDate()).padStart(2,'0') + months[d.getMonth()] + String(d.getFullYear()).slice(2);
+            label += ' ' + date;
         }
         badge.textContent = label;
         badge.title = comment || '';

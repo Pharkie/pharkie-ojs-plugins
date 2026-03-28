@@ -27,13 +27,16 @@
     --text-inverse: #faf8f4;
     --text-inverse-muted: #b0aca6;
 
-    /* Accent — a warm editorial red */
-    --accent-red: #c03a2b;
-    --accent-red-hover: #a8311f;
-    --accent-green: #2d7a4f;
-    --accent-green-hover: #236840;
-    --accent-amber: #b8860b;
-    --accent-amber-hover: #9a7009;
+    /* Semantic colours — only used for their meaning */
+    --color-reject: #c03a2b;
+    --color-reject-hover: #a8311f;
+    --color-approve: #2d7a4f;
+    --color-approve-hover: #236840;
+    --color-warn: #b8860b;
+
+    /* UI accent — for focus rings, active states, branding (NOT semantic) */
+    --accent: #5a7a9b;
+    --accent-hover: #4a6a8b;
 
     /* Category pills — each a distinct voice */
     --pill-ref-bg: #1e3a5f;
@@ -93,76 +96,68 @@ body {
     gap: 0;
 }
 
-/* ── Top pane — dark editorial bar ── */
+/* ── Top bar — single row ── */
 
 .qa-top {
     grid-column: 1 / -1;
     background: var(--surface-dark);
     color: var(--text-inverse);
-    padding: 10px 20px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    border-bottom: 3px solid var(--accent-red);
-}
-
-.qa-meta {
-    flex: 1;
-    min-width: 200px;
-}
-
-.qa-meta-primary {
+    padding: 6px 12px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 5px;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    overflow-x: auto;
+}
+
+.qa-app-name {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-inverse-muted);
+    flex-shrink: 0;
 }
 
 .qa-title {
     font-family: var(--font-display);
-    font-size: 17px;
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: -0.01em;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 400px;
     flex-shrink: 1;
-    min-width: 120px;
+    min-width: 80px;
 }
 
-.qa-meta-secondary {
+.qa-authors {
+    font-family: var(--font-ui);
     font-size: 12px;
     color: var(--text-inverse-muted);
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    font-weight: 400;
-    letter-spacing: 0.02em;
+    white-space: nowrap;
+    flex-shrink: 10;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
-.qa-meta-secondary span:not(:empty)::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: var(--text-inverse);
-    margin-right: 5px;
-    text-transform: uppercase;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-}
+.qa-spacer { flex: 1; }
+
 
 /* ── Status badges ── */
 
 .qa-badge {
     display: inline-block;
-    padding: 3px 12px;
+    padding: 2px 8px;
     border-radius: 3px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .qa-badge-approved    { background: var(--badge-approved-bg);    color: var(--badge-approved-text); }
@@ -172,44 +167,29 @@ body {
 
 /* ── Controls ── */
 
-.qa-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.qa-review-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding-right: 10px;
-    border-right: 1px solid rgba(255,255,255,0.15);
-}
-
 .qa-btn-wrap {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    flex-shrink: 0;
 }
 
 .qa-feedback {
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     opacity: 0;
-    transition: opacity 0.3s;
-    height: 14px;
+    height: 0;
 }
 
-.qa-feedback-approve { color: var(--accent-green); }
-.qa-feedback-reject { color: var(--accent-red); }
+.qa-feedback-approve { color: var(--color-approve); }
+.qa-feedback-reject { color: var(--color-reject); }
 
 .qa-feedback.qa-feedback-show {
     animation: qa-feedback-flash 1.5s ease forwards;
+    height: auto;
 }
 
 @keyframes qa-feedback-flash {
@@ -217,12 +197,6 @@ body {
     15%  { opacity: 1; }
     70%  { opacity: 1; }
     100% { opacity: 0; }
-}
-
-.qa-nav {
-    display: flex;
-    align-items: center;
-    gap: 4px;
 }
 
 .qa-progress {
@@ -245,52 +219,53 @@ body {
 /* ── Buttons ── */
 
 .qa-btn {
-    padding: 8px 18px;
+    padding: 5px 10px;
     border: none;
     border-radius: 4px;
     font-family: var(--font-ui);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
     transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
     letter-spacing: 0.02em;
+    flex-shrink: 0;
 }
 
 .qa-btn:active { transform: scale(0.96); }
 .qa-btn:focus-visible {
-    outline: 2px solid var(--accent-red);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
 .qa-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
 .qa-btn-approve {
-    background: var(--accent-green);
+    background: var(--color-approve);
     color: #fff;
     box-shadow: 0 1px 4px rgba(45,122,79,0.3);
 }
 .qa-btn-approve:hover:not(:disabled) {
-    background: var(--accent-green-hover);
+    background: var(--color-approve-hover);
     box-shadow: 0 2px 8px rgba(45,122,79,0.4);
 }
 
 .qa-btn-reject {
-    background: var(--accent-red);
+    background: var(--color-reject);
     color: #fff;
     box-shadow: 0 1px 4px rgba(192,58,43,0.3);
 }
 .qa-btn-reject:hover:not(:disabled) {
-    background: var(--accent-red-hover);
+    background: var(--color-reject-hover);
     box-shadow: 0 2px 8px rgba(192,58,43,0.4);
 }
 
 .qa-btn-reject-submit {
-    background: var(--accent-red);
+    background: var(--color-reject);
     color: #fff;
     box-shadow: 0 1px 4px rgba(192,58,43,0.3);
 }
 .qa-btn-reject-submit:hover:not(:disabled) {
-    background: var(--accent-red-hover);
+    background: var(--color-reject-hover);
 }
 
 .qa-btn-nav {
@@ -302,22 +277,13 @@ body {
     background: #3a3a42;
 }
 
-.qa-btn-problem {
-    background: var(--surface-dark-hover);
-    color: var(--accent-amber);
-    border: 1px solid var(--accent-amber);
-}
-.qa-btn-problem:hover:not(:disabled) {
-    background: rgba(184,134,11,0.15);
-}
-
 .qa-input {
-    padding: 7px 12px;
+    padding: 5px 8px;
     border: 1px solid rgba(255,255,255,0.2);
     border-radius: 4px;
     font-family: var(--font-ui);
-    font-size: 13px;
-    width: 280px;
+    font-size: 12px;
+    width: 180px;
     background: rgba(255,255,255,0.08);
     color: var(--text-inverse);
     transition: border-color 0.15s, background 0.15s;
@@ -326,7 +292,7 @@ body {
 .qa-input::placeholder { color: rgba(255,255,255,0.35); }
 .qa-input:focus {
     outline: none;
-    border-color: var(--accent-red);
+    border-color: var(--accent);
     background: rgba(255,255,255,0.12);
 }
 
@@ -427,15 +393,6 @@ body {
     position: relative;
 }
 
-.qa-endmatter::before {
-    content: '';
-    position: absolute;
-    top: -2px;
-    left: 0;
-    width: 60px;
-    height: 2px;
-    background: var(--accent-red);
-}
 
 .qa-endmatter-heading {
     font-family: var(--font-ui);
@@ -521,12 +478,12 @@ body {
 }
 
 .qa-toast-success {
-    background: var(--accent-green);
+    background: var(--color-approve);
     color: #fff;
 }
 
 .qa-toast-error {
-    background: var(--accent-red);
+    background: var(--color-reject);
     color: #fff;
 }
 
@@ -780,8 +737,8 @@ body {
     line-height: 1.2;
 }
 
-.qa-dash-stat-approved .qa-dash-num { color: var(--accent-green); }
-.qa-dash-stat-rejected .qa-dash-num { color: var(--accent-red); }
+.qa-dash-stat-approved .qa-dash-num { color: var(--color-approve); }
+.qa-dash-stat-rejected .qa-dash-num { color: var(--color-reject); }
 .qa-dash-stat-unreviewed .qa-dash-num { color: var(--text-muted); }
 
 .qa-dash-label {
@@ -840,7 +797,7 @@ body {
 
 .qa-dash-bar-fill {
     height: 100%;
-    background: var(--accent-green);
+    background: var(--color-approve);
     border-radius: 4px;
     transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -898,7 +855,7 @@ body {
 
 .qa-dash-mini-fill {
     height: 100%;
-    background: var(--accent-green);
+    background: var(--color-approve);
     border-radius: 3px;
     transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }

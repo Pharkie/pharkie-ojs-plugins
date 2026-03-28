@@ -131,41 +131,31 @@ class QaSplitsPlugin extends GenericPlugin
 </head>
 <body>
     <div class="qa-layout">
-        <!-- Top pane: metadata + controls -->
+        <!-- Top bar: single row -->
         <div class="qa-top">
-            <div class="qa-meta">
-                <div class="qa-meta-primary">
-                    <span class="qa-title" id="qa-title">Loading...</span>
-                    <span class="qa-badge" id="qa-status"></span>
-                </div>
-                <div class="qa-meta-secondary">
-                    <span id="qa-authors"></span>
-                    <span id="qa-section"></span>
-                    <span id="qa-issue"></span>
-                    <span id="qa-pages"></span>
-                </div>
+            <span class="qa-app-name">QA</span>
+            <span class="qa-title" id="qa-title">Loading...</span>
+            <span class="qa-authors" id="qa-authors"></span>
+            <span id="qa-section" style="display:none"></span>
+            <span id="qa-issue" style="display:none"></span>
+            <span id="qa-pages" style="display:none"></span>
+            <span class="qa-badge" id="qa-status"></span>
+            <span class="qa-spacer"></span>
+            <div class="qa-progress" id="qa-progress"></div>
+            <button id="btn-last-seen" class="qa-btn qa-btn-nav" title="Return to previous article">Back</button>
+            <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">&lsaquo;</button>
+            <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">&rsaquo;</button>
+            <button id="btn-random" class="qa-btn qa-btn-nav" title="Random unreviewed">Rnd</button>
+            <button id="btn-problem" class="qa-btn qa-btn-nav" title="Next problem case">Prob</button>
+            <input type="text" id="reject-comment" class="qa-input" placeholder="Reason..." style="display:none">
+            <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">OK</button>
+            <div class="qa-btn-wrap">
+                <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">&check;</button>
+                <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
             </div>
-            <div class="qa-controls">
-                <div class="qa-review-actions">
-                    <div class="qa-btn-wrap">
-                        <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approved</button>
-                        <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
-                    </div>
-                    <div class="qa-btn-wrap">
-                        <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">Reject</button>
-                        <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
-                    </div>
-                    <input type="text" id="reject-comment" class="qa-input" placeholder="Rejection comment..." style="display:none">
-                    <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">Submit Rejection</button>
-                </div>
-                <div class="qa-nav">
-                    <button id="btn-last-seen" class="qa-btn qa-btn-nav" title="Back to last reviewed">Last Seen</button>
-                    <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">Prev</button>
-                    <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">Next</button>
-                    <button id="btn-random" class="qa-btn qa-btn-nav" title="Random unreviewed">Random</button>
-                    <button id="btn-problem" class="qa-btn qa-btn-nav qa-btn-problem" title="Jump to next problem case (rejected/invalidated)">Next Problem</button>
-                </div>
-                <div class="qa-progress" id="qa-progress"></div>
+            <div class="qa-btn-wrap">
+                <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">&cross;</button>
+                <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
             </div>
         </div>
 
