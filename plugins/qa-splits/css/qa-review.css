@@ -624,10 +624,6 @@ body {
         grid-template-rows: auto auto 1fr;
     }
 
-    .qa-top {
-        overflow-x: auto;
-    }
-
     .qa-left {
         height: 50vh;
         min-height: 300px;
@@ -637,27 +633,42 @@ body {
         border-left: none;
         border-top: 1px solid var(--divider);
     }
+
+    .qa-row-2 {
+        flex-wrap: wrap;
+    }
+
+    .qa-title {
+        font-size: 16px;
+    }
+
+    .qa-authors {
+        display: none;
+    }
 }
 
 @media (max-width: 640px) {
     .qa-top {
-        padding: 8px 12px;
-        gap: 8px;
+        padding: 6px 10px;
+        gap: 4px;
     }
 
     .qa-title {
-        font-size: 15px;
-        max-width: 200px;
+        font-size: 14px;
     }
 
-    .qa-meta-secondary {
-        font-size: 11px;
-        gap: 10px;
+    .qa-app-name {
+        display: none;
     }
 
     .qa-btn {
         padding: 6px 10px;
         font-size: 12px;
+    }
+
+    .qa-progress {
+        font-size: 12px;
+        padding: 4px 8px;
     }
 
     .qa-left {
