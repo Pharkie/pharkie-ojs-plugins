@@ -62,35 +62,38 @@ This should point to the directory containing issue subdirectories with JATS, PD
 
 ### Accessing the QA interface
 
-Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requires Journal Manager or Site Admin login.
+Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requires Journal Manager or Site Admin login. There's also a floating "QA Splits" button on the OJS dashboard (visible to managers only).
+
+Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/qa-splits?id=9494`.
 
 ### Interface layout
 
 ```
 +------------------------------------------------------------------+
-| TOP: Title | Authors | Section | Vol/Issue | #ID | [Status]      |
-| [Approved] [Reject: ___________]                                  |
-| [Last Seen] [< Prev] [Next >] [Random] [Problem Case]           |
-| Progress: 150 total | 89 approved | 3 rejected | 58 unreviewed   |
+| ← Back | QA SPLITS | 37.1 #2 (2026) Title [section] by Authors  |
+| APPROVED 28MAR26  3 approved / 12 rejected / ... / View stats    |
+|   [‹ Previous] [Next ›] [Random] [Next Rejected] [Approve] [Reject]
 +-------------------------------+----------------------------------+
-| LEFT: PDF Viewer              | RIGHT: HTML Galley (iframe)      |
-| Page 3 of 12                  |                                  |
-| [scrollable PDF pages]        | [article body content]           |
-|                               |                                  |
+| LEFT: PDF Viewer              | RIGHT: HTML Galley               |
+| Page 3 of 12                  | (scrollable, selectable text)    |
+| [scrollable, selectable text] |                                  |
 |                               | ─── End-Matter Classification ─ |
-|                               | [Reference] Smith, J. (2020)...  |
-|                               | [Note] See also Winnicott...     |
-|                               | [Bio] John Smith is a pract...   |
-|                               | [Provenance] This article was... |
+|                               | [Reference] Smith, J. (2020)... |
+|                               | [Note] See also Winnicott...    |
 +-------------------------------+----------------------------------+
 ```
 
-### Progress dashboard
+**Row 1**: ← Back (returns to previous position after Random/Problem jump), app name, article title (with issue/sequence/year/section/authors inline).
 
-Click the progress counter in the top bar to open the QA dashboard overlay:
-- **Donut chart** showing approved/rejected/unreviewed percentages
-- **Review depth** bars (articles with 0, 1, or 2+ reviewers)
-- **Section breakdown** table with per-section progress bars
+**Row 2**: Status badge, progress counter (each number clickable to list those articles, "View stats" opens dashboard), navigation buttons, Approve/Reject.
+
+**Reject row**: Clicking Reject hides the Approve/Reject buttons and expands a full-width textarea row for the rejection reason. Prepopulated with existing comment if re-rejecting. "Reject with Reason" button or Ctrl+Enter to submit, Esc to cancel.
+
+**Approve/Reject auto-advance**: Both actions automatically load the next article after recording the review.
+
+### Progress counter
+
+The progress bar shows clickable numbers: `3 approved / 12 rejected / 1403 total / 1388 remaining / View stats`. Clicking a number opens a scrollable list of those articles (with rejection reasons shown in red). Click any article in the list to navigate to it. "View stats" opens the full dashboard overlay with donut chart and section breakdown.
 
 ### Keyboard shortcuts
 
@@ -98,10 +101,10 @@ Click the progress counter in the top bar to open the QA dashboard overlay:
 |-----|--------|
 | `Left arrow` | Previous article (sequential) |
 | `Right arrow` | Next article (sequential) |
-| `A` | Approve current article |
-| `R` | Reject (opens comment box) |
-| `Enter` | Submit rejection (when comment box is focused) |
-| `Escape` | Close comment box / help overlay |
+| `A` | Approve and advance to next |
+| `R` | Open rejection textarea |
+| `Ctrl+Enter` | Submit rejection (when textarea is focused) |
+| `Escape` | Close rejection textarea / help overlay |
 | `?` | Show keyboard shortcuts help |
 
 ### Review workflow
