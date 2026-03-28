@@ -363,10 +363,36 @@ body {
     gap: 10px;
 }
 
-.qa-pdf-container canvas {
+.qa-pdf-page {
+    position: relative;
     box-shadow: var(--shadow-page);
     background: #fff;
     max-width: 100%;
+}
+
+.qa-pdf-page canvas {
+    display: block;
+}
+
+.qa-pdf-text-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    line-height: 1;
+}
+
+.qa-pdf-text-layer span {
+    position: absolute;
+    color: transparent;
+    white-space: pre;
+    cursor: text;
+}
+
+.qa-pdf-text-layer ::selection {
+    background: rgba(90, 122, 155, 0.3);
 }
 
 /* Custom scrollbar for PDF pane */
