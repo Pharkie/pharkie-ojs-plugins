@@ -607,12 +607,10 @@
     function updateProgress(counts) {
         if (!counts) return;
         const remaining = (counts.unreviewed || 0) + (counts.invalidated || 0);
-        const problems = (counts.rejected || 0) + (counts.invalidated || 0);
-
         // Each entry: [text, filterStatus or null]
         const parts = [];
         if (counts.approved) parts.push([counts.approved + ' approved', 'approved']);
-        if (problems) parts.push([problems + ' problems', 'rejected']);
+        if (counts.rejected) parts.push([counts.rejected + ' rejected', 'rejected']);
         parts.push([counts.total + ' total', null]);
         if (remaining > 0) parts.push([remaining + ' remaining', 'unreviewed']);
 
