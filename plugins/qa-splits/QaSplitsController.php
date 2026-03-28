@@ -513,12 +513,7 @@ class QaSplitsController extends PKPBaseController
 
         $paths = $this->getFilePaths($submissionId);
         if ($paths && file_exists($paths['pdf'])) {
-            $content = file_get_contents($paths['pdf']);
-            return new Response($content, 200, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline',
-                'Cache-Control' => 'private, max-age=3600',
-            ]);
+            return $this->streamFile($paths['pdf'], 'application/pdf');
         }
 
         // Fallback: serve from OJS file storage
@@ -590,17 +585,26 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['error' => 'Galley not available'], 404);
         }
 
-        $content = file_get_contents($filePath);
-        return new Response($content, 200, [
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => 'inline',
-            'Cache-Control' => 'private, max-age=3600',
-        ]);
+        return $this->streamFile($filePath, $mimeType);
     }
 
     /**
      * Read galley file content from OJS storage. Returns null if not found.
      */
+    /**
+     * Stream a file to the client using readfile() (kernel-level, no PHP memory).
+     * Same approach as OJS core FileManager — avoids loading entire file into memory.
+     */
+    private function streamFile(string $filePath, string $mimeType): void
+    {
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . filesize($filePath));
+        header('Content-Disposition: inline');
+        header('Cache-Control: private, max-age=3600');
+        readfile($filePath);
+        exit;
+    }
+
     private function readGalleyContentFromOjs(int $publicationId, string $mimeType): ?string
     {
         $galley = DB::table('publication_galleys as pg')
@@ -738,7 +742,9 @@ class QaSplitsController extends PKPBaseController
 
     /**
      * GET /nav/problem-case — return next problem case submission_id.
-     * Priority: rejected > hash-invalidated > unreviewed.
+     * Priority: rejected > unreviewed.
+     * Hash invalidation is checked per-article on view (not here —
+     * computing hashes for all approved articles is O(n) file I/O).
      */
     public function problemCase(Request $request): JsonResponse
     {
@@ -761,24 +767,7 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['submission_id' => $rejected->submission_id, 'reason' => 'rejected']);
         }
 
-        // 2. Hash-invalidated articles
-        $approved = DB::table('qa_split_reviews as r1')
-            ->join('submissions as s', 'r1.submission_id', '=', 's.submission_id')
-            ->where('s.context_id', $contextId)
-            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = r1.submission_id)')
-            ->where('r1.decision', 'approved')
-            ->whereNotNull('r1.content_hash')
-            ->select('r1.submission_id', 'r1.content_hash')
-            ->get();
-
-        foreach ($approved as $row) {
-            $currentHash = $this->computeContentHash((int) $row->submission_id);
-            if ($currentHash !== null && $currentHash !== $row->content_hash) {
-                return new JsonResponse(['submission_id' => $row->submission_id, 'reason' => 'invalidated']);
-            }
-        }
-
-        // 3. Unreviewed articles
+        // 2. Unreviewed articles
         $unreviewed = DB::table('submissions as s')
             ->join('publications as p', function ($join) {
                 $join->on('p.submission_id', '=', 's.submission_id')

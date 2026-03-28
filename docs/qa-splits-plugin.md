@@ -172,6 +172,7 @@ Articles without a publisher-id in their JATS file are flagged as warnings in th
 - CSRF token validated on review submission
 - File paths validated with `realpath()` to prevent traversal
 - Rejection comments limited to 5000 characters
+- PDF files streamed in 4KB chunks (same as OJS core), not loaded into memory
 
 ## CLI Tool
 
