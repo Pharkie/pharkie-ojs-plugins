@@ -483,6 +483,10 @@
     async function submitReview(decision, comment) {
         if (currentIndex < 0) return;
 
+        // Prevent double-submit
+        els['btn-approve'].disabled = true;
+        els['btn-reject'].disabled = true;
+
         const article = articles[currentIndex];
 
         try {
@@ -523,8 +527,11 @@
                 updateStatusBadge(decision, 'you', article.reviewed_at, article.comment);
             }
         } catch (err) {
-            showFeedback('error');
+            toast('Review failed — network error', 'error');
             console.error('Review submission error:', err);
+        } finally {
+            els['btn-approve'].disabled = false;
+            els['btn-reject'].disabled = false;
         }
     }
 
@@ -758,7 +765,7 @@
 
         if (!feedbackEl) return;
 
-        feedbackEl.textContent = decision === 'error' ? 'Error' : (decision === 'approved' ? 'Done' : 'Done');
+        feedbackEl.textContent = decision === 'error' ? 'Error' : 'Done';
         feedbackEl.classList.remove('qa-feedback-show');
         // Force reflow to restart animation
         void feedbackEl.offsetWidth;
@@ -928,13 +935,13 @@
         return '<svg class="qa-dash-donut" viewBox="0 0 180 180">'
             + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--divider)" stroke-width="18"/>'
             + '<circle class="qa-dash-donut-seg" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" '
-            + 'stroke="var(--accent-green)" stroke-width="18" '
+            + 'stroke="var(--color-approve)" stroke-width="18" '
             + 'stroke-dasharray="' + segApproved + ' ' + circ + '" '
             + 'stroke-dashoffset="0" '
             + 'data-target="0" '
             + 'transform="rotate(-90 ' + cx + ' ' + cy + ')"/>'
             + '<circle class="qa-dash-donut-seg" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" '
-            + 'stroke="var(--accent-red)" stroke-width="18" '
+            + 'stroke="var(--color-reject)" stroke-width="18" '
             + 'stroke-dasharray="' + segRejected + ' ' + circ + '" '
             + 'stroke-dashoffset="-' + offRejected + '" '
             + 'data-target="-' + offRejected + '" '

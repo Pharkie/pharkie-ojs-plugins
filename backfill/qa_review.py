@@ -393,12 +393,13 @@ def cmd_sync(source: str, dest: str) -> None:
         safe_comment = (comment or '').replace("'", "''")
         if comment == 'NULL':
             safe_comment = ''
+        safe_username = (username or 'unknown').replace("'", "''")
 
         run_sql(dest, f"""
             INSERT INTO qa_split_reviews
                 (submission_id, publication_id, user_id, username, decision, comment, created_at)
             VALUES
-                ({dest_sub_id}, {dest_pub_id}, 1, '{username}',
+                ({dest_sub_id}, {dest_pub_id}, 1, '{safe_username}',
                  '{decision}', '{safe_comment}', '{created_at}');
         """)
         synced += 1
