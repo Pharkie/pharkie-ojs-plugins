@@ -462,8 +462,9 @@
     // ── Review actions ──
 
     function showRejectInput() {
-        const row = document.getElementById('qa-row-reject');
-        row.style.display = '';
+        document.getElementById('qa-row-reject').style.display = '';
+        els['btn-approve'].closest('.qa-btn-wrap').style.display = 'none';
+        els['btn-reject'].closest('.qa-btn-wrap').style.display = 'none';
         // Prepopulate with existing rejection comment if any
         const article = currentIndex >= 0 ? articles[currentIndex] : null;
         if (article && article.comment && !els['reject-comment'].value) {
@@ -473,8 +474,9 @@
     }
 
     function hideRejectInput() {
-        const row = document.getElementById('qa-row-reject');
-        row.style.display = 'none';
+        document.getElementById('qa-row-reject').style.display = 'none';
+        els['btn-approve'].closest('.qa-btn-wrap').style.display = '';
+        els['btn-reject'].closest('.qa-btn-wrap').style.display = '';
         els['reject-comment'].value = '';
     }
 
