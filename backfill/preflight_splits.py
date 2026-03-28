@@ -5,6 +5,17 @@ Preflight check: verify article titles appear on page 1 of split PDFs.
 Iterates all toc.json files and checks every article (including book reviews).
 Reports any where the title is not found on the first page — possible bad split.
 
+Title matching (see split.py title_in_split_pdf):
+- Strips toc.json prefixes not in PDF: "Book Review:", "Obituary:", "Poem:", etc.
+- Strips chained prefixes: "Obituary: Professor X" -> "X"
+- Strips trailing parentheticals: "(second review)", "(with author response)"
+- Exact substring match OR 80% word overlap (handles PDF line-break word fusion)
+- Fallback for letters/editorials: accepts section headings like "LETTERS TO THE
+  EDITORS" on page 1 when the toc.json title is descriptive, not literal
+
+As of 2026-03-28: 1403/1403 pass. 1402 by title match, 1 by fallback
+(11.2 #17 Letter to the Editors — manually verified correct).
+
 Usage:
     python backfill/preflight_splits.py                    # all issues
     python backfill/preflight_splits.py --issue 36.2       # single issue
