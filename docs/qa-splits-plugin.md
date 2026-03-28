@@ -173,9 +173,9 @@ Articles without a publisher-id in their JATS file are flagged as warnings in th
 - File paths validated with `realpath()` to prevent traversal
 - Rejection comments limited to 5000 characters
 
-## CLI Flagging Tool
+## CLI Tool
 
-`backfill/qa_flag.py` lets you flag articles as problem cases from the command line (e.g. from another Claude session) without needing the browser UI. Flagged articles appear in the "Next Problem" navigation.
+`backfill/qa_review.py` is the command-line equivalent of the web UI — approve, reject, check status, or list reviews. Useful for Claude sessions reviewing pipeline output without a browser.
 
 Articles can be specified three ways:
 - **Backfill path**: `29.2/03-on-the-phenomenon` (looks up publisher-id from JATS)
@@ -183,20 +183,38 @@ Articles can be specified three ways:
 - **Title search**: `"embracing vulnerability"` (searched in OJS DB, must match exactly 1)
 
 ```bash
-# Flag an article:
-python3 backfill/qa_flag.py 29.2/03-on-the-phenomenon "references mixed with notes"
-python3 backfill/qa_flag.py 9494 "bad split on page 5"
-python3 backfill/qa_flag.py "embracing vulnerability" "footnotes in wrong section"
+# Approve:
+python3 backfill/qa_review.py approve 29.2/03-on-the-phenomenon
 
-# Flag on live:
-python3 backfill/qa_flag.py --target live 9494 "needs re-review"
+# Reject with reason:
+python3 backfill/qa_review.py reject 9494 "references mixed with notes"
 
-# List current flags:
-python3 backfill/qa_flag.py --list
+# Check status + review history:
+python3 backfill/qa_review.py status 29.2/03-on-the-phenomenon
 
-# Clear a flag:
-python3 backfill/qa_flag.py --clear 9494
+# List problems (rejected):
+python3 backfill/qa_review.py list
+
+# List all reviews:
+python3 backfill/qa_review.py list --all
+
+# Clear reviews:
+python3 backfill/qa_review.py clear 9494
+
+# Target live:
+python3 backfill/qa_review.py --target live list
 ```
+
+### Collaboration workflow
+
+The web UI and CLI share the same database table (`qa_split_reviews`). Reviews from either tool are visible in both:
+
+1. **Claude reviews pipeline output** via CLI, flags problems with `reject`
+2. **Human opens QA Splits web UI**, clicks "Next Problem" to see flagged articles
+3. **Human reviews visually** (PDF vs HTML side-by-side), approves or adds detail
+4. **Claude checks** via `qa_review.py status` or `list` to see what needs fixing
+5. **Claude fixes** pipeline scripts, regenerates content
+6. **Content hash invalidation** automatically flags previously-approved articles for re-review
 
 ## E2E Tests
 

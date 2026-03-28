@@ -81,7 +81,7 @@ Standalone utilities:
 - `backfill/push_page_numbers.py` — push page numbers to OJS database (dev or live) without re-import
 - `backfill/snapshot_ids.py` — capture submission IDs and DOIs from OJS database into JATS and toc.json
 - `backfill/restore_ids.py` — remap OJS IDs to match JATS publisher-id after import (safety net)
-- `backfill/qa_flag.py` — flag articles as QA problem cases from CLI (by path, submission_id, or title search)
+- `backfill/qa_review.py` — QA Splits CLI: approve, reject, status, list reviews (by path, submission_id, or title search)
 
 All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
 

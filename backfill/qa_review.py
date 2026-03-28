@@ -1,28 +1,34 @@
 #!/usr/bin/env python3
 """
-Flag an article as a QA problem case.
+QA Splits CLI — approve, reject, or check article review status.
 
-Inserts a 'rejected' review into the OJS qa_split_reviews table so the
-article appears in the QA Splits plugin's "Next Problem" navigation.
+CLI equivalent of the QA Splits web interface. Manages review records
+in the OJS qa_split_reviews table.
 
-Looks up the submission_id from the JATS publisher-id, so you only need
-the backfill path (vol.iss/seq-slug).
+Articles can be specified by:
+  - Backfill path:   29.2/03-on-the-phenomenon
+  - Submission ID:   9494
+  - Title search:    "embracing vulnerability" (must match exactly 1)
 
 Usage:
-    # Flag an article on dev:
-    python backfill/qa_flag.py 29.2/03-on-the-phenomenon "references mixed with notes"
+    # Approve an article:
+    python backfill/qa_flag.py approve 29.2/03-on-the-phenomenon
 
-    # Flag on live:
-    python backfill/qa_flag.py --target live 29.2/03-on-the-phenomenon "bad split page 5"
+    # Reject with reason:
+    python backfill/qa_flag.py reject 9494 "references mixed with notes"
 
-    # List current flags:
-    python backfill/qa_flag.py --list
+    # Check status of one article:
+    python backfill/qa_flag.py status 29.2/03-on-the-phenomenon
 
-    # List flags on live:
-    python backfill/qa_flag.py --list --target live
+    # List all reviews (default: problems only):
+    python backfill/qa_flag.py list
+    python backfill/qa_flag.py list --all
 
-    # Clear a flag (remove all rejected reviews for an article):
-    python backfill/qa_flag.py --clear 29.2/03-on-the-phenomenon
+    # Clear all reviews for an article:
+    python backfill/qa_flag.py clear 9494
+
+    # Target live instead of dev:
+    python backfill/qa_flag.py --target live list
 """
 
 import argparse
@@ -75,12 +81,10 @@ def run_sql(target: str, sql: str) -> str:
 
 def find_jats(article_path: str) -> str | None:
     """Find the JATS file matching a vol.iss/seq-slug prefix."""
-    # Try exact match first
     exact = os.path.join(OUTPUT_DIR, article_path + '.jats.xml')
     if os.path.exists(exact):
         return exact
 
-    # Try prefix match (user may omit the full slug)
     vol_iss = os.path.dirname(article_path)
     prefix = os.path.basename(article_path)
     pattern = os.path.join(OUTPUT_DIR, vol_iss, prefix + '*.jats.xml')
@@ -126,10 +130,7 @@ def read_title(jats_path: str) -> str:
 def resolve_article(target: str, article_ref: str) -> tuple[int, str]:
     """Resolve an article reference to (submission_id, title).
 
-    Accepts:
-      - Numeric submission_id: "9494"
-      - Backfill path: "29.2/03-on-the-phenomenon"
-      - Title search: "embracing vulnerability" (searched in OJS DB)
+    Accepts numeric ID, backfill path (vol.iss/seq-slug), or title search.
     """
     # Numeric submission_id
     if article_ref.isdigit():
@@ -147,7 +148,7 @@ def resolve_article(target: str, article_ref: str) -> tuple[int, str]:
                   file=sys.stderr)
         return pub_id, title
 
-    # Backfill path (contains / or matches vol.iss pattern)
+    # Backfill path (contains /)
     if '/' in article_ref:
         jats_path = find_jats(article_ref)
         pub_id = read_publisher_id(jats_path)
@@ -179,29 +180,50 @@ def resolve_article(target: str, article_ref: str) -> tuple[int, str]:
         for line in lines:
             parts = line.split('\t', 1)
             print(f'  {parts[0]}: {parts[1] if len(parts) > 1 else "?"}', file=sys.stderr)
-        print(f'Use a more specific search or pass the submission_id directly.',
+        print('Use a more specific search or pass the submission_id directly.',
               file=sys.stderr)
         sys.exit(1)
     parts = lines[0].split('\t', 1)
     return int(parts[0]), parts[1] if len(parts) > 1 else '(unknown)'
 
 
-def flag_article(target: str, article_ref: str, comment: str) -> None:
-    """Insert a rejected review for the article."""
-    pub_id, title = resolve_article(target, article_ref)
-
-    # Get current_publication_id from OJS
+def get_publication_id(target: str, submission_id: int) -> int:
+    """Get current_publication_id for a submission."""
     out = run_sql(target, f"""
         SELECT current_publication_id FROM submissions
-        WHERE submission_id = {pub_id};
+        WHERE submission_id = {submission_id};
     """)
     pub_row = out.strip()
     if not pub_row:
-        print(f'Submission {pub_id} not found in OJS ({target}).', file=sys.stderr)
+        print(f'Submission {submission_id} not found in OJS ({target}).', file=sys.stderr)
         sys.exit(1)
-    publication_id = int(pub_row)
+    return int(pub_row)
 
-    # Escape single quotes in comment
+
+# ── Commands ──
+
+
+def cmd_approve(target: str, article_ref: str) -> None:
+    """Record an approval for the article."""
+    pub_id, title = resolve_article(target, article_ref)
+    publication_id = get_publication_id(target, pub_id)
+
+    run_sql(target, f"""
+        INSERT INTO qa_split_reviews
+            (submission_id, publication_id, user_id, username, decision, comment, created_at)
+        VALUES
+            ({pub_id}, {publication_id}, 1, 'claude', 'approved', NULL, NOW());
+    """)
+
+    print(f'Approved: {title}')
+    print(f'  submission_id={pub_id}, target={target}')
+
+
+def cmd_reject(target: str, article_ref: str, comment: str) -> None:
+    """Record a rejection with comment."""
+    pub_id, title = resolve_article(target, article_ref)
+    publication_id = get_publication_id(target, pub_id)
+
     safe_comment = comment.replace("'", "''")
 
     run_sql(target, f"""
@@ -212,21 +234,57 @@ def flag_article(target: str, article_ref: str, comment: str) -> None:
              '{safe_comment}', NOW());
     """)
 
-    print(f'Flagged: {title}')
+    print(f'Rejected: {title}')
     print(f'  submission_id={pub_id}, target={target}')
     print(f'  comment: {comment}')
 
 
-def list_flags(target: str) -> None:
-    """List all rejected reviews (current flags)."""
-    out = run_sql(target, """
-        SELECT r.submission_id, r.username, r.comment,
+def cmd_status(target: str, article_ref: str) -> None:
+    """Show review history for an article."""
+    pub_id, title = resolve_article(target, article_ref)
+
+    out = run_sql(target, f"""
+        SELECT r.decision, r.username, r.comment, r.created_at
+        FROM qa_split_reviews r
+        WHERE r.submission_id = {pub_id}
+        ORDER BY r.created_at DESC;
+    """)
+
+    print(f'{title} (#{pub_id})')
+    if not out.strip():
+        print('  Status: not reviewed')
+        return
+
+    lines = out.strip().splitlines()
+    first = lines[0].split('\t')
+    status = first[0].upper()
+    print(f'  Status: {status} (by {first[1]}, {first[3]})')
+    if first[2] and first[2] != 'NULL':
+        print(f'  Comment: {first[2]}')
+
+    if len(lines) > 1:
+        print(f'\n  Review history ({len(lines)} reviews):')
+        for line in lines:
+            parts = line.split('\t')
+            decision = parts[0]
+            user = parts[1] if len(parts) > 1 else '?'
+            comment = parts[2] if len(parts) > 2 and parts[2] != 'NULL' else ''
+            date = parts[3] if len(parts) > 3 else '?'
+            suffix = f' — {comment}' if comment else ''
+            print(f'    {date}  {decision:<10} by {user}{suffix}')
+
+
+def cmd_list(target: str, show_all: bool) -> None:
+    """List reviews. Default: rejected/problem cases only. --all: everything."""
+    where = '' if show_all else "WHERE r.decision = 'rejected'"
+    out = run_sql(target, f"""
+        SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
         FROM qa_split_reviews r
         LEFT JOIN publications p ON p.publication_id = r.publication_id
         LEFT JOIN publication_settings ps ON ps.publication_id = p.publication_id
             AND ps.setting_name = 'title' AND ps.locale = 'en'
-        WHERE r.decision = 'rejected'
+        {where}
           AND r.review_id = (
               SELECT MAX(r2.review_id) FROM qa_split_reviews r2
               WHERE r2.submission_id = r.submission_id
@@ -235,23 +293,24 @@ def list_flags(target: str) -> None:
     """)
 
     if not out.strip():
-        print('No flagged articles.')
+        label = 'reviews' if show_all else 'flagged articles'
+        print(f'No {label}.')
         return
 
-    print(f'{"ID":<6} {"By":<10} {"Date":<20} {"Title":<40} Comment')
-    print('-' * 100)
+    header = 'All reviews' if show_all else 'Flagged articles (rejected)'
+    print(f'{header}:\n')
+    print(f'{"ID":<6} {"Status":<10} {"By":<10} {"Date":<20} {"Title":<35} Comment')
+    print('-' * 105)
     for line in out.strip().splitlines():
         parts = line.split('\t')
-        if len(parts) >= 5:
-            sid, user, comment, date, title = parts[0], parts[1], parts[2], parts[3], parts[4]
-            print(f'{sid:<6} {user:<10} {date:<20} {title[:38]:<40} {comment}')
-        elif len(parts) >= 4:
-            sid, user, comment, date = parts[0], parts[1], parts[2], parts[3]
-            print(f'{sid:<6} {user:<10} {date:<20} {"?":<40} {comment}')
+        if len(parts) >= 6:
+            sid, decision, user, comment, date, title = parts[:6]
+            comment = '' if comment == 'NULL' else comment
+            print(f'{sid:<6} {decision:<10} {user:<10} {date:<20} {title[:33]:<35} {comment}')
 
 
-def clear_flag(target: str, article_ref: str) -> None:
-    """Remove all reviews for an article (clear flag)."""
+def cmd_clear(target: str, article_ref: str) -> None:
+    """Remove all reviews for an article."""
     pub_id, title = resolve_article(target, article_ref)
 
     run_sql(target, f"""
@@ -263,29 +322,47 @@ def clear_flag(target: str, article_ref: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Flag articles as QA problem cases in OJS.',
+        description='QA Splits CLI — approve, reject, or check article review status.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
     )
     parser.add_argument('--target', choices=['dev', 'live'], default='dev',
                         help='Target environment (default: dev)')
-    parser.add_argument('--list', action='store_true',
-                        help='List current flags')
-    parser.add_argument('--clear', metavar='ARTICLE',
-                        help='Clear flag for article (vol.iss/seq-slug)')
-    parser.add_argument('article', nargs='?',
-                        help='Article path: vol.iss/seq-slug (e.g. 29.2/03-on-the-phenomenon)')
-    parser.add_argument('comment', nargs='?',
-                        help='Rejection comment describing the problem')
+
+    sub = parser.add_subparsers(dest='command', help='Command')
+
+    # approve
+    p_approve = sub.add_parser('approve', help='Approve an article')
+    p_approve.add_argument('article', help='Article: path, submission_id, or title search')
+
+    # reject
+    p_reject = sub.add_parser('reject', help='Reject an article with comment')
+    p_reject.add_argument('article', help='Article: path, submission_id, or title search')
+    p_reject.add_argument('comment', help='Rejection reason')
+
+    # status
+    p_status = sub.add_parser('status', help='Show review status and history')
+    p_status.add_argument('article', help='Article: path, submission_id, or title search')
+
+    # list
+    p_list = sub.add_parser('list', help='List reviews (default: problems only)')
+    p_list.add_argument('--all', action='store_true', help='Show all reviews, not just rejections')
+
+    # clear
+    p_clear = sub.add_parser('clear', help='Remove all reviews for an article')
+    p_clear.add_argument('article', help='Article: path, submission_id, or title search')
 
     args = parser.parse_args()
 
-    if args.list:
-        list_flags(args.target)
-    elif args.clear:
-        clear_flag(args.target, args.clear)
-    elif args.article and args.comment:
-        flag_article(args.target, args.article, args.comment)
+    if args.command == 'approve':
+        cmd_approve(args.target, args.article)
+    elif args.command == 'reject':
+        cmd_reject(args.target, args.article, args.comment)
+    elif args.command == 'status':
+        cmd_status(args.target, args.article)
+    elif args.command == 'list':
+        cmd_list(args.target, args.all)
+    elif args.command == 'clear':
+        cmd_clear(args.target, args.article)
     else:
         parser.print_help()
         sys.exit(1)
