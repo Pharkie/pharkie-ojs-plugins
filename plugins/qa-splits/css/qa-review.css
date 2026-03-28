@@ -325,11 +325,30 @@ body {
     transition: border-color 0.15s, background 0.15s;
 }
 
+/* Reject row — slides in as a third row below controls */
+.qa-row-reject {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
 .qa-textarea {
     resize: vertical;
     min-height: 60px;
     max-height: 200px;
     line-height: 1.4;
+    flex: 1;
+}
+
+.qa-reject-hint {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--text-inverse-muted);
+    white-space: nowrap;
+    align-self: flex-end;
+    padding-bottom: 4px;
 }
 
 .qa-input::placeholder,
