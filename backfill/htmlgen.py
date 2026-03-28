@@ -409,6 +409,7 @@ def main():
     filtered_articles = []
     error_articles = []
     completed_articles = []  # (toc_path, idx) for prompt version tracking
+    bad_split_articles = []  # (toc_path, idx) for batch toc.json update
     lock = threading.Lock()
 
     # Parse --from-list filter if provided
@@ -468,14 +469,8 @@ def main():
             # Deterministic bad-split check (free, no API call)
             if not title_in_split_pdf(split_pdf, article.get('title', '')):
                 print(f"  ⚠ BAD_SPLIT {label}: title not found on page 1 of split PDF — skipping", flush=True)
-                article['_bad_split'] = True
-                # Write updated toc.json
-                with open(toc_path) as tf:
-                    toc_data = json.load(tf)
-                toc_data['articles'][idx]['_bad_split'] = True
-                with open(toc_path, 'w') as tf:
-                    json.dump(toc_data, tf, indent=2, ensure_ascii=False)
                 with lock:
+                    bad_split_articles.append((toc_path, idx))
                     failed += 1
                 return
 
@@ -551,6 +546,18 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = [executor.submit(process_article, item) for item in to_process]
         concurrent.futures.wait(futures)
+
+    # Batch-update toc.json with _bad_split flags (thread-safe: written after pool completes)
+    bad_split_updates = {}  # toc_path -> set of article indices
+    for toc_path, idx in bad_split_articles:
+        bad_split_updates.setdefault(toc_path, set()).add(idx)
+    for toc_path, indices in bad_split_updates.items():
+        with open(toc_path) as f:
+            toc_data = json.load(f)
+        for idx in indices:
+            toc_data['articles'][idx]['_bad_split'] = True
+        with open(toc_path, 'w') as f:
+            json.dump(toc_data, f, indent=2, ensure_ascii=False)
 
     # Batch-update toc.json with prompt version for completed articles
     toc_updates = {}  # toc_path -> set of article indices

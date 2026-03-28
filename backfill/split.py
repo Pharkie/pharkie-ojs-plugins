@@ -29,6 +29,7 @@ import fitz  # PyMuPDF
 
 def _clean_for_match(text):
     """Lowercase, strip non-alphanumeric, collapse whitespace. For title matching."""
+    text = re.sub(r"[-']", ' ', text)  # preserve word boundaries
     return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', text.lower())).strip()
 
 
@@ -82,7 +83,7 @@ def title_in_split_pdf(pdf_path, title, section=''):
         r'^(Book Reviews?|Film Review|Exhibition Report|Poem'
         r'|Personally Speaking|Obituary|Essay Review'
         r'|Letter to the Editors?|Responses?( to)?'
-        r'|Prof\.?|Professor)\s*:?\s*',
+        r'|Professor|Prof\.?)\s*:?\s*',
         '', title, flags=re.IGNORECASE
     ).strip()
     # Second pass for chained prefixes (e.g. "Obituary: Professor X" -> "X")
