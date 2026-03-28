@@ -228,7 +228,7 @@ class QaSplitsPlugin extends GenericPlugin
             </div>
             <div class="qa-row-reject" id="qa-row-reject" style="display:none">
                 <textarea id="reject-comment" class="qa-textarea" placeholder="Why is this article being rejected? Describe the issue..." rows="3"></textarea>
-                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit rejection (Ctrl+Enter)">Submit Rejection</button>
+                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit rejection (Ctrl+Enter)">Reject with Reason</button>
                 <span class="qa-reject-hint">Ctrl+Enter to submit, Esc to cancel</span>
             </div>
         </div>
