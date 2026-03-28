@@ -216,7 +216,7 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous article (Left arrow)">&lsaquo; Previous</button>
                 <button id="btn-next" class="qa-btn qa-btn-nav" title="Next article (Right arrow)">Next &rsaquo;</button>
                 <button id="btn-random" class="qa-btn qa-btn-nav" title="Jump to a random unreviewed article">Random</button>
-                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next problem/edge case: rejected or unreviewed articles that need attention">Next Issue &#9888;</button>
+                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next rejected article">Next Rejected</button>
                 <input type="text" id="reject-comment" class="qa-input" placeholder="Rejection reason..." style="display:none">
                 <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">Submit</button>
                 <div class="qa-btn-wrap">
