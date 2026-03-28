@@ -90,25 +90,64 @@ def check_article(art, vol_dir, all_articles, idx):
     if pdf_has_formal_refs(pdf_path) and not html_has_refs(html):
         issues.append('MISSING_REFS')
 
-    # CHECK 2: Abstract leak — is the toc.json abstract text in the HTML body start?
+    # CHECK 2: Abstract leak — is the first <p> block mostly the abstract?
+    # Only flags if the first <p> is predominantly abstract text, not if the
+    # body happens to start with the same sentence (common in Introductions).
     abstract = art.get('abstract', '')
     if abstract and len(abstract) > 50:
-        abs_words = clean(abstract)[:40]
-        html_start = clean(html_text[:len(abstract) + 200])
-        if abs_words in html_start:
-            issues.append('HAS_ABSTRACT')
+        # Extract first <p> content
+        m = re.search(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
+        if m:
+            first_p = strip_tags(m.group(1)).strip()
+            # Only flag if the first <p> is SHORT (abstract-length) and matches.
+            # A long Introduction paragraph that starts with the abstract sentence
+            # is real body content, not a leak.
+            if len(first_p) < len(abstract) * 2:
+                abs_clean = clean(abstract)
+                p_clean = clean(first_p)
+                # Check word overlap
+                abs_words = set(abs_clean.split())
+                p_words = set(p_clean.split())
+                if abs_words and p_words:
+                    overlap = len(abs_words & p_words) / len(abs_words)
+                    if overlap > 0.8:
+                        issues.append('HAS_ABSTRACT')
 
     # CHECK 3: End bleed — does the HTML contain the next article's title?
+    # Only flags if the title appears as a heading or standalone paragraph,
+    # NOT inside a reference citation (which commonly contains article titles).
     if idx < len(all_articles) - 1:
         next_title = all_articles[idx + 1].get('title', '')
         if next_title and len(next_title) > 15:
-            # Check the last portion of HTML for the next title
-            html_tail = strip_tags(html).lower()
-            next_clean = next_title.lower()
-            # Only flag if the next title appears after the last heading
-            last_h2 = html.lower().rfind('</h2>')
-            check_from = last_h2 if last_h2 > 0 else len(html) // 2
-            if next_clean in strip_tags(html[check_from:]).lower():
+            next_lower = next_title.lower()
+            html_lower = html.lower()
+            # Check for title in a heading tag
+            in_heading = next_lower in strip_tags(
+                ''.join(re.findall(r'<h[23][^>]*>.*?</h[23]>', html_lower, re.DOTALL)))
+            # Check for title as a standalone paragraph BEFORE any references section.
+            # Titles in reference citations are not end bleed.
+            # Find where references start (last back-matter heading)
+            refs_start = len(html_lower)
+            for heading_m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html_lower, re.DOTALL):
+                heading_text = strip_tags(heading_m.group(1)).strip()
+                if REFERENCE_HEADING_RE.match(heading_text):
+                    refs_start = heading_m.start()
+            # Also check <p><strong>References</strong></p> pattern
+            for strong_m in re.finditer(r'<p>\s*<strong>(.*?)</strong>\s*</p>', html_lower, re.DOTALL):
+                heading_text = strong_m.group(1).strip()
+                if REFERENCE_HEADING_RE.match(heading_text):
+                    refs_start = min(refs_start, strong_m.start())
+
+            # Only check for end bleed BEFORE the references section
+            pre_refs = html_lower[:refs_start]
+            last_chunk = pre_refs[len(pre_refs) * 4 // 5:] if len(pre_refs) > 0 else ''
+            in_standalone_p = False
+            for m in re.finditer(r'<p[^>]*>(.*?)</p>', last_chunk, re.DOTALL):
+                p_text = strip_tags(m.group(1)).strip().lower()
+                if next_lower in p_text and len(p_text) < len(next_title) * 3:
+                    in_standalone_p = True
+                    break
+            if in_heading or in_standalone_p:
                 issues.append('END_BLEED')
 
     return issues
