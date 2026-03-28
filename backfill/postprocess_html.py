@@ -408,13 +408,13 @@ def postprocess_article(html, article, pdf_path=None):
     section = article.get('section', '')
 
     if section in ('Book Reviews', 'Book Review'):
-        # Detect combined reviews: consecutive book review entries that overlap
-        # in page range. These are one review covering multiple books —
+        # Detect combined reviews: consecutive book review entries with identical
+        # page ranges. These are one review covering multiple books —
         # don't cut at the next entry's title.
         is_combined = (
             article.get('pdf_page_start') is not None
-            and article.get('_next_page_start') is not None
-            and article.get('_next_page_start') <= article.get('pdf_page_end', -1)
+            and article.get('pdf_page_start') == article.get('_next_page_start')
+            and article.get('pdf_page_end') == article.get('_next_page_end')
         )
         html = extract_book_review(
             html,
