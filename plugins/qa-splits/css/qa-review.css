@@ -312,19 +312,28 @@ body {
     background: #3a3a42;
 }
 
-.qa-input {
+.qa-input,
+.qa-textarea {
     padding: 8px 12px;
     border: 1px solid rgba(255,255,255,0.2);
     border-radius: 4px;
     font-family: var(--font-ui);
     font-size: 14px;
-    width: 240px;
+    width: 320px;
     background: rgba(255,255,255,0.08);
     color: var(--text-inverse);
     transition: border-color 0.15s, background 0.15s;
 }
 
-.qa-input::placeholder { color: rgba(255,255,255,0.35); }
+.qa-textarea {
+    resize: vertical;
+    min-height: 60px;
+    max-height: 200px;
+    line-height: 1.4;
+}
+
+.qa-input::placeholder,
+.qa-textarea::placeholder { color: rgba(255,255,255,0.35); }
 .qa-input:focus {
     outline: none;
     border-color: var(--accent);

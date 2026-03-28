@@ -86,7 +86,8 @@
 
         els['reject-comment'].addEventListener('keydown', (e) => {
             if (e.key === 'Escape') hideRejectInput();
-            if (e.key === 'Enter') {
+            // Ctrl+Enter or Cmd+Enter to submit (plain Enter adds newline)
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 const comment = els['reject-comment'].value.trim();
                 if (!comment) {
@@ -453,6 +454,11 @@
     function showRejectInput() {
         els['reject-comment'].style.display = '';
         els['btn-submit-reject'].style.display = '';
+        // Prepopulate with existing rejection comment if any
+        const article = currentIndex >= 0 ? articles[currentIndex] : null;
+        if (article && article.comment && !els['reject-comment'].value) {
+            els['reject-comment'].value = article.comment;
+        }
         els['reject-comment'].focus();
     }
 
