@@ -13,6 +13,8 @@ Usage:
     python backfill/htmlgen.py backfill/private/output/*/toc.json                       # all issues
     python backfill/htmlgen.py backfill/private/output/10.1/toc.json --dry-run          # cost estimate
     python backfill/htmlgen.py backfill/private/output/10.1/toc.json --article=3        # single article (1-indexed)
+    python backfill/htmlgen.py backfill/private/output/*/toc.json --overwrite           # regenerate all, even existing
+    python backfill/htmlgen.py backfill/private/output/*/toc.json --from-list regen.txt # only articles listed in file
     python backfill/htmlgen.py backfill/private/output/10.1/toc.json --workers=5        # concurrent API calls
 
 Requires ANTHROPIC_API_KEY environment variable (or .env file).
@@ -46,6 +48,7 @@ from postprocess_html import strip_abstract, check_missing_refs, detect_bad_spli
 from split import title_in_split_pdf
 
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
+PROMPT_VERSION = 4  # Bump when prompt changes; tracked in toc.json _html_prompt_version
 
 # Pricing per million tokens (docs.anthropic.com/en/docs/about-claude/pricing)
 MODEL_PRICING = {
@@ -409,14 +412,14 @@ def collect_articles(toc_paths, article_filter=None):
     return articles
 
 
-def estimate_cost(articles, model_name=DEFAULT_MODEL):
+def estimate_cost(articles, model_name=DEFAULT_MODEL, overwrite=False):
     """Estimate API cost for generating HTML for the given articles."""
     pricing = MODEL_PRICING.get(model_name, MODEL_PRICING[DEFAULT_MODEL])
     total_pages = 0
     skip_count = 0
     for _, _, _, _, article in articles:
         out_path = html_output_path(article['split_pdf'])
-        if os.path.exists(out_path):
+        if not overwrite and os.path.exists(out_path):
             skip_count += 1
             continue
         doc = fitz.open(article['split_pdf'])
@@ -448,6 +451,10 @@ def main():
                         help=f'Claude model (default: {DEFAULT_MODEL})')
     parser.add_argument('--workers', type=int, default=8,
                         help='Max concurrent API workers (default: 8)')
+    parser.add_argument('--overwrite', action='store_true',
+                        help='Regenerate even if HTML exists (still skips _manual_html)')
+    parser.add_argument('--from-list', metavar='FILE',
+                        help='Read article list from file (one per line: vol.iss/seq, e.g. 36.2/02)')
     parser.add_argument('--yes', '-y', action='store_true', help='Skip cost confirmation prompt')
     args = parser.parse_args()
 
@@ -464,7 +471,7 @@ def main():
 
     model_name = args.model
     pricing = MODEL_PRICING.get(model_name, MODEL_PRICING[DEFAULT_MODEL])
-    est = estimate_cost(articles, model_name)
+    est = estimate_cost(articles, model_name, overwrite=args.overwrite)
     print(f"\nHTML generation estimate:")
     print(f"  toc.json files:    {len(args.toc_json)}")
     print(f"  Total articles:    {est['total_articles']}")
@@ -507,21 +514,47 @@ def main():
     truncated_articles = []
     filtered_articles = []
     error_articles = []
+    completed_articles = []  # (toc_path, idx) for prompt version tracking
     lock = threading.Lock()
+
+    # Parse --from-list filter if provided
+    from_list_filter = None
+    if args.from_list:
+        with open(args.from_list) as f:
+            from_list_filter = set()
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                # Accept "vol.iss/seq" (e.g. "36.2/02") or just "vol.iss/seq"
+                from_list_filter.add(line)
 
     # Filter to only articles that need processing
     to_process = []
     manual_skipped = 0
     for item in articles:
-        _, _, _, _, article = item
+        _, vol, iss, idx, article = item
         out_path = html_output_path(article['split_pdf'])
+
+        # Always skip _manual_html
         if article.get('_manual_html') and os.path.exists(out_path):
             manual_skipped += 1
             skipped += 1
             continue
-        if os.path.exists(out_path):
+
+        # --from-list filter: only process articles in the list
+        if from_list_filter is not None:
+            dir_name = str(vol) if isinstance(vol, int) and vol <= 5 and iss == 1 else f"{vol}.{iss}"
+            key = f"{dir_name}/{idx + 1:02d}"
+            if key not in from_list_filter:
+                skipped += 1
+                continue
+
+        # Skip existing unless --overwrite
+        if not args.overwrite and os.path.exists(out_path):
             skipped += 1
             continue
+
         to_process.append(item)
     if manual_skipped:
         print(f"  Skipping {manual_skipped} manually-corrected HTML(s) (delete file to force regeneration)")
@@ -654,6 +687,7 @@ def main():
                 total_output += out_tok
                 total_pages += num_pages
                 completed += 1
+                completed_articles.append((toc_path, idx))
                 cost_so_far = (total_input / 1_000_000 * pricing['input'] +
                                total_output / 1_000_000 * pricing['output'])
                 trunc_flag = ' TRUNCATED' if truncated else ''
@@ -676,6 +710,18 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = [executor.submit(process_article, item) for item in to_process]
         concurrent.futures.wait(futures)
+
+    # Batch-update toc.json with prompt version for completed articles
+    toc_updates = {}  # toc_path -> set of article indices
+    for toc_path, idx in completed_articles:
+        toc_updates.setdefault(toc_path, set()).add(idx)
+    for toc_path, indices in toc_updates.items():
+        with open(toc_path) as f:
+            toc_data = json.load(f)
+        for idx in indices:
+            toc_data['articles'][idx]['_html_prompt_version'] = PROMPT_VERSION
+        with open(toc_path, 'w') as f:
+            json.dump(toc_data, f, indent=2, ensure_ascii=False)
 
     elapsed = time.time() - start_time
     actual_cost = (total_input / 1_000_000 * pricing['input'] +
