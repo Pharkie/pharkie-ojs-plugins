@@ -124,15 +124,19 @@ def _find_block_by_text(html, target_text, search_start=0, search_end=None):
 # Article post-processing steps
 # ---------------------------------------------------------------
 
-def strip_start_bleed(html, prev_title):
-    """Remove content from the previous article at the start of the HTML."""
-    if not prev_title:
+def strip_start_bleed(html, own_title):
+    """Remove content from the previous article at the start of the HTML.
+
+    Strategy: find this article's own title. Everything before it is
+    bleed from the previous article. This is more reliable than searching
+    for the previous article's title, because the bleed is the TAIL of
+    the previous article (body text, refs) — not its title.
+    """
+    if not own_title:
         return html
-    # Search up to the first body heading (structural landmark)
-    search_end = _find_first_body_heading(html)
-    start, end = _find_block_by_text(html, prev_title, search_end=search_end)
-    if start is not None:
-        html = html[end:].lstrip()
+    start, _ = _find_block_by_text(html, own_title)
+    if start is not None and start > 0:
+        html = html[start:]
     return html
 
 
@@ -311,6 +315,11 @@ def postprocess_article(html, article, pdf_path=None):
         article: toc.json article dict
         pdf_path: path to split PDF (for ref verification)
     """
+    # Skip post-processing for content-filtered articles (PyMuPDF fallback).
+    # These have no HTML structure — the pipeline would mangle them.
+    if '<!-- AUTO-EXTRACTED:' in html[:100]:
+        return html
+
     is_book_review = article.get('section', '') in ('Book Reviews', 'Book Review')
 
     if is_book_review:
@@ -321,7 +330,7 @@ def postprocess_article(html, article, pdf_path=None):
             reviewer=article.get('reviewer', ''),
         )
     else:
-        html = strip_start_bleed(html, article.get('_prev_title', ''))
+        html = strip_start_bleed(html, article.get('title', ''))
         html = strip_title(html, article.get('title', ''))
         html = strip_authors(html, article.get('authors', ''))
         html = strip_conference_note(html)
