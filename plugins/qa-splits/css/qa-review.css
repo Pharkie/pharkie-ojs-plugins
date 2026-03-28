@@ -99,17 +99,17 @@ body {
     grid-column: 1 / -1;
     background: var(--surface-dark);
     color: var(--text-inverse);
-    padding: 12px 20px;
+    padding: 10px 20px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
     border-bottom: 3px solid var(--accent-red);
 }
 
 .qa-meta {
     flex: 1;
-    min-width: 300px;
+    min-width: 200px;
 }
 
 .qa-meta-primary {
@@ -121,13 +121,15 @@ body {
 
 .qa-title {
     font-family: var(--font-display);
-    font-size: 19px;
+    font-size: 17px;
     font-weight: 600;
     letter-spacing: -0.01em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 650px;
+    max-width: 400px;
+    flex-shrink: 1;
+    min-width: 120px;
 }
 
 .qa-meta-secondary {
@@ -185,6 +187,38 @@ body {
     border-right: 1px solid rgba(255,255,255,0.15);
 }
 
+.qa-btn-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.qa-feedback {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.3s;
+    height: 14px;
+}
+
+.qa-feedback-approve { color: var(--accent-green); }
+.qa-feedback-reject { color: var(--accent-red); }
+
+.qa-feedback.qa-feedback-show {
+    animation: qa-feedback-flash 1.5s ease forwards;
+}
+
+@keyframes qa-feedback-flash {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 .qa-nav {
     display: flex;
     align-items: center;
@@ -192,17 +226,19 @@ body {
 }
 
 .qa-progress {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-inverse-muted);
     white-space: nowrap;
     letter-spacing: 0.02em;
-    padding-left: 8px;
+    padding: 4px 10px;
     cursor: pointer;
-    transition: color 0.15s;
+    transition: color 0.15s, background 0.15s;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
 }
 .qa-progress:hover {
     color: var(--text-inverse);
-    text-decoration: underline;
+    background: rgba(255,255,255,0.12);
     border-left: 1px solid rgba(255,255,255,0.15);
 }
 
@@ -471,7 +507,7 @@ body {
 
 .qa-toast {
     position: fixed;
-    top: 16px;
+    top: 80px;
     right: 16px;
     padding: 12px 22px;
     border-radius: 4px;

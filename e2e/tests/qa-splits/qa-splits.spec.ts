@@ -299,10 +299,9 @@ test.describe('QA Splits plugin', () => {
     // Press A to approve
     await page.keyboard.press('a');
 
-    // Toast should appear
-    const toast = page.locator('.qa-toast-success');
-    await expect(toast).toBeVisible({ timeout: 5000 });
-    await expect(toast).toContainText('Approved');
+    // Inline feedback should flash under button
+    const feedback = page.locator('#feedback-approve');
+    await expect(feedback).toHaveText('Done', { timeout: 5000 });
 
     // Status badge should update
     await expect(page.locator('#qa-status')).toContainText('Approved');
@@ -334,10 +333,9 @@ test.describe('QA Splits plugin', () => {
     await commentInput.fill('e2e-test-rejection: bad split on page 3');
     await page.keyboard.press('Enter');
 
-    // Toast should appear (red for rejection)
-    const toast = page.locator('.qa-toast-error');
-    await expect(toast).toBeVisible({ timeout: 5000 });
-    await expect(toast).toContainText('Rejected');
+    // Inline feedback should flash under button
+    const feedback = page.locator('#feedback-reject');
+    await expect(feedback).toHaveText('Done', { timeout: 5000 });
 
     // Status badge should update
     await expect(page.locator('#qa-status')).toContainText('Rejected');
