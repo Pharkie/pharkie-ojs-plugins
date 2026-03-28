@@ -44,7 +44,7 @@ except ImportError:
     sys.exit(1)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from postprocess_html import postprocess_article
+from postprocess_html import postprocess_article, verify_postprocessed
 from split import title_in_split_pdf
 
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
@@ -507,7 +507,14 @@ def main():
 
             # Post-processing: deterministic trimming
             # (postprocess_html.py handles title/abstract/keywords/bleed stripping)
-            html = postprocess_article(html, article, split_pdf)
+            raw_html = html
+            html = postprocess_article(raw_html, article, split_pdf)
+
+            # Verify post-processing output
+            pp_warnings = verify_postprocessed(raw_html, html, article)
+            if pp_warnings:
+                for w in pp_warnings:
+                    print(f"  ⚠ {label}: {w}", flush=True)
 
             # Save final trimmed HTML
             with open(out_path, 'w', encoding='utf-8') as f:

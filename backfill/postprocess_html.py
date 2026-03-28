@@ -35,6 +35,8 @@ MATCH_THRESHOLD = 0.6
 SUBSTRING_PREFIX_LEN = 50
 # Minimum abstract length worth stripping (shorter abstracts risk false matches)
 MIN_ABSTRACT_LENGTH = 30
+# Final HTML shorter than this (in chars) is flagged as empty/broken
+SHORT_CONTENT_THRESHOLD = 100
 
 
 def _clean(text):
@@ -273,7 +275,10 @@ def extract_book_review(html, book_title, next_book_title=None, reviewer=None):
     review_end = len(html)
     if next_book_title:
         clean_next = re.sub(r'^Book Review:\s*', '', next_book_title, flags=re.IGNORECASE)
-        next_start, _ = _find_block_by_text(html, clean_next, search_start=start + 100)
+        # Search for next book after the current title block (skip past it)
+        _, current_end = _find_block_by_text(html, clean_book, search_start=start)
+        search_after = current_end if current_end else start + len(clean_book)
+        next_start, _ = _find_block_by_text(html, clean_next, search_start=search_after)
         if next_start is not None:
             review_end = next_start
 
@@ -317,6 +322,95 @@ def postprocess_article(html, article, pdf_path=None):
 # ---------------------------------------------------------------
 # Verification helpers
 # ---------------------------------------------------------------
+
+# Section headings that satisfy the title check as a fallback
+# (letters/editorials may not have their toc.json title in the PDF)
+_SECTION_HEADINGS = frozenset({
+    'letters to the editors', 'letters to the editor', 'letter to the editors',
+    'letter to the editor', 'letters', 'editorial', 'book reviews',
+    'book review editorial', 'obituary',
+})
+
+
+def _strip_toc_prefixes(title):
+    """Strip toc.json prefixes that don't appear in the PDF/HTML.
+
+    Same logic as split.py title_in_split_pdf — kept in sync.
+    """
+    title = re.sub(
+        r'^(Book Reviews?|Film Review|Exhibition Report|Poem'
+        r'|Personally Speaking|Obituary|Essay Review'
+        r'|Letter to the Editors?|Responses?( to)?'
+        r'|Prof\.?|Professor)\s*:?\s*',
+        '', title, flags=re.IGNORECASE
+    ).strip()
+    title = re.sub(
+        r'^(Professor|Prof\.?)\s*:?\s*',
+        '', title, flags=re.IGNORECASE
+    ).strip()
+    title = re.sub(r'\s*\([^)]+\)\s*$', '', title)
+    return title
+
+
+def _title_in_text(title, text):
+    """Check if title appears in text using fuzzy matching.
+
+    Substring match or 80% word overlap (handles line breaks, fused words).
+    """
+    clean_title = _clean(title)
+    clean_text = _clean(text)
+    if not clean_title:
+        return True
+    if clean_title in clean_text:
+        return True
+    title_words = [w for w in clean_title.split() if len(w) > 2]
+    if not title_words:
+        return True
+    found = sum(1 for w in title_words if w in clean_text)
+    return found / len(title_words) >= 0.8
+
+
+def verify_postprocessed(raw_html, final_html, article):
+    """Verify post-processing produced correct output.
+
+    Returns list of warning strings (empty = all good).
+    """
+    warnings = []
+    title = article.get('title', '')
+    stripped_title = _strip_toc_prefixes(title)
+    section = article.get('section', '')
+    is_book_review = section in ('Book Reviews', 'Book Review')
+    raw_text = _strip_tags(raw_html)
+    final_text = _strip_tags(final_html)
+
+    # CHECK 1: Title must appear in raw HTML (Haiku extracted the right content)
+    if stripped_title and not _title_in_text(stripped_title, raw_text):
+        # Fallback for letters/editorials: accept section heading
+        if not any(h in raw_text.lower() for h in _SECTION_HEADINGS):
+            warnings.append(f'TITLE_NOT_IN_RAW: "{stripped_title[:50]}" not found in raw HTML')
+
+    # CHECK 2: For articles (not book reviews), title should NOT appear as a
+    # heading or standalone block at the start of the final HTML.
+    # Uses substring match (not word overlap) to avoid false positives from
+    # body text that happens to contain the same words as the title.
+    if not is_book_review and stripped_title:
+        clean_title = _clean(stripped_title)
+        # Check first few blocks for the full title as substring
+        first_blocks = _strip_tags(final_html[:500]).strip()
+        if clean_title and clean_title in _clean(first_blocks):
+            warnings.append(f'TITLE_NOT_STRIPPED: "{stripped_title[:50]}" still in final HTML')
+
+    # CHECK 3: For book reviews, the book title SHOULD be in final HTML
+    if is_book_review and stripped_title:
+        if not _title_in_text(stripped_title, final_text[:1000]):
+            warnings.append(f'BOOK_TITLE_MISSING: "{stripped_title[:50]}" not in final HTML')
+
+    # CHECK 4: Final HTML should not be empty
+    if len(final_text.strip()) < SHORT_CONTENT_THRESHOLD:
+        warnings.append(f'EMPTY_OUTPUT: final HTML has only {len(final_text.strip())} chars')
+
+    return warnings
+
 
 def pdf_has_formal_refs(pdf_path):
     """Check if PDF has a standalone back-matter heading."""
