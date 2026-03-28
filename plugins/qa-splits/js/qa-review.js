@@ -26,7 +26,7 @@
     let scrollHandler = null;   // Stored ref for cleanup
 
     // Prefetch cache: submissionId → { pdf: Blob|null, html: string|null, classification: object|null }
-    const PREFETCH_AHEAD = 3;
+    const PREFETCH_AHEAD = 5;
     const prefetchCache = new Map();
 
     // DOM refs
@@ -124,6 +124,10 @@
             }
 
             loadArticle(startIndex);
+
+            // Pre-resolve random/problem targets so buttons are instant
+            prefetchRandomTarget();
+            prefetchProblemTarget();
         } catch (err) {
             els['qa-title'].textContent = 'Error loading articles';
             console.error('Failed to load articles:', err);
@@ -498,7 +502,50 @@
         }
     }
 
+    // Pre-fetched random/problem targets — resolved ahead of time
+    let nextRandomIdx = null;
+    let nextProblemIdx = null;
+
+    function prefetchRandomTarget() {
+        fetch(API + '/nav/random-unreviewed', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.submission_id) {
+                    const idx = articles.findIndex(a => a.submission_id === data.submission_id);
+                    nextRandomIdx = idx >= 0 ? idx : null;
+                    // Also prefetch that article's content
+                    if (nextRandomIdx !== null) prefetchNearby(nextRandomIdx);
+                } else {
+                    nextRandomIdx = null;
+                }
+            })
+            .catch(() => { nextRandomIdx = null; });
+    }
+
+    function prefetchProblemTarget() {
+        fetch(API + '/nav/problem-case', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.submission_id) {
+                    const idx = articles.findIndex(a => a.submission_id === data.submission_id);
+                    nextProblemIdx = idx >= 0 ? idx : null;
+                    if (nextProblemIdx !== null) prefetchNearby(nextProblemIdx);
+                } else {
+                    nextProblemIdx = null;
+                }
+            })
+            .catch(() => { nextProblemIdx = null; });
+    }
+
     async function goToRandom() {
+        if (nextRandomIdx !== null) {
+            loadArticle(nextRandomIdx);
+            nextRandomIdx = null;
+            // Fetch the next random target in background
+            prefetchRandomTarget();
+            return;
+        }
+        // Fallback: fetch synchronously if prefetch wasn't ready
         try {
             const res = await fetch(API + '/nav/random-unreviewed', { credentials: 'same-origin' });
             const data = await res.json();
@@ -511,9 +558,16 @@
         } catch (err) {
             toast('Error finding random article', 'error');
         }
+        prefetchRandomTarget();
     }
 
     async function goToProblem() {
+        if (nextProblemIdx !== null) {
+            loadArticle(nextProblemIdx);
+            nextProblemIdx = null;
+            prefetchProblemTarget();
+            return;
+        }
         try {
             const res = await fetch(API + '/nav/problem-case', { credentials: 'same-origin' });
             const data = await res.json();
@@ -529,6 +583,7 @@
         } catch (err) {
             toast('Error finding problem case', 'error');
         }
+        prefetchProblemTarget();
     }
 
     // ── UI helpers ──
