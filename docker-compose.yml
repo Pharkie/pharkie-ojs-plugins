@@ -8,6 +8,17 @@ services:
       context: .
       dockerfile: docker/wp/Dockerfile
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
     environment:
       WORDPRESS_DB_HOST: wp-db
       WORDPRESS_DB_USER: wordpress
@@ -31,6 +42,16 @@ services:
   wp-db:
     image: mariadb:10.11
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
     environment:
       MYSQL_ROOT_PASSWORD: ${WP_DB_ROOT_PASSWORD}
       MYSQL_DATABASE: wordpress
@@ -52,6 +73,17 @@ services:
       dockerfile: docker/ojs/Dockerfile  # Extends pkpofficial/ojs:3_5_0-3 — adds gettext for envsubst
     platform: linux/amd64  # OJS base image is amd64 only
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
     entrypoint: /etc/ojs/entrypoint.sh
     environment:
       OJS_DB_HOST: ojs-db
@@ -125,6 +157,8 @@ services:
       - ./plugins/wpojs-subscription-api/api/v1/wpojs:/var/www/html/api/v1/wpojs:ro
       - ./plugins/ojs-inline-html-galley:/var/www/html/plugins/generic/inlineHtmlGalley
       - ./plugins/stripe-payment:/var/www/html/plugins/paymethod/stripe
+      - ./plugins/qa-splits:/var/www/html/plugins/generic/qaSplits
+      - ./plugins/qa-splits/api/v1/qa-splits:/var/www/html/api/v1/qa-splits:ro
       - ./docker/ojs/entrypoint.sh:/etc/ojs/entrypoint.sh:ro
       - ./docker/ojs/config.inc.php.tmpl:/etc/ojs/config.inc.php.tmpl:ro
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro
@@ -145,6 +179,16 @@ services:
   ojs-db:
     image: mariadb:10.11
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
     environment:
       MYSQL_ROOT_PASSWORD: ${OJS_DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ojs
@@ -163,6 +207,12 @@ services:
   adminer:
     image: adminer:4.8.1-standalone
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     environment:
       ADMINER_DEFAULT_SERVER: wp-db
     depends_on:

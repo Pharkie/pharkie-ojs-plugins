@@ -91,4 +91,54 @@ ufw allow 8081/tcp comment 'OJS staging' > /dev/null
 ufw --force enable
 echo "[ok] ufw active (22, 80, 443, 8080, 8081 allowed)."
 
+# --- Docker log rotation ---
+echo "--- Docker log rotation ---"
+DAEMON_JSON="/etc/docker/daemon.json"
+if [ -f "$DAEMON_JSON" ] && grep -q max-size "$DAEMON_JSON"; then
+  echo "[ok] Docker log rotation already configured."
+else
+  cat > "$DAEMON_JSON" <<'DJEOF'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+DJEOF
+  echo "[ok] Docker log rotation configured (10m x 3 files)."
+  echo "[info] Docker restart required for log rotation to take effect."
+  echo "       Containers will briefly restart. Run inside a maintenance window."
+fi
+
+# --- Deploy user ---
+echo "--- Deploy user ---"
+DEPLOY_USER="deploy"
+if id "$DEPLOY_USER" &>/dev/null; then
+  echo "[ok] User '$DEPLOY_USER' already exists."
+else
+  useradd -m -s /bin/bash "$DEPLOY_USER"
+  echo "[ok] User '$DEPLOY_USER' created."
+fi
+# Add to docker group (idempotent)
+usermod -aG docker "$DEPLOY_USER" 2>/dev/null
+echo "[ok] '$DEPLOY_USER' in docker group."
+# Copy SSH authorized_keys from root
+DEPLOY_SSH="/home/$DEPLOY_USER/.ssh"
+mkdir -p "$DEPLOY_SSH"
+if [ -f /root/.ssh/authorized_keys ]; then
+  cp /root/.ssh/authorized_keys "$DEPLOY_SSH/authorized_keys"
+  chown -R "$DEPLOY_USER:$DEPLOY_USER" "$DEPLOY_SSH"
+  chmod 700 "$DEPLOY_SSH"
+  chmod 600 "$DEPLOY_SSH/authorized_keys"
+  echo "[ok] SSH keys copied to '$DEPLOY_USER'."
+fi
+# Sudoers for limited commands
+cat > "/etc/sudoers.d/$DEPLOY_USER" <<'SUDOEOF'
+# Managed by provision-vps.sh — do not edit manually
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart ssh, /usr/bin/systemctl restart docker, /usr/sbin/ufw, /usr/bin/crontab, /usr/sbin/shutdown
+SUDOEOF
+chmod 440 "/etc/sudoers.d/$DEPLOY_USER"
+echo "[ok] Sudoers configured for '$DEPLOY_USER'."
+
 echo "=== Provisioning complete ==="

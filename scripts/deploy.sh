@@ -265,11 +265,11 @@ fi
 echo "--- Checking backup cron ---"
 $SSH_CMD "
   chmod +x $REMOTE_DIR/scripts/backup-ojs-db.sh 2>/dev/null
-  if crontab -l 2>/dev/null | grep -qF 'backup-ojs-db.sh'; then
+  if sudo crontab -l 2>/dev/null | grep -qF 'backup-ojs-db.sh'; then
     echo '[ok] Backup cron already installed.'
   elif [ -f $REMOTE_DIR/scripts/backup-ojs-db.sh ]; then
-    mkdir -p /opt/backups/ojs/daily /opt/backups/ojs/weekly
-    (crontab -l 2>/dev/null; echo '0 3 * * * /opt/pharkie-ojs-plugins/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | crontab -
+    sudo mkdir -p /opt/backups/ojs/daily /opt/backups/ojs/weekly
+    (sudo crontab -l 2>/dev/null; echo '0 3 * * * /opt/pharkie-ojs-plugins/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | sudo crontab -
     echo '[ok] Backup cron installed (daily 03:00 UTC).'
   else
     echo '[skip] backup-ojs-db.sh not found, skipping cron.'
