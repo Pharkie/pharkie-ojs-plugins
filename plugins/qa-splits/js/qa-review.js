@@ -474,11 +474,16 @@
             article.reviewed_at = new Date().toISOString();
             article.comment = comment || null;
 
-            updateStatusBadge(decision, 'you', article.reviewed_at, article.comment);
             hideRejectInput();
-            showFeedback(decision);
-
             recalculateProgress();
+
+            // Auto-advance to next article
+            if (currentIndex < articles.length - 1) {
+                loadArticle(currentIndex + 1);
+            } else {
+                // Last article — just update the badge
+                updateStatusBadge(decision, 'you', article.reviewed_at, article.comment);
+            }
         } catch (err) {
             showFeedback('error');
             console.error('Review submission error:', err);
