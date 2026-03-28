@@ -69,6 +69,7 @@
         els['btn-last-seen'].addEventListener('click', goToLastSeen);
         els['btn-random'].addEventListener('click', goToRandom);
         els['btn-problem'].addEventListener('click', goToProblem);
+        els['qa-progress'].addEventListener('click', showDashboard);
 
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -543,6 +544,140 @@
         }, { once: true });
 
         document.body.appendChild(overlay);
+    }
+
+    // ── Stats dashboard overlay ──
+
+    async function showDashboard() {
+        const existing = document.querySelector('.qa-dashboard-overlay');
+        if (existing) { existing.remove(); return; }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'qa-dashboard-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-label', 'QA Progress Dashboard');
+        overlay.innerHTML = '<div class="qa-dashboard"><div class="qa-loading">Loading stats...</div></div>';
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+        document.addEventListener('keydown', function dismiss(e) {
+            if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', dismiss); }
+        });
+
+        document.body.appendChild(overlay);
+
+        try {
+            const res = await fetch(API + '/stats', { credentials: 'same-origin' });
+            const data = await res.json();
+            renderDashboard(overlay.querySelector('.qa-dashboard'), data);
+        } catch (err) {
+            overlay.querySelector('.qa-dashboard').innerHTML = '<p>Failed to load stats</p>';
+        }
+    }
+
+    function renderDashboard(container, data) {
+        const o = data.overall;
+        const pctApproved = o.total ? Math.round((o.approved / o.total) * 100) : 0;
+        const pctRejected = o.total ? Math.round((o.rejected / o.total) * 100) : 0;
+        const pctUnreviewed = o.total ? Math.round((o.unreviewed / o.total) * 100) : 0;
+
+        // Reviewer depth
+        const rd = data.by_reviewer_count || [];
+
+        let html = '<div class="qa-dash-header">'
+            + '<h2>QA Progress</h2>'
+            + '<button class="qa-dash-close" onclick="this.closest(\'.qa-dashboard-overlay\').remove()">&times;</button>'
+            + '</div>';
+
+        // Overall donut
+        html += '<div class="qa-dash-overview">';
+        html += '<div class="qa-dash-donut-wrap">';
+        html += renderDonut(pctApproved, pctRejected, pctUnreviewed, o.total);
+        html += '</div>';
+        html += '<div class="qa-dash-numbers">';
+        html += '<div class="qa-dash-stat qa-dash-stat-approved"><span class="qa-dash-num">' + o.approved + '</span><span class="qa-dash-label">Approved</span></div>';
+        html += '<div class="qa-dash-stat qa-dash-stat-rejected"><span class="qa-dash-num">' + o.rejected + '</span><span class="qa-dash-label">Rejected</span></div>';
+        html += '<div class="qa-dash-stat qa-dash-stat-unreviewed"><span class="qa-dash-num">' + o.unreviewed + '</span><span class="qa-dash-label">Unreviewed</span></div>';
+        html += '</div>';
+        html += '</div>';
+
+        // Reviewer depth
+        html += '<div class="qa-dash-section"><h3>Review Depth</h3><div class="qa-dash-bars">';
+        rd.forEach(r => {
+            const pct = o.total ? Math.round((r.count / o.total) * 100) : 0;
+            html += '<div class="qa-dash-bar-row">'
+                + '<span class="qa-dash-bar-label">' + r.label + '</span>'
+                + '<div class="qa-dash-bar-track"><div class="qa-dash-bar-fill" style="width:' + pct + '%"></div></div>'
+                + '<span class="qa-dash-bar-value">' + r.count + '</span>'
+                + '</div>';
+        });
+        html += '</div></div>';
+
+        // Section breakdown
+        html += '<div class="qa-dash-section"><h3>By Section</h3><table class="qa-dash-table">';
+        html += '<tr><th>Section</th><th>Total</th><th>Approved</th><th>Rejected</th><th>Unreviewed</th><th>Progress</th></tr>';
+
+        const sections = Object.entries(data.by_section || {}).sort((a, b) => b[1].total - a[1].total);
+        sections.forEach(([name, s]) => {
+            const pct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
+            html += '<tr>'
+                + '<td>' + escapeHtml(name) + '</td>'
+                + '<td>' + s.total + '</td>'
+                + '<td>' + s.approved + '</td>'
+                + '<td>' + s.rejected + '</td>'
+                + '<td>' + s.unreviewed + '</td>'
+                + '<td><div class="qa-dash-mini-bar"><div class="qa-dash-mini-fill" style="width:' + pct + '%"></div><span>' + pct + '%</span></div></td>'
+                + '</tr>';
+        });
+        html += '</table></div>';
+
+        container.innerHTML = html;
+
+        // Animate donut segments in
+        requestAnimationFrame(() => {
+            container.querySelectorAll('.qa-dash-donut-seg').forEach(seg => {
+                seg.style.strokeDashoffset = seg.dataset.target;
+            });
+            container.querySelectorAll('.qa-dash-bar-fill').forEach(bar => {
+                bar.style.transition = 'width 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+            });
+        });
+    }
+
+    function renderDonut(pctApproved, pctRejected, pctUnreviewed, total) {
+        // SVG donut chart
+        const r = 70, cx = 90, cy = 90, circ = 2 * Math.PI * r;
+        const segApproved = (pctApproved / 100) * circ;
+        const segRejected = (pctRejected / 100) * circ;
+        const segUnreviewed = (pctUnreviewed / 100) * circ;
+
+        const offApproved = 0;
+        const offRejected = segApproved;
+        const offUnreviewed = segApproved + segRejected;
+
+        return '<svg class="qa-dash-donut" viewBox="0 0 180 180">'
+            + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--divider)" stroke-width="18"/>'
+            + '<circle class="qa-dash-donut-seg" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" '
+            + 'stroke="var(--accent-green)" stroke-width="18" '
+            + 'stroke-dasharray="' + segApproved + ' ' + circ + '" '
+            + 'stroke-dashoffset="0" '
+            + 'data-target="0" '
+            + 'transform="rotate(-90 ' + cx + ' ' + cy + ')"/>'
+            + '<circle class="qa-dash-donut-seg" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" '
+            + 'stroke="var(--accent-red)" stroke-width="18" '
+            + 'stroke-dasharray="' + segRejected + ' ' + circ + '" '
+            + 'stroke-dashoffset="-' + offRejected + '" '
+            + 'data-target="-' + offRejected + '" '
+            + 'transform="rotate(-90 ' + cx + ' ' + cy + ')"/>'
+            + '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" dy="0.35em" '
+            + 'font-family="var(--font-ui)" font-size="28" font-weight="700" fill="var(--text-primary)">'
+            + pctApproved + '%</text>'
+            + '<text x="' + cx + '" y="' + (cy + 18) + '" text-anchor="middle" '
+            + 'font-family="var(--font-ui)" font-size="11" fill="var(--text-muted)">'
+            + total + ' articles</text>'
+            + '</svg>';
     }
 
     // Boot
