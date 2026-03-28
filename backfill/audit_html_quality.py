@@ -2,14 +2,30 @@
 """
 Audit HTML galley quality against source PDFs.
 
-Checks each article's HTML for:
-- MISSING_REFS: PDF has a formal "References" heading but HTML doesn't
-- HAS_ABSTRACT: HTML body starts with the abstract text (should be skipped)
-- END_BLEED: HTML contains the title of the next article (leaked content)
+Checks ALL article types with section-specific standards:
+
+Articles:
+- MISSING_REFS: PDF has a back-matter heading but HTML doesn't
+- HAS_ABSTRACT: first <p> is predominantly the toc.json abstract text
+- TITLE_IN_BODY: article title still present at the start of the HTML
+- EMPTY: HTML body is too short
+
+Book Reviews:
+- BOOK_TITLE_MISSING: book title not found in HTML
+- EMPTY: HTML body is too short
+
+Editorial:
+- TITLE_IN_BODY: editorial title still present at the start
+- EMPTY: HTML body is too short
+
+Book Review Editorial:
+- HEADING_NOT_STRIPPED: "BOOK REVIEWS" heading still present
+- EMPTY: HTML body is too short
 
 Usage:
-    python backfill/audit_html_quality.py                    # all non-book-review articles
+    python backfill/audit_html_quality.py                    # all articles
     python backfill/audit_html_quality.py --issue 36.2       # single issue
+    python backfill/audit_html_quality.py --section Articles  # one section type
 """
 
 import argparse
@@ -22,17 +38,15 @@ import sys
 import fitz
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from citations import REFERENCE_HEADING_RE
+from postprocess_html import (
+    _clean, _strip_toc_prefixes, _title_in_text_fuzzy,
+    SHORT_CONTENT_THRESHOLD,
+)
 
 BACKFILL_DIR = os.path.dirname(__file__)
 OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
-
-BOOK_REVIEW_SECTIONS = ('Book Reviews', 'Book Review', 'Book Review Editorial')
-
-
-def clean(text):
-    """Lowercase, strip non-alphanumeric."""
-    return re.sub(r'[^a-z0-9 ]', '', text.lower())
 
 
 def strip_tags(html):
@@ -41,7 +55,7 @@ def strip_tags(html):
 
 
 def pdf_has_formal_refs(pdf_path):
-    """Check if PDF has a standalone back-matter heading (References, Notes, Bibliography, etc.)."""
+    """Check if PDF has a standalone back-matter heading."""
     doc = fitz.open(pdf_path)
     pdf_text = ''.join(p.get_text() for p in doc)
     doc.close()
@@ -52,13 +66,11 @@ def pdf_has_formal_refs(pdf_path):
 
 
 def html_has_refs(html):
-    """Check if HTML contains a back-matter section (References, Notes, Bibliography, etc.)."""
-    # Check for headings that match the shared regex
+    """Check if HTML contains a back-matter section heading."""
     for m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html, re.DOTALL):
-        heading_text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        heading_text = strip_tags(m.group(1)).strip()
         if REFERENCE_HEADING_RE.match(heading_text):
             return True
-    # Also check for strong-wrapped headings: <p><strong>References</strong></p>
     for m in re.finditer(r'<p>\s*<strong>(.*?)</strong>\s*</p>', html, re.DOTALL):
         heading_text = m.group(1).strip()
         if REFERENCE_HEADING_RE.match(heading_text):
@@ -66,102 +78,133 @@ def html_has_refs(html):
     return False
 
 
-def check_article(art, vol_dir, all_articles, idx):
-    """Check one article. Returns list of issue strings, or empty if OK."""
-    sp = art.get('split_pdf', '')
-    if not sp:
-        return []
-    slug = os.path.splitext(os.path.basename(sp))[0]
-    html_path = os.path.join(vol_dir, f'{slug}.html')
-    if not os.path.exists(html_path):
-        return ['NO_HTML']
+def _title_at_start(html, title):
+    """Check if the article title is still at the start of the HTML as a heading.
 
-    pdf_path = sp[2:] if sp.startswith('./') else sp
-    if not os.path.exists(pdf_path):
-        return ['NO_PDF']
+    Only flags if the first block is a heading tag (h1-h6) whose text
+    matches the title. Body paragraphs that happen to contain title words
+    are not flagged.
+    """
+    if not title:
+        return False
+    stripped = _strip_toc_prefixes(title)
+    if not stripped:
+        return False
+    # Only match if the first element is a heading containing the title
+    m = re.match(r'<h[1-6][^>]*>(.*?)</h[1-6]>', html, re.DOTALL)
+    if not m:
+        return False
+    heading_text = strip_tags(m.group(1)).strip()
+    # Use ordered word sequence — title words must appear in order
+    from postprocess_html import _text_to_regex
+    rx = _text_to_regex(stripped)
+    if rx is None:
+        return False
+    return bool(rx.search(_clean(heading_text)))
 
-    with open(html_path) as f:
-        html = f.read()
+
+# ---------------------------------------------------------------
+# Section-specific checks
+# ---------------------------------------------------------------
+
+def check_article(art, html, pdf_path, all_articles, idx):
+    """Check a standard article."""
+    issues = []
     html_text = strip_tags(html).strip()
 
-    issues = []
-
-    # CHECK 1: References — does PDF have a formal heading that HTML is missing?
+    # MISSING_REFS: PDF has refs but HTML doesn't
     if pdf_has_formal_refs(pdf_path) and not html_has_refs(html):
         issues.append('MISSING_REFS')
 
-    # CHECK 2: Abstract leak — is the first <p> block mostly the abstract?
-    # Only flags if the first <p> is predominantly abstract text, not if the
-    # body happens to start with the same sentence (common in Introductions).
+    # HAS_ABSTRACT: first <p> matches the toc.json abstract
     abstract = art.get('abstract', '')
     if abstract and len(abstract) > 50:
-        # Extract first <p> content
         m = re.search(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
         if m:
             first_p = strip_tags(m.group(1)).strip()
-            # Only flag if the first <p> is SHORT (abstract-length) and matches.
-            # A long Introduction paragraph that starts with the abstract sentence
-            # is real body content, not a leak.
             if len(first_p) < len(abstract) * 2:
-                abs_clean = clean(abstract)
-                p_clean = clean(first_p)
-                # Check word overlap
-                abs_words = set(abs_clean.split())
-                p_words = set(p_clean.split())
+                abs_words = set(_clean(abstract).split())
+                p_words = set(_clean(first_p).split())
                 if abs_words and p_words:
                     overlap = len(abs_words & p_words) / len(abs_words)
                     if overlap > 0.8:
                         issues.append('HAS_ABSTRACT')
 
-    # CHECK 3: End bleed — does the HTML contain the next article's title?
-    # Only flags if the title appears as a heading or standalone paragraph,
-    # NOT inside a reference citation (which commonly contains article titles).
-    if idx < len(all_articles) - 1:
-        next_title = all_articles[idx + 1].get('title', '')
-        if next_title and len(next_title) > 15:
-            next_lower = next_title.lower()
-            html_lower = html.lower()
-            # Check for title in a heading tag
-            in_heading = next_lower in strip_tags(
-                ''.join(re.findall(r'<h[23][^>]*>.*?</h[23]>', html_lower, re.DOTALL)))
-            # Check for title as a standalone paragraph BEFORE any references section.
-            # Titles in reference citations are not end bleed.
-            # Find where references start (last back-matter heading)
-            refs_start = len(html_lower)
-            for heading_m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html_lower, re.DOTALL):
-                heading_text = strip_tags(heading_m.group(1)).strip()
-                if REFERENCE_HEADING_RE.match(heading_text):
-                    refs_start = heading_m.start()
-            # Also check <p><strong>References</strong></p> pattern
-            for strong_m in re.finditer(r'<p>\s*<strong>(.*?)</strong>\s*</p>', html_lower, re.DOTALL):
-                heading_text = strong_m.group(1).strip()
-                if REFERENCE_HEADING_RE.match(heading_text):
-                    refs_start = min(refs_start, strong_m.start())
+    # TITLE_IN_BODY: title still at start
+    if _title_at_start(html, art.get('title', '')):
+        issues.append('TITLE_IN_BODY')
 
-            # Only check for end bleed BEFORE the references section
-            pre_refs = html_lower[:refs_start]
-            last_chunk = pre_refs[len(pre_refs) * 4 // 5:] if len(pre_refs) > 0 else ''
-            in_standalone_p = False
-            for m in re.finditer(r'<p[^>]*>(.*?)</p>', last_chunk, re.DOTALL):
-                p_text = strip_tags(m.group(1)).strip().lower()
-                if next_lower in p_text and len(p_text) < len(next_title) * 3:
-                    in_standalone_p = True
-                    break
-            if in_heading or in_standalone_p:
-                issues.append('END_BLEED')
+    # EMPTY
+    if len(html_text) < SHORT_CONTENT_THRESHOLD:
+        issues.append('EMPTY')
 
     return issues
 
 
+def check_book_review(art, html, all_articles, idx):
+    """Check a book review."""
+    issues = []
+    html_text = strip_tags(html).strip()
+
+    # BOOK_TITLE_MISSING: book title not in HTML
+    title = art.get('title', '')
+    stripped = _strip_toc_prefixes(title)
+    if stripped:
+        parts = [p.strip() for p in stripped.split('/') if p.strip()]
+        if not any(_title_in_text_fuzzy(p, html_text) for p in parts):
+            issues.append('BOOK_TITLE_MISSING')
+
+    # EMPTY
+    if len(html_text) < SHORT_CONTENT_THRESHOLD:
+        issues.append('EMPTY')
+
+    return issues
+
+
+def check_editorial(art, html):
+    """Check an editorial."""
+    issues = []
+    html_text = strip_tags(html).strip()
+
+    # TITLE_IN_BODY: editorial title still at start
+    if _title_at_start(html, art.get('title', '')):
+        issues.append('TITLE_IN_BODY')
+
+    # EMPTY
+    if len(html_text) < SHORT_CONTENT_THRESHOLD:
+        issues.append('EMPTY')
+
+    return issues
+
+
+def check_book_review_editorial(art, html):
+    """Check a book review editorial (section intro)."""
+    issues = []
+    html_text = strip_tags(html).strip()
+
+    # HEADING_NOT_STRIPPED: "BOOK REVIEWS" heading still present
+    if re.search(r'<h[1-3][^>]*>\s*BOOK\s+REVIEWS?\s*</h[1-3]>', html, re.IGNORECASE):
+        issues.append('HEADING_NOT_STRIPPED')
+
+    # EMPTY
+    if len(html_text) < SHORT_CONTENT_THRESHOLD:
+        issues.append('EMPTY')
+
+    return issues
+
+
+# ---------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser(description='Audit HTML galley quality')
     parser.add_argument('--issue', help='Single issue (e.g. 36.2)')
+    parser.add_argument('--section', help='Filter by section type (e.g. "Articles", "Book Reviews")')
     parser.add_argument('--verbose', '-v', action='store_true')
     args = parser.parse_args()
 
-    total = 0
-    passes = 0
-    failures = []
+    by_section = {}  # section -> {total, pass, failures}
 
     for toc_path in sorted(glob.glob(os.path.join(OUTPUT_DIR, '*/toc.json'))):
         with open(toc_path) as f:
@@ -175,7 +218,7 @@ def main():
         articles = toc.get('articles', [])
         for idx, art in enumerate(articles):
             section = art.get('section', '')
-            if section in BOOK_REVIEW_SECTIONS:
+            if args.section and section != args.section:
                 continue
             if art.get('_manual_html'):
                 continue
@@ -183,33 +226,80 @@ def main():
             if not sp:
                 continue
 
-            issues = check_article(art, vol_dir, articles, idx)
-            if issues == ['NO_HTML'] or issues == ['NO_PDF']:
+            slug = os.path.splitext(os.path.basename(sp))[0]
+            html_path = os.path.join(vol_dir, f'{slug}.html')
+            if not os.path.exists(html_path):
+                continue
+            pdf_path = sp[2:] if sp.startswith('./') else sp
+            if not os.path.exists(pdf_path):
                 continue
 
-            total += 1
-            slug = os.path.splitext(os.path.basename(sp))[0]
-            if issues:
-                failures.append((vol_iss, slug, issues))
-                if args.verbose:
-                    print(f'  FAIL {vol_iss}/{slug[:55]}: {", ".join(issues)}')
+            with open(html_path) as f:
+                html = f.read()
+
+            # Content-filtered articles: skip audit (known limitation)
+            if '<!-- AUTO-EXTRACTED:' in html[:100]:
+                continue
+
+            # Route to section-specific check
+            if section in ('Book Reviews', 'Book Review'):
+                issues = check_book_review(art, html, articles, idx)
+            elif section == 'Book Review Editorial':
+                issues = check_book_review_editorial(art, html)
+            elif section == 'Editorial':
+                issues = check_editorial(art, html)
             else:
-                passes += 1
+                issues = check_article(art, html, pdf_path, articles, idx)
 
-    print(f'Checked: {total} articles')
-    print(f'  PASS: {passes}')
-    print(f'  FAIL: {len(failures)}')
-    if failures:
-        counts = {}
-        for _, _, issues in failures:
-            for i in issues:
-                counts[i] = counts.get(i, 0) + 1
-        for issue_type, count in sorted(counts.items()):
+            # Track results by section
+            if section not in by_section:
+                by_section[section] = {'total': 0, 'passes': 0, 'failures': []}
+            by_section[section]['total'] += 1
+
+            if issues:
+                by_section[section]['failures'].append((vol_iss, slug, issues))
+                if args.verbose:
+                    print(f'  FAIL {vol_iss}/{slug[:55]} [{section[:12]}]: {", ".join(issues)}')
+            else:
+                by_section[section]['passes'] += 1
+
+    # Report
+    grand_total = sum(s['total'] for s in by_section.values())
+    grand_pass = sum(s['passes'] for s in by_section.values())
+    grand_fail = sum(len(s['failures']) for s in by_section.values())
+
+    print(f'Checked: {grand_total} articles')
+    print(f'  PASS: {grand_pass}')
+    print(f'  FAIL: {grand_fail}')
+
+    if grand_fail:
+        # Issue type counts across all sections
+        all_counts = {}
+        for s in by_section.values():
+            for _, _, issues in s['failures']:
+                for i in issues:
+                    all_counts[i] = all_counts.get(i, 0) + 1
+        for issue_type, count in sorted(all_counts.items()):
             print(f'    {issue_type}: {count}')
-        rate = passes / total * 100 if total else 0
-        print(f'  Pass rate: {rate:.1f}%')
 
-    return 0 if not failures else 1
+    print(f'\nBy section:')
+    for section in sorted(by_section.keys()):
+        s = by_section[section]
+        fail_count = len(s['failures'])
+        rate = s['passes'] / s['total'] * 100 if s['total'] else 0
+        print(f'  {section}: {s["passes"]}/{s["total"]} pass ({rate:.1f}%)')
+        if fail_count and args.verbose:
+            section_counts = {}
+            for _, _, issues in s['failures']:
+                for i in issues:
+                    section_counts[i] = section_counts.get(i, 0) + 1
+            for issue_type, count in sorted(section_counts.items()):
+                print(f'    {issue_type}: {count}')
+
+    rate = grand_pass / grand_total * 100 if grand_total else 0
+    print(f'\n  Overall: {rate:.1f}%')
+
+    return 0 if not grand_fail else 1
 
 
 if __name__ == '__main__':

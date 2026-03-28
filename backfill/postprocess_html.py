@@ -224,19 +224,36 @@ def strip_conference_note(html):
 
 
 def strip_abstract(html, abstract):
-    """Remove abstract heading and paragraph(s) from the HTML."""
+    """Remove abstract heading and paragraph(s) from the HTML.
+
+    Uses fuzzy word-overlap matching (not ordered-word regex) because
+    Haiku OCR may introduce errors in the abstract text (e.g. "clinicians"
+    → "citizenicians"). 80% word overlap is tolerant of OCR errors.
+    """
     if not abstract or len(abstract) < MIN_ABSTRACT_LENGTH:
         return html
 
     # Remove "Abstract" heading if present
     html = re.sub(r'<h[23][^>]*>\s*Abstract\s*</h[23]>\s*', '', html, count=1, flags=re.IGNORECASE)
 
-    # Search up to the first body heading (recalculate since we may have removed Abstract heading)
+    # Search for the abstract paragraph in early blocks using fuzzy matching
     search_end = _find_first_body_heading(html)
-    start, end = _find_block_by_text(html, abstract, search_end=search_end)
-    if start is not None:
-        html = html[:start] + html[end:]
-        html = html.lstrip()
+    abs_clean = _clean(abstract)
+    abs_words = set(abs_clean.split())
+    if not abs_words:
+        return html
+
+    region = html[:search_end]
+    for m in re.finditer(r'<p[^>]*>.*?</p>', region, re.DOTALL):
+        block_text = _clean(_strip_tags(m.group()))
+        block_words = set(block_text.split())
+        if not block_words:
+            continue
+        overlap = len(abs_words & block_words) / len(abs_words)
+        if overlap > 0.7:
+            html = html[:m.start()] + html[m.end():]
+            html = html.lstrip()
+            break
 
     return html
 
@@ -445,6 +462,10 @@ def postprocess_article(html, article, pdf_path=None):
         html = strip_conference_note(html)
         html = strip_abstract(html, article.get('abstract', ''))
         html = strip_keywords(html)
+        # Second pass: Haiku sometimes renders the title twice (h1 + h2).
+        # After stripping abstract/keywords, a duplicate title heading may
+        # now be at the top.
+        html = strip_title(html, article.get('title', ''))
         html = strip_end_bleed(html, article.get('_next_title', ''))
 
     html = re.sub(r'\n{3,}', '\n\n', html).strip()
