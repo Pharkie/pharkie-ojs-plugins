@@ -859,7 +859,7 @@ class QaSplitsController extends PKPBaseController
         }
 
         // Sort sections by total descending
-        arsort(array_column($sections, 'total'));
+        uasort($sections, fn($a, $b) => $b['total'] <=> $a['total']);
 
         return new JsonResponse([
             'overall'          => $overall,

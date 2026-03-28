@@ -12,23 +12,23 @@ Articles can be specified by:
 
 Usage:
     # Approve an article:
-    python backfill/qa_flag.py approve 29.2/03-on-the-phenomenon
+    python backfill/qa_review.py approve 29.2/03-on-the-phenomenon
 
     # Reject with reason:
-    python backfill/qa_flag.py reject 9494 "references mixed with notes"
+    python backfill/qa_review.py reject 9494 "references mixed with notes"
 
     # Check status of one article:
-    python backfill/qa_flag.py status 29.2/03-on-the-phenomenon
+    python backfill/qa_review.py status 29.2/03-on-the-phenomenon
 
     # List all reviews (default: problems only):
-    python backfill/qa_flag.py list
-    python backfill/qa_flag.py list --all
+    python backfill/qa_review.py list
+    python backfill/qa_review.py list --all
 
     # Clear all reviews for an article:
-    python backfill/qa_flag.py clear 9494
+    python backfill/qa_review.py clear 9494
 
     # Target live instead of dev:
-    python backfill/qa_flag.py --target live list
+    python backfill/qa_review.py --target live list
 """
 
 import argparse
@@ -161,7 +161,7 @@ def resolve_article(target: str, article_ref: str) -> tuple[int, str]:
         return pub_id, title
 
     # Title search in OJS DB
-    safe_search = article_ref.replace("'", "''")
+    safe_search = article_ref.replace("'", "''").replace('%', '\\%').replace('_', '\\_')
     out = run_sql(target, f"""
         SELECT s.submission_id, ps.setting_value
         FROM publication_settings ps

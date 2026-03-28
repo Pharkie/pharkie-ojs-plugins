@@ -588,7 +588,7 @@
 
         let html = '<div class="qa-dash-header">'
             + '<h2>QA Progress</h2>'
-            + '<button class="qa-dash-close" onclick="this.closest(\'.qa-dashboard-overlay\').remove()">&times;</button>'
+            + '<button class="qa-dash-close" id="qa-dash-close">&times;</button>'
             + '</div>';
 
         // Overall donut
@@ -634,6 +634,10 @@
         html += '</table></div>';
 
         container.innerHTML = html;
+
+        // Close button
+        const closeBtn = container.querySelector('#qa-dash-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => container.closest('.qa-dashboard-overlay').remove());
 
         // Animate donut segments in
         requestAnimationFrame(() => {
