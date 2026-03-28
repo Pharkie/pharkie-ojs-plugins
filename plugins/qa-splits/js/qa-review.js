@@ -352,8 +352,14 @@
         });
 
         if (totalItems === 0) {
-            container.innerHTML = '<div class="qa-endmatter-empty">No end-matter items classified</div>';
+            // Hide the entire section — nothing to show
+            const section = document.getElementById('endmatter-section');
+            if (section) section.style.display = 'none';
+            return;
         }
+        // Show section if it was previously hidden
+        const section = document.getElementById('endmatter-section');
+        if (section) section.style.display = '';
     }
 
     // ── Review actions ──
