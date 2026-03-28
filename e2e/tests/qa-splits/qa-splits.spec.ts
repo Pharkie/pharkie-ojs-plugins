@@ -275,6 +275,8 @@ test.describe('QA Splits plugin', () => {
     await expect(page.locator('.qa-help-box')).toContainText('Keyboard Shortcuts');
     await expect(page.locator('.qa-help-box')).toContainText('Approve');
 
+    // Wait for overlay animation to complete before screenshot
+    await page.waitForTimeout(400);
     await page.screenshot({
       path: 'e2e/screenshots/qa-splits-help.png',
       fullPage: false,
