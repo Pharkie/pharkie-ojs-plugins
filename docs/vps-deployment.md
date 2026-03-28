@@ -46,7 +46,7 @@ OJS and WordPress both run PHP — they benefit from CPU and RAM more than disk.
 | Host firewall (ufw) | Allow 22, 80, 443, 8080, 8081; default deny | Backup to Hetzner cloud firewall. |
 | Docker log rotation | `daemon.json` (10m x 3 files) | Requires Docker restart (brief container restart). |
 | Deploy user | `deploy` user with docker group + limited sudoers | All scripts use `deploy@` (not root). Root key auth kept as emergency backdoor. |
-| Container security | `cap_drop: ALL` + per-service `cap_add` | `no-new-privileges` on all containers. |
+| Container security | `cap_drop: ALL` + per-service `cap_add` | `no-new-privileges` on all. Web (wp, ojs): CHOWN, DAC_OVERRIDE, FOWNER, NET_BIND_SERVICE, SETGID, SETUID. DB: same minus NET_BIND_SERVICE. Caddy: NET_BIND_SERVICE only. |
 | Backup scope | OJS DB + WP DB + OJS files volume | All encrypted (AES-256-CBC), 7 daily + 4 weekly retention. |
 
 To verify after provisioning:
