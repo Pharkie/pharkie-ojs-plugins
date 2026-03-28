@@ -119,6 +119,11 @@ def html_output_path(split_pdf_path):
     return os.path.splitext(split_pdf_path)[0] + '.html'
 
 
+def raw_output_path(split_pdf_path):
+    """Return the .raw.html path for a given split PDF."""
+    return os.path.splitext(split_pdf_path)[0] + '.raw.html'
+
+
 def fallback_html_from_pdf(pdf_path):
     """Extract basic HTML from PDF using PyMuPDF text extraction.
 
@@ -304,8 +309,8 @@ def estimate_cost(articles, model_name=DEFAULT_MODEL, overwrite=False):
     total_pages = 0
     skip_count = 0
     for _, _, _, _, article in articles:
-        out_path = html_output_path(article['split_pdf'])
-        if not overwrite and os.path.exists(out_path):
+        raw_path = raw_output_path(article['split_pdf'])
+        if not overwrite and os.path.exists(raw_path):
             skip_count += 1
             continue
         doc = fitz.open(article['split_pdf'])
@@ -436,8 +441,9 @@ def main():
                 skipped += 1
                 continue
 
-        # Skip existing unless --overwrite
-        if not args.overwrite and os.path.exists(out_path):
+        # Skip if raw extraction already done (check .raw.html, not .html)
+        raw_path = raw_output_path(article['split_pdf'])
+        if not args.overwrite and os.path.exists(raw_path):
             skipped += 1
             continue
 
