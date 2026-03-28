@@ -207,7 +207,7 @@ AUTHOR_YEAR_SEARCH_WINDOW = 80  # Author+year pattern must be within first N cha
 SHORT_TEXT_THRESHOLD = 15     # Texts shorter than this are rejected outright
 NOTE_MAX_SENTENCES = 2        # Notes with more sentences than this + long text are rejected
 NOTE_LONG_TEXT = 350          # "Long text" threshold for sentence-count checks
-REF_MIN_TITLE_WORDS = 3      # References must have at least N title words after stripping author+year
+REF_MIN_TITLE_WORDS = 1      # References must have at least N title words after stripping author+year
 
 # ---------------------------------------------------------------
 # Confidence scoring (informational, for review/QA)
@@ -481,6 +481,12 @@ def is_author_bio(text: str) -> bool:
     return False
 
 
+def is_section_sublabel(text: str) -> bool:
+    """Detect section sub-labels like 'English-language references:' within back-matter."""
+    SUBLABEL_MAX_LENGTH = 50
+    return len(text) < SUBLABEL_MAX_LENGTH and text.rstrip().endswith(':')
+
+
 def is_provenance(text: str) -> bool:
     """Detect article provenance notes."""
     return bool(re.match(
@@ -647,10 +653,14 @@ def is_reference(text: str) -> bool:
 
     remainder = clean
     remainder = re.sub(r'^\d+[\.\)\s]*', '', remainder).strip()
-    remainder = re.sub(r'^(?:van\s+(?:den?\s+)?|de\s+|von\s+|du\s+)?'
-                       r"(?:Mc|Mac|Di|Du|O'|D')?"
-                       r'[A-ZÀ-Ž][a-zà-ž\']+(?:[–—-][A-Z][a-zà-ž]+)?'
-                       r'[,\.\s]+(?:[A-Z]\.?\s*(?:and\s+[A-Z]\.?\s*)?)?', '', remainder, count=1).strip()
+    # Strip one or more authors: "Surname, I., Surname, I. and Surname, I."
+    # Repeat to handle multiple comma-separated authors
+    _AUTHOR_PAT = (r'(?:van\s+(?:den?\s+)?|de\s+|von\s+|du\s+)?'
+                   r"(?:Mc|Mac|Di|Du|O'|D')?"
+                   r'[A-ZÀ-Ž\u0400-\u04FF][a-zà-ž\u0400-\u04FF\']+(?:[–—-][A-Z][a-zà-ž]+)?'
+                   r'[,\.\s]+(?:[A-Z]\.?\s*)?')
+    remainder = re.sub(r'^' + _AUTHOR_PAT + r'(?:(?:,\s*|\s+and\s+)' + _AUTHOR_PAT + r')*',
+                       '', remainder).strip()
     remainder = re.sub(r'\(?\d{4}[a-d]?(?:\s*\[\d{4}[a-d]?\])?\)?[,\.\s:;]*', '', remainder).strip()
     remainder = re.sub(r'^(?:pp?\.?\s*)?\d+[-–]?\d*[,\.\s]*', '', remainder).strip()
     remainder = re.sub(r'^(?:n\.d\.?|forthcoming|in press)[,\.\s]*', '', remainder, flags=re.IGNORECASE).strip()
