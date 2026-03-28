@@ -195,6 +195,21 @@ def _local(tag: str) -> str:
 
 
 # ---------------------------------------------------------------
+# Classification thresholds
+# ---------------------------------------------------------------
+# These control behaviour in is_reference, is_note, is_author_bio, etc.
+# Named here so they can be tuned without hunting through functions.
+
+LONG_REF_THRESHOLD = 300      # References longer than this get extra validation
+BIO_MIN_LENGTH = 50           # Bio phrases in text shorter than this are ignored
+BIO_PHRASE_SEARCH_WINDOW = 150  # Bio phrase must appear within first N chars
+AUTHOR_YEAR_SEARCH_WINDOW = 80  # Author+year pattern must be within first N chars
+SHORT_TEXT_THRESHOLD = 15     # Texts shorter than this are rejected outright
+NOTE_MAX_SENTENCES = 2        # Notes with more sentences than this + long text are rejected
+NOTE_LONG_TEXT = 350          # "Long text" threshold for sentence-count checks
+REF_MIN_TITLE_WORDS = 3      # References must have at least N title words after stripping author+year
+
+# ---------------------------------------------------------------
 # Confidence scoring (informational, for review/QA)
 # ---------------------------------------------------------------
 
@@ -323,7 +338,7 @@ def bio_confidence(text: str) -> int:
         score += 5
 
     # Negative: has year in parens (more like a citation)
-    if re.search(r'\(\d{4}\)', text[:80]):
+    if re.search(r'\(\d{4}\)', text[:AUTHOR_YEAR_SEARCH_WINDOW]):
         score -= 20
 
     return max(0, min(100, score))
@@ -351,7 +366,7 @@ def provenance_confidence(text: str) -> int:
 
 def is_junk(text: str) -> bool:
     """Filter out non-citation junk from reference sections."""
-    if len(text) < 15:
+    if len(text) < SHORT_TEXT_THRESHOLD:
         return True
 
     has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
@@ -385,7 +400,7 @@ def is_citation_like(text: str) -> bool:
     Used to filter Notes/Endnotes — keep items with year + author pattern,
     skip pure commentary.
     """
-    if len(text) < 15:
+    if len(text) < SHORT_TEXT_THRESHOLD:
         return False
 
     has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
@@ -406,7 +421,7 @@ def is_citation_like(text: str) -> bool:
     sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', text))
     if sentence_count >= 3 and len(text) > 200:
         return False
-    if sentence_count >= 2 and len(text) > 350:
+    if sentence_count >= NOTE_MAX_SENTENCES and len(text) > NOTE_LONG_TEXT:
         return False
     if len(text) > 400 and score < 3:
         return False
@@ -449,13 +464,13 @@ def is_author_bio(text: str) -> bool:
     # Bio phrase near start + starts with person's name (not just any word)
     # Must be: Name Name (is|was|has) — the name patterns above catch the strict cases,
     # this catches softer ones like "Dr John Smith is a practitioner in private practice"
-    if has_bio_phrase and len(text) > 50:
+    if has_bio_phrase and len(text) > BIO_MIN_LENGTH:
         # Must start with a plausible person name (2+ capitalised words)
         starts_with_name = bool(re.match(
             r'^(?:Dr\.?\s+|Professor\s+)?' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]', text))
         # Bio phrase must appear in first 150 chars (not buried deep in prose)
-        early_bio = any(phrase in text[:150] for phrase in bio_phrases)
-        if starts_with_name and early_bio and not re.search(r'\(\d{4}\)', text[:80]):
+        early_bio = any(phrase in text[:BIO_PHRASE_SEARCH_WINDOW] for phrase in bio_phrases)
+        if starts_with_name and early_bio and not re.search(r'\(\d{4}\)', text[:AUTHOR_YEAR_SEARCH_WINDOW]):
             return True
 
     return False
@@ -620,7 +635,7 @@ def is_reference(text: str) -> bool:
     if len(clean) > LONG_REF_THRESHOLD:
         has_author_year_start = bool(re.match(
             r'^[A-ZÀ-Ž][a-zà-ž\u015b\u0107\u017c\u0142\u0144]+[,\s]+[A-Z]\.?.*?\(\d{4}\)',
-            clean[:80]
+            clean[:AUTHOR_YEAR_SEARCH_WINDOW]
         ))
         if not has_author_year_start:
             return False
@@ -636,7 +651,7 @@ def is_reference(text: str) -> bool:
     remainder = re.sub(r'^(?:n\.d\.?|forthcoming|in press)[,\.\s]*', '', remainder, flags=re.IGNORECASE).strip()
 
     title_words = re.findall(r'[A-Za-zÀ-žà-ž\u0400-\u04FF]{3,}', remainder)
-    if len(title_words) < 3:
+    if len(title_words) < REF_MIN_TITLE_WORDS:
         return False
 
     return True

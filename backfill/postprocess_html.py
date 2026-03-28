@@ -31,6 +31,10 @@ from citations import REFERENCE_HEADING_RE
 
 # Minimum word overlap ratio for fuzzy text matching
 MATCH_THRESHOLD = 0.6
+# Prefix length for substring matching (avoids matching on tiny fragments)
+SUBSTRING_PREFIX_LEN = 50
+# Minimum abstract length worth stripping (shorter abstracts risk false matches)
+MIN_ABSTRACT_LENGTH = 30
 
 
 def _clean(text):
@@ -88,7 +92,7 @@ def _find_block_by_text(html, target_text, search_start=0, search_end=None):
         if not block_clean:
             continue
 
-        if target_clean[:50] in block_clean or block_clean in target_clean:
+        if target_clean[:SUBSTRING_PREFIX_LEN] in block_clean or block_clean in target_clean:
             ratio = 1.0
         else:
             ratio = _overlap_ratio(target_clean, block_clean)
@@ -186,7 +190,7 @@ def strip_conference_note(html):
 
 def strip_abstract(html, abstract):
     """Remove abstract heading and paragraph(s) from the HTML."""
-    if not abstract or len(abstract) < 30:
+    if not abstract or len(abstract) < MIN_ABSTRACT_LENGTH:
         return html
 
     # Remove "Abstract" heading if present
