@@ -27,6 +27,54 @@ import tempfile
 import fitz  # PyMuPDF
 
 
+def _clean_for_match(text):
+    """Lowercase, strip non-alphanumeric, collapse whitespace. For title matching."""
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', text.lower())).strip()
+
+
+def title_on_first_page(pdf_path, title):
+    """Check if the article title appears on page 1 of the split PDF.
+
+    Returns True if found, False if not. Uses two strategies:
+    1. Exact substring match (cleaned text)
+    2. Word overlap — at least 80% of significant title words found on page 1
+       (handles line breaks splitting the title across lines in PDF text)
+    """
+    if not title:
+        return True  # Can't check without a title
+    doc = fitz.open(pdf_path)
+    if len(doc) == 0:
+        doc.close()
+        return False
+    page1_text = doc[0].get_text()
+    doc.close()
+
+    # Strip toc.json prefixes that don't appear in the PDF
+    title = re.sub(r'^(Book Review|Film Review|Exhibition Report|Poem|Personally Speaking|Obituary|Essay Review|Letter to the Editors?):\s*', '', title)
+    clean_title = _clean_for_match(title)
+    clean_page = _clean_for_match(page1_text)
+
+    # Strategy 1: exact substring
+    if clean_title in clean_page:
+        return True
+
+    # Strategy 2: word overlap (handles line breaks in title)
+    title_words = [w for w in clean_title.split() if len(w) > 2]
+    if not title_words:
+        return True
+    page_words = set(clean_page.split())
+    # Check both exact word match AND substring match (PDF extraction
+    # often fuses words across line breaks: "2002knowing" instead of
+    # "2002 knowing")
+    found = 0
+    for w in title_words:
+        if w in page_words:
+            found += 1
+        elif w in clean_page:  # substring of the full text
+            found += 1
+    return found / len(title_words) >= 0.8
+
+
 def slugify(text, max_len=80):
     """Convert title to a filesystem-safe slug."""
     # Remove "Book Review: " prefix for cleaner filenames
@@ -80,7 +128,14 @@ def split_pdf(toc_data, output_dir):
         out_doc.close()
 
         pages = end - start + 1
-        print(f"  ✓ {filename} ({pages}pp)", file=sys.stderr)
+
+        # Verify article title appears on first page of split PDF
+        if not title_on_first_page(filepath, article.get('title', '')):
+            print(f"  ⚠ {filename} ({pages}pp) — WARNING: title not found on first page", file=sys.stderr)
+            article['_split_warning'] = True
+        else:
+            article.pop('_split_warning', None)
+            print(f"  ✓ {filename} ({pages}pp)", file=sys.stderr)
 
         article['split_pdf'] = filepath
         article['split_pages'] = pages

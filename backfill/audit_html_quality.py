@@ -3,10 +3,9 @@
 Audit HTML galley quality against source PDFs.
 
 Checks each article's HTML for:
-- SKIPPED_BODY: body text starts too far after abstract/keywords in PDF
-- MISSING_REFS: PDF has references section but HTML doesn't
-- NO_TITLE_SKIP: HTML still contains the article title (should be skipped)
-- HAS_ABSTRACT: HTML contains abstract text (should be skipped)
+- MISSING_REFS: PDF has a formal "References" heading but HTML doesn't
+- HAS_ABSTRACT: HTML body starts with the abstract text (should be skipped)
+- END_BLEED: HTML contains the title of the next article (leaked content)
 
 Usage:
     python backfill/audit_html_quality.py                    # all non-book-review articles
@@ -22,6 +21,9 @@ import sys
 
 import fitz
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+from citations import REFERENCE_HEADING_RE
+
 BACKFILL_DIR = os.path.dirname(__file__)
 OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
 
@@ -29,14 +31,42 @@ BOOK_REVIEW_SECTIONS = ('Book Reviews', 'Book Review', 'Book Review Editorial')
 
 
 def clean(text):
+    """Lowercase, strip non-alphanumeric."""
     return re.sub(r'[^a-z0-9 ]', '', text.lower())
 
 
 def strip_tags(html):
+    """Remove HTML tags."""
     return re.sub(r'<[^>]+>', '', html)
 
 
-def check_article(art, vol_dir):
+def pdf_has_formal_refs(pdf_path):
+    """Check if PDF has a standalone back-matter heading (References, Notes, Bibliography, etc.)."""
+    doc = fitz.open(pdf_path)
+    pdf_text = ''.join(p.get_text() for p in doc)
+    doc.close()
+    for line in pdf_text.split('\n'):
+        if REFERENCE_HEADING_RE.match(line.strip()):
+            return True
+    return False
+
+
+def html_has_refs(html):
+    """Check if HTML contains a back-matter section (References, Notes, Bibliography, etc.)."""
+    # Check for headings that match the shared regex
+    for m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html, re.DOTALL):
+        heading_text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        if REFERENCE_HEADING_RE.match(heading_text):
+            return True
+    # Also check for strong-wrapped headings: <p><strong>References</strong></p>
+    for m in re.finditer(r'<p>\s*<strong>(.*?)</strong>\s*</p>', html, re.DOTALL):
+        heading_text = m.group(1).strip()
+        if REFERENCE_HEADING_RE.match(heading_text):
+            return True
+    return False
+
+
+def check_article(art, vol_dir, all_articles, idx):
     """Check one article. Returns list of issue strings, or empty if OK."""
     sp = art.get('split_pdf', '')
     if not sp:
@@ -54,26 +84,32 @@ def check_article(art, vol_dir):
         html = f.read()
     html_text = strip_tags(html).strip()
 
-    doc = fitz.open(pdf_path)
-    pdf_text = ''.join(p.get_text() for p in doc)
-    doc.close()
-
     issues = []
 
-    # CHECK 1: References present if PDF has them
-    pdf_lower = pdf_text.lower()
-    pdf_has_refs = ('references' in pdf_lower[-4000:] or 'bibliography' in pdf_lower[-4000:])
-    html_has_refs = ('references' in html.lower() or 'bibliography' in html.lower())
-    if pdf_has_refs and not html_has_refs:
+    # CHECK 1: References — does PDF have a formal heading that HTML is missing?
+    if pdf_has_formal_refs(pdf_path) and not html_has_refs(html):
         issues.append('MISSING_REFS')
 
-    # CHECK 2: Abstract should NOT be in HTML
+    # CHECK 2: Abstract leak — is the toc.json abstract text in the HTML body start?
     abstract = art.get('abstract', '')
     if abstract and len(abstract) > 50:
-        abs_start = clean(abstract)[:40]
-        html_clean = clean(html_text)[:500]
-        if abs_start in html_clean:
+        abs_words = clean(abstract)[:40]
+        html_start = clean(html_text[:len(abstract) + 200])
+        if abs_words in html_start:
             issues.append('HAS_ABSTRACT')
+
+    # CHECK 3: End bleed — does the HTML contain the next article's title?
+    if idx < len(all_articles) - 1:
+        next_title = all_articles[idx + 1].get('title', '')
+        if next_title and len(next_title) > 15:
+            # Check the last portion of HTML for the next title
+            html_tail = strip_tags(html).lower()
+            next_clean = next_title.lower()
+            # Only flag if the next title appears after the last heading
+            last_h2 = html.lower().rfind('</h2>')
+            check_from = last_h2 if last_h2 > 0 else len(html) // 2
+            if next_clean in strip_tags(html[check_from:]).lower():
+                issues.append('END_BLEED')
 
     return issues
 
@@ -97,7 +133,8 @@ def main():
         if args.issue and vol_iss != args.issue:
             continue
 
-        for art in toc.get('articles', []):
+        articles = toc.get('articles', [])
+        for idx, art in enumerate(articles):
             section = art.get('section', '')
             if section in BOOK_REVIEW_SECTIONS:
                 continue
@@ -107,7 +144,7 @@ def main():
             if not sp:
                 continue
 
-            issues = check_article(art, vol_dir)
+            issues = check_article(art, vol_dir, articles, idx)
             if issues == ['NO_HTML'] or issues == ['NO_PDF']:
                 continue
 
@@ -124,10 +161,12 @@ def main():
     print(f'  PASS: {passes}')
     print(f'  FAIL: {len(failures)}')
     if failures:
-        missing_refs = sum(1 for f in failures if 'MISSING_REFS' in f[2])
-        has_abstract = sum(1 for f in failures if 'HAS_ABSTRACT' in f[2])
-        print(f'    Missing refs:  {missing_refs}')
-        print(f'    Has abstract:  {has_abstract}')
+        counts = {}
+        for _, _, issues in failures:
+            for i in issues:
+                counts[i] = counts.get(i, 0) + 1
+        for issue_type, count in sorted(counts.items()):
+            print(f'    {issue_type}: {count}')
         rate = passes / total * 100 if total else 0
         print(f'  Pass rate: {rate:.1f}%')
 
