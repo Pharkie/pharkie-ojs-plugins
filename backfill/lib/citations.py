@@ -57,9 +57,39 @@ NOTES_HEADING_RE = re.compile(
 )
 
 
+# Common academic/book publishers. Used across classification functions
+# to detect bibliographic references. Single source of truth — add new
+# publishers here rather than in individual regexes.
+PUBLISHER_NAMES = (
+    'Press|Publisher|Books|University|Routledge|Sage|Springer|Wiley|Penguin|'
+    'Palgrave|Harper|Random House|Vintage|Tavistock|Macmillan|Methuen|'
+    'OUP|Blackwell|Faber|Karnac|Norton|Continuum|Duckworth'
+)
+
 # ---------------------------------------------------------------
 # Text extraction helpers
 # ---------------------------------------------------------------
+
+# Common abbreviations in references that end with a period but don't
+# mark a sentence boundary. Used by _count_sentences().
+_ABBREV_RE = re.compile(
+    r'(?:'
+    r'[A-Z]\.'           # Single-letter initials: J. K. R.
+    r'|(?:Dr|Mr|Mrs|Ms|Prof|Rev|Vol|vol|No|no|ed|eds|trans|repr'
+    r'|Dept|Inc|Ltd|Corp|Assoc|Univ|pp|ca|cf|etc|vs|approx)\.'
+    r')\s+[A-Z]'
+)
+
+
+def _count_sentences(text):
+    """Count approximate sentence boundaries, excluding common abbreviations.
+
+    Counts [.!?] followed by space + capital letter, minus matches that
+    are abbreviations (initials, Dr., Vol., pp., etc.).
+    """
+    raw = len(re.findall(r'[.!?]\s+[A-Z]', text))
+    abbrevs = len(_ABBREV_RE.findall(text))
+    return max(0, raw - abbrevs)
 
 class _HTMLTextExtractor(HTMLParser):
     """Strip HTML tags, return plain text."""
@@ -272,8 +302,7 @@ def citation_confidence(text: str, heading: str) -> int:
     elif re.match(r'^\d+[\.\)]\s+[A-Z][a-zà-ü]+', text):
         score += 6
 
-    if re.search(r'(Press|Publisher|Books|Routledge|Sage|Springer|Wiley|Penguin|'
-                 r'Palgrave|Harper|Random House|Vintage)', text, re.IGNORECASE):
+    if re.search(r'(' + PUBLISHER_NAMES + r')', text, re.IGNORECASE):
         score += 8
     if re.search(r'(Journal|Review|Quarterly|Bulletin|Annals|Archives)\s+of\b', text, re.IGNORECASE):
         score += 8
@@ -305,7 +334,7 @@ def citation_confidence(text: str, heading: str) -> int:
     elif year_count > 2 and length > 150:
         score -= 12
 
-    sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', text))
+    sentence_count = _count_sentences(text)
     if sentence_count > 3:
         score -= 15
     elif sentence_count > 1 and length > 200:
@@ -335,7 +364,7 @@ def note_confidence(text: str) -> int:
         score += 10
 
     # Prose characteristics (multiple sentences)
-    sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', text))
+    sentence_count = _count_sentences(text)
     if sentence_count >= 2:
         score += 10
 
@@ -447,8 +476,7 @@ def is_citation_like(text: str) -> bool:
     has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
     has_author_pattern = bool(re.search(r'[A-Z][a-zà-ü]+,?\s', text))
     has_publisher = bool(re.search(
-        r'(Press|Publisher|Books|University|Routledge|Sage|Springer|Wiley|Oxford|Cambridge)',
-        text, re.IGNORECASE))
+        r'(' + PUBLISHER_NAMES + r')', text, re.IGNORECASE))
     has_journal = bool(re.search(
         r'(Journal|Review|Quarterly|Analysis|Psycholog|Psychother|Existential)',
         text, re.IGNORECASE))
@@ -459,7 +487,7 @@ def is_citation_like(text: str) -> bool:
     score = sum([has_year, has_author_pattern, has_publisher, has_journal,
                  has_pages, has_doi, has_url])
 
-    sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', text))
+    sentence_count = _count_sentences(text)
     if sentence_count >= 3 and len(text) > 200:
         return False
     if sentence_count >= NOTE_MAX_SENTENCES and len(text) > NOTE_LONG_TEXT:
@@ -658,9 +686,7 @@ def is_reference(text: str) -> bool:
 
     if not has_year_fuzzy:
         has_publisher = bool(re.search(
-            r'\b(Press|Publisher|Books|Routledge|Sage|Springer|Penguin|Wiley|'
-            r'Tavistock|Macmillan|Methuen|OUP|Blackwell|Faber|Harper)\b',
-            clean, re.IGNORECASE))
+            r'\b(' + PUBLISHER_NAMES + r')\b', clean, re.IGNORECASE))
         has_place = bool(re.search(
             r'(London|New York|Cambridge|Oxford|Paris|Berlin|Edinburgh|Boston|Chicago)',
             clean, re.IGNORECASE))
@@ -760,7 +786,7 @@ def _is_numbered_commentary(after_num: str) -> bool:
             return False
         return True
 
-    sentence_count = len(re.findall(r'[.!?]\s+[A-Z]', after_num))
+    sentence_count = _count_sentences(after_num)
     if sentence_count >= 2 or len(after_num) > 200:
         return True
 

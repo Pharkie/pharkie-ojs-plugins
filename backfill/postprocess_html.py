@@ -27,7 +27,7 @@ except ImportError:
     fitz = None
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
-from citations import REFERENCE_HEADING_RE
+from citations import REFERENCE_HEADING_RE, PUBLISHER_NAMES
 
 # Minimum abstract length worth stripping. Shortest real abstract in dataset
 # is 152 chars. Below 30 chars, a toc.json "abstract" is likely a fragment
@@ -299,11 +299,12 @@ def _find_book_publication_details(html, book_title, search_start=0):
     if not rx_parts:
         return None, None
 
-    # Publication detail markers: publisher names, year in parens, pp, price
+    # Publication detail markers: year, page count, price, or publisher name.
+    # Publisher names imported from citations.py (single source of truth).
     pub_markers = re.compile(
-        r'(?:\d{4}|pp\.?\s*\d|ISBN|\$|£|Routledge|Sage|Springer|Press|'
-        r'Publisher|Continuum|Wiley|Penguin|Karnac|Palgrave|Norton|'
-        r'Oxford|Cambridge|London|New York|Duckworth|Blackwell)', re.IGNORECASE)
+        r'(?:\d{4}|pp\.?\s*\d|ISBN|\$|£|'
+        + PUBLISHER_NAMES +
+        r'|Oxford|Cambridge|London|New York)', re.IGNORECASE)
 
     for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
         block_text = _clean(_strip_tags(m.group()))

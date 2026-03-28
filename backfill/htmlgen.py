@@ -17,6 +17,10 @@ Usage:
     python backfill/htmlgen.py backfill/private/output/*/toc.json --from-list regen.txt # only articles listed in file
     python backfill/htmlgen.py backfill/private/output/10.1/toc.json --workers=5        # concurrent API calls
 
+--from-list file format: one article per line, format "vol.iss/seq" (0-padded seq).
+Examples: "36.2/02", "1/04", "10.1/13". Lines starting with # are ignored.
+Single-issue volumes (1-5) use just the volume number: "1/04" not "1.1/04".
+
 Requires ANTHROPIC_API_KEY environment variable (or .env file).
 """
 
