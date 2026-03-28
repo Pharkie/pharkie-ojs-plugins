@@ -428,7 +428,8 @@ def is_author_bio(text: str) -> bool:
 
     # Words that start a sentence but aren't person names — exclude from bio patterns
     _NOT_NAME = (r'(?!(?:The|This|That|What|Which|Where|When|How|Why|For|From|'
-                 r'With|About|After|Before|Between|During|Into|Through|Under)\s)')
+                 r'With|About|After|Before|Between|During|Into|Through|Under|'
+                 r'As|If|In|On|At|By|To|So|Or|An|No|It|We|He|She|They)\s)')
 
     bio_patterns = [
         r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
@@ -463,7 +464,8 @@ def is_author_bio(text: str) -> bool:
 def is_provenance(text: str) -> bool:
     """Detect article provenance notes."""
     return bool(re.match(
-        r'^This (article|paper|chapter|essay|lecture|talk)\s+(is|was)\s', text
+        r'^(This|A version of this|An earlier version of this|A shorter version of this)\s+'
+        r'(article|paper|chapter|essay|lecture|talk)\s+(is|was)\s', text
     ))
 
 
@@ -531,7 +533,7 @@ def is_reference(text: str) -> bool:
 
     Must have: author pattern + year.
     """
-    clean = re.sub(r'^\d+[\.\)\s]*', '', text).strip()
+    clean = re.sub(r'^[\d\*•·–—\-]+[\.\)\s]*', '', text).strip()
 
     # Reject common English words that aren't surnames
     if re.match(r'^(It|In|As|At|An|If|Is|Or|On|So|Do|No|My|He|We|But|Yet|For|The|This|That|'
@@ -590,7 +592,7 @@ def is_reference(text: str) -> bool:
     has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)[a-d]?\b', clean))
     has_year_fuzzy = has_year or bool(re.search(r'\b1\s?\d{3}\b', clean))
     has_year_fuzzy = has_year_fuzzy or bool(re.search(r'\b[lI]\d{3}\b', clean))
-    has_year_fuzzy = has_year_fuzzy or bool(re.search(r'\b(forthcoming|in press|n\.d\.?|undated)\b', clean, re.IGNORECASE))
+    has_year_fuzzy = has_year_fuzzy or bool(re.search(r'\b(forthcoming|in press|in print|n\.d\.?|undated)\b', clean, re.IGNORECASE))
     has_year_fuzzy = has_year_fuzzy or bool(re.search(r'\(\d{4}', clean))
 
     if not has_year_fuzzy:
