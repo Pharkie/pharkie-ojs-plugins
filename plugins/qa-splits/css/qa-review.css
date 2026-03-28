@@ -117,6 +117,21 @@ body {
     min-width: 0;
 }
 
+.qa-back-btn {
+    background: none;
+    border: none;
+    color: var(--text-inverse-muted);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 10px 4px 4px;
+    flex-shrink: 0;
+    transition: color 0.15s;
+    border-right: 1px solid rgba(255,255,255,0.15);
+    margin-right: 2px;
+}
+.qa-back-btn:hover { color: var(--text-inverse); }
+
 .qa-app-name {
     font-family: var(--font-ui);
     font-size: 14px;
@@ -182,19 +197,6 @@ body {
 .qa-badge-unreviewed  { background: var(--badge-unreviewed-bg);  color: var(--badge-unreviewed-text); }
 
 /* ── Controls ── */
-
-.qa-action-group {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.qa-action-buttons {
-    display: flex;
-    gap: 6px;
-}
 
 .qa-btn-wrap {
     display: flex;
