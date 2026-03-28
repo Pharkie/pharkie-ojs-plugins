@@ -147,8 +147,14 @@ class QaSplitsPlugin extends GenericPlugin
             </div>
             <div class="qa-controls">
                 <div class="qa-review-actions">
-                    <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approved</button>
-                    <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">Reject</button>
+                    <div class="qa-btn-wrap">
+                        <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approved</button>
+                        <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
+                    </div>
+                    <div class="qa-btn-wrap">
+                        <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">Reject</button>
+                        <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
+                    </div>
                     <input type="text" id="reject-comment" class="qa-input" placeholder="Rejection comment..." style="display:none">
                     <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" style="display:none">Submit Rejection</button>
                 </div>

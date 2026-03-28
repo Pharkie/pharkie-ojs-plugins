@@ -404,11 +404,11 @@
 
             updateStatusBadge(decision, 'you', article.reviewed_at, article.comment);
             hideRejectInput();
-            toast(decision === 'approved' ? 'Approved' : 'Rejected', decision === 'approved' ? 'success' : 'error');
+            showFeedback(decision);
 
             recalculateProgress();
         } catch (err) {
-            toast('Network error', 'error');
+            showFeedback('error');
             console.error('Review submission error:', err);
         }
     }
@@ -481,13 +481,13 @@
 
     function updateProgress(counts) {
         if (!counts) return;
+        const remaining = (counts.unreviewed || 0) + (counts.invalidated || 0);
         const parts = [];
-        parts.push(counts.total + ' total');
         if (counts.approved) parts.push(counts.approved + ' approved');
         if (counts.rejected) parts.push(counts.rejected + ' rejected');
-        if (counts.invalidated) parts.push(counts.invalidated + ' invalidated');
-        if (counts.unreviewed) parts.push(counts.unreviewed + ' unreviewed');
-        els['qa-progress'].textContent = parts.join(' | ');
+        parts.push(counts.total + ' total');
+        if (remaining > 0) parts.push(remaining + ' remaining');
+        els['qa-progress'].textContent = parts.join(' / ');
     }
 
     function recalculateProgress() {
@@ -499,6 +499,21 @@
             else counts.unreviewed++;
         });
         updateProgress(counts);
+    }
+
+    function showFeedback(decision) {
+        // Show inline feedback under the relevant button
+        const feedbackEl = decision === 'approved'
+            ? document.getElementById('feedback-approve')
+            : document.getElementById('feedback-reject');
+
+        if (!feedbackEl) return;
+
+        feedbackEl.textContent = decision === 'error' ? 'Error' : (decision === 'approved' ? 'Done' : 'Done');
+        feedbackEl.classList.remove('qa-feedback-show');
+        // Force reflow to restart animation
+        void feedbackEl.offsetWidth;
+        feedbackEl.classList.add('qa-feedback-show');
     }
 
     function toast(message, type) {
