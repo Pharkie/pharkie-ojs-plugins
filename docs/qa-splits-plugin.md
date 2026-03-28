@@ -2,6 +2,10 @@
 
 Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: PDF (left), HTML galley + end-matter classification (right), metadata + review controls (top).
 
+![QA Splits review interface](images/qa-splits-with-content.png)
+
+![QA Progress dashboard](images/qa-splits-dashboard.png)
+
 ## Purpose
 
 After the backfill pipeline splits issue PDFs into per-article PDFs, generates JATS XML, classifies end-matter, and produces HTML galleys, a human reviewer needs to verify the results visually. This plugin provides a rapid review workflow:
@@ -81,6 +85,13 @@ Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requi
 +-------------------------------+----------------------------------+
 ```
 
+### Progress dashboard
+
+Click the progress counter in the top bar to open the QA dashboard overlay:
+- **Donut chart** showing approved/rejected/unreviewed percentages
+- **Review depth** bars (articles with 0, 1, or 2+ reviewers)
+- **Section breakdown** table with per-section progress bars
+
 ### Keyboard shortcuts
 
 | Key | Action |
@@ -134,6 +145,7 @@ All endpoints require authenticated Manager/Admin session. Base: `/api/v1/qa-spl
 | `POST` | `/reviews` | Submit review: `{submissionId, decision, comment}` |
 | `GET` | `/nav/random-unreviewed` | Random unreviewed submission_id |
 | `GET` | `/nav/problem-case` | Next problem case with reason |
+| `GET` | `/stats` | QA progress: overall counts, section breakdown, reviewer depth |
 
 ### CSRF protection
 
