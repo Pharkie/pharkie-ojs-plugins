@@ -118,8 +118,13 @@
                 return;
             }
 
+            // Priority: URL ?id= param > localStorage last-seen > first article
             let startIndex = 0;
-            if (lastSeenId) {
+            const urlId = parseInt(new URL(window.location).searchParams.get('id'), 10);
+            if (urlId) {
+                const idx = articles.findIndex(a => a.submission_id === urlId);
+                if (idx >= 0) startIndex = idx;
+            } else if (lastSeenId) {
                 const idx = articles.findIndex(a => a.submission_id === lastSeenId);
                 if (idx >= 0) startIndex = idx;
             }
@@ -145,6 +150,11 @@
 
         localStorage.setItem('qa-last-seen', article.submission_id);
         lastSeenId = article.submission_id;
+
+        // Update URL with article ID (shareable deep link)
+        const url = new URL(window.location);
+        url.searchParams.set('id', article.submission_id);
+        history.replaceState(null, '', url);
 
         // Compact title: 37.1 #14 (2026) Title [section]
         const sectionTag = article.section ? ' [' + article.section.toLowerCase() + ']' : '';
