@@ -613,8 +613,16 @@ def is_reference(text: str) -> bool:
     if (cite_refs + semicolon_refs) >= 4:
         return False
 
-    if len(clean) > 300:
-        if not re.match(r'^[A-Z][a-zà-ž]+,\s+[A-Z]\..*?\(\d{4}\)', clean[:60]):
+    # Long texts: require author-like start + year to avoid classifying
+    # body paragraphs as references. Accept multiple author formats:
+    # "Surname, I. (YYYY)", "Surname I. and Surname, I. (YYYY)", etc.
+    LONG_REF_THRESHOLD = 300
+    if len(clean) > LONG_REF_THRESHOLD:
+        has_author_year_start = bool(re.match(
+            r'^[A-ZÀ-Ž][a-zà-ž\u015b\u0107\u017c\u0142\u0144]+[,\s]+[A-Z]\.?.*?\(\d{4}\)',
+            clean[:80]
+        ))
+        if not has_author_year_start:
             return False
 
     remainder = clean
