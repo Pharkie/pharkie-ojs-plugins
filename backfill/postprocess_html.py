@@ -29,11 +29,9 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 from citations import REFERENCE_HEADING_RE
 
-# Minimum word overlap ratio for fuzzy text matching
-MATCH_THRESHOLD = 0.6
-# Prefix length for substring matching (avoids matching on tiny fragments)
-SUBSTRING_PREFIX_LEN = 50
-# Minimum abstract length worth stripping (shorter abstracts risk false matches)
+# Minimum abstract length worth stripping (shorter abstracts risk false matches).
+# Derived from data: shortest real abstract in dataset is 152 chars. Anything
+# under 30 chars is likely a fragment, not a real abstract.
 MIN_ABSTRACT_LENGTH = 30
 # Final HTML shorter than this (in chars) is flagged as empty/broken
 SHORT_CONTENT_THRESHOLD = 100
@@ -48,15 +46,6 @@ def _strip_tags(html):
     """Remove HTML tags."""
     return re.sub(r'<[^>]+>', '', html)
 
-
-def _overlap_ratio(a, b):
-    """Word overlap ratio between two strings (0.0–1.0)."""
-    words_a = set(a.split())
-    words_b = set(b.split())
-    if not words_a or not words_b:
-        return 0.0
-    intersection = words_a & words_b
-    return len(intersection) / min(len(words_a), len(words_b))
 
 
 def _find_first_body_heading(html):
@@ -73,9 +62,41 @@ def _find_first_body_heading(html):
     return len(html)
 
 
-def _find_block_by_text(html, target_text, search_start=0, search_end=None):
-    """Find the HTML block whose text best matches target_text.
+def _text_to_regex(text):
+    """Build a regex from text: words in order, flexible non-alpha gaps between.
 
+    Strips toc.json prefixes (Book Review:, Obituary:, etc.) and trailing
+    parentheticals before building. Returns compiled regex or None.
+    """
+    text = _strip_toc_prefixes(text)
+    words = _clean(text).split()
+    if not words:
+        return None
+    # Words must appear in order; gaps allow any non-alphanumeric chars
+    # (whitespace, punctuation, line breaks, HTML residue)
+    gap = r'[^a-z0-9]*'
+    pattern = gap.join(re.escape(w) for w in words)
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _title_in_text(title, text):
+    """Check if title appears in text as an ordered word sequence.
+
+    No threshold — either the words appear in order or they don't.
+    """
+    if not title:
+        return True
+    rx = _text_to_regex(title)
+    if rx is None:
+        return True
+    clean_text = _clean(_strip_tags(text))
+    return bool(rx.search(clean_text))
+
+
+def _find_block_by_text(html, target_text, search_start=0, search_end=None):
+    """Find the HTML block whose text matches target_text.
+
+    Uses ordered word-sequence matching (no threshold).
     Returns (start_pos, end_pos) of the matching block, or (None, None).
     """
     if not target_text or len(target_text) < 5:
@@ -83,27 +104,16 @@ def _find_block_by_text(html, target_text, search_start=0, search_end=None):
     if search_end is None:
         search_end = len(html)
     region = html[search_start:search_end]
-    target_clean = _clean(target_text)
-
-    best_match = None
-    best_ratio = 0
+    rx = _text_to_regex(target_text)
+    if rx is None:
+        return None, None
 
     for m in re.finditer(r'<(p|h[1-6]|blockquote)[^>]*>.*?</\1>', region, re.DOTALL):
-        block_text = _strip_tags(m.group()).strip()
-        block_clean = _clean(block_text)
-        if not block_clean:
-            continue
+        block_text = _clean(_strip_tags(m.group()))
+        if rx.search(block_text):
+            return (search_start + m.start(), search_start + m.end())
 
-        if target_clean[:SUBSTRING_PREFIX_LEN] in block_clean or block_clean in target_clean:
-            ratio = 1.0
-        else:
-            ratio = _overlap_ratio(target_clean, block_clean)
-
-        if ratio > best_ratio and ratio >= MATCH_THRESHOLD:
-            best_ratio = ratio
-            best_match = (search_start + m.start(), search_start + m.end())
-
-    return best_match if best_match else (None, None)
+    return None, None
 
 
 # ---------------------------------------------------------------
@@ -126,8 +136,8 @@ def strip_title(html, title):
     """Remove the article's own title from the HTML.
 
     Handles multi-element titles (h1/h2 + subtitle paragraphs). Removes
-    consecutive blocks from the top that collectively match the title words.
-    Stops when it hits a block with no title-word overlap.
+    consecutive blocks from the top whose words collectively form an
+    ordered subsequence of the title. Stops when a block has no title words.
     """
     if not title:
         return html
@@ -152,10 +162,10 @@ def strip_title(html, title):
             matched_words |= overlap
             best_end = block.end()
         else:
-            # Non-matching block — stop consuming
             break
 
-    if matched_words and len(matched_words) / len(title_words) >= MATCH_THRESHOLD:
+    # Require that we matched most of the title words
+    if matched_words and len(matched_words) > len(title_words) // 2:
         html = html[best_end:].lstrip()
 
     return html
