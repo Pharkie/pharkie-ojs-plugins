@@ -200,10 +200,9 @@ test.describe('QA Splits plugin', () => {
       'End-Matter Classification',
     );
 
-    // Wait for classification API to complete (items or empty message appear)
-    await expect(
-      page.locator('.qa-endmatter-item, .qa-endmatter-empty').first(),
-    ).toBeVisible({ timeout: 10_000 });
+    // Wait for classification API to complete — section is either
+    // visible with items or hidden entirely (no end-matter)
+    await page.waitForTimeout(3000);
 
     // If pills exist, verify structure
     const pills = page.locator('.qa-pill');
@@ -295,15 +294,13 @@ test.describe('QA Splits plugin', () => {
     await page.goto(QA_URL);
     await expect(page.locator('#qa-title')).not.toHaveText('Loading...');
 
-    // Press A to approve
+    const titleBefore = await page.locator('#qa-title').textContent();
+
+    // Press A to approve — auto-advances to next article
     await page.keyboard.press('a');
 
-    // Inline feedback should flash under button
-    const feedback = page.locator('#feedback-approve');
-    await expect(feedback).toHaveText('Done', { timeout: 5000 });
-
-    // Status badge should update
-    await expect(page.locator('#qa-status')).toContainText('Approved');
+    // Should advance to next article
+    await expect(page.locator('#qa-title')).not.toHaveText(titleBefore!, { timeout: 10_000 });
 
     await page.screenshot({
       path: 'e2e/screenshots/qa-splits-approved.png',
@@ -329,15 +326,12 @@ test.describe('QA Splits plugin', () => {
     await expect(commentInput).toBeVisible();
 
     // Type comment and submit
+    const titleBefore = await page.locator('#qa-title').textContent();
     await commentInput.fill('e2e-test-rejection: bad split on page 3');
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('Control+Enter');
 
-    // Inline feedback should flash under button
-    const feedback = page.locator('#feedback-reject');
-    await expect(feedback).toHaveText('Done', { timeout: 5000 });
-
-    // Status badge should update
-    await expect(page.locator('#qa-status')).toContainText('Rejected');
+    // Should auto-advance to next article
+    await expect(page.locator('#qa-title')).not.toHaveText(titleBefore!, { timeout: 10_000 });
 
     await page.screenshot({
       path: 'e2e/screenshots/qa-splits-rejected.png',

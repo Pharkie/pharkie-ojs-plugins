@@ -347,8 +347,8 @@ body {
     font-size: 11px;
     color: var(--text-inverse-muted);
     white-space: nowrap;
-    align-self: flex-end;
-    padding-bottom: 4px;
+    align-self: flex-start;
+    padding-top: 10px;
 }
 
 .qa-input::placeholder,
