@@ -552,28 +552,23 @@
     function updateProgress(counts) {
         if (!counts) return;
         const remaining = (counts.unreviewed || 0) + (counts.invalidated || 0);
-        const parts = [];
-        if (counts.approved) parts.push(counts.approved + ' approved');
-        if (counts.rejected) parts.push(counts.rejected + ' rejected');
-        parts.push(counts.total + ' total');
-        if (remaining > 0) parts.push(remaining + ' remaining');
+        const problems = (counts.rejected || 0) + (counts.invalidated || 0);
 
-        // Build as HTML with clickable status links
+        // Each entry: [text, filterStatus or null]
+        const parts = [];
+        if (counts.approved) parts.push([counts.approved + ' approved', 'approved']);
+        if (problems) parts.push([problems + ' problems', 'rejected']);
+        parts.push([counts.total + ' total', null]);
+        if (remaining > 0) parts.push([remaining + ' remaining', 'unreviewed']);
+
         els['qa-progress'].innerHTML = '';
-        parts.forEach((part, i) => {
+        parts.forEach(([text, filter], i) => {
             if (i > 0) els['qa-progress'].appendChild(document.createTextNode(' / '));
             const span = document.createElement('span');
-            span.textContent = part;
-            // Make approved/rejected/remaining clickable to filter
-            if (part.includes('approved')) {
+            span.textContent = text;
+            if (filter) {
                 span.className = 'qa-progress-link';
-                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList('approved'); });
-            } else if (part.includes('rejected')) {
-                span.className = 'qa-progress-link';
-                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList('rejected'); });
-            } else if (part.includes('remaining')) {
-                span.className = 'qa-progress-link';
-                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList('unreviewed'); });
+                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList(filter); });
             }
             els['qa-progress'].appendChild(span);
         });
