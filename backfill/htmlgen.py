@@ -44,7 +44,7 @@ except ImportError:
     sys.exit(1)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from postprocess_html import strip_abstract, check_missing_refs, detect_bad_split
+from postprocess_html import postprocess_article
 from split import title_in_split_pdf
 
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
@@ -79,106 +79,18 @@ of..."), running footers, volume/issue identifiers, section-level headings
 like "EDITORIAL", "ARTICLES", "BOOK REVIEWS", "Book Review Editorial"."""
 
 ARTICLE_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
+Include EVERYTHING you see on these pages. Do not skip anything.
 
 """ + FORMATTING_RULES + """
 
-SKIP ONLY these items at the very top of the first page (already in OJS
-metadata — do NOT include them):
-  - Article title and subtitle
-  - Author name(s) / byline
-  - Abstract paragraph
-  - Keywords line
-
-Start your output from the FIRST body content after the keywords. This is
-usually an Introduction heading or the first body paragraph.
-
-CRITICAL — do NOT skip any of these:
-  - Introduction section (heading + paragraphs) — this IS body content
-  - Body paragraphs that appear before the first heading
-  - ANY section heading (Introduction, Method, Discussion, Conclusion, etc.)
-  - Author bio paragraph (usually near the end, describes who the author is)
-  - Contact email / ORCID
-  - References or Bibliography — include EVERY entry, do not stop early
+Include ALL of the following — title, authors, abstract, keywords, body
+paragraphs, section headings, block quotes, footnotes, endnotes,
+references, bibliography, author bio, contact details, ORCID.
 
 If references appear in multiple scripts (e.g. Cyrillic then transliterated
-Latin), include BOTH sets — they are not duplicates.
+Latin), include BOTH sets — they are not duplicates."""
 
-If this article appears to start part-way through (e.g. no article title
-visible on the first page), prepend <!-- BAD_SPLIT --> to your output
-before any HTML."""
-
-ARTICLE_SHARED_PAGE_PROMPT = """Convert these journal article pages into clean, well-structured HTML.
-The first and/or last page may contain content from an adjacent article
-(articles run continuously without page breaks). Only extract THIS article.
-
-""" + FORMATTING_RULES + """
-
-SKIP ONLY these items at the very top of the first page (already in OJS
-metadata — do NOT include them):
-  - Article title and subtitle
-  - Author name(s) / byline
-  - Abstract paragraph
-  - Keywords line
-
-If the first page starts with the END of a previous article, skip that
-content and start from THIS article's body text.
-
-Start your output from the FIRST body content after the keywords. This is
-usually an Introduction heading or the first body paragraph.
-
-CRITICAL — do NOT skip any of these:
-  - Introduction section (heading + paragraphs) — this IS body content
-  - Body paragraphs that appear before the first heading
-  - ANY section heading (Introduction, Method, Discussion, Conclusion, etc.)
-  - Author bio paragraph (usually near the end, describes who the author is)
-  - Contact email / ORCID
-  - References or Bibliography — include EVERY entry, do not stop early
-
-If references appear in multiple scripts (e.g. Cyrillic then transliterated
-Latin), include BOTH sets — they are not duplicates. If the last page
-contains the START of the next article, stop before it.
-
-If this article appears to start part-way through (e.g. no article title
-visible on the first page, AND no previous article content to skip),
-prepend <!-- BAD_SPLIT --> to your output before any HTML."""
-
-BOOK_REVIEW_PROMPT = """Convert this book review PDF into clean, well-structured HTML.
-
-CRITICAL: These pages may contain MULTIPLE book reviews running continuously.
-You MUST extract ONLY ONE specific review. The first page may START with
-text from a DIFFERENT review — if so, SKIP ALL of that text completely.
-Look for the target book's title in BOLD to find where YOUR review begins.
-After the reviewer's name (and any References), STOP — do not include
-the next review.
-
-Sometimes a reviewer writes a shared introduction covering several books
-before reviewing each one individually. If you see such an introduction,
-SKIP IT — start from where THIS specific book's review begins (usually
-after its title/publication details or after the shared intro transitions
-to discussing this particular book).
-
-""" + FORMATTING_RULES + """
-
-This is a BOOK REVIEW, not a regular article. The rules are different:
-
-DO NOT skip any standalone person's name in the text. In book reviews,
-a person's name on its own line near the end is the REVIEWER — it is
-critical content that MUST appear in the output as
-<p><strong>Name</strong></p>. This is NOT an "author byline" to skip.
-
-Include EVERYTHING from this review — publication details, epigraphs,
-body paragraphs, quotes, reviewer name, references. Do not skip anything.
-
-What to INCLUDE (in order):
-  1. The book title, author, year, publisher (publication details)
-  2. Any epigraph or quote after the publication details
-  3. All review body paragraphs
-  4. The reviewer's name (standalone name near the end OF THIS REVIEW)
-  5. References section if present after the reviewer's name
-
-IMPORTANT: A name appearing BEFORE this review's book title belongs to
-the PREVIOUS review's reviewer — do NOT include it. Only include the
-reviewer name that appears AFTER the body of THIS review."""
+EXTRACTION_PROMPT = ARTICLE_PROMPT  # Same prompt for all article types including book reviews
 
 
 def load_env():
@@ -270,46 +182,20 @@ def strip_code_fences(html):
     return html
 
 
-def build_prompt(is_book_review=False, has_shared_pages=False, book_title=None, reviewer=None,
-                 title=None, authors=None, prev_title=None, next_title=None,
-                 refs_retry=False):
-    """Select the right prompt for this article type."""
-    if is_book_review:
-        prompt = BOOK_REVIEW_PROMPT
-        if book_title:
-            prompt += f'\n\nThe book being reviewed is: "{book_title}"\nExtract ONLY the review of THIS specific book. Ignore content reviewing any other book.'
-        if reviewer:
-            prompt += f'\n\nThe reviewer is: {reviewer}. Your output MUST end with <p><strong>{reviewer}</strong></p> (or close variant). If it does not, you have extracted the wrong review.'
-        return prompt
-    elif has_shared_pages:
-        prompt = ARTICLE_SHARED_PAGE_PROMPT
-    else:
-        prompt = ARTICLE_PROMPT
+def build_prompt():
+    """Return the extraction prompt. Same for all article types.
 
-    # Tell the AI exactly what to skip and where boundaries are
-    if title:
-        prompt += f'\n\nThis article is titled: "{title}"'
-        if authors:
-            prompt += f'\nBy: {authors}'
-        prompt += '\nSkip ONLY this title and author at the top. Start from the very next content (abstract, keywords, or body text).'
-    if prev_title:
-        prompt += f'\n\nThe PREVIOUS article is titled: "{prev_title}". If you see content from this article at the top of the first page, skip ALL of it.'
-    if next_title:
-        prompt += f'\n\nThe NEXT article is titled: "{next_title}". If you see this title or content from this article, STOP — do not include it.'
-
-    if refs_retry:
-        prompt += '\n\nIMPORTANT: This article has a References or Bibliography section. You MUST include every reference entry. Do NOT stop before the references — continue through to the very last entry.'
-
-    return prompt
+    Haiku extracts everything — all content decisions (trimming title,
+    abstract, keywords, start/end bleed) happen in post-processing.
+    """
+    return ARTICLE_PROMPT
 
 
-def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8,
-                               is_book_review=False, has_shared_pages=False, book_title=None,
-                               reviewer=None, title=None, authors=None,
-                               prev_title=None, next_title=None, refs_retry=False):
-    """Send all pages of a split PDF to Claude, return (html, input_tokens, output_tokens, num_pages, truncated).
+def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8):
+    """Send all pages of a split PDF to Claude for full text extraction.
 
-    All pages sent in a single message for full article context.
+    Returns (html, input_tokens, output_tokens, num_pages, truncated).
+    Haiku extracts EVERYTHING — post-processing handles trimming.
     Retries with exponential backoff on rate limit errors.
     """
     doc = fitz.open(split_pdf_path)
@@ -332,7 +218,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
 
     content.append({
         'type': 'text',
-        'text': build_prompt(is_book_review=is_book_review, has_shared_pages=has_shared_pages, book_title=book_title, reviewer=reviewer, title=title, authors=authors, prev_title=prev_title, next_title=next_title, refs_retry=refs_retry),
+        'text': build_prompt(),
     })
 
     for attempt in range(max_retries):
@@ -584,22 +470,16 @@ def main():
                     failed += 1
                 return
 
-            reviewer = article.get('reviewer', '') if article.get('_is_book_review') else None
             html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(
-                client, split_pdf, model_name,
-                is_book_review=article.get('_is_book_review', False),
-                has_shared_pages=article.get('_has_shared_pages', False),
-                book_title=article.get('book_title', '') if article.get('_is_book_review') else None,
-                reviewer=reviewer,
-                title=article.get('title', ''),
-                authors=article.get('authors', ''),
-                prev_title=article.get('_prev_title'),
-                next_title=article.get('_next_title'))
+                client, split_pdf, model_name)
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback
                 fallback = fallback_html_from_pdf(split_pdf)
+                raw_path = os.path.splitext(out_path)[0] + '.raw.html'
                 if fallback:
+                    with open(raw_path, 'w', encoding='utf-8') as f:
+                        f.write(fallback)
                     with open(out_path, 'w', encoding='utf-8') as f:
                         f.write(fallback)
                 with lock:
@@ -614,71 +494,16 @@ def main():
                     print(f"  FILTERED {label} ({basename}){fb}", flush=True)
                 return
 
-            # Validate reviewer name for book reviews (retry once if wrong)
-            if reviewer and html:
-                strong_names = re.findall(r'<strong>([^<]+)</strong>', html)
-                last_strong = strong_names[-1].strip() if strong_names else ''
-                expected = reviewer.strip().lower()
-                actual = last_strong.lower()
-                if expected not in actual and actual not in expected:
-                    print(f"  RETRY {label}: reviewer mismatch (expected '{reviewer}', got '{last_strong}')", flush=True)
-                    html2, inp2, out2, _, _ = generate_html_for_article(
-                        client, split_pdf, model_name,
-                        is_book_review=True, has_shared_pages=article.get('_has_shared_pages', False),
-                        book_title=article.get('book_title', ''),
-                        reviewer=reviewer)
-                    if html2:
-                        inp_tok += inp2
-                        out_tok += out2
-                        strong2 = re.findall(r'<strong>([^<]+)</strong>', html2)
-                        last2 = strong2[-1].strip() if strong2 else ''
-                        if expected in last2.lower() or last2.lower() in expected:
-                            html = html2
-                            print(f"  RETRY OK {label}: got '{last2}'", flush=True)
-                        else:
-                            print(f"  RETRY FAIL {label}: still got '{last2}', keeping first attempt", flush=True)
+            # Save raw HTML (full extraction, before any trimming)
+            raw_path = os.path.splitext(out_path)[0] + '.raw.html'
+            with open(raw_path, 'w', encoding='utf-8') as f:
+                f.write(html)
 
-            # Post-processing: strip abstract if it leaked into HTML
-            abstract = article.get('abstract', '')
-            html, abs_stripped = strip_abstract(html, abstract)
-            if abs_stripped:
-                print(f"  POSTPROC {label}: stripped leaked abstract", flush=True)
+            # Post-processing: deterministic trimming
+            # (postprocess_html.py handles title/abstract/keywords/bleed stripping)
+            html = postprocess_article(html, article, split_pdf)
 
-            # Post-processing: retry once with refs-emphasis prompt if refs missing
-            if not article.get('_is_book_review') and check_missing_refs(html, split_pdf):
-                print(f"  RETRY {label}: missing refs, retrying with refs-emphasis prompt", flush=True)
-                html2, inp2, out2, _, _ = generate_html_for_article(
-                    client, split_pdf, model_name,
-                    is_book_review=False,
-                    has_shared_pages=article.get('_has_shared_pages', False),
-                    title=article.get('title', ''),
-                    authors=article.get('authors', ''),
-                    prev_title=article.get('_prev_title'),
-                    next_title=article.get('_next_title'),
-                    refs_retry=True)
-                if html2 and not check_missing_refs(html2, split_pdf):
-                    html = html2
-                    html, _ = strip_abstract(html, abstract)
-                    inp_tok += inp2
-                    out_tok += out2
-                    print(f"  RETRY OK {label}: refs now present", flush=True)
-                else:
-                    if html2:
-                        inp_tok += inp2
-                        out_tok += out2
-                    print(f"  RETRY FAIL {label}: refs still missing, keeping first attempt", flush=True)
-
-            # Post-processing: AI bad-split detection
-            if detect_bad_split(html):
-                print(f"  ⚠ BAD_SPLIT {label}: AI flagged bad split — saving but flagging", flush=True)
-                article['_bad_split'] = True
-                with open(toc_path) as tf:
-                    toc_data = json.load(tf)
-                toc_data['articles'][idx]['_bad_split'] = True
-                with open(toc_path, 'w') as tf:
-                    json.dump(toc_data, tf, indent=2, ensure_ascii=False)
-
-            # Save HTML body content
+            # Save final trimmed HTML
             with open(out_path, 'w', encoding='utf-8') as f:
                 f.write(html)
 
