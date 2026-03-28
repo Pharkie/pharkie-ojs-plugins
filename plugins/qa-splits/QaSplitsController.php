@@ -50,6 +50,7 @@ class QaSplitsController extends PKPBaseController
         Route::post('reviews', $this->submitReview(...))->name('qa.reviews.submit');
         Route::get('nav/random-unreviewed', $this->randomUnreviewed(...))->name('qa.nav.random');
         Route::get('nav/problem-case', $this->problemCase(...))->name('qa.nav.problem');
+        Route::get('stats', $this->getStats(...))->name('qa.stats');
     }
 
     // ---------------------------------------------------------------
@@ -785,5 +786,89 @@ class QaSplitsController extends PKPBaseController
         }
 
         return new JsonResponse(['submission_id' => null, 'message' => 'No problem cases found']);
+    }
+
+    /**
+     * GET /stats — QA progress breakdown by section and reviewer depth.
+     */
+    public function getStats(Request $request): JsonResponse
+    {
+        $authError = $this->requireManager($request);
+        if ($authError) return $authError;
+
+        $contextId = $this->getContextId();
+
+        // All articles with section info
+        $articles = DB::table('submissions as s')
+            ->join('publications as p', function ($join) {
+                $join->on('p.submission_id', '=', 's.submission_id')
+                     ->whereColumn('p.publication_id', '=', 's.current_publication_id');
+            })
+            ->join('issues as i', 'p.issue_id', '=', 'i.issue_id')
+            ->leftJoin('section_settings as ss', function ($join) {
+                $join->on('ss.section_id', '=', 'p.section_id')
+                     ->where('ss.setting_name', '=', 'title')
+                     ->where('ss.locale', '=', 'en');
+            })
+            ->where('s.context_id', $contextId)
+            ->select([
+                's.submission_id',
+                DB::raw("COALESCE(ss.setting_value, 'Uncategorised') as section"),
+            ])
+            ->get();
+
+        // Latest review per submission + count of distinct reviewers
+        $reviewData = DB::table('qa_split_reviews')
+            ->select([
+                'submission_id',
+                DB::raw('MAX(CASE WHEN review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = qa_split_reviews.submission_id) THEN decision END) as latest_decision'),
+                DB::raw('COUNT(DISTINCT user_id) as reviewer_count'),
+            ])
+            ->groupBy('submission_id')
+            ->get()
+            ->keyBy('submission_id');
+
+        // Build section breakdown
+        $sections = [];
+        $overall = ['total' => 0, 'approved' => 0, 'rejected' => 0, 'unreviewed' => 0];
+        $byReviewerCount = [0 => 0, 1 => 0, 2 => 0]; // 0 reviewers, 1 reviewer, 2+ reviewers
+
+        foreach ($articles as $article) {
+            $section = $article->section;
+            if (!isset($sections[$section])) {
+                $sections[$section] = ['total' => 0, 'approved' => 0, 'rejected' => 0, 'unreviewed' => 0];
+            }
+
+            $review = $reviewData[$article->submission_id] ?? null;
+            $status = 'unreviewed';
+            $reviewerCount = 0;
+
+            if ($review) {
+                $status = $review->latest_decision;
+                $reviewerCount = (int) $review->reviewer_count;
+            }
+
+            $sections[$section]['total']++;
+            $sections[$section][$status]++;
+            $overall['total']++;
+            $overall[$status]++;
+
+            if ($reviewerCount === 0) $byReviewerCount[0]++;
+            elseif ($reviewerCount === 1) $byReviewerCount[1]++;
+            else $byReviewerCount[2]++;
+        }
+
+        // Sort sections by total descending
+        arsort(array_column($sections, 'total'));
+
+        return new JsonResponse([
+            'overall'          => $overall,
+            'by_section'       => $sections,
+            'by_reviewer_count' => [
+                ['label' => 'No reviews',     'count' => $byReviewerCount[0]],
+                ['label' => '1 reviewer',     'count' => $byReviewerCount[1]],
+                ['label' => '2+ reviewers',   'count' => $byReviewerCount[2]],
+            ],
+        ]);
     }
 }
