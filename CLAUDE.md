@@ -17,6 +17,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`docs/non-docker-setup.md`](docs/non-docker-setup.md) — non-Docker plugin installation
 - [`docs/vps-deployment.md`](docs/vps-deployment.md) — VPS deployment
 - [`docs/support-runbook.md`](docs/support-runbook.md) — support staff quick reference
+- [`docs/qa-splits-plugin.md`](docs/qa-splits-plugin.md) — QA Splits plugin: visual review interface for backfill article splits
 - `private/TODO.md` — roadmap (in private repo)
 
 ## Good to know

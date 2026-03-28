@@ -737,6 +737,32 @@ SQL
   echo "[OJS] Inline HTML galley configured (org: $INLINE_ORG)."
 fi
 
+# --- Enable QA Splits plugin (dev/staging only) ---
+if [ "${QA_SPLITS_ENABLED:-1}" = "1" ]; then
+  echo "[OJS] Enabling qa-splits plugin for journal $JOURNAL_ID..."
+  $MARIADB <<SQL
+    INSERT IGNORE INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+    VALUES ('qasplitsplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
+    INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
+    VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'qaSplits', 'QaSplitsPlugin', 1, 0);
+    CREATE TABLE IF NOT EXISTS qa_split_reviews (
+      review_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      submission_id BIGINT UNSIGNED NOT NULL,
+      publication_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      decision ENUM('approved', 'rejected') NOT NULL,
+      comment TEXT NULL,
+      content_hash VARCHAR(64) NULL,
+      created_at DATETIME NOT NULL,
+      INDEX qa_sr_submission (submission_id),
+      INDEX qa_sr_decision (decision)
+    );
+SQL
+else
+  echo "[OJS] QA Splits plugin disabled (QA_SPLITS_ENABLED=${QA_SPLITS_ENABLED:-0})."
+fi
+
 # --- UI messages (stored in plugin_settings, not config.inc.php) ---
 # PHP INI files corrupt values containing " and {} (HTML with href="..." and
 # {placeholder}), so we write instance-specific messages directly to the DB.
