@@ -17,7 +17,7 @@ if (!existsSync(resolve(projectRoot, '.env'))) {
 // Load select env vars from .env so tests use the same values as setup scripts.
 // Only loads vars that aren't already set in the environment.
 for (const line of readFileSync(resolve(projectRoot, '.env'), 'utf-8').split('\n')) {
-  const m = line.match(/^(WP_ADMIN_PASSWORD|DB_PASSWORD|OJS_DB_PASSWORD|QA_SUB_PASSWORD|QA_NOSUB_PASSWORD)=["']?(.+?)["']?$/);
+  const m = line.match(/^(WP_ADMIN_PASSWORD|OJS_ADMIN_PASSWORD|OJS_ADMIN_USER|DB_PASSWORD|OJS_DB_PASSWORD|QA_SUB_PASSWORD|QA_NOSUB_PASSWORD)=["']?(.+?)["']?$/);
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
 
@@ -33,7 +33,8 @@ export default defineConfig({
   timeout: 60_000,
   maxFailures: isCI ? 0 : 3,
   retries: isCI ? 1 : 0,
-  reporter: [['list'], ['html']],
+  outputDir: './e2e/test-results',
+  reporter: [['list'], ['html', { outputFolder: './e2e/playwright-report' }]],
   use: {
     baseURL: 'http://localhost:8080',
     screenshot: 'only-on-failure',

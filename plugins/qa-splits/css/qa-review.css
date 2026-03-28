@@ -1,0 +1,609 @@
+/*
+ * QA Splits — Editorial workspace aesthetic
+ *
+ * Direction: refined editorial desk. Dark authoritative header,
+ * warm archival paper tones for reading, sharp typography,
+ * intentional color language for classification categories.
+ *
+ * Fonts: Source Serif 4 (display/titles) + Outfit (UI/controls)
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Outfit:wght@400;500;600;700&display=swap');
+
+/* ── Design tokens ── */
+
+:root {
+    /* Surface palette — warm archival tones */
+    --surface-dark: #1a1a1e;
+    --surface-dark-hover: #2a2a30;
+    --surface-warm: #faf8f4;
+    --surface-cream: #f3efe8;
+    --surface-pdf: #4a4a50;
+
+    /* Text */
+    --text-primary: #1a1a1e;
+    --text-secondary: #6b6560;
+    --text-muted: #9e9892;
+    --text-inverse: #faf8f4;
+    --text-inverse-muted: #b0aca6;
+
+    /* Accent — a warm editorial red */
+    --accent-red: #c03a2b;
+    --accent-red-hover: #a8311f;
+    --accent-green: #2d7a4f;
+    --accent-green-hover: #236840;
+    --accent-amber: #b8860b;
+    --accent-amber-hover: #9a7009;
+
+    /* Category pills — each a distinct voice */
+    --pill-ref-bg: #1e3a5f;
+    --pill-ref-text: #c8ddf0;
+    --pill-note-bg: #5c4a1e;
+    --pill-note-text: #f0e0b8;
+    --pill-bio-bg: #1e4a2e;
+    --pill-bio-text: #c0e8cc;
+    --pill-prov-bg: #4a3a4a;
+    --pill-prov-text: #f0e4f4;
+
+    /* Status badges */
+    --badge-approved-bg: #d8f0e0;
+    --badge-approved-text: #1a5030;
+    --badge-rejected-bg: #f5d8d4;
+    --badge-rejected-text: #7a2018;
+    --badge-invalidated-bg: #f5e8c8;
+    --badge-invalidated-text: #6a5010;
+    --badge-unreviewed-bg: #e8e4de;
+    --badge-unreviewed-text: #5a564e;
+
+    /* Dividers */
+    --divider: #e0dcd5;
+    --divider-strong: #1a1a1e;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(26,26,30,0.08);
+    --shadow-md: 0 4px 12px rgba(26,26,30,0.12);
+    --shadow-page: 0 2px 12px rgba(0,0,0,0.35);
+
+    /* Type scale */
+    --font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── Reset ── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--surface-dark);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Layout grid ── */
+
+.qa-layout {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 1fr 1fr;
+    height: 100vh;
+    gap: 0;
+}
+
+/* ── Top pane — dark editorial bar ── */
+
+.qa-top {
+    grid-column: 1 / -1;
+    background: var(--surface-dark);
+    color: var(--text-inverse);
+    padding: 12px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 3px solid var(--accent-red);
+}
+
+.qa-meta {
+    flex: 1;
+    min-width: 300px;
+}
+
+.qa-meta-primary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 5px;
+}
+
+.qa-title {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 650px;
+}
+
+.qa-meta-secondary {
+    font-size: 12px;
+    color: var(--text-inverse-muted);
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+
+.qa-meta-secondary span:not(:empty)::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-inverse);
+    margin-right: 5px;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+}
+
+/* ── Status badges ── */
+
+.qa-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.qa-badge-approved    { background: var(--badge-approved-bg);    color: var(--badge-approved-text); }
+.qa-badge-rejected    { background: var(--badge-rejected-bg);    color: var(--badge-rejected-text); }
+.qa-badge-invalidated { background: var(--badge-invalidated-bg); color: var(--badge-invalidated-text); }
+.qa-badge-unreviewed  { background: var(--badge-unreviewed-bg);  color: var(--badge-unreviewed-text); }
+
+/* ── Controls ── */
+
+.qa-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.qa-review-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 10px;
+    border-right: 1px solid rgba(255,255,255,0.15);
+}
+
+.qa-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.qa-progress {
+    font-size: 11px;
+    color: var(--text-inverse-muted);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255,255,255,0.15);
+}
+
+/* ── Buttons ── */
+
+.qa-btn {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    letter-spacing: 0.02em;
+}
+
+.qa-btn:active { transform: scale(0.96); }
+.qa-btn:focus-visible {
+    outline: 2px solid var(--accent-red);
+    outline-offset: 2px;
+}
+.qa-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+.qa-btn-approve {
+    background: var(--accent-green);
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(45,122,79,0.3);
+}
+.qa-btn-approve:hover:not(:disabled) {
+    background: var(--accent-green-hover);
+    box-shadow: 0 2px 8px rgba(45,122,79,0.4);
+}
+
+.qa-btn-reject {
+    background: var(--accent-red);
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(192,58,43,0.3);
+}
+.qa-btn-reject:hover:not(:disabled) {
+    background: var(--accent-red-hover);
+    box-shadow: 0 2px 8px rgba(192,58,43,0.4);
+}
+
+.qa-btn-reject-submit {
+    background: var(--accent-red);
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(192,58,43,0.3);
+}
+.qa-btn-reject-submit:hover:not(:disabled) {
+    background: var(--accent-red-hover);
+}
+
+.qa-btn-nav {
+    background: var(--surface-dark-hover);
+    color: var(--text-inverse);
+    padding: 8px 14px;
+}
+.qa-btn-nav:hover:not(:disabled) {
+    background: #3a3a42;
+}
+
+.qa-btn-problem {
+    background: var(--surface-dark-hover);
+    color: var(--accent-amber);
+    border: 1px solid var(--accent-amber);
+}
+.qa-btn-problem:hover:not(:disabled) {
+    background: rgba(184,134,11,0.15);
+}
+
+.qa-input {
+    padding: 7px 12px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    width: 280px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-inverse);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.qa-input::placeholder { color: rgba(255,255,255,0.35); }
+.qa-input:focus {
+    outline: none;
+    border-color: var(--accent-red);
+    background: rgba(255,255,255,0.12);
+}
+
+/* ── Left pane: PDF viewer ── */
+
+.qa-left {
+    background: var(--surface-pdf);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.qa-pdf-toolbar {
+    padding: 7px 14px;
+    background: rgba(0,0,0,0.25);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.65);
+    text-align: center;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.qa-pdf-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+    gap: 10px;
+}
+
+.qa-pdf-container canvas {
+    box-shadow: var(--shadow-page);
+    background: #fff;
+    max-width: 100%;
+}
+
+/* Custom scrollbar for PDF pane */
+.qa-pdf-container::-webkit-scrollbar { width: 8px; }
+.qa-pdf-container::-webkit-scrollbar-track { background: transparent; }
+.qa-pdf-container::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+}
+.qa-pdf-container::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+
+/* ── Right pane: HTML galley + end-matter ── */
+
+.qa-right {
+    background: var(--surface-warm);
+    overflow-y: auto;
+    border-left: 1px solid var(--divider);
+}
+
+/* Custom scrollbar for right pane */
+.qa-right::-webkit-scrollbar { width: 8px; }
+.qa-right::-webkit-scrollbar-track { background: transparent; }
+.qa-right::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.12);
+    border-radius: 4px;
+}
+.qa-right::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+.qa-html-content {
+    padding: 28px 32px;
+    font-family: var(--font-display);
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--text-primary);
+}
+
+.qa-html-content h1, .qa-html-content h2, .qa-html-content h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-top: 1.4em;
+    margin-bottom: 0.5em;
+    color: var(--text-primary);
+}
+
+.qa-html-content h2 { font-size: 1.3em; }
+.qa-html-content h3 { font-size: 1.1em; }
+
+.qa-html-content p {
+    margin-bottom: 0.9em;
+}
+
+/* ── End-matter classification ── */
+
+.qa-endmatter {
+    border-top: 2px solid var(--divider-strong);
+    margin: 8px 32px 32px;
+    padding-top: 20px;
+    position: relative;
+}
+
+.qa-endmatter::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 0;
+    width: 60px;
+    height: 2px;
+    background: var(--accent-red);
+}
+
+.qa-endmatter-heading {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+}
+
+.qa-endmatter-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--divider);
+    align-items: flex-start;
+}
+
+.qa-endmatter-item:last-child {
+    border-bottom: none;
+}
+
+.qa-endmatter-item:hover {
+    background: rgba(0,0,0,0.02);
+    margin: 0 -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-radius: 4px;
+}
+
+/* ── Category pills — distinct color voices ── */
+
+.qa-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+
+.qa-pill-reference  { background: var(--pill-ref-bg);  color: var(--pill-ref-text); }
+.qa-pill-note       { background: var(--pill-note-bg); color: var(--pill-note-text); }
+.qa-pill-bio        { background: var(--pill-bio-bg);  color: var(--pill-bio-text); }
+.qa-pill-provenance { background: var(--pill-prov-bg); color: var(--pill-prov-text); }
+
+.qa-endmatter-text {
+    font-family: var(--font-display);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.qa-endmatter-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    font-family: var(--font-display);
+    padding: 12px 0;
+}
+
+/* ── Review history ── */
+
+.qa-review-history {
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.qa-review-history-item {
+    padding: 4px 0;
+    border-bottom: 1px dotted var(--divider);
+}
+
+/* ── Toast notifications ── */
+
+.qa-toast {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    padding: 12px 22px;
+    border-radius: 4px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    z-index: 10000;
+    box-shadow: var(--shadow-md);
+    animation: qa-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qa-toast-success {
+    background: var(--accent-green);
+    color: #fff;
+}
+
+.qa-toast-error {
+    background: var(--accent-red);
+    color: #fff;
+}
+
+@keyframes qa-toast-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Loading state ── */
+
+.qa-loading {
+    text-align: center;
+    padding: 48px;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+}
+
+.qa-loading::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(107, 101, 96, 0.2);
+    border-top-color: var(--text-secondary);
+    border-radius: 50%;
+    animation: qa-spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+@keyframes qa-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── HTML galley iframe (XSS sandbox) ── */
+
+.qa-html-iframe {
+    width: 100%;
+    min-height: 200px;
+    border: none;
+    background: var(--surface-warm);
+}
+
+/* ── Keyboard help overlay ── */
+
+.qa-help-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,26,30,0.7);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: qa-toast-in 0.2s ease;
+}
+
+.qa-help-box {
+    background: var(--surface-warm);
+    border-radius: 8px;
+    padding: 28px 36px;
+    box-shadow: var(--shadow-md);
+    max-width: 400px;
+}
+
+.qa-help-box h3 {
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+}
+
+.qa-help-box table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.qa-help-box td {
+    padding: 6px 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--divider);
+}
+
+.qa-help-box td:first-child {
+    width: 120px;
+    color: var(--text-secondary);
+}
+
+.qa-help-box kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--surface-cream);
+    border: 1px solid var(--divider);
+    border-radius: 3px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.qa-help-box p {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+}
