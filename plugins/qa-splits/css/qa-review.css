@@ -605,6 +605,15 @@ body {
     min-width: 0;
 }
 
+.qa-btn-random {
+    border: 1px solid var(--accent);
+    color: var(--text-inverse);
+    background: rgba(90,122,155,0.15);
+}
+.qa-btn-random:hover {
+    background: rgba(90,122,155,0.3);
+}
+
 .qa-drawer-footer {
     padding: 8px 12px;
     border-top: 1px solid rgba(255,255,255,0.1);
