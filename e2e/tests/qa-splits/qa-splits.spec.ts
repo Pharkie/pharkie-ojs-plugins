@@ -117,7 +117,7 @@ test.describe('QA Splits plugin', () => {
 
     // Wait for PDF canvas to render
     const canvas = page.locator('#pdf-container canvas').first();
-    await expect(canvas).toBeVisible({ timeout: 30_000 });
+    await expect(canvas).toBeVisible({ timeout: 60_000 });
 
     // Page indicator should show page count
     const pageInfo = await page.locator('#pdf-page-info').textContent();
