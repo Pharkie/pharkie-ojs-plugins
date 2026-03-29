@@ -189,12 +189,12 @@ python3 backfill/qa_review.py --target live list
 
 ## QA iteration workflow
 
-QA Splits reads from OJS — pipeline changes require reimport to be visible.
+QA Splits reads from OJS — pipeline changes require reimport to be visible. Always use per-issue reimport when possible.
 
-**Per-issue iteration** (~3-4 min, for targeted fixes):
+**Per-issue iteration** (~8 sec, preferred):
 ```bash
 # 1. Fix pipeline code
-# 2. Reprocess from raw
+# 2. Reprocess from raw (~11 sec for all, or target one issue)
 python3 backfill/reprocess_html.py backfill/private/output/23.1/toc.json
 # 3. JATS pipeline
 python3 backfill/generate_jats.py backfill/private/output/23.1/toc.json
@@ -203,19 +203,27 @@ python3 backfill/split_citation_tiers.py
 python3 backfill/jats_to_html.py backfill/private/output/23.1/toc.json
 # 4. Regenerate import XML
 python3 backfill/generate_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
-# 5. Reimport just that issue
+# 5. Reimport just that issue (~7 sec)
 backfill/import.sh backfill/private/output/23.1 --force
-# 6. Restore IDs
-python3 backfill/restore_ids.py --target dev
+# 6. Restore IDs for that issue only (~0.6 sec)
+python3 backfill/restore_ids.py --target dev --issue 23.1
 # 7. Check in QA Splits
 ```
 
-**Full reimport** (~20 min, for systemic changes):
+**Full reimport** (~20 min, only for systemic changes affecting all issues):
 ```bash
-# Reprocess all, run full pipeline on all, regenerate all XML
+# Reprocess all from raw
+python3 backfill/reprocess_html.py backfill/private/output/*/toc.json
+# Full JATS pipeline
+python3 backfill/generate_jats.py backfill/private/output/*/toc.json
+python3 backfill/extract_citations.py --extract
+python3 backfill/split_citation_tiers.py
+python3 backfill/jats_to_html.py backfill/private/output/*/toc.json
+# Regenerate all XML
 for t in backfill/private/output/*/toc.json; do
   python3 backfill/generate_xml.py "$t" -o "$(dirname "$t")/import.xml"
 done
+# Reimport all
 backfill/import.sh backfill/private/output/* --wipe-articles
 python3 backfill/restore_ids.py --target dev
 ```
