@@ -373,12 +373,12 @@ document.addEventListener('alpine:init', () => {
         get classificationGroups() {
             if (!this.classification) return [];
             const defs = [
+                { key: 'bios', label: 'Author Bios', cls: 'qa-pill-bio',
+                  hint: 'Classified as author biographical notes. Also rendered in the HTML galley above.' },
                 { key: 'references', label: 'References', cls: 'qa-pill-reference',
                   hint: 'Extracted from HTML body and imported into OJS citations table. OJS renders these separately on the article page.' },
                 { key: 'notes', label: 'Notes', cls: 'qa-pill-note',
                   hint: 'Classified as footnotes/endnotes. Rendered in the HTML galley below the body text.' },
-                { key: 'bios', label: 'Author Bios', cls: 'qa-pill-bio',
-                  hint: 'Classified as author biographical notes. Rendered in the HTML galley.' },
                 { key: 'provenance', label: 'Provenance', cls: 'qa-pill-provenance',
                   hint: 'Publication history, acknowledgements, or source notes. Rendered in the HTML galley.' },
             ];
