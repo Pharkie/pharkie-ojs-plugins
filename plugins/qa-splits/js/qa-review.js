@@ -18,14 +18,18 @@
     const PLUGIN_URL = window.QA_CONFIG.pluginUrl;
 
     // State
-    let articles = [];
-    let currentIndex = -1;
+    let articles = [];          // Full unfiltered list
+    let workingSet = [];        // Current filtered subset (indices into articles[])
+    let setIndex = -1;          // Position within workingSet
+    let setFilter = null;       // { type: 'author'|'issue'|'status'|'search', query: string } or null
+    let currentIndex = -1;      // Index into articles[] (derived from workingSet[setIndex])
     let lastSeenId = parseInt(localStorage.getItem('qa-last-seen'), 10) || null;
     let pdfDoc = null;
-    let loadGeneration = 0;     // Incremented per loadArticle to cancel stale fetches
-    let scrollHandler = null;   // Stored ref for cleanup
+    let loadGeneration = 0;
+    let scrollHandler = null;
+    let drawerOpen = false;
 
-    // Prefetch cache: submissionId → { pdf: Blob|null, html: string|null, classification: object|null }
+    // Prefetch cache
     const PREFETCH_AHEAD = 5;
     const prefetchCache = new Map();
 
@@ -49,6 +53,7 @@
         }
 
         bindEvents();
+        bindDrawerEvents();
         loadArticles();
     }
 
@@ -118,18 +123,37 @@
                 return;
             }
 
-            // Priority: URL ?id= param > localStorage last-seen > first article
-            let startIndex = 0;
-            const urlId = parseInt(new URL(window.location).searchParams.get('id'), 10);
-            if (urlId) {
-                const idx = articles.findIndex(a => a.submission_id === urlId);
-                if (idx >= 0) startIndex = idx;
-            } else if (lastSeenId) {
-                const idx = articles.findIndex(a => a.submission_id === lastSeenId);
-                if (idx >= 0) startIndex = idx;
-            }
+            // Initialize working set (full list by default)
+            workingSet = articles.map((_, i) => i);
 
-            loadArticle(startIndex);
+            // Check URL for set filter params
+            const urlParams = new URL(window.location).searchParams;
+            const urlSet = urlParams.get('set');
+            const urlQ = urlParams.get('q');
+            const urlPos = parseInt(urlParams.get('pos'), 10);
+            const urlId = parseInt(urlParams.get('id'), 10);
+
+            if (urlSet && urlQ) {
+                // Apply filter from URL
+                applyFilter(urlSet, urlQ);
+                if (urlPos && urlPos > 0 && urlPos <= workingSet.length) {
+                    loadArticleFromSet(urlPos - 1);
+                } else {
+                    loadArticleFromSet(0);
+                }
+            } else {
+                // Single article or default
+                let startIndex = 0;
+                if (urlId) {
+                    const idx = articles.findIndex(a => a.submission_id === urlId);
+                    if (idx >= 0) startIndex = idx;
+                } else if (lastSeenId) {
+                    const idx = articles.findIndex(a => a.submission_id === lastSeenId);
+                    if (idx >= 0) startIndex = idx;
+                }
+                setIndex = startIndex;
+                loadArticle(startIndex);
+            }
 
             // Pre-resolve random/problem targets so buttons are instant
             prefetchRandomTarget();
@@ -151,10 +175,12 @@
         localStorage.setItem('qa-last-seen', article.submission_id);
         lastSeenId = article.submission_id;
 
-        // Update URL with article ID (shareable deep link)
-        const url = new URL(window.location);
-        url.searchParams.set('id', article.submission_id);
-        history.replaceState(null, '', url);
+        // Track position in working set
+        const si = workingSet.indexOf(index);
+        if (si >= 0) setIndex = si;
+        updateUrl();
+        updateDrawerTab();
+        if (setFilter) updateSetPosition();
 
         // Compact title: 37.1 #14 (2026) Title [section]
         const sectionTag = article.section ? ' [' + article.section.toLowerCase() + ']' : '';
@@ -174,8 +200,8 @@
             checkHashValidity(article, gen);
         }
 
-        els['btn-prev'].disabled = (index === 0);
-        els['btn-next'].disabled = (index === articles.length - 1);
+        els['btn-prev'].disabled = (setIndex <= 0);
+        els['btn-next'].disabled = (setIndex >= workingSet.length - 1);
 
         // Load content in parallel, checking generation before rendering
         loadPdf(article.submission_id, gen);
@@ -519,11 +545,11 @@
             hideRejectInput();
             recalculateProgress();
 
-            // Auto-advance to next article
-            if (currentIndex < articles.length - 1) {
-                loadArticle(currentIndex + 1);
+            // Auto-advance to next article in working set
+            if (setIndex < workingSet.length - 1) {
+                loadArticleFromSet(setIndex + 1);
             } else {
-                // Last article — just update the badge
+                // Last in set — just update the badge
                 updateStatusBadge(decision, 'you', article.reviewed_at, article.comment);
             }
         } catch (err) {
@@ -538,9 +564,9 @@
     // ── Navigation ──
 
     function navigate(delta) {
-        const newIndex = currentIndex + delta;
-        if (newIndex >= 0 && newIndex < articles.length) {
-            loadArticle(newIndex);
+        const newSi = setIndex + delta;
+        if (newSi >= 0 && newSi < workingSet.length) {
+            loadArticleFromSet(newSi);
         }
     }
 
@@ -953,6 +979,208 @@
             + 'font-family="var(--font-ui)" font-size="11" fill="var(--text-muted)">'
             + total + ' articles</text>'
             + '</svg>';
+    }
+
+    // ── Drawer: collapsible article list + filtering ──
+
+    function bindDrawerEvents() {
+        document.getElementById('qa-drawer-tab').addEventListener('click', toggleDrawer);
+        document.getElementById('qa-drawer-close').addEventListener('click', toggleDrawer);
+        document.getElementById('qa-drawer-search').addEventListener('input', (e) => {
+            applyFilter('search', e.target.value.trim());
+        });
+    }
+
+    function toggleDrawer() {
+        drawerOpen = !drawerOpen;
+        const drawer = document.getElementById('qa-drawer');
+        const tab = document.getElementById('qa-drawer-tab');
+        if (drawerOpen) {
+            drawer.style.display = '';
+            tab.style.display = 'none';
+            renderDrawerList();
+            document.getElementById('qa-drawer-search').focus();
+        } else {
+            drawer.style.display = 'none';
+            tab.style.display = '';
+        }
+    }
+
+    function applyFilter(type, query) {
+        if (!query) {
+            // Clear filter
+            setFilter = null;
+            workingSet = articles.map((_, i) => i);
+        } else {
+            setFilter = { type, query };
+            const q = query.toLowerCase();
+            workingSet = [];
+            articles.forEach((a, i) => {
+                let match = false;
+                switch (type) {
+                    case 'search':
+                        match = a.title.toLowerCase().includes(q)
+                            || a.authors.some(auth => auth.toLowerCase().includes(q))
+                            || (a.section || '').toLowerCase().includes(q);
+                        break;
+                    case 'author':
+                        match = a.authors.some(auth => auth.toLowerCase().includes(q));
+                        break;
+                    case 'issue':
+                        match = (a.volume + '.' + a.number) === query;
+                        break;
+                    case 'status':
+                        match = a.status === query;
+                        break;
+                }
+                if (match) workingSet.push(i);
+            });
+        }
+
+        // Find current article's position in new set
+        setIndex = workingSet.indexOf(currentIndex);
+        if (setIndex < 0 && workingSet.length > 0) {
+            setIndex = 0;
+            loadArticleFromSet(0);
+        }
+
+        updateSetPosition();
+        updateDrawerTab();
+        renderDrawerList();
+        updateUrl();
+    }
+
+    function loadArticleFromSet(si) {
+        if (si < 0 || si >= workingSet.length) return;
+        setIndex = si;
+        loadArticle(workingSet[si]);
+    }
+
+    function renderDrawerList() {
+        const list = document.getElementById('qa-drawer-list');
+        const filters = document.getElementById('qa-drawer-filters');
+
+        // Quick filter buttons
+        const counts = { rejected: 0, unreviewed: 0 };
+        const issues = {};
+        articles.forEach(a => {
+            if (a.status === 'rejected') counts.rejected++;
+            if (a.status === 'unreviewed') counts.unreviewed++;
+            const key = a.volume + '.' + a.number;
+            issues[key] = (issues[key] || 0) + 1;
+        });
+
+        let filtersHtml = '';
+        if (counts.rejected) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'rejected' ? ' active' : '') + '" data-type="status" data-q="rejected">Rejected (' + counts.rejected + ')</button>';
+        if (counts.unreviewed) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'unreviewed' ? ' active' : '') + '" data-type="status" data-q="unreviewed">Unreviewed (' + counts.unreviewed + ')</button>';
+
+        // Top 5 issues by article count
+        const sortedIssues = Object.entries(issues).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        sortedIssues.forEach(([key, count]) => {
+            filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === key ? ' active' : '') + '" data-type="issue" data-q="' + key + '">Issue ' + key + ' (' + count + ')</button>';
+        });
+
+        filters.innerHTML = filtersHtml;
+        filters.querySelectorAll('.qa-drawer-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = btn.dataset.type;
+                const q = btn.dataset.q;
+                // Toggle off if same filter clicked
+                if (setFilter && setFilter.type === type && setFilter.query === q) {
+                    applyFilter(null, null);
+                    document.getElementById('qa-drawer-search').value = '';
+                } else {
+                    applyFilter(type, q);
+                    document.getElementById('qa-drawer-search').value = '';
+                }
+            });
+        });
+
+        // Article list
+        let html = '';
+        workingSet.forEach((artIdx, si) => {
+            const a = articles[artIdx];
+            const active = si === setIndex ? ' active' : '';
+            const icon = a.status === 'approved' ? '✓' : a.status === 'rejected' ? '✗' : '·';
+            html += '<div class="qa-drawer-item' + active + '" data-si="' + si + '">'
+                + '<span class="qa-drawer-item-status">' + icon + '</span>'
+                + '<span class="qa-drawer-item-title">' + a.volume + '.' + a.number + ' #' + a.seq + ' ' + escapeHtml(a.title) + '</span>'
+                + '</div>';
+        });
+        list.innerHTML = html || '<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.35)">No articles match</div>';
+
+        list.querySelectorAll('.qa-drawer-item').forEach(item => {
+            item.addEventListener('click', () => {
+                loadArticleFromSet(parseInt(item.dataset.si, 10));
+                renderDrawerList(); // Re-render to update active state
+            });
+        });
+
+        // Scroll active item into view
+        const activeEl = list.querySelector('.qa-drawer-item.active');
+        if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+
+        // Footer
+        const footer = document.getElementById('qa-drawer-footer');
+        let footerText = (setIndex + 1) + ' / ' + workingSet.length;
+        if (setFilter) {
+            footerText += ' <button class="qa-drawer-clear">Clear filter</button>';
+        }
+        footer.innerHTML = footerText;
+        const clearBtn = footer.querySelector('.qa-drawer-clear');
+        if (clearBtn) clearBtn.addEventListener('click', () => {
+            applyFilter(null, null);
+            document.getElementById('qa-drawer-search').value = '';
+        });
+    }
+
+    function updateDrawerTab() {
+        const tab = document.getElementById('qa-drawer-tab-text');
+        if (setFilter) {
+            tab.textContent = (setIndex + 1) + '/' + workingSet.length;
+        } else {
+            tab.textContent = (setIndex + 1) + '/' + articles.length;
+        }
+    }
+
+    function updateSetPosition() {
+        // Update progress counter to show set position when filtered
+        if (setFilter && workingSet.length > 0) {
+            const label = setFilter.type === 'search' ? '"' + setFilter.query + '"'
+                : setFilter.type === 'author' ? 'by ' + setFilter.query
+                : setFilter.type === 'issue' ? 'Issue ' + setFilter.query
+                : setFilter.query;
+            els['qa-progress'].innerHTML = '';
+            const posText = document.createTextNode((setIndex + 1) + ' / ' + workingSet.length + ' ' + label + ' ');
+            els['qa-progress'].appendChild(posText);
+            const exitLink = document.createElement('span');
+            exitLink.textContent = '× Clear filter';
+            exitLink.className = 'qa-progress-link';
+            exitLink.addEventListener('click', (e) => {
+                e.stopPropagation();
+                applyFilter(null, null);
+                document.getElementById('qa-drawer-search').value = '';
+            });
+            els['qa-progress'].appendChild(exitLink);
+        }
+    }
+
+    function updateUrl() {
+        const url = new URL(window.location);
+        if (setFilter) {
+            url.searchParams.set('set', setFilter.type);
+            url.searchParams.set('q', setFilter.query);
+            url.searchParams.set('pos', String(setIndex + 1));
+            url.searchParams.delete('id');
+        } else {
+            url.searchParams.delete('set');
+            url.searchParams.delete('q');
+            url.searchParams.delete('pos');
+            if (currentIndex >= 0) {
+                url.searchParams.set('id', articles[currentIndex].submission_id);
+            }
+        }
+        history.replaceState(null, '', url);
     }
 
     // Boot

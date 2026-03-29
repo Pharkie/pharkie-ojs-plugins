@@ -94,7 +94,7 @@ class QaSplitsPlugin extends GenericPlugin
 
         $request = Application::get()->getRequest();
         $user = $request->getUser();
-        if (!$user || !$this->userIsManager($user, $request)) {
+        if (!$user) {
             return Hook::CONTINUE;
         }
 
@@ -133,17 +133,11 @@ class QaSplitsPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
-        // Require authenticated user with Manager or Site Admin role
+        // Require any authenticated user
         $request = Application::get()->getRequest();
         $user = $request->getUser();
         if (!$user) {
             $request->redirect(null, 'login');
-            return true;
-        }
-
-        if (!$this->userIsManager($user, $request)) {
-            // Redirect to dashboard with a message rather than a bare 403
-            $request->redirect(null, 'dashboard');
             return true;
         }
 
@@ -231,6 +225,20 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit rejection (Ctrl+Enter)">Reject with Reason</button>
                 <span class="qa-reject-hint">Ctrl+Enter to submit, Esc to cancel</span>
             </div>
+        </div>
+
+        <!-- Drawer: collapsible filter/article list panel -->
+        <div class="qa-drawer-tab" id="qa-drawer-tab" title="Open article list">
+            <span id="qa-drawer-tab-text">All</span>
+        </div>
+        <div class="qa-drawer" id="qa-drawer" style="display:none">
+            <div class="qa-drawer-header">
+                <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
+                <button id="qa-drawer-close" class="qa-drawer-close">&times;</button>
+            </div>
+            <div class="qa-drawer-filters" id="qa-drawer-filters"></div>
+            <div class="qa-drawer-list" id="qa-drawer-list"></div>
+            <div class="qa-drawer-footer" id="qa-drawer-footer"></div>
         </div>
 
         <!-- Left pane: PDF viewer -->
