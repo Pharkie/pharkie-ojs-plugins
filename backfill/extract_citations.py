@@ -139,33 +139,19 @@ def extract_from_jats(jats_path: Path) -> dict:
     trailing_bio_elements = []
     trailing_bio_parts = []
 
-    # Find the last container to scan: last <sec> if it exists, else <body>
-    removed_elements = set(id(s['element']) for s in sections)
-    body_children = list(body)
-    last_container = body
-    last_container_is_sec = False
-    for child in reversed(body_children):
-        if id(child) in removed_elements:
-            continue
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-        if tag == 'sec':
-            last_container = child
-            last_container_is_sec = True
-        break
-
-    # Walk backwards through <p> elements in the container
-    for child in reversed(list(last_container)):
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+    # Scan all <p> elements in the body (at any depth) for bio/contact
+    # patterns. Bios can appear before ethics statements, author statements,
+    # or other non-bio trailing content, so we can't just walk backwards.
+    for p_el in body.iter():
+        tag = p_el.tag.split('}')[-1] if '}' in p_el.tag else p_el.tag
         if tag != 'p':
-            break
-        text = extract_text_from_element(child).strip()
+            continue
+        text = extract_text_from_element(p_el).strip()
         if not text:
             continue
         if is_author_bio(text) or is_author_contact(text):
-            trailing_bio_parts.insert(0, text)
-            trailing_bio_elements.insert(0, child)
-        else:
-            break
+            trailing_bio_parts.append(text)
+            trailing_bio_elements.append(p_el)
     if trailing_bio_parts:
         bios.append(' '.join(trailing_bio_parts))
 
