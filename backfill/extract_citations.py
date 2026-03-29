@@ -69,12 +69,27 @@ def extract_from_jats(jats_path: Path) -> dict:
         elif family is not None:
             author_names.append(family.text)
 
+    # Scan leading <p> elements (before first <sec>) for provenance notes.
+    # Conference/presentation notes appear at the top of the article body,
+    # not in reference sections at the tail.
+    leading_provenance = []
+    leading_provenance_elements = []
+    for child in body:
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag == 'sec':
+            break  # Reached first section — stop scanning
+        if tag == 'p':
+            text = extract_text_from_element(child).strip()
+            if text and is_provenance(text):
+                leading_provenance.append(text)
+                leading_provenance_elements.append(child)
+
     sections = find_jats_reference_sections(body, tail_only=True,
                                             author_names=author_names)
 
     citations = []
     bios = []
-    provenance_items = []
+    provenance_items = list(leading_provenance)
     note_items = []
     headings = []
 
@@ -114,6 +129,7 @@ def extract_from_jats(jats_path: Path) -> dict:
         'notes': note_items,
         'headings': headings,
         'sections_to_remove': [sec['element'] for sec in sections],
+        'leading_provenance_elements': leading_provenance_elements,
         'tree': tree,
     }
 
@@ -135,6 +151,14 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
                 body.remove(sec_el)
             except ValueError:
                 pass  # already removed
+
+    # Remove leading provenance elements from body
+    for el in extracted.get('leading_provenance_elements', []):
+        if body is not None:
+            try:
+                body.remove(el)
+            except ValueError:
+                pass
 
     # Find or create <back>
     back = root.find('.//{*}back')
@@ -295,8 +319,11 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
                 write_back_matter_to_jats(jats_path, extracted, dry_run=dry_run)
 
                 if verbose:
-                    print(f"  ✓ {vol_name}/{slug}: {len(extracted['citations'])} citations, "
-                          f"{len(extracted['notes'])} notes, {len(extracted['bios'])} bios")
+                    parts = [f"{len(extracted['citations'])} citations",
+                             f"{len(extracted['notes'])} notes",
+                             f"{len(extracted['bios'])} bios",
+                             f"{len(extracted['provenance'])} provenance"]
+                    print(f"  ✓ {vol_name}/{slug}: {', '.join(parts)}")
             else:
                 stats['without_citations'] += 1
                 if verbose:

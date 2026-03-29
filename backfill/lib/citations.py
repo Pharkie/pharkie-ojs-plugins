@@ -606,12 +606,32 @@ NEVER_NAME_WORDS = frozenset({
     'for', 'from', 'with', 'into',
     'between', 'towards', 'toward', 'through', 'about', 'against',
     'before', 'after', 'during', 'without', 'within', 'beyond',
+    'its', 'his', 'her', 'their', 'our', 'my',                # possessive pronouns
 })
 
 # Nobiliary particles allowed in names (only matched when lowercase)
 NAME_PARTICLES = frozenset({
     'van', 'de', 'du', 'von', 'le', 'la', 'di', 'el', 'al',
-    'bin', 'del', 'der', 'dos', 'den', 'das', 'ibn',
+    'bin', 'del', 'der', 'dos', 'den', 'das', 'da', 'ibn',
+})
+
+
+# Word suffixes that are virtually never found in person names.
+# Only truly safe suffixes — many endings (-ing, -ous, -ling, -ive)
+# appear in real surnames (Rowling, D'Astous, Hastings, etc.).
+_NON_NAME_SUFFIXES = re.compile(
+    r'(?:tion|sion|ment|ness|ical|ology|ophy|istry|ence|ance)$',
+    re.IGNORECASE
+)
+
+# Capitalised words that are never person names but appear in titles.
+# Kept small and conservative — only add words with zero plausible
+# name interpretations across cultures.
+_TITLE_WORDS = frozenset({
+    'debunking', 'antipsychiatry', 'psychotherapy', 'counselling',
+    'counseling', 'psychiatry', 'psychology', 'phenomenology',
+    'existentialism', 'philosophy', 'hermeneutics', 'ontology',
+    'therapy', 'therapeutic', 'clinical', 'embodiment',
 })
 
 
@@ -630,10 +650,21 @@ def _is_single_person_name(text: str) -> bool:
         w_clean = w.rstrip('.,;:')
         if not w_clean:
             continue
+        # Strip possessive 's (e.g. "Heidegger's" → "Heidegger")
+        if w_clean.endswith("'s") or w_clean.endswith('\u2019s'):
+            w_clean = w_clean[:-2]
+        if not w_clean:
+            continue
         # Nobiliary particles only match when lowercase (van, de, du).
         # "Del" as a given name should not match the particle "del".
         if w_clean[0].islower() and w_clean.lower() in NAME_PARTICLES:
             continue
+        # Reject words with non-name suffixes (Conscience, Philosophical, etc.)
+        if len(w_clean) >= 6 and _NON_NAME_SUFFIXES.search(w_clean):
+            return False
+        # Reject known title/domain words (Psychotherapy, Debunking, etc.)
+        if w_clean.lower() in _TITLE_WORDS:
+            return False
         # Initials with dot: "W.", "R.D.", "F."
         if re.match(r'^[A-ZÀ-Ž]\.$', w_clean) or re.match(r'^(?:[A-ZÀ-Ž]\.)+$', w_clean):
             cap_count += 1
@@ -843,11 +874,21 @@ def is_section_sublabel(text: str) -> bool:
 
 
 def is_provenance(text: str) -> bool:
-    """Detect article provenance notes."""
-    return bool(re.match(
+    """Detect article provenance notes (conference presentations, origins)."""
+    provenance_patterns = [
+        # "This paper was originally presented at..."
         r'^(This|A version of this|An earlier version of this|A shorter version of this)\s+'
-        r'(article|paper|chapter|essay|lecture|talk)\s+(is|was)\s', text
-    ))
+        r'(article|paper|chapter|essay|lecture|talk)\s+(is|was)\s',
+        # "Presentation, 19 November 2011..."
+        r'^Presentation[,\s]',
+        # "Based on a presentation/keynote/talk/version..."
+        r'^Based\s+on\s+(?:a\s+)?(?:presentation|version|talk|paper|keynote)',
+        # "Paper/Talk/Keynote given/delivered/presented at..."
+        r'^(?:Paper|Talk|Keynote)\s+(?:given|delivered|presented)',
+        # "Adapted/Revised/Expanded from..."
+        r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
+    ]
+    return any(re.match(p, text, re.IGNORECASE) for p in provenance_patterns)
 
 
 # ---------------------------------------------------------------

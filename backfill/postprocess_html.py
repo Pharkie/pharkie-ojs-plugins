@@ -218,11 +218,12 @@ def strip_authors(html, authors):
 
 
 def strip_conference_note(html):
-    """Remove 'Based on (a) presentation/keynote...' lines."""
-    html = re.sub(
-        r'<p[^>]*>\s*(?:<em>)?\s*Based\s+on\s+(?:a\s+)?(?:keynote\s+)?presentation\b.*?</p>\s*',
-        '', html, count=1, flags=re.DOTALL | re.IGNORECASE
-    )
+    """Preserve conference/presentation notes — they flow into JATS body
+    and are extracted as provenance by extract_citations.py.
+
+    Previously these were stripped (discarded). Now kept so they end up
+    in JATS <back><notes notes-type="provenance"> after extraction.
+    """
     return html
 
 
