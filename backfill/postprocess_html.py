@@ -22,15 +22,15 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib.citations import normalise_allcaps
+from lib.citations import (
+    normalise_allcaps, normalise_for_overlap, REFERENCE_HEADING_RE,
+    PUBLISHER_NAMES,
+)
 
 try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
-from citations import REFERENCE_HEADING_RE, PUBLISHER_NAMES
 
 # Minimum abstract length worth stripping. Shortest real abstract in dataset
 # is 152 chars. Below 30 chars, a toc.json "abstract" is likely a fragment
@@ -48,11 +48,16 @@ MIN_TARGET_TEXT_LEN = 5
 TITLE_BLOCK_MAX_RATIO = 2
 # Require matching at least half the title words
 TITLE_WORD_MATCH_RATIO = 0.5
-
-
-def _clean(text):
-    """Lowercase, strip non-alphanumeric, collapse whitespace."""
-    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', text.lower())).strip()
+# Abstract overlap: fraction of abstract words that must appear in a
+# candidate paragraph to consider it a match. Tolerant of OCR errors
+# (e.g. "clinicians" → "citizenicians").
+ABSTRACT_OVERLAP_THRESHOLD = 0.7
+# Fuzzy title verification: fraction of title words (>2 chars) that must
+# appear in text. Tolerant of PDF extraction artefacts (fused words,
+# reordered fragments).
+TITLE_FUZZY_MATCH_THRESHOLD = 0.8
+# Use shared normalise_for_overlap as _clean (keeps digits for content matching)
+_clean = normalise_for_overlap
 
 
 def _strip_tags(html):
@@ -217,16 +222,6 @@ def strip_authors(html, authors):
     return html
 
 
-def strip_conference_note(html):
-    """Preserve conference/presentation notes — they flow into JATS body
-    and are extracted as provenance by extract_citations.py.
-
-    Previously these were stripped (discarded). Now kept so they end up
-    in JATS <back><notes notes-type="provenance"> after extraction.
-    """
-    return html
-
-
 def strip_abstract(html, abstract):
     """Remove abstract heading and paragraph(s) from the HTML.
 
@@ -254,7 +249,7 @@ def strip_abstract(html, abstract):
         if not block_words:
             continue
         overlap = len(abs_words & block_words) / len(abs_words)
-        if overlap > 0.7:
+        if overlap > ABSTRACT_OVERLAP_THRESHOLD:
             html = html[:m.start()] + html[m.end():]
             html = html.lstrip()
             break
@@ -463,7 +458,8 @@ def postprocess_article(html, article, pdf_path=None):
         html = strip_start_bleed(html, article.get('title', ''))
         html = strip_title(html, article.get('title', ''))
         html = strip_authors(html, article.get('authors', ''))
-        html = strip_conference_note(html)
+        # Conference/presentation notes are preserved in the body — they flow
+        # into JATS and are extracted as provenance by extract_citations.py.
         html = strip_abstract(html, article.get('abstract', ''))
         html = strip_keywords(html)
         # Second pass: Haiku sometimes renders the title twice (h1 + h2).
@@ -536,7 +532,7 @@ def _title_in_text_fuzzy(title, text):
     if not title_words:
         return True
     found = sum(1 for w in title_words if w in clean_text)
-    return found / len(title_words) >= 0.8
+    return found / len(title_words) >= TITLE_FUZZY_MATCH_THRESHOLD
 
 
 def verify_postprocessed(raw_html, final_html, article):

@@ -1,0 +1,50 @@
+{
+  "_doc": "Reference detection test data. 'true' = is a bibliographic reference, 'false' = is not.",
+  "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
+
+  "true": [
+    "Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.",
+    "Laing, R.D. (1960). The Divided Self. London: Tavistock.",
+    "Heidegger, M. (1927). Being and Time. Trans. J. Macquarrie. Oxford: Blackwell.",
+    "Frankl, V. (1946). Man's Search for Meaning. Boston: Beacon Press.",
+    "May, R. (1958). Existence. New York: Basic Books, pp. 37-91.",
+    "Yalom, I.D. (1980). Existential Psychotherapy. New York: Basic Books.",
+    "Smith, J. (2005). On anxiety. Journal of Existential Analysis, 16(2), 45-67. doi:10.1234/test",
+    "van Deurzen, E. (2012). Existential Counselling and Psychotherapy in Practice. London: Sage.",
+    "du Plock, S. (1997). Case Studies in Existential Psychotherapy. Wiley.",
+    "Cooper, M. and McLeod, J. (2011). Pluralistic Counselling and Psychotherapy. Sage.",
+    "BINSWANGER, L. (1963). Being-in-the-World. New York: Basic Books.",
+    "Martin Buber (1923). I and Thou. Edinburgh: T. & T. Clark.",
+    "Adams, M. (forthcoming). Existential perspectives on supervision.",
+    "Anonymous (n.d.). An early existential text. London: Routledge.",
+    "1. Kierkegaard, S. (1843). Either/Or. Princeton University Press.",
+    "Spinelli, E. (2007). Practising Existential Psychotherapy. London: Sage.",
+    "Nietzsche, F. (1997). Human, All too Human. Stanford: Stanford University Press.",
+    "Cohen, H.W. (1999). Why Heidegger. (WH). Journal of The Society for Existential Analysis, 10.2.",
+    "Heider, F. (1958). The Psychology of Interpersonal Relations. Cichester: John Wiley.",
+    "Gray, A.M. (2006). Cost-effectiveness analyses alongside randomised clinical trials. Clinical Trials, 3(6) p 538-42.",
+    "Nichols, M..P. & Zax, M. (1977). Catharsis in Psychotherapy. New York, Gardner.",
+    "Sedgwick, D. (2001). Introduction to Jungian Psychotherapy: The Therapeutic Relationship. New York: Taylor & Francis Inc.",
+    "Kierkegaard, S. (1978). Søren Kierkegaard's Journals and Papers. Bloomington, IN: Indiana University Press.",
+    "Nussbaum, M. (2003). Upheavals of Thought: the Intelligence of Emotions. Cambridge, MA: Cambridge University Press.",
+    "Jaspers, K. (1951) The Way to Wisdom. Trans. Manheim, R. New Haven and London: Yale University Press.",
+    "Heaton, J.M. (2000). Wittgenstein and Psychoanalysis. Icon Books Ltd.",
+    "Du Plock, S. (2017). Everyday Therapy: Putting the Wonderment Back into our Daily Lives. Existential Analysis, 28(1): 93-95.",
+    "Norcross, J.C. & Wampold B.E. (2018). A new therapy for each patient: Evidence-based relationships and responsiveness.",
+    "Cohn, H.W. What is Existential Psychotherapy? British Journal of Psychiatry? 1994 165, p.699",
+    "Snyder, D. K. & Wills, R. M. (1989). Behavioral versus insight-oriented marital therapy.",
+    "Groth, M. (2002). Review: Martin Heidegger, Zollikon Seminars. Existential Analysis, 13.1 (January 2002): 160–164."
+  ],
+
+  "false": [
+    "The existential approach has gained significant traction in recent years.",
+    "However, existential therapy has much to offer.",
+    "It is clear that anxiety plays a central role.",
+    "In this paper we explore the notion of being.",
+    "The authors argue that freedom is fundamental.",
+    "Emmy van Deurzen is a philosopher and psychotherapist.",
+    "This article was delivered as a keynote at the SEA conference.",
+    "Smith (2003), Jones (2005), Brown (2010), and Williams (2015) all agree.",
+    "Ibid., p. 45."
+  ]
+}

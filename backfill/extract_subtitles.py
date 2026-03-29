@@ -26,7 +26,10 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from lib.citations import looks_like_person_name, normalise_allcaps
+from lib.citations import (
+    looks_like_person_name, normalise_allcaps, normalise_for_match as _normalise_for_match,
+    is_provenance, strip_html,
+)
 
 
 # ---------------------------------------------------------------
@@ -69,20 +72,6 @@ BOOK_REVIEW_PATTERNS = [
     re.compile(r'\bISBN\b', re.I),
 ]
 
-# Patterns for conference/presentation notes (not subtitles, but provenance)
-PROVENANCE_PATTERNS = [
-    re.compile(r'^(?:This\s+)?(?:paper|article|talk|presentation)\s+(?:was\s+)?(?:given|presented|delivered)', re.I),
-    re.compile(r'^Presentation\s+given\s+at', re.I),
-    re.compile(r'^Presentation[,\s]', re.I),  # "Presentation, 19 November 2011" / "Presentation given"
-    re.compile(r'^Based\s+on\s+(?:a\s+)?(?:presentation|version|talk|paper|keynote)', re.I),
-    re.compile(r'^(?:Paper|Talk)\s+(?:given|delivered|presented)', re.I),
-    re.compile(r'^Keynote\s+', re.I),
-    re.compile(r'Society\s+for\s+Existential\s+Analysis\s+(?:Annual\s+)?Conference', re.I),
-    re.compile(r'World\s+Congress\s+for\s+Exist', re.I),
-    re.compile(r'Annual\s+Conference', re.I),
-    re.compile(r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)', re.I),
-]
-
 # Pattern for issue headers misdetected as titles
 ISSUE_HEADER_RE = re.compile(
     r'^Existential\s+Analysis\s+\d+\.\d+', re.I
@@ -111,13 +100,6 @@ def parse_author_names(authors_raw) -> list[str]:
     # e.g. "Andrea F. Ycaza, Scott M. Hyman" splits correctly
     # but "Smith, John" would need recombining — unlikely in this dataset
     return [p.strip() for p in parts if p and p.strip()]
-
-
-def normalise_for_match(text: str) -> str:
-    """Lowercase, strip punctuation, collapse whitespace."""
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    return re.sub(r'\s+', ' ', text).strip().lower()
-
 
 
 
@@ -397,7 +379,10 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
             continue
         stats['total'] += 1
 
-        raw_path = os.path.splitext(sp)[0] + '.raw.html'
+        # split_pdf may be a full relative path or bare filename — join with
+        # vol_dir using just the stem to be safe regardless of working directory.
+        stem = os.path.splitext(os.path.basename(sp))[0]
+        raw_path = os.path.join(vol_dir, stem + '.raw.html')
         if not os.path.exists(raw_path):
             continue
 

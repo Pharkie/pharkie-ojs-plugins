@@ -1,0 +1,201 @@
+{
+  "_doc": "Person name detection test data. 'true' = is a person name, 'false' = is not.",
+  "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
+
+  "true": {
+    "western": [
+      "Titos Florides",
+      "Kim Loliya",
+      "Charles Scott",
+      "Kirk Schneider",
+      "Sarah Young",
+      "Alice Walker"
+    ],
+    "particles": [
+      "Emmy van Deurzen",
+      "Simon du Plock",
+      "Carl von Weizsäcker",
+      "Pierre de Fermat",
+      "Arnoud van de Ven",
+      "Jan van den Berg",
+      "Baruch de Spinoza"
+    ],
+    "initials": [
+      "R.D. Laing",
+      "F. A. Jenner",
+      "W. B. Yeats",
+      "J.K. Rowling",
+      "T.S. Eliot",
+      "J. P. Sartre",
+      "Kirk J Schneider"
+    ],
+    "hyphenated": [
+      "Ann-Helen Siirala",
+      "Sheba Boakye-Duah",
+      "Jean-Paul Sartre",
+      "Hans-Georg Gadamer",
+      "Marie-Claire Bancquart"
+    ],
+    "celtic_prefixes": [
+      "Michael McCarthy",
+      "Brian O'Neill",
+      "Seán O'Casey",
+      "Alain D'Astous"
+    ],
+    "east_asian": [
+      "Haruki Murakami",
+      "Yoko Ono",
+      "Keiji Nishitani",
+      "Park Chan-wook",
+      "Kim Dae-jung"
+    ],
+    "arabic": [
+      "Mohammed al-Rashid",
+      "Fatima el-Sayed",
+      "Omar ibn Khattab",
+      "Abdul al-Jabbar",
+      "Khalil Gibran"
+    ],
+    "south_asian": [
+      "Rabindranath Tagore",
+      "Gayatri Chakravorty Spivak",
+      "Arundhati Roy",
+      "Ashis Nandy"
+    ],
+    "turkish": [
+      "Orhan Pamuk",
+      "Elif Şafak",
+      "Ahmet Hamdi Tanpınar"
+    ],
+    "african": [
+      "Chinua Achebe",
+      "Chimamanda Adichie",
+      "Wole Soyinka",
+      "Frantz Fanon"
+    ],
+    "russian": [
+      "Fyodor Dostoevsky",
+      "Nikolai Berdyaev",
+      "Lev Shestov"
+    ],
+    "greek": [
+      "Nikos Kazantzakis",
+      "Cornelius Castoriadis",
+      "Evgenia Georganda"
+    ],
+    "spanish": [
+      "Gabriel García Márquez",
+      "Jorge Luis Borges",
+      "Mario Vargas Llosa",
+      "Pablo Neruda"
+    ],
+    "accented_european": [
+      "Aleksandar Dimitrijević",
+      "Jiří Různička",
+      "Søren Kierkegaard",
+      "László Tengelyi",
+      "Mārtiņš Liepa"
+    ],
+    "multi_author": [
+      "Alice Smith and Bob Jones",
+      "Alice Smith & Bob Jones"
+    ],
+    "three_word": [
+      "Martin Luther King",
+      "Mary Ellen Chase",
+      "Michael R. Montgomery"
+    ],
+    "real_journal_authors": [
+      "Emmy van Deurzen",
+      "Simon du Plock",
+      "Sasha van Deurzen-Smith",
+      "Scarlett de Courcier",
+      "Kate Du Toit",
+      "Lily De Vooght",
+      "Friedrich-Wilhelm von Herrmann",
+      "Roberto Novaes de Sá",
+      "Carole Van Artsdalen",
+      "João da Fonseca",
+      "Alfried Längle",
+      "Anders Dræby Sørensen",
+      "Jiří Růžička",
+      "Béla Buda",
+      "Fabíola Langaro",
+      "Gabriela Flores Macías",
+      "Jolanta Sondaitė",
+      "Ewa Ryś",
+      "Marija Vaštakė",
+      "Anna C. Rédei",
+      "Alessandra Lemma-Wright",
+      "Alice Holzhey-Kunz",
+      "Anne-Mette Bredahl",
+      "Claire Arnold-Baker",
+      "Chloe Paidoussis-Mitchell",
+      "Chris Goto-Jones",
+      "Christine E. Ramsey-Wade",
+      "Donata Schoeller-Reisch",
+      "Charles Gordon-Graham",
+      "Christian Schulz-Quach",
+      "Adrian C. Laing",
+      "Andrea F. Ycaza",
+      "Aron B. Bekesi",
+      "Ashley L. Whitaker",
+      "Benaliligha F. Selemo",
+      "Charles E. Scott",
+      "Christian A.R. Gilliam",
+      "Craig A. Munns",
+      "Edwin L. Hersch",
+      "Edward L. Murray",
+      "Albyn Leah Hall",
+      "Amir Adam Tarsha",
+      "Ana Maria Lopez Calvo de Feijoo",
+      "Branca Sá Pires"
+    ]
+  },
+
+  "false": {
+    "english_phrases": [
+      "The Philosophy of Existence",
+      "This is a sentence",
+      "In the beginning",
+      "A Commentary",
+      "For the Record",
+      "Some Thoughts on Therapy",
+      "On Being Human",
+      "Between Two Worlds"
+    ],
+    "section_headings": [
+      "References",
+      "Bibliography",
+      "Notes"
+    ],
+    "sentences": [
+      "The author explores existential themes in modern therapy.",
+      "This paper was delivered at the SEA conference in London."
+    ],
+    "too_short": [
+      "Kierkegaard",
+      "",
+      "A"
+    ],
+    "questions": [
+      "Why Existentialism?"
+    ],
+    "too_many_words": [
+      "This Is Not A Person Name At All Really"
+    ],
+    "real_article_titles": [
+      "Heidegger's Conscience",
+      "Being-Towards-Death in The Digital Age",
+      "The Question of the Self in Existential Thought",
+      "Truth and Psychotherapy",
+      "Delusions of References",
+      "The Language of Embodiment",
+      "Philosophical Counselling and Its Logics",
+      "The Question of Power in Psychotherapy",
+      "The Child's Relations With Others",
+      "An Existential Approach to HIV Related Psychotherapy",
+      "Debunking Antipsychiatry"
+    ]
+  }
+}

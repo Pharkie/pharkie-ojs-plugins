@@ -26,6 +26,7 @@
   ],
   "containerEnv": {
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    "TZ": "Europe/London",
     // Host-side workspace path for DinD: docker compose --project-directory
     // needs this because volume mounts resolve against the HOST filesystem.
     "HOST_PROJECT_DIR": "${localWorkspaceFolder}"

@@ -1,0 +1,25 @@
+{
+  "_doc": "Author contact detection test data.",
+  "_instructions": "If a test fails, fix the CODE not this file.",
+
+  "true": [
+    "Email: author@example.com",
+    "Contact: Dr Smith, 123 Therapy Lane",
+    "Address: 45 Harley Street, London W1G 8QR",
+    "author@university.ac.uk",
+    "Correspondence: Department of Psychology"
+  ],
+
+  "false": [
+    "Emmy van Deurzen is a psychotherapist.",
+    "See Smith (2005) for details.",
+    "The email system was unreliable.",
+    "Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.",
+    "The address of the problem is its phenomenological structure.",
+    "This article was delivered at the SEA conference.",
+    "1 The term is used here in its Heideggerian sense.",
+    "For correspondence about the findings, see the discussion section.",
+    "Contact with the unconscious is a theme in Jungian therapy.",
+    "The telephone interview lasted approximately 45 minutes."
+  ]
+}

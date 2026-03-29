@@ -1,0 +1,25 @@
+{
+  "_doc": "Provenance note detection test data.",
+  "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
+
+  "true": [
+    "This article was delivered as a keynote lecture at the SEA conference.",
+    "This paper is based on a talk given at the 2019 annual gathering.",
+    "A version of this essay was presented at the UKCP conference.",
+    "An earlier version of this paper was published in a different form.",
+    "This article is a revised version of a lecture given in November 2018.",
+    "A version of this paper was given at the Society for Existential Analysis 12th Annual Conference. May 7 2000.",
+    "This paper is a slightly revised version of the Keynote Lecture given by the author at the SEA 20th Anniversary Conference held on 4th October 2008.",
+    "This paper was presented as the 'Talk from the Chair' at the AGM of the SEA in March 2010.",
+    "This article was first delivered as a paper at the annual meetings of the Society for Existential Analysis on November 11, 1995.",
+    "This article is a revised version of a lecture that was originally given on November 11, 1995 at a conference entitled \"The Legacy of Rollo May\".",
+    "This paper was first given at the City University Postgraduate Seminar in Phenomenology and Existential Philosophy on June 17th 1996."
+  ],
+
+  "false": [
+    "Emmy van Deurzen is a psychotherapist.",
+    "Kierkegaard, S. (1849). The Sickness Unto Death.",
+    "See the original paper for full details.",
+    "The article explores themes of anxiety."
+  ]
+}

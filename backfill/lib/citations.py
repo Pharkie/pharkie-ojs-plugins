@@ -1,7 +1,9 @@
 """Shared citation classification and reference section detection.
 
-Used by extract_citations.py (extraction from JATS body) and
-split_citation_tiers.py (classification of refs vs notes).
+Used by extract_citations.py (extraction from JATS body),
+split_citation_tiers.py (classification of refs vs notes),
+and other backfill scripts that need text normalisation, HTML
+stripping, provenance detection, or XML namespace helpers.
 
 All classification logic lives here — no duplication across scripts.
 """
@@ -112,7 +114,11 @@ def strip_html(html_str: str) -> str:
 
 
 def extract_text_from_element(el: ET.Element) -> str:
-    """Extract plain text from an XML element (recursive)."""
+    """Extract plain text from an XML element (recursive).
+
+    Also usable as a replacement for _text_content in jats_to_html.py —
+    both functions do the same recursive text extraction.
+    """
     parts = []
     if el.text:
         parts.append(el.text)
@@ -124,13 +130,65 @@ def extract_text_from_element(el: ET.Element) -> str:
 
 
 # ---------------------------------------------------------------
+# Text normalisation (shared across scripts)
+# ---------------------------------------------------------------
+
+def normalise_for_match(text: str) -> str:
+    """Lowercase, strip non-alpha, collapse whitespace.
+
+    General-purpose normalisation for fuzzy text matching. Strips HTML
+    tags, punctuation, and digits — suitable for title/name comparison.
+    """
+    text = re.sub(r'<[^>]+>', '', text)  # strip HTML tags
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    return re.sub(r'\s+', ' ', text).strip().lower()
+
+
+def normalise_for_overlap(text: str) -> str:
+    """Lowercase, strip non-alphanumeric (keep digits), collapse whitespace.
+
+    Like normalise_for_match but preserves digits — suitable for content
+    overlap checks where years/numbers matter (e.g. abstract matching).
+    """
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', text.lower())).strip()
+
+
+# ---------------------------------------------------------------
+# XML namespace helpers (shared across JATS scripts)
+# ---------------------------------------------------------------
+
+def local_name(tag: str) -> str:
+    """Strip namespace from an XML element tag.
+
+    '{http://...}name' → 'name', 'name' → 'name'.
+    """
+    if '}' in tag:
+        return tag.split('}', 1)[1]
+    return tag
+
+
+# ---------------------------------------------------------------
+# Note sorting (shared by extract_citations.py and generate_jats.py)
+# ---------------------------------------------------------------
+
+def sort_notes_by_number(notes: list[str]) -> list[str]:
+    """Sort notes by their leading number (e.g. '3 Text...' before '4 Text...').
+
+    Notes without a leading number are placed at the end in original order.
+    """
+    def sort_key(note):
+        m = re.match(r'^(\d+)[\.\)\s]', note)
+        return (0, int(m.group(1))) if m else (1, 0)
+    return sorted(notes, key=sort_key)
+
+
+# ---------------------------------------------------------------
 # JATS section detection (replaces HTML h2-based detection)
 # ---------------------------------------------------------------
 
 def _normalise_name(name: str) -> str:
     """Normalise a name for fuzzy matching: lowercase, strip punctuation, collapse spaces."""
-    name = re.sub(r'[^a-zA-Z\s]', '', name)
-    return re.sub(r'\s+', ' ', name).strip().lower()
+    return normalise_for_match(name)
 
 
 def _is_bio_section(el: ET.Element, ns: str, author_names: list[str] = None) -> bool:
@@ -296,11 +354,8 @@ def _ns(tag: str) -> str:
     return ''
 
 
-def _local(tag: str) -> str:
-    """Strip namespace from an element tag."""
-    if '}' in tag:
-        return tag.split('}', 1)[1]
-    return tag
+# Internal alias — callers outside this module should use local_name()
+_local = local_name
 
 
 # ---------------------------------------------------------------
@@ -353,160 +408,14 @@ REF_MIN_TITLE_WORDS = 1
 # SUBLABEL_MAX_LENGTH: section sublabels like 'English-language references:'
 # are typically 10-50 chars. Longer text is prose.
 SUBLABEL_MAX_LENGTH = 50
-
-# ---------------------------------------------------------------
-# Confidence scoring (informational, for review/QA)
-# ---------------------------------------------------------------
-# These scoring functions produce a 0-100 confidence score for QA review.
-# They do NOT control matching or categorisation — that's done by
-# is_reference, is_note, is_author_bio, which use the named constants
-# above. The numeric weights here (+12, -15, etc.) are heuristic tuning
-# for a diagnostic score, not behavioural thresholds.
-
-def citation_confidence(text: str, heading: str) -> int:
-    """Score 0-100 how confident we are this is a single, clean citation."""
-    score = 50
-
-    length = len(text)
-    is_notes = bool(NOTES_HEADING_RE.match(heading))
-    is_refs = bool(PURE_REFERENCE_HEADING_RE.match(heading))
-
-    if re.search(r'\(\d{4}\)', text):
-        score += 12
-    elif re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text):
-        score += 6
-
-    if re.match(r'^[A-Z][a-zà-ü]+,?\s+[A-Z]\.', text):
-        score += 12
-    elif re.match(r'^\d+[\.\)]\s+[A-Z][a-zà-ü]+', text):
-        score += 6
-
-    if re.search(r'(' + PUBLISHER_NAMES + r')', text, re.IGNORECASE):
-        score += 8
-    if re.search(r'(Journal|Review|Quarterly|Bulletin|Annals|Archives)\s+of\b', text, re.IGNORECASE):
-        score += 8
-    if re.search(r'(pp?\.?\s*\d+[-–]\d+|\b\d+[-–]\d+\b)', text):
-        score += 6
-    if re.search(r'doi[:\s]|10\.\d{4,}/', text, re.IGNORECASE):
-        score += 10
-    if re.search(r'https?://', text):
-        score += 4
-    if re.search(r'\b(Trans\.|trans\.|Transl\.|ed\.|eds\.|Ed\.|Vol\.)', text):
-        score += 4
-    if re.search(r'(London|New York|Cambridge|Oxford|Paris|Berlin|Chicago|Boston)\s*:', text):
-        score += 6
-    if is_refs:
-        score += 8
-
-    if is_notes:
-        score -= 10
-    if length < 30:
-        score -= 15
-    elif length > 500:
-        score -= 20
-    elif length > 300:
-        score -= 8
-
-    year_count = len(re.findall(r'\b(?:1[89]\d{2}|20[0-2]\d)\b', text))
-    if year_count > 3 and length > 200:
-        score -= 25
-    elif year_count > 2 and length > 150:
-        score -= 12
-
-    sentence_count = _count_sentences(text)
-    if sentence_count > 3:
-        score -= 15
-    elif sentence_count > 1 and length > 200:
-        score -= 8
-
-    if is_author_bio(text):
-        score -= 40
-    if re.match(r'^(The|This|It|In|As|For|We|He|She|A)\s', text) and not re.match(r'^The\s', text[:20]):
-        score -= 10
-    if re.search(r'\b(Ibid\.?|Ibidem|Op\.?\s*cit)', text, re.IGNORECASE):
-        score -= 15
-
-    return max(0, min(100, score))
-
-
-def note_confidence(text: str) -> int:
-    """Score 0-100 how confident we are this is a note/endnote."""
-    score = 50
-
-    # Strong note signals
-    note_reason = is_note(text)
-    if note_reason:
-        score += 30  # caught by a specific rule
-
-    # Numbered prefix (typical endnote)
-    if re.match(r'^\d+[\.\)\s]', text):
-        score += 10
-
-    # Prose characteristics (multiple sentences)
-    sentence_count = _count_sentences(text)
-    if sentence_count >= 2:
-        score += 10
-
-    # "See" / "cf." cross-references
-    if re.match(r'^(See |see |cf\.|Cf\.)', text):
-        score += 15
-
-    # Ibid
-    if re.search(r'\b(Ibid\.?|Ibidem|Op\.?\s*cit)', text, re.IGNORECASE):
-        score += 15
-
-    # Negative: looks like a reference (penalise)
-    if is_reference(text) and not note_reason:
-        score -= 30
-
-    return max(0, min(100, score))
-
-
-def bio_confidence(text: str) -> int:
-    """Score 0-100 how confident we are this is an author bio."""
-    score = 50
-
-    # Name + "is/was/has" pattern (strongest signal)
-    if re.match(r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s', text):
-        score += 35  # ALL CAPS name
-    elif re.match(r'^[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+.*?\s+(is|was|has)\s', text):
-        score += 30  # Mixed case name
-
-    # Bio phrases
-    bio_phrases = ['private practice', 'practitioner', 'works with',
-                   'academic interests', 'Research Fellow', 'currently a']
-    matches = sum(1 for p in bio_phrases if p in text)
-    score += matches * 8
-
-    # Credentials
-    if re.search(r'\b(PhD|MA|MSc|UKCP|BPS|BACP|MBPsS)\b', text):
-        score += 10
-
-    # Length: bios are typically 50-300 chars
-    if 50 < len(text) < 400:
-        score += 5
-
-    # Negative: has year in parens (more like a citation)
-    if re.search(r'\(\d{4}\)', text[:AUTHOR_YEAR_SEARCH_WINDOW]):
-        score -= 20
-
-    return max(0, min(100, score))
-
-
-def provenance_confidence(text: str) -> int:
-    """Score 0-100 how confident we are this is a provenance note."""
-    score = 50
-
-    if re.match(r'^This (article|paper|chapter|essay|lecture|talk)\s+(is|was)\s', text):
-        score += 40
-
-    if re.search(r'(delivered|presented|given)\s+(at|as|to)', text):
-        score += 10
-
-    if re.search(r'(revised|adapted|based on|version of)', text, re.IGNORECASE):
-        score += 10
-
-    return max(0, min(100, score))
+#
+# CITATION_SENTENCE_LENGTH: texts with 3+ sentences over this length are body
+# paragraphs, not citations. Longest real citation in dataset is ~180 chars.
+CITATION_SENTENCE_LENGTH = 200
+#
+# CITATION_WEAK_SIGNAL_LENGTH: longer texts need 3+ citation signals to
+# qualify. Body paragraphs with 1-2 signals are common above this length.
+CITATION_WEAK_SIGNAL_LENGTH = 400
 
 
 # ---------------------------------------------------------------
@@ -567,11 +476,11 @@ def is_citation_like(text: str) -> bool:
                  has_pages, has_doi, has_url])
 
     sentence_count = _count_sentences(text)
-    if sentence_count >= 3 and len(text) > 200:
+    if sentence_count >= 3 and len(text) > CITATION_SENTENCE_LENGTH:
         return False
     if sentence_count >= NOTE_MAX_SENTENCES and len(text) > NOTE_LONG_TEXT:
         return False
-    if len(text) > 400 and score < 3:
+    if len(text) > CITATION_WEAK_SIGNAL_LENGTH and score < 3:
         return False
 
     return score >= 2 or (score >= 1 and has_year)
@@ -724,8 +633,10 @@ def looks_like_person_name(text: str) -> bool:
         if w_clean[0].islower() and w_clean.lower() in NOT_NAME_WORDS:
             return False
 
-    # "A [Word]" is an English article + noun, not initial + surname
-    if words[0] == 'A' and len(words) == 2:
+    # "A [Word]" / "An [Word]" is an English article + noun, not initial + surname.
+    # NOT_NAME_WORDS catches lowercase 'an' but not capitalised 'An' (since
+    # 'An' could theoretically be a name). The 2-word guard catches it here.
+    if words[0] in ('A', 'An') and len(words) == 2:
         return False
 
     # "Name and Name" / "Name & Name" — check each half
@@ -874,12 +785,18 @@ def is_section_sublabel(text: str) -> bool:
 
 
 def is_provenance(text: str) -> bool:
-    """Detect article provenance notes (conference presentations, origins)."""
+    """Detect article provenance notes (conference presentations, origins).
+
+    Single source of truth for provenance detection — used by
+    extract_citations.py and extract_subtitles.py (via is_provenance_note).
+    """
     provenance_patterns = [
         # "This paper was originally presented at..."
         r'^(This|A version of this|An earlier version of this|A shorter version of this)\s+'
         r'(article|paper|chapter|essay|lecture|talk)\s+(is|was)\s',
-        # "Presentation, 19 November 2011..."
+        # "This paper/article was given/presented/delivered..."
+        r'^(?:This\s+)?(?:paper|article|talk|presentation)\s+(?:was\s+)?(?:given|presented|delivered)',
+        # "Presentation, 19 November 2011..." / "Presentation given"
         r'^Presentation[,\s]',
         # "Based on a presentation/keynote/talk/version..."
         r'^Based\s+on\s+(?:a\s+)?(?:presentation|version|talk|paper|keynote)',
@@ -887,8 +804,12 @@ def is_provenance(text: str) -> bool:
         r'^(?:Paper|Talk|Keynote)\s+(?:given|delivered|presented)',
         # "Adapted/Revised/Expanded from..."
         r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
+        # Conference name patterns
+        r'Society\s+for\s+Existential\s+Analysis\s+(?:Annual\s+)?Conference',
+        r'World\s+Congress\s+for\s+Exist',
+        r'Annual\s+Conference',
     ]
-    return any(re.match(p, text, re.IGNORECASE) for p in provenance_patterns)
+    return any(re.search(p, text, re.IGNORECASE) for p in provenance_patterns)
 
 
 # ---------------------------------------------------------------

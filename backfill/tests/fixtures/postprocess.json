@@ -1,0 +1,196 @@
+{
+  "_doc": "Post-processing pipeline test data. Each case has input HTML, article metadata, and expected behaviour.",
+  "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
+
+  "strip_title": {
+    "removes_h1_title": {
+      "html": "<h1>Becoming An Existential Therapist</h1>\n<p><strong>Emmy van Deurzen</strong></p>\n<h2>Abstract</h2>\n<p>Body text here.</p>",
+      "title": "Becoming An Existential Therapist",
+      "should_not_contain": "Becoming An Existential Therapist",
+      "should_contain": "Body text here"
+    },
+    "removes_h2_title": {
+      "html": "<h2>Are Sexual Preferences Existential Choices?</h2>\n<p>Some contributions to the debate</p>\n<p><strong>Victor Amorim Rodrigues</strong></p>\n<p>Body text here.</p>",
+      "title": "Are Sexual Preferences Existential Choices?",
+      "should_not_contain": "Are Sexual Preferences",
+      "should_contain": "Body text here"
+    },
+    "preserves_body_when_no_title_match": {
+      "html": "<h2>Completely Different Title</h2>\n<p>Body text here.</p>",
+      "title": "Nonexistent Title That Does Not Match",
+      "should_contain": "Completely Different Title"
+    },
+    "empty_title_returns_unchanged": {
+      "html": "<h2>Some Title</h2>\n<p>Body text.</p>",
+      "title": "",
+      "should_contain": "Some Title"
+    },
+    "handles_all_caps_title": {
+      "html": "<h2>COMMEMORATING 25 YEARS OF EXISTENTIAL ANALYSIS</h2>\n<p>Body text here.</p>",
+      "title": "Commemorating 25 Years Of Existential Analysis",
+      "should_not_contain": "COMMEMORATING",
+      "should_contain": "Body text here"
+    },
+    "handles_title_with_colon": {
+      "html": "<h1>Being Sexual: Human Sexuality Revisited</h1>\n<p>Body text here.</p>",
+      "title": "Being Sexual: Human Sexuality Revisited",
+      "should_not_contain": "Being Sexual",
+      "should_contain": "Body text here"
+    },
+    "handles_title_with_em_tags": {
+      "html": "<h2>COMMEMORATING 25 YEARS OF <em>EXISTENTIAL ANALYSIS</em></h2>\n<p>Body text here.</p>",
+      "title": "Commemorating 25 Years Of Existential Analysis",
+      "should_not_contain": "COMMEMORATING",
+      "should_contain": "Body text here"
+    },
+    "handles_title_with_parenthetical": {
+      "html": "<h2>Being Sexual: Human Sexuality Revisited (Part 2)</h2>\n<p>Body text.</p>",
+      "title": "Being Sexual: Human Sexuality Revisited (Part 2)",
+      "should_not_contain": "Being Sexual",
+      "should_contain": "Body text"
+    },
+    "does_not_eat_body_paragraphs": {
+      "html": "<h1>Being Sexual</h1>\n<p>This second part of a two-part paper seeks to develop an existentially-informed approach to human sexuality that was initially presented in an earlier paper by the author. This paper explores themes of otherness and identity in depth, examining how existential philosophy can illuminate our understanding of the complexities of human sexual experience.</p>",
+      "title": "Being Sexual",
+      "should_not_contain_tag": "<h1>Being Sexual</h1>",
+      "should_contain": "existentially-informed approach"
+    }
+  },
+
+  "strip_authors": {
+    "removes_strong_byline": {
+      "html": "<p><strong>Emmy van Deurzen</strong></p>\n<h2>Abstract</h2>\n<p>Body text here.</p>",
+      "authors": "Emmy van Deurzen",
+      "should_not_contain": "Emmy van Deurzen",
+      "should_contain": "Body text here"
+    },
+    "removes_plain_byline": {
+      "html": "<p>Ernesto Spinelli</p>\n<h2>Abstract</h2>\n<p>Body text here.</p>",
+      "authors": "Ernesto Spinelli",
+      "should_not_contain": "Ernesto Spinelli",
+      "should_contain": "Body text here"
+    },
+    "preserves_body_when_no_match": {
+      "html": "<p>Unknown Author Name</p>\n<p>Body text here.</p>",
+      "authors": "Completely Different Person",
+      "should_contain": "Body text here"
+    },
+    "empty_authors_returns_unchanged": {
+      "html": "<p>Some Author</p>\n<p>Body text.</p>",
+      "authors": "",
+      "should_contain": "Some Author"
+    }
+  },
+
+  "strip_abstract": {
+    "removes_abstract_heading_and_paragraph": {
+      "html": "<h2>Abstract</h2>\n<p>This paper explores existential themes in modern therapy and concludes with practical recommendations for practitioners working in clinical settings.</p>\n<h2>Introduction</h2>\n<p>Body text here.</p>",
+      "abstract": "This paper explores existential themes in modern therapy and concludes with practical recommendations for practitioners working in clinical settings.",
+      "should_not_contain": "explores existential themes",
+      "should_contain": "Body text here"
+    },
+    "tolerates_ocr_errors_fuzzy": {
+      "html": "<h2>Abstract</h2>\n<p>This paper explores exlstential themes in modem therapy and conclndes with practical recommendations.</p>\n<p>Body text here.</p>",
+      "abstract": "This paper explores existential themes in modern therapy and concludes with practical recommendations.",
+      "should_contain": "Body text here"
+    },
+    "preserves_body_when_abstract_too_short": {
+      "html": "<p>Short abs.</p>\n<p>Body text here.</p>",
+      "abstract": "Short abs.",
+      "should_contain": "Short abs."
+    },
+    "removes_abstract_heading_only_when_paragraph_matches": {
+      "html": "<h2>Abstract</h2>\n<p>Completely unrelated paragraph that does not match the real abstract at all.</p>\n<h2>Introduction</h2>\n<p>Body text here.</p>",
+      "abstract": "The real abstract about existential therapy and its applications in modern clinical practice.",
+      "should_contain": "Completely unrelated paragraph"
+    },
+    "empty_abstract_returns_unchanged": {
+      "html": "<h2>Abstract</h2>\n<p>Some paragraph.</p>",
+      "abstract": "",
+      "should_contain": "Some paragraph"
+    }
+  },
+
+  "strip_keywords": {
+    "removes_keywords_paragraph": {
+      "html": "<p>Keywords: essentialism, existence, sexuality, otherness, gender.</p>\n<p>Body text here.</p>",
+      "should_not_contain": "essentialism",
+      "should_contain": "Body text here"
+    },
+    "removes_heading_plus_paragraph": {
+      "html": "<h2>Key Words</h2>\n<p>Sexuality, existential, analysis, hermeneutics.</p>\n<p>Body text here.</p>",
+      "should_not_contain": "hermeneutics",
+      "should_contain": "Body text here"
+    },
+    "removes_KEYWORDS_all_caps": {
+      "html": "<p>KEYWORDS: anxiety, freedom, responsibility, authenticity.</p>\n<p>Body text here.</p>",
+      "should_not_contain": "anxiety, freedom",
+      "should_contain": "Body text here"
+    },
+    "preserves_body_without_keywords": {
+      "html": "<p>No keywords in this HTML.</p>\n<p>Body text here.</p>",
+      "should_contain": "No keywords in this HTML"
+    }
+  },
+
+  "strip_start_bleed": {
+    "removes_content_before_own_title": {
+      "html": "<p>This is the tail end of the previous article about unrelated topics.</p>\n<h2>My Real Title</h2>\n<p>Body text here.</p>",
+      "own_title": "My Real Title",
+      "should_not_contain": "previous article",
+      "should_contain": "Body text here"
+    },
+    "preserves_when_no_bleed": {
+      "html": "<h2>My Real Title</h2>\n<p>Body text here.</p>",
+      "own_title": "My Real Title",
+      "should_contain": "Body text here"
+    },
+    "empty_title_returns_unchanged": {
+      "html": "<p>Some bleed.</p>\n<p>Body text.</p>",
+      "own_title": "",
+      "should_contain": "Some bleed"
+    }
+  },
+
+  "strip_end_bleed": {
+    "removes_next_article_title_and_after": {
+      "html": "<p>Body text here.</p>\n<h2>References</h2>\n<p>Kierkegaard, S. (1849). The Sickness Unto Death.</p>\n<h2>Next Article Title</h2>\n<p>This is the start of the next article.</p>",
+      "next_title": "Next Article Title",
+      "should_contain": "Body text here",
+      "should_not_contain": "start of the next article"
+    },
+    "preserves_when_no_next_title_match": {
+      "html": "<p>Body text here.</p>\n<h2>References</h2>\n<p>Some ref.</p>",
+      "next_title": "Nonexistent Next Article",
+      "should_contain": "Body text here"
+    },
+    "empty_next_title_returns_unchanged": {
+      "html": "<p>Body text.</p>\n<p>Trailing content.</p>",
+      "next_title": "",
+      "should_contain": "Trailing content"
+    }
+  },
+
+  "postprocess_article": {
+    "full_pipeline": {
+      "html": "<p>Previous article tail content about unrelated things.</p>\n<h1>Being Sexual: Human Sexuality Revisited</h1>\n<p><strong>Ernesto Spinelli</strong></p>\n<h2>Abstract</h2>\n<p>This second part of a two-part paper seeks to develop an existentially-informed approach to human sexuality that was initially presented in an earlier paper.</p>\n<h2>Key words</h2>\n<p>Essentialism, existence precedes essence, queer theory, sexual fluidity.</p>\n<h2>Introduction</h2>\n<p>The real body content starts here and discusses important themes.</p>\n<h2>References</h2>\n<p>Kierkegaard, S. (1849). The Sickness Unto Death.</p>\n<h2>Next Article Different Topic</h2>\n<p>Content from next article.</p>",
+      "article": {
+        "title": "Being Sexual: Human Sexuality Revisited",
+        "authors": "Ernesto Spinelli",
+        "abstract": "This second part of a two-part paper seeks to develop an existentially-informed approach to human sexuality that was initially presented in an earlier paper.",
+        "section": "Articles",
+        "_next_title": "Next Article Different Topic"
+      },
+      "should_contain": ["real body content", "Kierkegaard"],
+      "should_not_contain": ["Previous article tail", "Ernesto Spinelli", "Essentialism, existence"]
+    },
+    "auto_extracted_passthrough": {
+      "html": "<!-- AUTO-EXTRACTED: pymupdf -->\n<p>Raw PyMuPDF text without structure.</p>",
+      "article": {
+        "title": "Some Title",
+        "section": "Articles"
+      },
+      "should_contain": ["Raw PyMuPDF text"]
+    }
+  }
+}

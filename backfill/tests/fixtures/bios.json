@@ -1,0 +1,52 @@
+{
+  "_doc": "Author bio detection test data. 'true' = is a bio, 'false' = is not.",
+  "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
+
+  "true": [
+    "CHARLES SCOTT is a psychotherapist in private practice in London.",
+    "SIMON DU PLOCK is a registered psychologist.",
+    "Emmy van Deurzen is a philosopher and psychotherapist.",
+    "Kirk Schneider has been a practitioner for over 30 years.",
+    "Del Loewenthal was a professor of psychotherapy and counselling.",
+    "Titos Florides is a practitioner in existential analysis.",
+    "Andrea Ycaza is currently a doctoral candidate in clinical psychology.",
+    "Del Loewenthal is Emeritus Professor of Counselling and Psychotherapy at the University of Roehampton, London and Chair of the Southern Association for Psychotherapy and Counselling (SAFPAC).",
+    "Emmy van Deurzen is Principal of the New School of Psychotherapy and Counselling and a practising existential psychotherapist.",
+    "Digby Tantam is Clinical Professor of Psychotherapy at the University of Sheffield.",
+    "Digby Tantam has a particular interest in empathy and nonverbal communication.",
+    "Simon du Plock works with individuals and couples in private practice.",
+    "All three authors work at the New School of Psychotherapy and Counselling.",
+    "Email: author@example.com",
+    "author@university.ac.uk",
+    "Mike Hickes is a UKCP accredited existential-phenomenological therapist and an executive coach in private practice in Central London.",
+    "Nicola Diamond PhD has been a university lecturer, an NHS psychotherapist and is currently in private practice.",
+    "Harriett Goldenberg is an existential psychotherapist and chartered counselling psychologist in private practice.",
+    "JOHN HEATON is a psychiatrist practising psychotherapy in London.",
+    "Paul Smith-Pickard is an existential psychotherapist working in private practice.",
+    "Freddie Strasser, PhD, is a psychotherapist in private practice.",
+    "Dr Ernesto Spinelli is a psychologist and practicing psychotherapist.",
+    "Sophie Caston is currently writing her MA dissertation at the New School of Psychotherapy and Counselling.",
+    "Simon du Plock is Principal Lecturer in Psychotherapy and Counselling Psychology.",
+    "F. A. Jenner is Emeritus Professor of Psychiatry, Sheffield, and Professor Visitante, Concepción, Chile.",
+    "Ismail Asmall is an existential psychotherapist employed by the Forward Project."
+  ],
+
+  "false": [
+    "Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.",
+    "The existential approach has gained traction in recent years.",
+    "See Laing, 1960, pp. 23-45 for further discussion.",
+    "This article was delivered as a keynote at the SEA conference.",
+    "1 The term \"Dasein\" is used throughout in the Heideggerian sense.",
+    "Heidegger, M. (1927). Being and Time. Trans. J. Macquarrie. Oxford: Blackwell.",
+    "Smith (2003) argues that anxiety is a fundamental human condition.",
+    "Ibid., p. 45.",
+    "This paper was first given at the City University Postgraduate Seminar.",
+    "The phenomenological method was developed in the early twentieth century.",
+    "Existential therapy draws on the philosophical traditions of phenomenology and hermeneutics.",
+    "In this section we examine the implications of Heidegger's concept of Dasein.",
+    "Cooper, M. and McLeod, J. (2011). Pluralistic Counselling and Psychotherapy. Sage.",
+    "https://example.com/paper.pdf",
+    "The author would like to thank the anonymous reviewers for their helpful comments.",
+    "For a fuller discussion of these themes, see van Deurzen (2012)."
+  ]
+}
