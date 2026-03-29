@@ -767,7 +767,7 @@ def is_author_bio(text: str) -> bool:
         r'^All (three|four|five|six) authors',
     ]
 
-    if any(re.match(p, text) for p in bio_patterns):
+    if has_bio_phrase and any(re.match(p, text) for p in bio_patterns):
         return True
 
     # Check if text starts with a person name followed by a bio verb
@@ -775,14 +775,21 @@ def is_author_bio(text: str) -> bool:
     # "Name is/was/has..." is just body text discussing a person.
     # Reject: possessives, interview transcripts (colon after name),
     # conjunction/adverb prefixes, reference format (year in parens).
+    # Also reject interview transcripts early (Name: dialogue...)
+    # Reject interview transcripts and conjunction/adverb openers
+    if re.match(r'^[A-Z][a-z]*\s*:', text) or re.match(r'^[A-Z]+\s*:', text):
+        return False
+    if re.match(r'^(However|Firstly|Secondly|Furthermore|Moreover|'
+                r'Ultimately|Nevertheless|Importantly|Meanwhile|'
+                r'Similarly|Conversely|Accordingly|Indeed|Notably|'
+                r'Although|While|Whereas|Since|Because|After|'
+                r'Afterwards)\b', text):
+        return False
     bio_verb = re.search(r'\b(is|was|has)\s', text[:BIO_PHRASE_SEARCH_WINDOW])
     if bio_verb:
         leading = text[:bio_verb.start()].strip().rstrip(',')
-        # Reject interview transcripts ("Neil: I was...", "YALOM: But...")
-        if re.match(r'^[A-Z][a-z]*\s*:', text) or re.match(r'^[A-Z]+\s*:', text):
-            pass
         # Reject if possessive before verb ("Name's X is...")
-        elif "'s " in text[:bio_verb.start()]:
+        if "'s " in text[:bio_verb.start()]:
             pass
         # Reject reference format ("Gans, S.(1999)...")
         elif re.search(r'\(\d{4}\)', text[:bio_verb.start()]):
