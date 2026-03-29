@@ -82,6 +82,7 @@ One community image (`teic/docker-pkp-ojs`) builds for both amd64 and arm64 and 
 - **Not reported upstream** — no ARM64 issues filed on `pkp/containers`.
 - **Community ARM64 image:** [teic/docker-pkp-ojs](https://hub.docker.com/r/teic/docker-pkp-ojs)
 - **Workaround:** OJS load-based backpressure handles this automatically. No manual `--delay` needed.
+- **Custom ARM64 build feasibility:** OJS is pure PHP — no native binaries. A custom multi-arch Dockerfile based on `php:8.3-apache` + OJS source tarball would work. Effort: ~2-4 hours one-time, then rebuild 2-3x/year when OJS updates. The `teic/docker-pkp-ojs` community image proves this works. Would give ~3-5x speedup for dev and E2E tests on Apple Silicon.
 
 ## Caching
 
