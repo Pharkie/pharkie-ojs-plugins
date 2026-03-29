@@ -1005,7 +1005,18 @@
     // ── Drawer: collapsible article list + filtering ──
 
     function bindDrawerEvents() {
-        document.getElementById('qa-drawer-search').addEventListener('input', refilterDrawer);
+        const searchEl = document.getElementById('qa-drawer-search');
+        const clearBtn = document.getElementById('qa-search-clear');
+        searchEl.addEventListener('input', () => {
+            clearBtn.style.display = searchEl.value ? '' : 'none';
+            refilterDrawer();
+        });
+        clearBtn.addEventListener('click', () => {
+            searchEl.value = '';
+            clearBtn.style.display = 'none';
+            searchEl.focus();
+            refilterDrawer();
+        });
         document.getElementById('qa-drawer-issue').addEventListener('change', refilterDrawer);
         document.getElementById('qa-drawer-more').addEventListener('click', (e) => {
             e.preventDefault();

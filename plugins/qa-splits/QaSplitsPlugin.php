@@ -212,6 +212,7 @@ class QaSplitsPlugin extends GenericPlugin
             </div>
             <div class="qa-drawer-header">
                 <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
+                <button id="qa-search-clear" class="qa-search-clear" style="display:none">&times;</button>
             </div>
             <div class="qa-drawer-filter-row">
                 <select id="qa-drawer-issue" class="qa-drawer-select"><option value="">All issues</option></select>
@@ -240,7 +241,6 @@ class QaSplitsPlugin extends GenericPlugin
                 <span class="qa-badge" id="qa-status"></span>
                 <div class="qa-progress" id="qa-progress"></div>
                 <span class="qa-row-spacer"></span>
-                <button id="btn-last-seen" class="qa-btn qa-btn-nav" title="Return to previous position">&larr; Back</button>
                 <div class="qa-btn-wrap">
                     <button id="btn-reject" class="qa-btn qa-btn-reject" title="Request Fix (R)">Request Fix</button>
                     <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
