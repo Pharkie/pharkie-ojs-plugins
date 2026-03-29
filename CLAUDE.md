@@ -51,7 +51,7 @@ Pipeline scripts (called by `split-issue.sh`):
 JATS is the single source of truth for article content. The pipeline direction is **PDF → JATS → HTML**:
 
 1. `backfill/htmlgen.py` — sends split PDFs to Claude API, generates initial HTML body content (`.raw.html`)
-2. `backfill/reprocess_html.py` → `backfill/postprocess_html.py` — deterministic post-processing: strip title/authors/abstract/keywords, trim bleed, normalise ALL CAPS headings to title case. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.html` from `.raw.html`.
+2. `backfill/reprocess_html.py` → `backfill/postprocess_html.py` — deterministic post-processing: strip title/subtitle/authors/abstract/keywords, trim bleed, strip running headers and page numbers, normalise ALL CAPS headings to title case. Section-specific handlers for articles, editorials, and book reviews. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.html` from `.raw.html`.
 3. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + processed HTML body
 4. `backfill/extract_citations.py` — reads JATS `<body>`, extracts: reference sections (tail) → `<ref-list>`, notes → `<fn-group>`, author bio sections → `<bio>`, leading provenance notes (conference/presentation) → `<notes notes-type="provenance">`. Removes extracted content from body.
 5. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
@@ -105,7 +105,7 @@ Standalone utilities:
 - `backfill/snapshot_ids.py` — capture submission IDs and DOIs from OJS database into JATS and toc.json
 - `backfill/restore_ids.py` — remap OJS IDs to match JATS publisher-id after import (supports `--issue` for per-issue)
 - `backfill/qa_review.py` — QA Splits CLI: approve, reject, status, list reviews (by path, submission_id, or title search)
-- `backfill/extract_subtitles.py` — detect and split title/subtitle in toc.json from raw HTML structure
+- `backfill/extract_subtitles.py` — detect and split title/subtitle in toc.json from raw HTML structure (`--report-file` for markdown review table)
 - `backfill/fix_html_bleed.py` — detect and strip start/end bleed, running headers, issue headers from HTML galleys
 
 All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
