@@ -324,8 +324,10 @@
         const wrapper = document.createElement('div');
         wrapper.className = 'qa-pdf-page';
         wrapper.dataset.page = pageNum;
-        wrapper.style.width = scaledViewport.width + 'px';
-        wrapper.style.height = scaledViewport.height + 'px';
+        // Store render dimensions for text layer scaling
+        wrapper.style.setProperty('--pdf-render-width', scaledViewport.width + 'px');
+        wrapper.style.setProperty('--pdf-render-height', scaledViewport.height + 'px');
+        wrapper.style.aspectRatio = scaledViewport.width + '/' + scaledViewport.height;
 
         const canvas = document.createElement('canvas');
         canvas.width = scaledViewport.width;
@@ -349,6 +351,19 @@
             container: textLayerDiv,
             viewport: scaledViewport,
         });
+    }
+
+    // Scale text layers when container resizes (PDF canvas scales via CSS width:100%)
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => {
+            document.querySelectorAll('.qa-pdf-page').forEach(wrapper => {
+                const renderW = parseFloat(wrapper.style.getPropertyValue('--pdf-render-width'));
+                if (renderW) {
+                    const cssScale = wrapper.clientWidth / renderW;
+                    wrapper.style.setProperty('--pdf-css-scale', cssScale);
+                }
+            });
+        }).observe(document.getElementById('pdf-container'));
     }
 
     function updatePageIndicator() {
