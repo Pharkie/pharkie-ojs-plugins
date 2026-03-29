@@ -154,17 +154,49 @@ def extract_from_jats(jats_path: Path) -> dict:
               if (el.tag.split('}')[-1] if '}' in el.tag else el.tag) == 'p']
     # Only scan the last half of paragraphs
     scan_start = len(all_ps) // 2
+    # Group: when we find a bio <p>, consume following contact <p> elements
+    # as part of the same bio. A standalone contact without a preceding bio
+    # is still collected (it belongs to a bio extracted by the section scan).
+    current_bio_parts = []
+    current_bio_elements = []
+    in_bio = False
     for p_el in all_ps[scan_start:]:
         text = extract_text_from_element(p_el).strip()
-        if not text or len(text) > 500:
+        if not text:
             continue
         if text in already_extracted:
             continue
-        if is_author_bio(text) or is_author_contact(text):
-            trailing_bio_parts.append(text)
-            trailing_bio_elements.append(p_el)
-    if trailing_bio_parts:
-        bios.append(' '.join(trailing_bio_parts))
+        is_bio_text = is_author_bio(text) and not is_author_contact(text)
+        is_contact_text = is_author_contact(text)
+        if is_bio_text:
+            # Start a new bio group (flush previous if any)
+            if current_bio_parts:
+                bios.append(' '.join(current_bio_parts))
+                trailing_bio_elements.extend(current_bio_elements)
+            current_bio_parts = [text]
+            current_bio_elements = [p_el]
+            in_bio = True
+        elif is_contact_text and in_bio:
+            # Append contact to current bio
+            current_bio_parts.append(text)
+            current_bio_elements.append(p_el)
+        elif is_contact_text and not in_bio:
+            # Orphaned contact — still collect it
+            current_bio_parts = [text]
+            current_bio_elements = [p_el]
+            in_bio = True
+        else:
+            # Non-bio content — flush and stop grouping
+            if current_bio_parts:
+                bios.append(' '.join(current_bio_parts))
+                trailing_bio_elements.extend(current_bio_elements)
+                current_bio_parts = []
+                current_bio_elements = []
+            in_bio = False
+    # Flush final group
+    if current_bio_parts:
+        bios.append(' '.join(current_bio_parts))
+        trailing_bio_elements.extend(current_bio_elements)
 
     return {
         'citations': citations,
