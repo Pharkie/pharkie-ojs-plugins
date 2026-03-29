@@ -212,12 +212,12 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-random" class="qa-btn qa-btn-nav" title="Jump to a random unreviewed article">Random</button>
                 <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next article needing fixes">Next Fix</button>
                 <div class="qa-btn-wrap">
-                    <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approve</button>
-                    <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
-                </div>
-                <div class="qa-btn-wrap">
                     <button id="btn-reject" class="qa-btn qa-btn-reject" title="Request Fix (R)">Request Fix</button>
                     <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
+                </div>
+                <div class="qa-btn-wrap">
+                    <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approve</button>
+                    <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
                 </div>
             </div>
             <div class="qa-row-reject" id="qa-row-reject" style="display:none">
@@ -234,7 +234,13 @@ class QaSplitsPlugin extends GenericPlugin
         <div class="qa-drawer" id="qa-drawer" style="display:none">
             <div class="qa-drawer-header">
                 <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
+                <button id="qa-drawer-pin" class="qa-drawer-pin" title="Pin sidebar open">&#128204;</button>
                 <button id="qa-drawer-close" class="qa-drawer-close">&times;</button>
+            </div>
+            <div class="qa-drawer-filter-row">
+                <select id="qa-drawer-issue" class="qa-drawer-select"><option value="">All issues</option></select>
+                <select id="qa-drawer-status" class="qa-drawer-select"><option value="">All statuses</option></select>
+                <select id="qa-drawer-section" class="qa-drawer-select"><option value="">All sections</option></select>
             </div>
             <div class="qa-drawer-filters" id="qa-drawer-filters"></div>
             <div class="qa-drawer-list" id="qa-drawer-list"></div>

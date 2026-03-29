@@ -181,6 +181,7 @@
         updateUrl();
         updateDrawerTab();
         if (setFilter) updateSetPosition();
+        if (drawerOpen) renderDrawerList();
 
         // Compact title: 37.1 #14 (2026) Title [section]
         const sectionTag = article.section ? ' [' + article.section.toLowerCase() + ']' : '';
@@ -669,13 +670,22 @@
         badge.className = 'qa-badge qa-badge-' + status;
         badge.setAttribute('role', 'status');
 
-        const statusLabels = { approved: 'Approved', rejected: 'Fix Requested', invalidated: 'Invalidated', unreviewed: 'Unreviewed' };
+        const statusLabels = { approved: 'Approved', needs_fix: 'Fix Requested', invalidated: 'Invalidated', unreviewed: 'Unreviewed' };
         let label = statusLabels[status] || status;
         if (reviewer && reviewedAt) {
             const d = new Date(reviewedAt);
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             const date = String(d.getDate()).padStart(2,'0') + months[d.getMonth()] + String(d.getFullYear()).slice(2);
             label += ' ' + date;
+        }
+        // Show comment inline if needs_fix
+        if (comment && status === 'needs_fix') {
+            label += ' ⓘ';
+            badge.style.cursor = 'pointer';
+            badge.onclick = () => toast(comment, 'error');
+        } else {
+            badge.style.cursor = '';
+            badge.onclick = null;
         }
         badge.textContent = label;
         badge.title = comment || '';
@@ -698,7 +708,11 @@
             span.textContent = text;
             if (filter) {
                 span.className = 'qa-progress-link';
-                span.addEventListener('click', (e) => { e.stopPropagation(); showFilteredList(filter); });
+                span.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    applyFilter('status', filter);
+                    if (!drawerOpen) toggleDrawer();
+                });
             }
             els['qa-progress'].appendChild(span);
         });
@@ -985,12 +999,16 @@
 
     // ── Drawer: collapsible article list + filtering ──
 
+    let drawerPinned = false;
+
     function bindDrawerEvents() {
         document.getElementById('qa-drawer-tab').addEventListener('click', toggleDrawer);
-        document.getElementById('qa-drawer-close').addEventListener('click', toggleDrawer);
-        document.getElementById('qa-drawer-search').addEventListener('input', (e) => {
-            applyFilter('search', e.target.value.trim());
-        });
+        document.getElementById('qa-drawer-close').addEventListener('click', () => { if (!drawerPinned) toggleDrawer(); });
+        document.getElementById('qa-drawer-pin').addEventListener('click', togglePin);
+        document.getElementById('qa-drawer-search').addEventListener('input', refilterDrawer);
+        document.getElementById('qa-drawer-issue').addEventListener('change', refilterDrawer);
+        document.getElementById('qa-drawer-status').addEventListener('change', refilterDrawer);
+        document.getElementById('qa-drawer-section').addEventListener('change', refilterDrawer);
     }
 
     function toggleDrawer() {
@@ -1000,46 +1018,98 @@
         if (drawerOpen) {
             drawer.style.display = '';
             tab.style.display = 'none';
+            populateDropdowns();
             renderDrawerList();
             document.getElementById('qa-drawer-search').focus();
         } else {
+            if (drawerPinned) togglePin();
             drawer.style.display = 'none';
             tab.style.display = '';
         }
     }
 
-    function applyFilter(type, query) {
-        if (!query) {
-            // Clear filter
-            setFilter = null;
-            workingSet = articles.map((_, i) => i);
+    function togglePin() {
+        drawerPinned = !drawerPinned;
+        const layout = document.querySelector('.qa-layout');
+        const pinBtn = document.getElementById('qa-drawer-pin');
+        const closeBtn = document.getElementById('qa-drawer-close');
+        if (drawerPinned) {
+            layout.classList.add('qa-drawer-pinned');
+            pinBtn.classList.add('pinned');
+            closeBtn.style.display = 'none';
         } else {
-            setFilter = { type, query };
-            const q = query.toLowerCase();
-            workingSet = [];
-            articles.forEach((a, i) => {
-                let match = false;
-                switch (type) {
-                    case 'search':
-                        match = a.title.toLowerCase().includes(q)
-                            || a.authors.some(auth => auth.toLowerCase().includes(q))
-                            || (a.section || '').toLowerCase().includes(q);
-                        break;
-                    case 'author':
-                        match = a.authors.some(auth => auth.toLowerCase().includes(q));
-                        break;
-                    case 'issue':
-                        match = (a.volume + '.' + a.number) === query;
-                        break;
-                    case 'status':
-                        match = a.status === query;
-                        break;
-                }
-                if (match) workingSet.push(i);
-            });
+            layout.classList.remove('qa-drawer-pinned');
+            pinBtn.classList.remove('pinned');
+            closeBtn.style.display = '';
         }
+    }
 
-        // Find current article's position in new set
+    function populateDropdowns() {
+        const issueSelect = document.getElementById('qa-drawer-issue');
+        const statusSelect = document.getElementById('qa-drawer-status');
+        const sectionSelect = document.getElementById('qa-drawer-section');
+
+        // Issues — all unique vol.num sorted desc
+        const issues = {};
+        articles.forEach(a => {
+            const key = a.volume + '.' + a.number;
+            issues[key] = (issues[key] || 0) + 1;
+        });
+        const sortedIssues = Object.entries(issues).sort((a, b) => {
+            const [av, an] = a[0].split('.').map(Number);
+            const [bv, bn] = b[0].split('.').map(Number);
+            return bv - av || bn - an;
+        });
+        issueSelect.innerHTML = '<option value="">All issues</option>'
+            + sortedIssues.map(([k, c]) => '<option value="' + k + '">Issue ' + k + ' (' + c + ')</option>').join('');
+
+        // Statuses
+        statusSelect.innerHTML = '<option value="">All statuses</option>'
+            + '<option value="approved">Approved</option>'
+            + '<option value="needs_fix">Needs Fix</option>'
+            + '<option value="unreviewed">Unreviewed</option>';
+
+        // Sections
+        const sections = {};
+        articles.forEach(a => { if (a.section) sections[a.section] = (sections[a.section] || 0) + 1; });
+        sectionSelect.innerHTML = '<option value="">All sections</option>'
+            + Object.entries(sections).sort((a, b) => b[1] - a[1])
+                .map(([k, c]) => '<option value="' + k + '">' + k + ' (' + c + ')</option>').join('');
+
+        // Restore selections if filter is active
+        if (setFilter) {
+            if (setFilter.type === 'issue') issueSelect.value = setFilter.query;
+            if (setFilter.type === 'status') statusSelect.value = setFilter.query;
+            if (setFilter.type === 'section') sectionSelect.value = setFilter.query;
+        }
+    }
+
+    function refilterDrawer() {
+        const search = document.getElementById('qa-drawer-search').value.trim();
+        const issue = document.getElementById('qa-drawer-issue').value;
+        const status = document.getElementById('qa-drawer-status').value;
+        const section = document.getElementById('qa-drawer-section').value;
+
+        // Build combined filter
+        workingSet = [];
+        const q = search.toLowerCase();
+        articles.forEach((a, i) => {
+            if (issue && (a.volume + '.' + a.number) !== issue) return;
+            if (status && a.status !== status) return;
+            if (section && a.section !== section) return;
+            if (q && !a.title.toLowerCase().includes(q)
+                && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                && !(a.section || '').toLowerCase().includes(q)) return;
+            workingSet.push(i);
+        });
+
+        // Track active filter for URL/display
+        if (issue) setFilter = { type: 'issue', query: issue };
+        else if (status) setFilter = { type: 'status', query: status };
+        else if (section) setFilter = { type: 'section', query: section };
+        else if (q) setFilter = { type: 'search', query: search };
+        else setFilter = null;
+
         setIndex = workingSet.indexOf(currentIndex);
         if (setIndex < 0 && workingSet.length > 0) {
             setIndex = 0;
@@ -1050,6 +1120,22 @@
         updateDrawerTab();
         renderDrawerList();
         updateUrl();
+    }
+
+    function applyFilter(type, query) {
+        // Set the appropriate dropdown and clear others
+        const issueEl = document.getElementById('qa-drawer-issue');
+        const statusEl = document.getElementById('qa-drawer-status');
+        const sectionEl = document.getElementById('qa-drawer-section');
+        const searchEl = document.getElementById('qa-drawer-search');
+
+        if (issueEl) issueEl.value = type === 'issue' ? query : '';
+        if (statusEl) statusEl.value = type === 'status' ? query : '';
+        if (sectionEl) sectionEl.value = type === 'section' ? query : '';
+        if (searchEl) searchEl.value = type === 'search' ? query : '';
+
+        // Delegate to refilterDrawer which reads from dropdowns
+        refilterDrawer();
     }
 
     function loadArticleFromSet(si) {
