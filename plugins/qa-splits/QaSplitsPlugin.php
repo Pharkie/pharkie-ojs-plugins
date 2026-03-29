@@ -308,6 +308,7 @@ HTMLSTART;
             <div class="qa-article-meta" x-show="article">
                 <div class="qa-meta-issue" x-text="(article?.issue_title || '') + ' ' + (article?.volume || '') + '.' + (article?.number || '') + ': ' + (article?.year || '')"></div>
                 <h1 class="qa-meta-title" x-text="article?.title"></h1>
+                <h2 class="qa-meta-subtitle" x-show="article?.subtitle" x-text="article?.subtitle"></h2>
                 <div class="qa-meta-authors" x-show="article?.authors?.length">
                     <template x-for="(author, i) in (article?.authors || [])" :key="i">
                         <span class="qa-meta-author" x-text="author"></span>

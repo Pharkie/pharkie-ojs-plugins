@@ -222,17 +222,22 @@ class QaSplitsController extends PKPBaseController
             }
         }
 
-        // Abstracts
+        // Subtitles + Abstracts
+        $subtitles = [];
         $abstracts = [];
         if ($pubIds) {
-            $absRows = DB::table('publication_settings')
+            $settingsRows = DB::table('publication_settings')
                 ->whereIn('publication_id', $pubIds)
-                ->where('setting_name', 'abstract')
+                ->whereIn('setting_name', ['subtitle', 'abstract'])
                 ->where('locale', 'en')
-                ->select(['publication_id', 'setting_value'])
+                ->select(['publication_id', 'setting_name', 'setting_value'])
                 ->get();
-            foreach ($absRows as $row) {
-                $abstracts[$row->publication_id] = $row->setting_value;
+            foreach ($settingsRows as $row) {
+                if ($row->setting_name === 'subtitle') {
+                    $subtitles[$row->publication_id] = $row->setting_value;
+                } else {
+                    $abstracts[$row->publication_id] = $row->setting_value;
+                }
             }
         }
 
@@ -291,6 +296,7 @@ class QaSplitsController extends PKPBaseController
                 'submission_id'  => (int) $article->submission_id,
                 'publication_id' => $pubId,
                 'title'          => $article->title ?? '(untitled)',
+                'subtitle'       => $subtitles[$pubId] ?? null,
                 'authors'        => $authors[$pubId] ?? [],
                 'section'        => $article->section ?? '',
                 'volume'         => (int) $article->volume,
