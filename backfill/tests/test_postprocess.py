@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from backfill.postprocess_html import (
     strip_title,
+    strip_subtitle,
     strip_authors,
     strip_abstract,
     strip_keywords,
@@ -27,6 +28,8 @@ from backfill.postprocess_html import (
     strip_end_bleed,
     postprocess_article,
     verify_postprocessed,
+    RUNNING_HEADER_RE,
+    PAGE_NUMBER_RE,
     _clean,
     _strip_tags,
     _find_first_body_heading,
@@ -277,6 +280,52 @@ class TestFindBlockByText:
         html = '<p>First paragraph.</p><p>Second paragraph.</p>'
         start, end = _find_block_by_text(html, 'Nonexistent text that is not here')
         assert start is None
+
+
+# ===============================================================
+# strip_subtitle
+# ===============================================================
+
+class TestStripSubtitle:
+
+    @pytest.mark.parametrize('case_name', [
+        k for k in DATA['strip_subtitle']
+    ])
+    def test_strip_subtitle(self, case_name):
+        case = DATA['strip_subtitle'][case_name]
+        result = strip_subtitle(case['html'], case['subtitle'])
+
+        if 'should_contain' in case:
+            assert case['should_contain'] in _strip_tags(result), \
+                f'{case_name}: should contain "{case["should_contain"]}"'
+        if 'should_not_contain' in case:
+            assert case['should_not_contain'] not in _strip_tags(result), \
+                f'{case_name}: should NOT contain "{case["should_not_contain"]}"'
+
+
+# ===============================================================
+# strip_running_headers / page numbers
+# ===============================================================
+
+class TestStripRunningHeaders:
+
+    @pytest.mark.parametrize('case_name', [
+        k for k in DATA['strip_running_headers']
+    ])
+    def test_strip_running_headers(self, case_name):
+        case = DATA['strip_running_headers'][case_name]
+        html = case['html']
+        result = RUNNING_HEADER_RE.sub('', html)
+        result = PAGE_NUMBER_RE.sub('', result)
+
+        if 'should_contain' in case:
+            targets = case['should_contain'] if isinstance(case['should_contain'], list) else [case['should_contain']]
+            for target in targets:
+                assert target in result, \
+                    f'{case_name}: should contain "{target}"'
+        if 'should_not_contain' in case:
+            assert case['should_not_contain'] not in result, \
+                f'{case_name}: should NOT contain "{case["should_not_contain"]}"'
 
 
 class TestVerifyPostprocessed:
