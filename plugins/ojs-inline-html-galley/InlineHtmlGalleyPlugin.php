@@ -202,15 +202,61 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         // Archive quality notice (configurable)
         $archiveNotice = '';
         if ($this->cfg('archiveNoticeEnabled')) {
-            $context = Application::get()->getRequest()->getContext();
-            $email = htmlspecialchars($context ? $context->getData('contactEmail') : '');
-            $emailLink = $email ? '<a href="mailto:' . $email . '">' . $email . '</a>' : 'the journal';
-            $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
-                . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
-                . 'This article has been digitally restored from print. If you spot any errors '
-                . 'or formatting issues, please email ' . $emailLink . '.'
-                . ' You can also view the PDF version of this article.'
-                . '</div>';
+            $request = Application::get()->getRequest();
+            $user = $request->getUser();
+
+            if ($user) {
+                // Logged-in: show "report a content issue" link → expandable form
+                $submissionId = (int) $article->getId();
+                $contextPath = $request->getContext() ? $request->getContext()->getPath() : '';
+                $apiUrl = $request->getBaseUrl() . '/index.php/' . $contextPath . '/api/v1/qa-splits/reviews';
+                $csrfToken = $request->getSession()->token();
+
+                $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
+                    . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
+                    . 'This article has been digitally restored from print. If you spot any errors or formatting issues, you can '
+                    . '<a href="#" class="ihg-report-link" onclick="document.getElementById(\'ihg-report-form\').style.display=\'block\';this.style.display=\'none\';return false;">report a content issue</a>.'
+                    . ' You can also view the PDF version of this article.'
+                    . '<div id="ihg-report-form" style="display:none;margin-top:10px;">'
+                    . '<textarea id="ihg-report-text" placeholder="Describe the issue you found..."'
+                    . ' style="width:100%;min-height:80px;padding:8px 10px;border:1px solid #e0d8cc;border-radius:4px;'
+                    . 'font-family:inherit;font-size:14px;line-height:1.5;resize:vertical;box-sizing:border-box;"></textarea>'
+                    . '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">'
+                    . '<button id="ihg-report-submit" style="padding:8px 16px;background:#b8860b;color:#fff;border:none;'
+                    . 'border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;">Request Fix</button>'
+                    . '<button onclick="document.getElementById(\'ihg-report-form\').style.display=\'none\';'
+                    . 'document.querySelector(\'.ihg-report-link\').style.display=\'\';return false;"'
+                    . ' style="padding:8px 16px;background:none;border:1px solid #ccc;border-radius:4px;'
+                    . 'font-size:14px;cursor:pointer;color:#666;">Cancel</button>'
+                    . '<span id="ihg-report-status" style="font-size:13px;color:#666;"></span>'
+                    . '</div></div></div>'
+                    . '<script>document.getElementById("ihg-report-submit").addEventListener("click",function(){'
+                    . 'var t=document.getElementById("ihg-report-text").value.trim();'
+                    . 'if(!t){document.getElementById("ihg-report-status").textContent="Please describe the issue.";return;}'
+                    . 'this.disabled=true;document.getElementById("ihg-report-status").textContent="Submitting...";'
+                    . 'fetch("' . $apiUrl . '",{method:"POST",credentials:"same-origin",'
+                    . 'headers:{"Content-Type":"application/json","X-Csrf-Token":"' . $csrfToken . '"},'
+                    . 'body:JSON.stringify({submissionId:' . $submissionId . ',decision:"needs_fix",comment:t})})'
+                    . '.then(function(r){return r.json()}).then(function(d){'
+                    . 'if(d.success){document.getElementById("ihg-report-status").textContent="Thank you — issue reported.";'
+                    . 'document.getElementById("ihg-report-text").value="";'
+                    . 'setTimeout(function(){document.getElementById("ihg-report-form").style.display="none";'
+                    . 'document.querySelector(".ihg-report-link").style.display="";'
+                    . 'document.getElementById("ihg-report-status").textContent="";},2000);'
+                    . '}else{document.getElementById("ihg-report-status").textContent=d.error||"Failed to submit.";}'
+                    . 'document.getElementById("ihg-report-submit").disabled=false;})'
+                    . '.catch(function(){document.getElementById("ihg-report-status").textContent="Network error.";'
+                    . 'document.getElementById("ihg-report-submit").disabled=false;});});</script>';
+            } else {
+                // Not logged in: show email link
+                $context = $request->getContext();
+                $email = htmlspecialchars($context ? $context->getData('contactEmail') : '');
+                $emailLink = $email ? '<a href="mailto:' . $email . '">' . $email . '</a>' : 'the journal';
+                $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
+                    . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
+                    . 'This article has been digitally restored from print. If you spot any errors or formatting issues, '
+                    . 'please email ' . $emailLink . '. You can also view the PDF version of this article.</div>';
+            }
         }
 
         $output .= '<section class="item inline-html-galley">'
