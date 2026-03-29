@@ -283,6 +283,29 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         if re.search(r'Existential Analysis\s+\d+\.\d+', text):
             return None
 
+        # Strip title repetition from the start of the subtitle.
+        # Some PDFs repeat the title in ALL CAPS before the actual subtitle:
+        # <h1>Title</h1><p>TITLE: actual subtitle</p>
+        title_norm = normalise_for_match(html_title)
+        text_norm = normalise_for_match(text)
+        if title_norm and text_norm.startswith(title_norm):
+            # Find the position in the original text after the title words
+            title_words = title_norm.split()
+            text_words_lower = [w.lower() for w in re.findall(r'[a-zA-Z]+', text)]
+            if text_words_lower[:len(title_words)] == title_words:
+                # Count characters consumed by the title words in original text
+                consumed = 0
+                words_matched = 0
+                for m in re.finditer(r'[a-zA-Z]+', text):
+                    if words_matched >= len(title_words):
+                        break
+                    words_matched += 1
+                    consumed = m.end()
+                remainder = text[consumed:].lstrip()
+                remainder = re.sub(r'^[\s:,\-–—]+', '', remainder).strip()
+                if remainder:
+                    text = remainder
+
         # Clean up the subtitle
         subtitle = normalise_allcaps(text)
         # Collapse line breaks to spaces
