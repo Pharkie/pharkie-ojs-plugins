@@ -515,7 +515,15 @@ body {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    padding: 8px 12px;
+    padding: 6px 12px;
+}
+
+.qa-drawer-pills + .qa-drawer-pills {
+    padding-top: 0;
+}
+
+.qa-drawer-pills:last-of-type {
+    padding-bottom: 8px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
@@ -735,6 +743,97 @@ body {
 }
 .qa-right::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
 
+/* ── Article metadata header (mirrors OJS article landing page) ── */
+
+.qa-article-meta {
+    padding: 32px 32px 0;
+    font-family: var(--font-display);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+}
+
+.qa-meta-issue {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    letter-spacing: 0.01em;
+}
+
+.qa-meta-title {
+    font-family: var(--font-display);
+    font-size: 1.6em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    margin: 0 0 12px;
+    color: var(--text-primary);
+}
+
+.qa-meta-authors {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+}
+
+.qa-meta-author + .qa-meta-author::before {
+    content: ', ';
+}
+
+.qa-meta-doi {
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.qa-meta-doi a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.qa-meta-doi a:hover {
+    text-decoration: underline;
+}
+
+.qa-meta-pages {
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.qa-meta-keywords {
+    font-size: 13px;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+}
+
+.qa-meta-kw-label {
+    font-weight: 600;
+}
+
+.qa-meta-abstract {
+    margin-bottom: 0;
+    padding-bottom: 24px;
+}
+
+.qa-meta-abstract h3 {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin: 12px 0 6px;
+}
+
+.qa-meta-abstract div {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
 .qa-html-content {
     padding: 28px 32px;
     font-family: var(--font-display);
@@ -779,10 +878,33 @@ body {
     color: var(--text-secondary);
 }
 
+.qa-endmatter-group {
+    margin-bottom: 20px;
+}
+
+.qa-endmatter-group:last-child {
+    margin-bottom: 0;
+}
+
+.qa-endmatter-group-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.qa-endmatter-hint {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
 .qa-endmatter-item {
     display: flex;
-    gap: 12px;
-    padding: 10px 0;
+    gap: 8px;
+    padding: 6px 0;
     border-bottom: 1px solid var(--divider);
     align-items: flex-start;
 }
@@ -797,6 +919,16 @@ body {
     padding-left: 8px;
     padding-right: 8px;
     border-radius: 4px;
+}
+
+.qa-endmatter-num {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 22px;
+    text-align: right;
+    flex-shrink: 0;
+    padding-top: 1px;
 }
 
 /* ── Category pills — distinct color voices ── */
