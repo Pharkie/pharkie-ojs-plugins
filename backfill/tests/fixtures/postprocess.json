@@ -192,5 +192,41 @@
       },
       "should_contain": ["Raw PyMuPDF text"]
     }
+  },
+
+  "strip_subtitle": {
+    "removes_subtitle_paragraph": {
+      "html": "<p>Can Heideggerian language do justice to the experience?</p>\n<h2>Introduction</h2>\n<p>Body text here.</p>",
+      "subtitle": "Can Heideggerian language do justice to the experience?",
+      "should_not_contain": "Heideggerian language",
+      "should_contain": "Body text here"
+    },
+    "empty_subtitle_returns_unchanged": {
+      "html": "<p>Some paragraph.</p>\n<p>Body text.</p>",
+      "subtitle": "",
+      "should_contain": "Some paragraph"
+    },
+    "preserves_body_when_no_match": {
+      "html": "<p>Unrelated opening paragraph with enough words.</p>\n<p>Body text.</p>",
+      "subtitle": "Completely different subtitle text",
+      "should_contain": "Unrelated opening"
+    }
+  },
+
+  "strip_running_headers": {
+    "removes_journal_header": {
+      "html": "<p>Body paragraph one.</p>\n<p><em>Existential Analysis: Journal of The Society for Existential Analysis</em></p>\n<p>Body paragraph two.</p>",
+      "should_not_contain": "Journal of The Society",
+      "should_contain": ["Body paragraph one", "Body paragraph two"]
+    },
+    "removes_bare_page_number": {
+      "html": "<p>Body paragraph.</p>\n<p>270</p>\n<p>More body text.</p>",
+      "should_not_contain": ">270<",
+      "should_contain": ["Body paragraph", "More body text"]
+    },
+    "preserves_numbers_in_text": {
+      "html": "<p>In 1988, the group had 270 members attending conferences.</p>",
+      "should_contain": "270 members"
+    }
   }
 }
