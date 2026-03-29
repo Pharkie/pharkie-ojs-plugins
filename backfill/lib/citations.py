@@ -876,6 +876,8 @@ def is_reference(text: str) -> bool:
 
     Must have: author pattern + year.
     """
+    # Strip soft hyphens (PDF artefact from word-wrapping)
+    text = text.replace('\u00ad', '')
     clean = re.sub(r'^[\d\*•·–—\-]+[\.\)\s]*', '', text).strip()
 
     # Reject common English words that aren't surnames
