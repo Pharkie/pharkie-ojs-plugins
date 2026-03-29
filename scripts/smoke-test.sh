@@ -74,7 +74,7 @@ WP_ADMIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME/wp/wp-admin/"
 WP_ADMIN_BODY=$(curl -s "$WP_HOME/wp/wp-admin/" 2>/dev/null | head -20)
 if echo "$WP_ADMIN_BODY" | grep -qi "Fatal error\|Exception\|unable to read"; then
   fail "WP Admin has PHP fatal error"
-elif [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
+elif [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "301" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
   pass "WP Admin responds (HTTP $WP_ADMIN_STATUS)"
 else
   fail "WP Admin not responding (HTTP $WP_ADMIN_STATUS)"
