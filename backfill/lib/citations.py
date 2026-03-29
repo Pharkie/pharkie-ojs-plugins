@@ -755,6 +755,7 @@ def is_author_bio(text: str) -> bool:
         'candidate', 'student', 'doctoral', 'emeritus',
         'university', 'institute', 'college', 'school',
         'nhs', 'private practice', 'visiting tutor',
+        'member', 'author', 'writer', 'founder', 'editor',
     ]
     text_lower = text.lower()
     has_bio_phrase = (any(phrase in text for phrase in bio_phrases)
