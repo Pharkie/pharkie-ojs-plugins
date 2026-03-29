@@ -758,11 +758,32 @@ def is_author_bio(text: str) -> bool:
 
     # Check if text starts with a person name followed by a bio verb.
     # Extract the leading words and check with looks_like_person_name.
+    # Reject body-text patterns: possessives ("Heidegger's Utopia is"),
+    # conjunction/adverb prefixes ("However, Bartlett is"), and names
+    # followed by non-bio verbs ("Byatt is clear that").
     bio_verb = re.search(r'\b(is|was|has)\s', text[:BIO_PHRASE_SEARCH_WINDOW])
     if bio_verb:
         leading = text[:bio_verb.start()].strip().rstrip(',')
-        if leading and looks_like_person_name(leading):
-            return True
+        # Reject if possessive before verb ("Name's X is...")
+        if "'s " in text[:bio_verb.start()]:
+            pass
+        # Reject if starts with conjunction/adverb ("However, Name is...")
+        elif re.match(r'^(However|Firstly|Secondly|Furthermore|Moreover|'
+                      r'Ultimately|Nevertheless|Importantly|Meanwhile|'
+                      r'Similarly|Conversely|Accordingly|Indeed|Notably)\b',
+                      text):
+            pass
+        elif leading and looks_like_person_name(leading):
+            # Check the word after the verb — bio verbs are followed by
+            # articles/profession words ("is a therapist", "is Emeritus"),
+            # not adjectives/adverbs ("is clear that", "is known to").
+            after_verb = text[bio_verb.end():bio_verb.end() + 40].strip()
+            non_bio_after = re.match(
+                r'^(clear|known|careful|famous|interested|correct|'
+                r'right|wrong|not|also|often|more|less|still|now|'
+                r'perhaps|certainly|indeed)\b', after_verb, re.I)
+            if not non_bio_after:
+                return True
 
     # Bio phrase near start + starts with person name
     if has_bio_phrase and len(text) > BIO_MIN_LENGTH:

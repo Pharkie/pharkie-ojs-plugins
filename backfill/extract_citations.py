@@ -139,15 +139,26 @@ def extract_from_jats(jats_path: Path) -> dict:
     trailing_bio_elements = []
     trailing_bio_parts = []
 
-    # Scan all <p> elements in the body (at any depth) for bio/contact
-    # patterns. Bios can appear before ethics statements, author statements,
-    # or other non-bio trailing content, so we can't just walk backwards.
-    for p_el in body.iter():
-        tag = p_el.tag.split('}')[-1] if '}' in p_el.tag else p_el.tag
-        if tag != 'p':
-            continue
+    # Scan <p> elements in the last quarter of the body for bio/contact
+    # patterns. Bios appear near the end but may be followed by ethics
+    # statements or author declarations. Limit scope to avoid false
+    # positives from body text discussing named philosophers.
+    # Skip paragraphs already processed by the reference-section scan.
+    already_extracted = set()
+    for sec in sections:
+        for item in sec.get('items', []):
+            already_extracted.add(item.strip())
+
+    all_ps = list(body.iter())
+    all_ps = [el for el in all_ps
+              if (el.tag.split('}')[-1] if '}' in el.tag else el.tag) == 'p']
+    # Only scan the last half of paragraphs
+    scan_start = len(all_ps) // 2
+    for p_el in all_ps[scan_start:]:
         text = extract_text_from_element(p_el).strip()
-        if not text:
+        if not text or len(text) > 500:
+            continue
+        if text in already_extracted:
             continue
         if is_author_bio(text) or is_author_contact(text):
             trailing_bio_parts.append(text)
