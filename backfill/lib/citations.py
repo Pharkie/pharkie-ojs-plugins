@@ -737,15 +737,28 @@ def is_author_bio(text: str) -> bool:
     if is_author_contact(text):
         return True
 
+    # Structural phrases that indicate biographical content
     bio_phrases = [
-        'is a ', 'is an ', 'was a ', 'was an ',
-        'private practice', 'in practice', 'practitioner',
-        'working in', 'works with', 'works as',
-        'academic interests', 'has been a ',
+        'private practice', 'in practice', 'working in', 'works with',
+        'works as', 'works at', 'academic interests', 'has been a ',
         'Research Fellow', 'has a particular interest',
-        'currently in private', 'currently a ',
+        'currently in private', 'currently a ', 'currently training',
     ]
-    has_bio_phrase = any(phrase in text for phrase in bio_phrases)
+    # Profession/role keywords that distinguish bios from body text.
+    # A bio describes someone's professional role or affiliation.
+    # Without one of these, "Name is/was..." is just body text.
+    BIO_ROLE_WORDS = [
+        'professor', 'lecturer', 'therapist', 'psychologist',
+        'psychotherapist', 'counsellor', 'counselor', 'supervisor',
+        'researcher', 'practitioner', 'clinician', 'psychiatrist',
+        'trainer', 'coach', 'director', 'chair', 'fellow',
+        'candidate', 'student', 'doctoral', 'emeritus',
+        'university', 'institute', 'college', 'school',
+        'nhs', 'private practice', 'visiting tutor',
+    ]
+    text_lower = text.lower()
+    has_bio_phrase = (any(phrase in text for phrase in bio_phrases)
+                     or any(word in text_lower for word in BIO_ROLE_WORDS))
 
     bio_patterns = [
         r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
@@ -756,33 +769,27 @@ def is_author_bio(text: str) -> bool:
     if any(re.match(p, text) for p in bio_patterns):
         return True
 
-    # Check if text starts with a person name followed by a bio verb.
-    # Extract the leading words and check with looks_like_person_name.
-    # Reject body-text patterns: possessives ("Heidegger's Utopia is"),
-    # conjunction/adverb prefixes ("However, Bartlett is"), and names
-    # followed by non-bio verbs ("Byatt is clear that").
+    # Check if text starts with a person name followed by a bio verb
+    # AND contains a profession/role indicator. Without a profession keyword,
+    # "Name is/was/has..." is just body text discussing a person.
+    # Reject: possessives, interview transcripts (colon after name),
+    # conjunction/adverb prefixes, reference format (year in parens).
     bio_verb = re.search(r'\b(is|was|has)\s', text[:BIO_PHRASE_SEARCH_WINDOW])
     if bio_verb:
         leading = text[:bio_verb.start()].strip().rstrip(',')
-        # Reject if possessive before verb ("Name's X is...")
-        if "'s " in text[:bio_verb.start()]:
+        # Reject interview transcripts ("Neil: I was...", "YALOM: But...")
+        if re.match(r'^[A-Z][a-z]*\s*:', text) or re.match(r'^[A-Z]+\s*:', text):
             pass
-        # Reject if starts with conjunction/adverb ("However, Name is...")
-        elif re.match(r'^(However|Firstly|Secondly|Furthermore|Moreover|'
-                      r'Ultimately|Nevertheless|Importantly|Meanwhile|'
-                      r'Similarly|Conversely|Accordingly|Indeed|Notably)\b',
-                      text):
+        # Reject if possessive before verb ("Name's X is...")
+        elif "'s " in text[:bio_verb.start()]:
+            pass
+        # Reject reference format ("Gans, S.(1999)...")
+        elif re.search(r'\(\d{4}\)', text[:bio_verb.start()]):
             pass
         elif leading and looks_like_person_name(leading):
-            # Check the word after the verb — bio verbs are followed by
-            # articles/profession words ("is a therapist", "is Emeritus"),
-            # not adjectives/adverbs ("is clear that", "is known to").
-            after_verb = text[bio_verb.end():bio_verb.end() + 40].strip()
-            non_bio_after = re.match(
-                r'^(clear|known|careful|famous|interested|correct|'
-                r'right|wrong|not|also|often|more|less|still|now|'
-                r'perhaps|certainly|indeed)\b', after_verb, re.I)
-            if not non_bio_after:
+            # Must have a profession/role indicator — "Name is/was" alone
+            # is body text, not a bio
+            if has_bio_phrase:
                 return True
 
     # Bio phrase near start + starts with person name
