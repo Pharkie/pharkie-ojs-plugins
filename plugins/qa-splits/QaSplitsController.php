@@ -16,8 +16,6 @@ use PKP\security\Role;
 
 class QaSplitsController extends PKPBaseController
 {
-    /** @var array<int, array{jats: string, html: string, pdf: string, issue_dir: string}>|null */
-    private ?array $fileIndex = null;
 
     public function getHandlerPath(): string
     {
@@ -96,189 +94,20 @@ class QaSplitsController extends PKPBaseController
     }
 
     // ---------------------------------------------------------------
-    // File index: submission_id → JATS/PDF/HTML paths
+    // Content from OJS storage
     // ---------------------------------------------------------------
 
-    private function getBackfillDir(): string
-    {
-        return Config::getVar('qa-splits', 'backfill_output_dir', '/data/sample-issues');
-    }
-
     /**
-     * Scan JATS files in the backfill output directory and build a mapping
-     * from publisher-id (= OJS submission_id) to file paths.
+     * Compute SHA256 hash of HTML galley content from OJS storage.
+     * Reviews are invalidated when the imported content changes.
      */
-    private function buildFileIndex(): array
+    private function computeContentHash(int $publicationId): ?string
     {
-        if ($this->fileIndex !== null) {
-            return $this->fileIndex;
-        }
-
-        $this->fileIndex = [];
-        $baseDir = $this->getBackfillDir();
-        if (!is_dir($baseDir)) {
-            return $this->fileIndex;
-        }
-
-        $realBase = realpath($baseDir);
-        $issueDirs = glob($baseDir . '/*', GLOB_ONLYDIR);
-        foreach ($issueDirs as $issueDir) {
-            $jatsFiles = glob($issueDir . '/*.jats.xml');
-            foreach ($jatsFiles as $jatsPath) {
-                // Path traversal protection: ensure file is within base dir
-                $realPath = realpath($jatsPath);
-                if (!$realPath || !str_starts_with($realPath, $realBase)) {
-                    continue;
-                }
-
-                $publisherId = $this->readPublisherId($realPath);
-                if ($publisherId === null) {
-                    continue;
-                }
-
-                $baseName = preg_replace('/\.jats\.xml$/', '', $realPath);
-                $this->fileIndex[(int) $publisherId] = [
-                    'jats' => $realPath,
-                    'html' => $baseName . '.html',
-                    'pdf'  => $baseName . '.pdf',
-                    'issue_dir' => basename($issueDir),
-                ];
-            }
-        }
-
-        return $this->fileIndex;
-    }
-
-    /**
-     * Read publisher-id from a JATS XML file header.
-     */
-    private function readPublisherId(string $jatsPath): ?string
-    {
-        $head = file_get_contents($jatsPath, false, null, 0, 2048);
-        if ($head === false) {
+        $html = $this->readGalleyContentFromOjs($publicationId, 'text/html');
+        if ($html === null) {
             return null;
         }
-
-        if (preg_match('/<article-id\s+pub-id-type="publisher-id">(\d+)<\/article-id>/', $head, $m)) {
-            return $m[1];
-        }
-
-        return null;
-    }
-
-    /**
-     * Get file paths for a submission, or null if not in backfill output.
-     */
-    private function getFilePaths(int $submissionId): ?array
-    {
-        $index = $this->buildFileIndex();
-        return $index[$submissionId] ?? null;
-    }
-
-    // ---------------------------------------------------------------
-    // JATS parsing
-    // ---------------------------------------------------------------
-
-    /**
-     * Extract text content from a SimpleXML element's <p> children.
-     */
-    private function extractParagraphs(\SimpleXMLElement $element): string
-    {
-        $text = '';
-        foreach ($element->p as $p) {
-            $text .= trim(strip_tags($p->asXML())) . ' ';
-        }
-        return trim($text);
-    }
-
-    /**
-     * Parse JATS <back> element to extract classified end-matter items.
-     *
-     * Items are already classified by the pipeline (extract_citations.py,
-     * split_citation_tiers.py). This just reads the resulting structure:
-     *   <ref-list>/<ref>/<mixed-citation> → references
-     *   <fn-group>/<fn>                   → notes
-     *   <bio>                             → author bios
-     *   <notes notes-type="provenance">   → provenance
-     */
-    private function parseJatsBackMatter(string $jatsPath): array
-    {
-        $result = [
-            'references' => [],
-            'notes'      => [],
-            'bios'       => [],
-            'provenance' => [],
-        ];
-
-        if (!file_exists($jatsPath)) {
-            return $result;
-        }
-
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_file($jatsPath);
-        if ($xml === false) {
-            $result['error'] = 'Failed to parse JATS XML';
-            return $result;
-        }
-
-        foreach ($xml->xpath('//back/ref-list/ref') as $ref) {
-            $citation = $ref->{'mixed-citation'};
-            if ($citation) {
-                $result['references'][] = [
-                    'text' => trim((string) $citation),
-                    'id'   => (string) ($ref['id'] ?? ''),
-                ];
-            }
-        }
-
-        foreach ($xml->xpath('//back/fn-group/fn') as $fn) {
-            $text = $this->extractParagraphs($fn);
-            if ($text) {
-                $result['notes'][] = [
-                    'text' => $text,
-                    'id'   => (string) ($fn['id'] ?? ''),
-                ];
-            }
-        }
-
-        foreach ($xml->xpath('//back/bio') as $bio) {
-            $text = $this->extractParagraphs($bio);
-            if ($text) {
-                $result['bios'][] = ['text' => $text];
-            }
-        }
-
-        foreach ($xml->xpath('//back/notes[@notes-type="provenance"]') as $notes) {
-            $text = $this->extractParagraphs($notes);
-            if ($text) {
-                $result['provenance'][] = ['text' => $text];
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Compute SHA256 hash of HTML galley + JATS content.
-     * Including JATS ensures reviews are invalidated when back-matter changes,
-     * even if the HTML galley hasn't been regenerated yet.
-     */
-    private function computeContentHash(int $submissionId): ?string
-    {
-        $paths = $this->getFilePaths($submissionId);
-        if (!$paths) {
-            return null;
-        }
-
-        $parts = '';
-        if (file_exists($paths['html'])) {
-            $parts .= hash_file('sha256', $paths['html']);
-        }
-        if (file_exists($paths['jats'])) {
-            $parts .= hash_file('sha256', $paths['jats']);
-        }
-
-        return $parts ? hash('sha256', $parts) : null;
+        return hash('sha256', $html);
     }
 
     // ---------------------------------------------------------------
@@ -436,13 +265,11 @@ class QaSplitsController extends PKPBaseController
             }
         }
 
-        $fileIndex = $this->buildFileIndex();
         $result = [];
         $counts = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'unreviewed' => 0, 'invalidated' => 0];
 
         foreach ($articles as $article) {
             $review = $reviews[$article->submission_id] ?? null;
-            $hasFiles = isset($fileIndex[(int) $article->submission_id]);
 
             $status = 'unreviewed';
             $hashValid = null;
@@ -476,30 +303,15 @@ class QaSplitsController extends PKPBaseController
                 'keywords'       => $keywords[$pubId] ?? [],
                 'pages'          => $pages[$pubId] ?? null,
                 'status'         => $status,
-                'has_files'      => $hasFiles,
                 'reviewer'       => $review ? $review->username : null,
                 'reviewed_at'    => $review ? $review->created_at : null,
                 'comment'        => $review ? $review->comment : null,
             ];
         }
 
-        // Warn about JATS files without publisher-id (not imported)
-        $warnings = [];
-        $baseDir = $this->getBackfillDir();
-        if (is_dir($baseDir)) {
-            foreach (glob($baseDir . '/*', GLOB_ONLYDIR) as $issueDir) {
-                foreach (glob($issueDir . '/*.jats.xml') as $jatsPath) {
-                    if ($this->readPublisherId($jatsPath) === null) {
-                        $warnings[] = basename($issueDir) . '/' . basename($jatsPath) . ' — no publisher-id (not imported)';
-                    }
-                }
-            }
-        }
-
         return new JsonResponse([
             'articles' => $result,
             'counts'   => $counts,
-            'warnings' => $warnings,
         ]);
     }
 
@@ -534,7 +346,7 @@ class QaSplitsController extends PKPBaseController
             ])
             ->toArray();
 
-        $currentHash = $this->computeContentHash($submissionId);
+        $currentHash = $this->computeContentHash($publication->publication_id);
 
         return new JsonResponse([
             'submission_id' => $submissionId,
@@ -559,12 +371,6 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['error' => 'Submission not found'], 404);
         }
 
-        $paths = $this->getFilePaths($submissionId);
-        if ($paths && file_exists($paths['pdf'])) {
-            return $this->streamFile($paths['pdf'], 'application/pdf');
-        }
-
-        // Fallback: serve from OJS file storage
         return $this->serveGalleyFromOjs($publication->publication_id, 'application/pdf');
     }
 
@@ -584,15 +390,7 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['error' => 'Submission not found'], 404);
         }
 
-        $paths = $this->getFilePaths($submissionId);
-        $html = null;
-
-        if ($paths && file_exists($paths['html'])) {
-            $html = file_get_contents($paths['html']);
-        } else {
-            $html = $this->readGalleyContentFromOjs($publication->publication_id, 'text/html');
-        }
-
+        $html = $this->readGalleyContentFromOjs($publication->publication_id, 'text/html');
         if ($html === null) {
             return new JsonResponse(['error' => 'No HTML galley found'], 404);
         }
@@ -604,7 +402,6 @@ class QaSplitsController extends PKPBaseController
 
         return new Response(trim($html), 200, [
             'Content-Type' => 'text/html; charset=utf-8',
-            // XSS mitigation: restrict what embedded content can do
             'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; script-src 'none';",
         ]);
     }
@@ -637,11 +434,7 @@ class QaSplitsController extends PKPBaseController
     }
 
     /**
-     * Read galley file content from OJS storage. Returns null if not found.
-     */
-    /**
      * Stream a file to the client using readfile() (kernel-level, no PHP memory).
-     * Same approach as OJS core FileManager — avoids loading entire file into memory.
      */
     private function streamFile(string $filePath, string $mimeType): void
     {
@@ -672,7 +465,11 @@ class QaSplitsController extends PKPBaseController
     }
 
     /**
-     * GET /articles/{submissionId}/classification — JATS back-matter items.
+     * GET /articles/{submissionId}/classification — end-matter from OJS.
+     *
+     * References from citations table (not in HTML galley).
+     * Notes/bios/provenance counts from jats-* divs in the HTML galley
+     * (content already visible and labelled in the HTML pane).
      */
     public function getClassification(Request $request): JsonResponse
     {
@@ -687,17 +484,28 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['error' => 'Submission not found'], 404);
         }
 
-        $paths = $this->getFilePaths($submissionId);
-        if (!$paths || !file_exists($paths['jats'])) {
-            return new JsonResponse([
-                'references' => [],
-                'notes' => [],
-                'bios' => [],
-                'provenance' => [],
-            ]);
-        }
+        $pubId = $publication->publication_id;
 
-        return new JsonResponse($this->parseJatsBackMatter($paths['jats']));
+        // References from citations table
+        $references = DB::table('citations')
+            ->where('publication_id', $pubId)
+            ->orderBy('seq')
+            ->pluck('raw_citation')
+            ->map(fn ($text) => ['text' => trim($text)])
+            ->toArray();
+
+        // Count jats-* divs in the HTML galley
+        $html = $this->readGalleyContentFromOjs($pubId, 'text/html');
+        $notesCount = $html ? preg_match_all('/<div\s+class="jats-notes"/', $html) : 0;
+        $biosCount = $html ? preg_match_all('/<div\s+class="jats-bios"/', $html) : 0;
+        $provenanceCount = $html ? preg_match_all('/<div\s+class="jats-provenance"/', $html) : 0;
+
+        return new JsonResponse([
+            'references'       => $references,
+            'notes_count'      => $notesCount,
+            'bios_count'       => $biosCount,
+            'provenance_count' => $provenanceCount,
+        ]);
     }
 
     /**
@@ -739,7 +547,7 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['error' => 'Submission not found'], 404);
         }
 
-        $contentHash = $this->computeContentHash($submissionId);
+        $contentHash = $this->computeContentHash($publication->publication_id);
 
         DB::table('qa_split_reviews')->insert([
             'submission_id'  => $submissionId,

@@ -364,26 +364,40 @@ document.addEventListener('alpine:init', () => {
 
         get hasClassification() {
             if (!this.classification) return false;
-            return (this.classification.references || []).length +
-                   (this.classification.notes || []).length +
-                   (this.classification.bios || []).length +
-                   (this.classification.provenance || []).length > 0;
+            const c = this.classification;
+            return (c.references || []).length > 0
+                || (c.notes_count || 0) > 0
+                || (c.bios_count || 0) > 0
+                || (c.provenance_count || 0) > 0;
         },
 
         get classificationGroups() {
             if (!this.classification) return [];
-            const defs = [
-                { key: 'bios', label: 'Author Bios', cls: 'qa-pill-bio' },
-                { key: 'references', label: 'References', cls: 'qa-pill-reference' },
-                { key: 'notes', label: 'Notes', cls: 'qa-pill-note' },
-                { key: 'provenance', label: 'Provenance', cls: 'qa-pill-provenance' },
-            ];
-            return defs
-                .map(d => {
-                    const items = (this.classification[d.key] || []).map(item => item.text);
-                    return { ...d, items, count: items.length };
-                })
-                .filter(g => g.count > 0);
+            const c = this.classification;
+            const groups = [];
+
+            // Bios — count only (content visible in HTML pane above)
+            if (c.bios_count > 0) {
+                groups.push({ label: 'Author Bios', cls: 'qa-pill-bio', count: c.bios_count, items: [] });
+            }
+
+            // References — full list (not in HTML galley, from citations table)
+            const refs = c.references || [];
+            if (refs.length > 0) {
+                groups.push({ label: 'References', cls: 'qa-pill-reference', count: refs.length, items: refs.map(r => r.text) });
+            }
+
+            // Notes — count only
+            if (c.notes_count > 0) {
+                groups.push({ label: 'Notes', cls: 'qa-pill-note', count: c.notes_count, items: [] });
+            }
+
+            // Provenance — count only
+            if (c.provenance_count > 0) {
+                groups.push({ label: 'Provenance', cls: 'qa-pill-provenance', count: c.provenance_count, items: [] });
+            }
+
+            return groups;
         },
 
         // ── Reviews ──
