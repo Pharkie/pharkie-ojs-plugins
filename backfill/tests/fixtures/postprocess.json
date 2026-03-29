@@ -227,6 +227,15 @@
     "preserves_numbers_in_text": {
       "html": "<p>In 1988, the group had 270 members attending conferences.</p>",
       "should_contain": "270 members"
+    },
+    "removes_journal_header_without_prefix": {
+      "html": "<p><em>Journal of the Society for Existential Analysis</em></p>\n<p>Body text here.</p>",
+      "should_not_contain": "Journal of the Society",
+      "should_contain": "Body text here"
+    },
+    "preserves_journal_name_in_body_text": {
+      "html": "<p>This was published in the <em>Journal of the Society for Existential Analysis</em> in 2005.</p>",
+      "should_contain": "Journal of the Society"
     }
   }
 }
