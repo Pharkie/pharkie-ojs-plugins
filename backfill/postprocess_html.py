@@ -43,8 +43,9 @@ MIN_ABSTRACT_LENGTH = 30
 # extractions while allowing very short book reviews.
 # Running headers from print layout (journal name, volume info)
 RUNNING_HEADER_RE = re.compile(
-    r'^\s*<p[^>]*>\s*(?:<em>|<i>)?\s*Existential\s+Analysis\s*:\s*Journal\s+of\s+'
-    r'(?:The\s+)?Society\s+for\s+Existential\s+Analysis\s*(?:</em>|</i>)?\s*</p>\s*$',
+    r'^\s*<p[^>]*>\s*(?:<em>|<i>)?\s*(?:Existential\s+Analysis\s*:\s*)?'
+    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis'
+    r'\s*(?:</em>|</i>)?\s*</p>\s*$',
     re.IGNORECASE | re.MULTILINE
 )
 # Bare page numbers from print layout (standalone number in a <p>)
