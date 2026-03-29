@@ -83,13 +83,16 @@ def extract_from_jats(jats_path: Path) -> dict:
         headings.append(heading)
         is_notes_section = bool(NOTES_HEADING_RE.match(heading))
 
+        # Collect bio items from this section to merge into one per author
+        sec_bio_parts = []
+
         for item in sec['items']:
             if is_junk(item):
                 # Classify filtered items (provenance before bio — more specific)
                 if is_provenance(item):
                     provenance_items.append(item)
                 elif is_author_bio(item):
-                    bios.append(item)
+                    sec_bio_parts.append(item)
                 else:
                     note_items.append(item)
                 continue
@@ -99,6 +102,10 @@ def extract_from_jats(jats_path: Path) -> dict:
                 continue
 
             citations.append(item)
+
+        # Merge consecutive bio items from the same section into one bio
+        if sec_bio_parts:
+            bios.append(' '.join(sec_bio_parts))
 
     return {
         'citations': citations,
