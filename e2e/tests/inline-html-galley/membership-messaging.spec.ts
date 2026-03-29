@@ -154,7 +154,7 @@ test.describe('Membership/access messaging', () => {
     await expect(inlineHtml).toBeVisible();
 
     // Should see updated archive notice with PDF mention
-    await expect(inlineHtml).toContainText('view the PDF version');
+    await expect(inlineHtml).toContainText('try the PDF version');
 
     // Should NOT see the CTA
     const cta = page.locator('.inline-html-galley-cta');
@@ -207,7 +207,7 @@ test.describe('Membership/access messaging', () => {
     await expect(subBox2).toHaveCount(0);
 
     // Should see archive notice
-    await expect(inlineHtml).toContainText('digitally restored from print');
+    await expect(inlineHtml).toContainText('digitally restored from an archive');
   });
 
   test('anonymous on open-access editorial sees content without CTA', async ({ page }) => {
