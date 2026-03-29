@@ -755,14 +755,14 @@ def is_author_bio(text: str) -> bool:
         'candidate', 'student', 'doctoral', 'emeritus',
         'university', 'institute', 'college', 'school',
         'nhs', 'private practice', 'visiting tutor',
-        'member', 'author', 'writer', 'founder', 'editor',
+        'member of', 'author of', 'writer', 'founder', 'editor',
     ]
     text_lower = text.lower()
     has_bio_phrase = (any(phrase in text for phrase in bio_phrases)
                      or any(word in text_lower for word in BIO_ROLE_WORDS))
 
     bio_patterns = [
-        r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
+        r'^[A-Z]{2,}[\s\.\-]+[A-Z][\s\.\-\w]*\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
         r'^[A-Z]+\s+(?:van|de|von)\s+[A-Z\-]+\s+(is|was|has)\s',  # ALL CAPS + prefix
         r'^All (three|four|five|six) authors',
     ]
