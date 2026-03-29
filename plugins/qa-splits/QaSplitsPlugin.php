@@ -335,7 +335,7 @@ HTMLSTART;
             </div>
             <div class="qa-endmatter" x-show="hasClassification">
                 <h3 class="qa-endmatter-heading">End-Matter Classification</h3>
-                <template x-for="group in classificationGroups" :key="group.key">
+                <template x-for="group in classificationGroups" :key="group.label">
                     <div class="qa-endmatter-group">
                         <div class="qa-endmatter-group-header">
                             <span class="qa-pill" :class="group.cls" x-text="group.label + ' (' + group.count + ')'"></span>
