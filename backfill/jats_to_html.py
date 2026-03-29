@@ -79,13 +79,16 @@ def _render_back_matter(back) -> str:
                     if text.strip():
                         notes.append(text.strip())
         if notes:
-            parts.append('\n<h2>Notes</h2>')
+            parts.append('\n<div class="jats-notes">')
+            parts.append('<h2>Notes</h2>')
             parts.append('<ol>')
             for note in notes:
                 parts.append(f'<li>{note}</li>')
             parts.append('</ol>')
+            parts.append('</div>')
 
     # Author bios
+    bios = []
     for child in back:
         if _local_name(child.tag) == 'bio':
             p = child.find('{*}p') if '}' in child.tag else child.find('p')
@@ -97,9 +100,15 @@ def _render_back_matter(back) -> str:
             if p is not None:
                 text = _text_content(p)
                 if text.strip():
-                    parts.append(f'\n<p>{text.strip()}</p>')
+                    bios.append(text.strip())
+    if bios:
+        parts.append('\n<div class="jats-bios">')
+        for bio in bios:
+            parts.append(f'<p>{bio}</p>')
+        parts.append('</div>')
 
     # Provenance notes
+    prov_items = []
     for child in back:
         if _local_name(child.tag) == 'notes':
             notes_type = child.get('notes-type', '')
@@ -113,7 +122,12 @@ def _render_back_matter(back) -> str:
                 if p is not None:
                     text = _text_content(p)
                     if text.strip():
-                        parts.append(f'\n<p><em>{text.strip()}</em></p>')
+                        prov_items.append(text.strip())
+    if prov_items:
+        parts.append('\n<div class="jats-provenance">')
+        for prov in prov_items:
+            parts.append(f'<p><em>{prov}</em></p>')
+        parts.append('</div>')
 
     return '\n'.join(parts)
 

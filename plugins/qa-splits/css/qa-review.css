@@ -851,6 +851,33 @@ body {
 .qa-html-content h2 { font-size: 1.3em; }
 .qa-html-content h3 { font-size: 1.1em; }
 
+/* Pipeline-extracted back matter rendered in HTML galley (from JATS <back>) */
+.qa-html-content .jats-notes,
+.qa-html-content .jats-bios,
+.qa-html-content .jats-provenance {
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+    margin: 1.5em 0;
+    position: relative;
+}
+
+.qa-html-content .jats-notes::before,
+.qa-html-content .jats-bios::before,
+.qa-html-content .jats-provenance::before {
+    display: block;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 6px;
+}
+
+.qa-html-content .jats-notes::before       { content: 'Extracted from JATS \2014  Notes'; }
+.qa-html-content .jats-bios::before        { content: 'Extracted from JATS \2014  Author Bio'; }
+.qa-html-content .jats-provenance::before  { content: 'Extracted from JATS \2014  Provenance'; }
+
 .qa-html-content p {
     margin-bottom: 0.9em;
 }
