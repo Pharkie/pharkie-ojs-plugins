@@ -397,24 +397,26 @@ body {
     top: 50%;
     transform: translateY(-50%);
     z-index: 100;
-    background: var(--surface-dark);
-    color: var(--text-inverse-muted);
-    padding: 12px 8px;
-    border-radius: 0 6px 6px 0;
+    background: var(--surface-warm);
+    color: var(--text-primary);
+    padding: 14px 10px;
+    border-radius: 0 8px 8px 0;
     cursor: pointer;
     font-family: var(--font-ui);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     writing-mode: vertical-lr;
     text-orientation: mixed;
     letter-spacing: 0.05em;
-    transition: background 0.15s, color 0.15s;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+    transition: background 0.15s, box-shadow 0.15s;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+    border: 1px solid var(--divider);
+    border-left: none;
 }
 
 .qa-drawer-tab:hover {
-    background: var(--surface-dark-hover);
-    color: var(--text-inverse);
+    background: var(--surface-cream);
+    box-shadow: 2px 0 16px rgba(0,0,0,0.25);
 }
 
 .qa-drawer {
@@ -430,6 +432,7 @@ body {
     flex-direction: column;
     box-shadow: 4px 0 20px rgba(0,0,0,0.4);
     animation: qa-drawer-in 0.2s ease;
+    overflow: hidden;
 }
 
 @keyframes qa-drawer-in {
@@ -472,24 +475,17 @@ body {
 .qa-drawer-pin:hover { opacity: 0.8; }
 .qa-drawer-pin.pinned { opacity: 1; color: var(--accent); }
 
-.qa-drawer-close-btn {
-    display: block;
-    width: calc(100% - 24px);
-    margin: 8px 12px 12px;
-    padding: 8px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 4px;
+.qa-drawer-close {
+    background: none;
+    border: none;
     color: var(--text-inverse-muted);
     font-family: var(--font-ui);
     font-size: 13px;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    padding: 4px 8px;
+    white-space: nowrap;
 }
-.qa-drawer-close-btn:hover {
-    background: rgba(255,255,255,0.12);
-    color: var(--text-inverse);
-}
+.qa-drawer-close:hover { color: var(--text-inverse); }
 
 .qa-drawer-filter-row {
     display: flex;
@@ -511,32 +507,32 @@ body {
 }
 .qa-drawer-select option { background: var(--surface-dark); color: var(--text-inverse); }
 
-.qa-drawer-filters {
+.qa-drawer-pills {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 10px 12px;
+    gap: 4px;
+    padding: 8px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
-.qa-drawer-filter-btn {
+.qa-drawer-pill {
     padding: 4px 10px;
     border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 4px;
+    border-radius: 12px;
     background: transparent;
     color: var(--text-inverse-muted);
     font-family: var(--font-ui);
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
 
-.qa-drawer-filter-btn:hover {
+.qa-drawer-pill:hover {
     background: rgba(255,255,255,0.1);
     color: var(--text-inverse);
 }
 
-.qa-drawer-filter-btn.active {
+.qa-drawer-pill.active {
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
@@ -569,6 +565,14 @@ body {
     background: rgba(255,255,255,0.1);
     color: var(--text-inverse);
     border-left-color: var(--accent);
+}
+
+.qa-drawer-item-num {
+    flex-shrink: 0;
+    width: 28px;
+    text-align: right;
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
 }
 
 .qa-drawer-item-status {
