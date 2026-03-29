@@ -376,7 +376,7 @@ class QaSplitsController extends PKPBaseController
 
         $fileIndex = $this->buildFileIndex();
         $result = [];
-        $counts = ['total' => 0, 'approved' => 0, 'rejected' => 0, 'unreviewed' => 0, 'invalidated' => 0];
+        $counts = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'unreviewed' => 0, 'invalidated' => 0];
 
         foreach ($articles as $article) {
             $review = $reviews[$article->submission_id] ?? null;
@@ -393,7 +393,7 @@ class QaSplitsController extends PKPBaseController
 
             $counts['total']++;
             if ($status === 'approved') $counts['approved']++;
-            elseif ($status === 'rejected') $counts['rejected']++;
+            elseif ($status === 'needs_fix') $counts['needs_fix']++;
             elseif ($status === 'invalidated') $counts['invalidated']++;
             else $counts['unreviewed']++;
 
@@ -653,11 +653,11 @@ class QaSplitsController extends PKPBaseController
         $decision = $request->input('decision');
         $comment = $request->input('comment', '');
 
-        if (!in_array($decision, ['approved', 'rejected'])) {
-            return new JsonResponse(['error' => 'Invalid decision. Must be "approved" or "rejected".'], 400);
+        if (!in_array($decision, ['approved', 'needs_fix'])) {
+            return new JsonResponse(['error' => 'Invalid decision. Must be "approved" or "needs_fix".'], 400);
         }
 
-        if ($decision === 'rejected' && empty(trim($comment))) {
+        if ($decision === 'needs_fix' && empty(trim($comment))) {
             return new JsonResponse(['error' => 'Comment required for rejections.'], 400);
         }
 
@@ -679,7 +679,7 @@ class QaSplitsController extends PKPBaseController
             'user_id'        => $user->getId(),
             'username'       => $user->getUsername(),
             'decision'       => $decision,
-            'comment'        => $decision === 'rejected' ? trim($comment) : null,
+            'comment'        => $decision === 'needs_fix' ? trim($comment) : null,
             'content_hash'   => $contentHash,
             'created_at'     => Core::getCurrentDate(),
         ]);
@@ -738,13 +738,13 @@ class QaSplitsController extends PKPBaseController
             ->join('submissions as s', 'r1.submission_id', '=', 's.submission_id')
             ->where('s.context_id', $contextId)
             ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = r1.submission_id)')
-            ->where('r1.decision', 'rejected')
+            ->where('r1.decision', 'needs_fix')
             ->select('r1.submission_id')
             ->inRandomOrder()
             ->first();
 
         if ($rejected) {
-            return new JsonResponse(['submission_id' => $rejected->submission_id, 'reason' => 'rejected']);
+            return new JsonResponse(['submission_id' => $rejected->submission_id, 'reason' => 'needs_fix']);
         }
 
         // 2. Unreviewed articles
@@ -809,13 +809,13 @@ class QaSplitsController extends PKPBaseController
 
         // Build section breakdown
         $sections = [];
-        $overall = ['total' => 0, 'approved' => 0, 'rejected' => 0, 'unreviewed' => 0];
+        $overall = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'unreviewed' => 0];
         $byReviewerCount = [0 => 0, 1 => 0, 2 => 0]; // 0 reviewers, 1 reviewer, 2+ reviewers
 
         foreach ($articles as $article) {
             $section = $article->section;
             if (!isset($sections[$section])) {
-                $sections[$section] = ['total' => 0, 'approved' => 0, 'rejected' => 0, 'unreviewed' => 0];
+                $sections[$section] = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'unreviewed' => 0];
             }
 
             $review = $reviewData[$article->submission_id] ?? null;

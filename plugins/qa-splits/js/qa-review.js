@@ -67,7 +67,7 @@
                 els['reject-comment'].focus();
                 return;
             }
-            submitReview('rejected', comment);
+            submitReview('needs_fix', comment);
         });
 
         els['btn-prev'].addEventListener('click', () => navigate(-1));
@@ -99,7 +99,7 @@
                     toast('Comment required', 'error');
                     return;
                 }
-                submitReview('rejected', comment);
+                submitReview('needs_fix', comment);
             }
         });
     }
@@ -196,7 +196,7 @@
         hideRejectInput();
 
         // Check hash validity per-article (deferred from list to avoid O(n) file reads)
-        if (article.status === 'approved' || article.status === 'rejected') {
+        if (article.status === 'approved' || article.status === 'needs_fix') {
             checkHashValidity(article, gen);
         }
 
@@ -669,7 +669,8 @@
         badge.className = 'qa-badge qa-badge-' + status;
         badge.setAttribute('role', 'status');
 
-        let label = status.charAt(0).toUpperCase() + status.slice(1);
+        const statusLabels = { approved: 'Approved', rejected: 'Fix Requested', invalidated: 'Invalidated', unreviewed: 'Unreviewed' };
+        let label = statusLabels[status] || status;
         if (reviewer && reviewedAt) {
             const d = new Date(reviewedAt);
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -686,7 +687,7 @@
         // Each entry: [text, filterStatus or null]
         const parts = [];
         if (counts.approved) parts.push([counts.approved + ' approved', 'approved']);
-        if (counts.rejected) parts.push([counts.rejected + ' rejected', 'rejected']);
+        if (counts.needs_fix) parts.push([counts.needs_fix + ' needs fix', 'needs_fix']);
         parts.push([counts.total + ' total', null]);
         if (remaining > 0) parts.push([remaining + ' remaining', 'unreviewed']);
 
@@ -715,7 +716,8 @@
         const existing = document.querySelector('.qa-dashboard-overlay');
         if (existing) existing.remove();
 
-        const label = status === 'unreviewed' ? 'Remaining' : status.charAt(0).toUpperCase() + status.slice(1);
+        const filterLabels = { approved: 'Approved', rejected: 'Needs Fix', unreviewed: 'Remaining' };
+        const label = filterLabels[status] || status;
         const filtered = articles.filter(a => {
             if (status === 'unreviewed') return a.status === 'unreviewed' || a.status === 'invalidated';
             return a.status === status;
@@ -741,7 +743,7 @@
             html += '<p class="qa-filtered-empty">None</p>';
         } else {
             filtered.forEach(a => {
-                const comment = (a.comment && status === 'rejected') ? '<span class="qa-filtered-comment">' + escapeHtml(a.comment) + '</span>' : '';
+                const comment = (a.comment && status === 'needs_fix') ? '<span class="qa-filtered-comment">' + escapeHtml(a.comment) + '</span>' : '';
                 html += '<div class="qa-filtered-item" data-sid="' + a.submission_id + '">'
                     + '<span class="qa-filtered-title">'
                     + a.volume + '.' + a.number + ' #' + a.seq + ' ' + escapeHtml(a.title)
@@ -776,7 +778,7 @@
         const counts = { total: articles.length, approved: 0, rejected: 0, invalidated: 0, unreviewed: 0 };
         articles.forEach(a => {
             if (a.status === 'approved') counts.approved++;
-            else if (a.status === 'rejected') counts.rejected++;
+            else if (a.status === 'needs_fix') counts.needs_fix++;
             else if (a.status === 'invalidated') counts.invalidated++;
             else counts.unreviewed++;
         });
@@ -877,7 +879,7 @@
     function renderDashboard(container, data) {
         const o = data.overall;
         const pctApproved = o.total ? Math.round((o.approved / o.total) * 100) : 0;
-        const pctRejected = o.total ? Math.round((o.rejected / o.total) * 100) : 0;
+        const pctRejected = o.total ? Math.round((o.needs_fix / o.total) * 100) : 0;
         const pctUnreviewed = o.total ? Math.round((o.unreviewed / o.total) * 100) : 0;
 
         // Reviewer depth
@@ -895,7 +897,7 @@
         html += '</div>';
         html += '<div class="qa-dash-numbers">';
         html += '<div class="qa-dash-stat qa-dash-stat-approved"><span class="qa-dash-num">' + o.approved + '</span><span class="qa-dash-label">Approved</span></div>';
-        html += '<div class="qa-dash-stat qa-dash-stat-rejected"><span class="qa-dash-num">' + o.rejected + '</span><span class="qa-dash-label">Rejected</span></div>';
+        html += '<div class="qa-dash-stat qa-dash-stat-needs_fix"><span class="qa-dash-num">' + o.needs_fix + '</span><span class="qa-dash-label">Needs Fix</span></div>';
         html += '<div class="qa-dash-stat qa-dash-stat-unreviewed"><span class="qa-dash-num">' + o.unreviewed + '</span><span class="qa-dash-label">Unreviewed</span></div>';
         html += '</div>';
         html += '</div>';
@@ -914,7 +916,7 @@
 
         // Section breakdown
         html += '<div class="qa-dash-section"><h3>By Section</h3><table class="qa-dash-table">';
-        html += '<tr><th>Section</th><th>Total</th><th>Approved</th><th>Rejected</th><th>Unreviewed</th><th>Progress</th></tr>';
+        html += '<tr><th>Section</th><th>Total</th><th>Approved</th><th>Needs Fix</th><th>Unreviewed</th><th>Progress</th></tr>';
 
         const sections = Object.entries(data.by_section || {}).sort((a, b) => b[1].total - a[1].total);
         sections.forEach(([name, s]) => {
@@ -923,7 +925,7 @@
                 + '<td>' + escapeHtml(name) + '</td>'
                 + '<td>' + s.total + '</td>'
                 + '<td>' + s.approved + '</td>'
-                + '<td>' + s.rejected + '</td>'
+                + '<td>' + s.needs_fix + '</td>'
                 + '<td>' + s.unreviewed + '</td>'
                 + '<td><div class="qa-dash-mini-bar"><div class="qa-dash-mini-fill" style="width:' + pct + '%"></div><span>' + pct + '%</span></div></td>'
                 + '</tr>';
@@ -967,7 +969,7 @@
             + 'data-target="0" '
             + 'transform="rotate(-90 ' + cx + ' ' + cy + ')"/>'
             + '<circle class="qa-dash-donut-seg" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" '
-            + 'stroke="var(--color-reject)" stroke-width="18" '
+            + 'stroke="var(--color-fix)" stroke-width="18" '
             + 'stroke-dasharray="' + segRejected + ' ' + circ + '" '
             + 'stroke-dashoffset="-' + offRejected + '" '
             + 'data-target="-' + offRejected + '" '
@@ -1064,14 +1066,14 @@
         const counts = { rejected: 0, unreviewed: 0 };
         const issues = {};
         articles.forEach(a => {
-            if (a.status === 'rejected') counts.rejected++;
+            if (a.status === 'needs_fix') counts.needs_fix++;
             if (a.status === 'unreviewed') counts.unreviewed++;
             const key = a.volume + '.' + a.number;
             issues[key] = (issues[key] || 0) + 1;
         });
 
         let filtersHtml = '';
-        if (counts.rejected) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'rejected' ? ' active' : '') + '" data-type="status" data-q="rejected">Rejected (' + counts.rejected + ')</button>';
+        if (counts.needs_fix) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'needs_fix' ? ' active' : '') + '" data-type="status" data-q="needs_fix">Needs Fix (' + counts.needs_fix + ')</button>';
         if (counts.unreviewed) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'unreviewed' ? ' active' : '') + '" data-type="status" data-q="unreviewed">Unreviewed (' + counts.unreviewed + ')</button>';
 
         // Top 5 issues by article count
@@ -1101,7 +1103,7 @@
         workingSet.forEach((artIdx, si) => {
             const a = articles[artIdx];
             const active = si === setIndex ? ' active' : '';
-            const icon = a.status === 'approved' ? '✓' : a.status === 'rejected' ? '✗' : '·';
+            const icon = a.status === 'approved' ? '✓' : a.status === 'needs_fix' ? '✗' : '·';
             html += '<div class="qa-drawer-item' + active + '" data-si="' + si + '">'
                 + '<span class="qa-drawer-item-status">' + icon + '</span>'
                 + '<span class="qa-drawer-item-title">' + a.volume + '.' + a.number + ' #' + a.seq + ' ' + escapeHtml(a.title) + '</span>'

@@ -13,7 +13,7 @@
 /* ── Design tokens ── */
 
 :root {
-    /* Surface palette — warm archival tones */
+    /* Surface palette — light mode (warm archival tones) */
     --surface-dark: #1a1a1e;
     --surface-dark-hover: #2a2a30;
     --surface-warm: #faf8f4;
@@ -28,17 +28,16 @@
     --text-inverse-muted: #b0aca6;
 
     /* Semantic colours — only used for their meaning */
-    --color-reject: #c03a2b;
-    --color-reject-hover: #a8311f;
+    --color-fix: #b8860b;
+    --color-fix-hover: #9a7009;
     --color-approve: #2d7a4f;
     --color-approve-hover: #236840;
-    --color-warn: #b8860b;
 
     /* UI accent — for focus rings, active states, branding (NOT semantic) */
     --accent: #5a7a9b;
     --accent-hover: #4a6a8b;
 
-    /* Category pills — each a distinct voice */
+    /* Category pills */
     --pill-ref-bg: #1e3a5f;
     --pill-ref-text: #c8ddf0;
     --pill-note-bg: #5c4a1e;
@@ -51,9 +50,9 @@
     /* Status badges */
     --badge-approved-bg: #d8f0e0;
     --badge-approved-text: #1a5030;
-    --badge-rejected-bg: #f5d8d4;
-    --badge-rejected-text: #7a2018;
-    --badge-invalidated-bg: #f5e8c8;
+    --badge-needs_fix-bg: #fef3cd;
+    --badge-needs_fix-text: #6a5010;
+    --badge-invalidated-bg: #fef3cd;
     --badge-invalidated-text: #6a5010;
     --badge-unreviewed-bg: #e8e4de;
     --badge-unreviewed-text: #5a564e;
@@ -71,6 +70,35 @@
     --font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
     --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── Dark mode (system-linked) ── */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --surface-warm: #1e1e22;
+        --surface-cream: #252528;
+        --surface-pdf: #2a2a2e;
+
+        --text-primary: #e8e4de;
+        --text-secondary: #a09890;
+        --text-muted: #706860;
+
+        --badge-approved-bg: #1a4030;
+        --badge-approved-text: #a0e0b8;
+        --badge-needs_fix-bg: #4a3a10;
+        --badge-needs_fix-text: #e8d080;
+        --badge-invalidated-bg: #4a3a10;
+        --badge-invalidated-text: #e8d080;
+        --badge-unreviewed-bg: #303030;
+        --badge-unreviewed-text: #909090;
+
+        --divider: #383838;
+        --divider-strong: #e8e4de;
+
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+        --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+        --shadow-page: 0 2px 12px rgba(0,0,0,0.6);
+    }
 }
 
 /* ── Reset ── */
@@ -192,7 +220,7 @@ body {
 }
 
 .qa-badge-approved    { background: var(--badge-approved-bg);    color: var(--badge-approved-text); }
-.qa-badge-rejected    { background: var(--badge-rejected-bg);    color: var(--badge-rejected-text); }
+.qa-badge-needs_fix    { background: var(--badge-needs_fix-bg);    color: var(--badge-needs_fix-text); }
 .qa-badge-invalidated { background: var(--badge-invalidated-bg); color: var(--badge-invalidated-text); }
 .qa-badge-unreviewed  { background: var(--badge-unreviewed-bg);  color: var(--badge-unreviewed-text); }
 
@@ -216,7 +244,7 @@ body {
 }
 
 .qa-feedback-approve { color: var(--color-approve); }
-.qa-feedback-reject { color: var(--color-reject); }
+.qa-feedback-reject { color: var(--color-fix); }
 
 .qa-feedback.qa-feedback-show {
     animation: qa-feedback-flash 1.5s ease forwards;
@@ -285,22 +313,22 @@ body {
 }
 
 .qa-btn-reject {
-    background: var(--color-reject);
+    background: var(--color-fix);
     color: #fff;
-    box-shadow: 0 1px 4px rgba(192,58,43,0.3);
+    box-shadow: 0 1px 4px rgba(184,134,11,0.3);
 }
 .qa-btn-reject:hover:not(:disabled) {
-    background: var(--color-reject-hover);
-    box-shadow: 0 2px 8px rgba(192,58,43,0.4);
+    background: var(--color-fix-hover);
+    box-shadow: 0 2px 8px rgba(184,134,11,0.4);
 }
 
 .qa-btn-reject-submit {
-    background: var(--color-reject);
+    background: var(--color-fix);
     color: #fff;
-    box-shadow: 0 1px 4px rgba(192,58,43,0.3);
+    box-shadow: 0 1px 4px rgba(184,134,11,0.3);
 }
 .qa-btn-reject-submit:hover:not(:disabled) {
-    background: var(--color-reject-hover);
+    background: var(--color-fix-hover);
 }
 
 .qa-btn-nav {
@@ -747,8 +775,8 @@ body {
 }
 
 .qa-toast-error {
-    background: var(--color-reject);
-    color: #fff;
+    background: var(--color-fix);
+    color: #1a1a1e;
 }
 
 @keyframes qa-toast-in {
@@ -1013,7 +1041,7 @@ body {
 }
 
 .qa-dash-stat-approved .qa-dash-num { color: var(--color-approve); }
-.qa-dash-stat-rejected .qa-dash-num { color: var(--color-reject); }
+.qa-dash-stat-needs_fix .qa-dash-num { color: var(--color-fix); }
 .qa-dash-stat-unreviewed .qa-dash-num { color: var(--text-muted); }
 
 .qa-dash-label {
@@ -1178,8 +1206,8 @@ body {
 .qa-filtered-comment {
     font-family: var(--font-ui);
     font-size: 14px;
-    color: var(--color-reject);
-    margin-top: 2px;
+    color: var(--color-fix);
+    margin-top: 4px;
 }
 
 .qa-filtered-empty {

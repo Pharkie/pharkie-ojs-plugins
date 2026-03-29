@@ -751,7 +751,7 @@ if [ "${QA_SPLITS_ENABLED:-1}" = "1" ]; then
       publication_id BIGINT UNSIGNED NOT NULL,
       user_id BIGINT UNSIGNED NOT NULL,
       username VARCHAR(255) NOT NULL,
-      decision ENUM('approved', 'rejected') NOT NULL,
+      decision ENUM('approved', 'needs_fix') NOT NULL,
       comment TEXT NULL,
       content_hash VARCHAR(64) NULL,
       created_at DATETIME NOT NULL,

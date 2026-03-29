@@ -210,19 +210,19 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous article (Left arrow)">&lsaquo; Previous</button>
                 <button id="btn-next" class="qa-btn qa-btn-nav" title="Next article (Right arrow)">Next &rsaquo;</button>
                 <button id="btn-random" class="qa-btn qa-btn-nav" title="Jump to a random unreviewed article">Random</button>
-                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next rejected article">Next Rejected</button>
+                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next article needing fixes">Next Fix</button>
                 <div class="qa-btn-wrap">
                     <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approve</button>
                     <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
                 </div>
                 <div class="qa-btn-wrap">
-                    <button id="btn-reject" class="qa-btn qa-btn-reject" title="Reject (R)">Reject</button>
+                    <button id="btn-reject" class="qa-btn qa-btn-reject" title="Request Fix (R)">Request Fix</button>
                     <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
                 </div>
             </div>
             <div class="qa-row-reject" id="qa-row-reject" style="display:none">
-                <textarea id="reject-comment" class="qa-textarea" placeholder="Why is this article being rejected? Describe the issue..." rows="3"></textarea>
-                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit rejection (Ctrl+Enter)">Reject with Reason</button>
+                <textarea id="reject-comment" class="qa-textarea" placeholder="What needs fixing? Describe the issue..." rows="3"></textarea>
+                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit fix request (Ctrl+Enter)">Request Fix</button>
                 <span class="qa-reject-hint">Ctrl+Enter to submit, Esc to cancel</span>
             </div>
         </div>
