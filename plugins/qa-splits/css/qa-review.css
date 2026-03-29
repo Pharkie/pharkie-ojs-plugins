@@ -144,6 +144,7 @@ body {
     align-items: baseline;
     gap: 10px;
     min-width: 0;
+    flex-wrap: wrap;
 }
 
 .qa-back-btn {
@@ -178,9 +179,6 @@ body {
     font-size: 20px;
     font-weight: 600;
     letter-spacing: -0.01em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     flex-shrink: 1;
     min-width: 0;
 }
@@ -189,7 +187,6 @@ body {
     font-family: var(--font-ui);
     font-size: 16px;
     color: var(--text-inverse-muted);
-    white-space: nowrap;
     flex-shrink: 10;
     overflow: hidden;
     text-overflow: ellipsis;
