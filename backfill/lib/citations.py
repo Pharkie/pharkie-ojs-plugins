@@ -689,6 +689,79 @@ def looks_like_person_name(text: str) -> bool:
     return _is_single_person_name(clean)
 
 
+# ---------------------------------------------------------------
+# ALL CAPS normalisation
+# ---------------------------------------------------------------
+
+# Words that stay lowercase in title case (unless first word)
+TITLE_CASE_LOWERCASE = frozenset({
+    'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'yet', 'so',
+    'in', 'on', 'at', 'to', 'by', 'of', 'as', 'is', 'it',
+})
+
+
+def title_case_words(text: str) -> str:
+    """Convert text to title case, keeping small words lowercase (except first)."""
+    words = text.split()
+    result = []
+    for i, word in enumerate(words):
+        prefix = ''
+        suffix = ''
+        core = word
+        while core and not core[0].isalpha():
+            prefix += core[0]
+            core = core[1:]
+        while core and not core[-1].isalpha():
+            suffix = core[-1] + suffix
+            core = core[:-1]
+
+        if not core:
+            result.append(word)
+            continue
+
+        lower = core.lower()
+        if i > 0 and lower in TITLE_CASE_LOWERCASE:
+            result.append(prefix + lower + suffix)
+        else:
+            result.append(prefix + core.capitalize() + suffix)
+
+    return ' '.join(result)
+
+
+def normalise_allcaps(text: str) -> str:
+    """Convert ALL CAPS text to title case.
+
+    Only triggers when every alphabetic character is uppercase.
+    Also handles mixed text where the non-quoted portion is ALL CAPS.
+    Returns text unchanged if it's already mixed case.
+    Preserves Roman numerals (I, II, III, IV, etc.).
+    """
+    alpha_chars = [c for c in text if c.isalpha()]
+    if not alpha_chars:
+        return text
+
+    # Preserve Roman numerals
+    if re.match(r'^[IVXLCDM]+$', text.strip()):
+        return text
+
+    if all(c.isupper() for c in alpha_chars):
+        return title_case_words(text)
+
+    # Check if text before any quote is all caps
+    quote_pos = len(text)
+    for q in ('"', "'", '\u201c'):
+        p = text.find(q)
+        if p > 0 and p < quote_pos:
+            quote_pos = p
+    if quote_pos > 0:
+        before = text[:quote_pos]
+        alpha_before = [c for c in before if c.isalpha()]
+        if alpha_before and all(c.isupper() for c in alpha_before):
+            return title_case_words(before) + text[quote_pos:]
+
+    return text
+
+
 def is_author_contact(text: str) -> bool:
     """Detect author contact details (address, email, affiliation lines)."""
     return bool(re.match(

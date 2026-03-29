@@ -21,6 +21,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lib.citations import normalise_allcaps
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -467,6 +470,16 @@ def postprocess_article(html, article, pdf_path=None):
         # now be at the top.
         html = strip_title(html, article.get('title', ''))
         html = strip_end_bleed(html, article.get('_next_title', ''))
+
+    # Normalise ALL CAPS headings to title case. Older issues used
+    # ALL CAPS as a print styling convention — not intentional emphasis.
+    def _normalise_heading(m):
+        tag_open = m.group(1)
+        content = m.group(2)
+        tag_close = m.group(3)
+        return tag_open + normalise_allcaps(content) + tag_close
+
+    html = re.sub(r'(<h[1-6][^>]*>)(.*?)(</h[1-6]>)', _normalise_heading, html, flags=re.DOTALL)
 
     html = re.sub(r'\n{3,}', '\n\n', html).strip()
     return html
