@@ -457,10 +457,23 @@ body {
 .qa-drawer-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     padding: 10px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
+    position: relative;
 }
+
+.qa-search-clear {
+    position: absolute;
+    right: 16px;
+    background: none;
+    border: none;
+    color: var(--text-inverse-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+.qa-search-clear:hover { color: var(--text-inverse); }
 
 .qa-drawer-search {
     flex: 1;
