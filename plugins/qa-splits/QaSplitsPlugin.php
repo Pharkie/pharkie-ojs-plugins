@@ -223,7 +223,7 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">&lsaquo; Previous</button>
                 <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">Next &rsaquo;</button>
                 <button id="btn-random" class="qa-btn qa-btn-nav" title="Random unreviewed">Random</button>
-                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Next needing fix">Next Fix</button>
+
             </div>
             <div class="qa-drawer-footer" id="qa-drawer-footer"></div>
         </div>
