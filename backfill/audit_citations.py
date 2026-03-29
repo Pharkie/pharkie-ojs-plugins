@@ -22,29 +22,12 @@ import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from html.parser import HTMLParser
+
+sys.path.insert(0, os.path.dirname(__file__))
+from lib.citations import strip_html
 
 OUTPUT_DIR = Path(__file__).parent / "private" / "output"
 REPORT_PATH = OUTPUT_DIR / "citations-audit-report.json"
-
-
-class HTMLTextExtractor(HTMLParser):
-    """Strip HTML tags, return plain text."""
-    def __init__(self):
-        super().__init__()
-        self._text = []
-
-    def handle_data(self, data):
-        self._text.append(data)
-
-    def get_text(self):
-        return "".join(self._text).strip()
-
-
-def strip_html(html_str: str) -> str:
-    extractor = HTMLTextExtractor()
-    extractor.feed(html_str)
-    return extractor.get_text()
 
 
 # Headings that indicate a reference/citation section

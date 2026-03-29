@@ -11,11 +11,15 @@ Usage:
 """
 
 import argparse
+import os
 import re
 import sys
 from collections import Counter
 from pathlib import Path
 from xml.etree import ElementTree as ET
+
+sys.path.insert(0, os.path.dirname(__file__))
+from lib.citations import local_name, extract_text_from_element
 
 
 def jats_to_html(jats_path: Path) -> str | None:
@@ -207,23 +211,10 @@ def _inline_content(element) -> str:
     return ''.join(parts)
 
 
-def _text_content(element) -> str:
-    """Get plain text content of an element (stripping all tags)."""
-    parts = []
-    if element.text:
-        parts.append(element.text)
-    for child in element:
-        parts.append(_text_content(child))
-        if child.tail:
-            parts.append(child.tail)
-    return ''.join(parts)
-
-
-def _local_name(tag: str) -> str:
-    """Strip namespace from an element tag."""
-    if '}' in tag:
-        return tag.split('}', 1)[1]
-    return tag
+# _text_content and _local_name are now imported from lib/citations.py
+# as extract_text_from_element and local_name respectively.
+_text_content = extract_text_from_element
+_local_name = local_name
 
 
 def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:

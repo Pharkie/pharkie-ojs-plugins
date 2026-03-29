@@ -105,9 +105,9 @@ def parse_author_names(authors_raw) -> list[str]:
 
 def text_matches_author(text: str, author_names: list[str]) -> bool:
     """Check if text is (or contains) a known author name."""
-    text_norm = normalise_for_match(text)
+    text_norm = _normalise_for_match(text)
     for name in author_names:
-        name_norm = normalise_for_match(name)
+        name_norm = _normalise_for_match(name)
         if len(name_norm) < AUTHOR_NAME_MIN_MATCH_LENGTH:
             continue
         # Full name match
@@ -142,18 +142,21 @@ def is_book_review_metadata(text: str) -> bool:
 
 
 def is_provenance_note(text: str) -> bool:
-    """Check if text is a conference/presentation provenance note."""
-    return any(p.search(text) for p in PROVENANCE_PATTERNS)
+    """Check if text is a conference/presentation provenance note.
+
+    Delegates to the shared is_provenance() in lib/citations.py.
+    """
+    return is_provenance(text)
 
 
 
 
 def strip_html_tags(html: str) -> str:
-    """Remove HTML tags, decode entities."""
-    text = re.sub(r'<[^>]+>', '', html)
-    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-    text = text.replace('&quot;', '"').replace('&#39;', "'")
-    return text.strip()
+    """Remove HTML tags, decode entities.
+
+    Uses the HTMLParser-based strip_html() from lib/citations.py.
+    """
+    return strip_html(html)
 
 
 def detect_subtitle(raw_html: str, author_names: list[str],
@@ -268,8 +271,8 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         # Strip title repetition from the start of the subtitle.
         # Some PDFs repeat the title in ALL CAPS before the actual subtitle:
         # <h1>Title</h1><p>TITLE: actual subtitle</p>
-        title_norm = normalise_for_match(html_title)
-        text_norm = normalise_for_match(text)
+        title_norm = _normalise_for_match(html_title)
+        text_norm = _normalise_for_match(text)
         if title_norm and text_norm.startswith(title_norm):
             # Find the position in the original text after the title words
             title_words = title_norm.split()
@@ -297,7 +300,7 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         subtitle = re.sub(r'([a-zA-Z!?."\'])\d$', r'\1', subtitle)
 
         # Skip if subtitle is just the title repeated (sometimes in ALL CAPS)
-        if normalise_for_match(subtitle) == normalise_for_match(html_title):
+        if _normalise_for_match(subtitle) == _normalise_for_match(html_title):
             return None
 
         # This looks like a subtitle — use html_title as the authoritative title
