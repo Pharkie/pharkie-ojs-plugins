@@ -582,11 +582,11 @@ body {
 .qa-drawer-item-status {
     flex-shrink: 0;
     font-size: 14px;
-    color: var(--text-inverse-muted);
+    color: rgba(255,255,255,0.25);
 }
 
-.qa-drawer-item-status-approved { color: var(--color-approve); }
-.qa-drawer-item-status-needs_fix { color: var(--color-fix); }
+.qa-drawer-item-status-approved { color: var(--color-approve); font-weight: 700; }
+.qa-drawer-item-status-needs_fix { color: var(--color-fix); font-weight: 700; }
 
 .qa-drawer-item-title {
     overflow: hidden;
