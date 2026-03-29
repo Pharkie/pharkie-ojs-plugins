@@ -155,6 +155,12 @@
                 loadArticle(startIndex);
             }
 
+            // Populate drawer if open
+            if (drawerOpen) {
+                populateDropdowns();
+                renderDrawerList();
+            }
+
             // Pre-resolve random/problem targets so buttons are instant
             prefetchRandomTarget();
             prefetchProblemTarget();
@@ -1018,8 +1024,10 @@
         if (drawerOpen) {
             drawer.style.display = '';
             tab.style.display = 'none';
-            populateDropdowns();
-            renderDrawerList();
+            if (articles.length > 0) {
+                populateDropdowns();
+                renderDrawerList();
+            }
             document.getElementById('qa-drawer-search').focus();
         } else {
             if (drawerPinned) togglePin();
@@ -1039,12 +1047,21 @@
             layout.classList.remove('qa-drawer-pinned');
             pinBtn.classList.remove('pinned');
         }
+        // Re-render PDF at new container width after layout reflow
+        if (pdfDoc && currentIndex >= 0) {
+            setTimeout(() => {
+                const gen = loadGeneration;
+                loadPdf(articles[currentIndex].submission_id, gen);
+            }, 100);
+        }
     }
+
+    // Active pill toggles (multiple can be on)
+    let activeStatuses = new Set();   // 'approved', 'needs_fix', 'unreviewed'
+    let activeSections = new Set();   // 'Articles', 'Editorial', etc.
 
     function populateDropdowns() {
         const issueSelect = document.getElementById('qa-drawer-issue');
-        const statusSelect = document.getElementById('qa-drawer-status');
-        const sectionSelect = document.getElementById('qa-drawer-section');
 
         // Issues — all unique vol.num sorted desc
         const issues = {};
@@ -1060,50 +1077,75 @@
         issueSelect.innerHTML = '<option value="">All issues</option>'
             + sortedIssues.map(([k, c]) => '<option value="' + k + '">Issue ' + k + ' (' + c + ')</option>').join('');
 
-        // Statuses
-        statusSelect.innerHTML = '<option value="">All statuses</option>'
-            + '<option value="approved">Approved</option>'
-            + '<option value="needs_fix">Needs Fix</option>'
-            + '<option value="unreviewed">Unreviewed</option>';
+        if (setFilter && setFilter.type === 'issue') issueSelect.value = setFilter.query;
 
-        // Sections
-        const sections = {};
-        articles.forEach(a => { if (a.section) sections[a.section] = (sections[a.section] || 0) + 1; });
-        sectionSelect.innerHTML = '<option value="">All sections</option>'
-            + Object.entries(sections).sort((a, b) => b[1] - a[1])
-                .map(([k, c]) => '<option value="' + k + '">' + k + ' (' + c + ')</option>').join('');
+        // Render pills
+        renderPills();
+    }
 
-        // Restore selections if filter is active
-        if (setFilter) {
-            if (setFilter.type === 'issue') issueSelect.value = setFilter.query;
-            if (setFilter.type === 'status') statusSelect.value = setFilter.query;
-            if (setFilter.type === 'section') sectionSelect.value = setFilter.query;
-        }
+    function renderPills() {
+        const container = document.getElementById('qa-drawer-pills');
+
+        // Status pills
+        const statusCounts = { approved: 0, needs_fix: 0, unreviewed: 0 };
+        const sectionCounts = {};
+        articles.forEach(a => {
+            if (statusCounts[a.status] !== undefined) statusCounts[a.status]++;
+            if (a.section) sectionCounts[a.section] = (sectionCounts[a.section] || 0) + 1;
+        });
+
+        let html = '';
+        // Status pills
+        Object.entries(statusCounts).forEach(([status, count]) => {
+            if (!count) return;
+            const label = status === 'needs_fix' ? 'Needs Fix' : status === 'approved' ? 'Approved' : 'Unreviewed';
+            const active = activeStatuses.has(status) ? ' active' : '';
+            html += '<button class="qa-drawer-pill' + active + '" data-filter="status" data-value="' + status + '">' + label + ' (' + count + ')</button>';
+        });
+        // Section pills
+        Object.entries(sectionCounts).sort((a, b) => b[1] - a[1]).forEach(([section, count]) => {
+            const active = activeSections.has(section) ? ' active' : '';
+            html += '<button class="qa-drawer-pill' + active + '" data-filter="section" data-value="' + section + '">' + section + ' (' + count + ')</button>';
+        });
+
+        container.innerHTML = html;
+
+        // Toggle on click
+        container.querySelectorAll('.qa-drawer-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                const filter = pill.dataset.filter;
+                const value = pill.dataset.value;
+                if (filter === 'status') {
+                    if (activeStatuses.has(value)) activeStatuses.delete(value);
+                    else activeStatuses.add(value);
+                } else {
+                    if (activeSections.has(value)) activeSections.delete(value);
+                    else activeSections.add(value);
+                }
+                refilterDrawer();
+            });
+        });
     }
 
     function refilterDrawer() {
         const search = document.getElementById('qa-drawer-search').value.trim();
         const issue = document.getElementById('qa-drawer-issue').value;
-        const status = document.getElementById('qa-drawer-status').value;
-        const section = document.getElementById('qa-drawer-section').value;
 
-        // Build combined filter
         workingSet = [];
         const q = search.toLowerCase();
         articles.forEach((a, i) => {
             if (issue && (a.volume + '.' + a.number) !== issue) return;
-            if (status && a.status !== status) return;
-            if (section && a.section !== section) return;
+            if (activeStatuses.size > 0 && !activeStatuses.has(a.status)) return;
+            if (activeSections.size > 0 && !activeSections.has(a.section)) return;
             if (q && !a.title.toLowerCase().includes(q)
                 && !a.authors.some(auth => auth.toLowerCase().includes(q))
                 && !(a.section || '').toLowerCase().includes(q)) return;
             workingSet.push(i);
         });
 
-        // Track active filter for URL/display
+        // Track filter for URL
         if (issue) setFilter = { type: 'issue', query: issue };
-        else if (status) setFilter = { type: 'status', query: status };
-        else if (section) setFilter = { type: 'section', query: section };
+        else if (activeStatuses.size === 1) setFilter = { type: 'status', query: [...activeStatuses][0] };
         else if (q) setFilter = { type: 'search', query: search };
         else setFilter = null;
 
@@ -1115,6 +1157,7 @@
 
         updateSetPosition();
         updateDrawerTab();
+        renderPills();
         renderDrawerList();
         updateUrl();
     }
@@ -1143,53 +1186,17 @@
 
     function renderDrawerList() {
         const list = document.getElementById('qa-drawer-list');
-        const filters = document.getElementById('qa-drawer-filters');
 
-        // Quick filter buttons
-        const counts = { rejected: 0, unreviewed: 0 };
-        const issues = {};
-        articles.forEach(a => {
-            if (a.status === 'needs_fix') counts.needs_fix++;
-            if (a.status === 'unreviewed') counts.unreviewed++;
-            const key = a.volume + '.' + a.number;
-            issues[key] = (issues[key] || 0) + 1;
-        });
-
-        let filtersHtml = '';
-        if (counts.needs_fix) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'needs_fix' ? ' active' : '') + '" data-type="status" data-q="needs_fix">Needs Fix (' + counts.needs_fix + ')</button>';
-        if (counts.unreviewed) filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === 'unreviewed' ? ' active' : '') + '" data-type="status" data-q="unreviewed">Unreviewed (' + counts.unreviewed + ')</button>';
-
-        // Top 5 issues by article count
-        const sortedIssues = Object.entries(issues).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        sortedIssues.forEach(([key, count]) => {
-            filtersHtml += '<button class="qa-drawer-filter-btn' + (setFilter && setFilter.query === key ? ' active' : '') + '" data-type="issue" data-q="' + key + '">Issue ' + key + ' (' + count + ')</button>';
-        });
-
-        filters.innerHTML = filtersHtml;
-        filters.querySelectorAll('.qa-drawer-filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const type = btn.dataset.type;
-                const q = btn.dataset.q;
-                // Toggle off if same filter clicked
-                if (setFilter && setFilter.type === type && setFilter.query === q) {
-                    applyFilter(null, null);
-                    document.getElementById('qa-drawer-search').value = '';
-                } else {
-                    applyFilter(type, q);
-                    document.getElementById('qa-drawer-search').value = '';
-                }
-            });
-        });
-
-        // Article list
+        // Numbered article list with year
         let html = '';
         workingSet.forEach((artIdx, si) => {
             const a = articles[artIdx];
             const active = si === setIndex ? ' active' : '';
-            const icon = a.status === 'approved' ? '✓' : a.status === 'needs_fix' ? '✗' : '·';
+            const icon = a.status === 'approved' ? '✓' : a.status === 'needs_fix' ? '⚠' : '·';
             html += '<div class="qa-drawer-item' + active + '" data-si="' + si + '">'
+                + '<span class="qa-drawer-item-num">' + (si + 1) + '</span>'
                 + '<span class="qa-drawer-item-status">' + icon + '</span>'
-                + '<span class="qa-drawer-item-title">' + a.volume + '.' + a.number + ' #' + a.seq + ' ' + escapeHtml(a.title) + '</span>'
+                + '<span class="qa-drawer-item-title">' + a.volume + '.' + a.number + ' (' + a.year + ') ' + escapeHtml(a.title) + '</span>'
                 + '</div>';
         });
         list.innerHTML = html || '<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.35)">No articles match</div>';
@@ -1197,25 +1204,27 @@
         list.querySelectorAll('.qa-drawer-item').forEach(item => {
             item.addEventListener('click', () => {
                 loadArticleFromSet(parseInt(item.dataset.si, 10));
-                renderDrawerList(); // Re-render to update active state
+                renderDrawerList();
             });
         });
 
-        // Scroll active item into view
         const activeEl = list.querySelector('.qa-drawer-item.active');
         if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
 
         // Footer
         const footer = document.getElementById('qa-drawer-footer');
-        let footerText = (setIndex + 1) + ' / ' + workingSet.length;
-        if (setFilter) {
-            footerText += ' <button class="qa-drawer-clear">Clear filter</button>';
+        let footerText = workingSet.length > 0 ? (setIndex + 1) + ' / ' + workingSet.length : '0 articles';
+        if (setFilter || activeStatuses.size > 0 || activeSections.size > 0) {
+            footerText += ' <button class="qa-drawer-clear">Clear all filters</button>';
         }
         footer.innerHTML = footerText;
         const clearBtn = footer.querySelector('.qa-drawer-clear');
         if (clearBtn) clearBtn.addEventListener('click', () => {
-            applyFilter(null, null);
+            activeStatuses.clear();
+            activeSections.clear();
             document.getElementById('qa-drawer-search').value = '';
+            document.getElementById('qa-drawer-issue').value = '';
+            refilterDrawer();
         });
     }
 

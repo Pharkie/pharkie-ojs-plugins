@@ -235,16 +235,14 @@ class QaSplitsPlugin extends GenericPlugin
             <div class="qa-drawer-header">
                 <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
                 <button id="qa-drawer-pin" class="qa-drawer-pin" title="Pin sidebar open">&#128204;</button>
+                <button id="qa-drawer-close" class="qa-drawer-close">&times; Close</button>
             </div>
             <div class="qa-drawer-filter-row">
                 <select id="qa-drawer-issue" class="qa-drawer-select"><option value="">All issues</option></select>
-                <select id="qa-drawer-status" class="qa-drawer-select"><option value="">All statuses</option></select>
-                <select id="qa-drawer-section" class="qa-drawer-select"><option value="">All sections</option></select>
             </div>
-            <div class="qa-drawer-filters" id="qa-drawer-filters"></div>
+            <div class="qa-drawer-pills" id="qa-drawer-pills"></div>
             <div class="qa-drawer-list" id="qa-drawer-list"></div>
             <div class="qa-drawer-footer" id="qa-drawer-footer"></div>
-            <button id="qa-drawer-close" class="qa-drawer-close-btn">Close Sidebar</button>
         </div>
 
         <!-- Left pane: PDF viewer -->
