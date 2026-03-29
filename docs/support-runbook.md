@@ -177,6 +177,14 @@ The "SEA: OJS scheduled tasks" heartbeat monitors the hourly OJS cron job. If it
 3. **`scheduler exit <other>`** = the OJS scheduler itself failed. SSH in and run manually: `docker compose exec ojs /usr/local/bin/php /var/www/html/lib/pkp/tools/scheduler.php run`
 4. **No heartbeat at all** (grace period expired) = cron may not be running. Check: `docker compose exec ojs crontab -l` and `docker compose exec ojs pgrep cron`.
 
+### Hourly/daily monitoring heartbeat down
+
+The "SEA: Hourly monitoring" and "SEA: Daily monitoring" heartbeats are pinged by GitHub Actions workflows (`private/.github/workflows/monitor-hourly.yml` and `monitor-daily.yml`). If either goes down:
+
+1. **Check the GitHub Actions run logs first:** `gh run list --workflow=monitor-hourly.yml --limit=5` (or `monitor-daily.yml`), then `gh run view <id> --log-failed`. The `[FAIL]` lines show exactly which check failed.
+2. **If all checks pass but heartbeat is still down:** check that the `BETTERSTACK_HB_HOURLY` / `BETTERSTACK_HB_DAILY` GitHub secrets are set correctly.
+3. **If the workflow isn't running at all:** check the private repo's Actions tab — the workflow may be disabled or the schedule cron syntax may be wrong.
+
 ### Daily digest shows failures
 
 The digest email fires once per day if there were any sync failures in the last 24 hours.
