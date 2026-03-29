@@ -231,11 +231,13 @@ HTMLSTART;
 
             <div class="qa-drawer-pills">
                 <template x-for="p in statusPills" :key="p.key">
-                    <button class="qa-drawer-pill" :class="{ active: isStatusActive(p.key) }"
+                    <button class="qa-drawer-pill qa-drawer-pill-status" :class="{ active: isStatusActive(p.key) }"
                         @click="toggleStatus(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
+            </div>
+            <div class="qa-drawer-pills" x-show="sectionPills.length > 0">
                 <template x-for="p in sectionPills" :key="p.key">
-                    <button class="qa-drawer-pill" :class="{ active: isSectionActive(p.key) }"
+                    <button class="qa-drawer-pill qa-drawer-pill-section" :class="{ active: isSectionActive(p.key) }"
                         @click="toggleSection(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
             </div>
@@ -303,16 +305,48 @@ HTMLSTART;
 
         <!-- HTML galley + end-matter -->
         <div class="qa-right">
+            <div class="qa-article-meta" x-show="article">
+                <div class="qa-meta-issue" x-text="(article?.issue_title || '') + ' ' + (article?.volume || '') + '.' + (article?.number || '') + ': ' + (article?.year || '')"></div>
+                <h1 class="qa-meta-title" x-text="article?.title"></h1>
+                <div class="qa-meta-authors" x-show="article?.authors?.length">
+                    <template x-for="(author, i) in (article?.authors || [])" :key="i">
+                        <span class="qa-meta-author" x-text="author"></span>
+                    </template>
+                </div>
+                <div class="qa-meta-doi" x-show="article?.doi">
+                    DOI: <a :href="'https://doi.org/' + (article?.doi || '')" target="_blank"
+                        x-text="'https://doi.org/' + (article?.doi || '')"></a>
+                </div>
+                <div class="qa-meta-pages" x-show="article?.pages">
+                    <span>Pages: </span><span x-text="article?.pages"></span>
+                </div>
+                <div class="qa-meta-keywords" x-show="article?.keywords?.length">
+                    <span class="qa-meta-kw-label">Keywords: </span>
+                    <span x-text="(article?.keywords || []).join(', ')"></span>
+                </div>
+                <div class="qa-meta-abstract" x-show="article?.abstract">
+                    <h3>Abstract</h3>
+                    <div x-html="article?.abstract || ''"></div>
+                </div>
+            </div>
             <div class="qa-html-content">
                 <div x-show="htmlLoading" class="qa-loading">Loading HTML...</div>
                 <div x-show="!htmlLoading" x-html="htmlContent"></div>
             </div>
             <div class="qa-endmatter" x-show="hasClassification">
                 <h3 class="qa-endmatter-heading">End-Matter Classification</h3>
-                <template x-for="item in classificationItems" :key="item.text">
-                    <div class="qa-endmatter-item">
-                        <span class="qa-pill" :class="item.cls" x-text="item.label"></span>
-                        <span class="qa-endmatter-text" x-text="item.text"></span>
+                <template x-for="group in classificationGroups" :key="group.key">
+                    <div class="qa-endmatter-group">
+                        <div class="qa-endmatter-group-header">
+                            <span class="qa-pill" :class="group.cls" x-text="group.label + ' (' + group.count + ')'"></span>
+                            <span class="qa-endmatter-hint" x-text="group.hint"></span>
+                        </div>
+                        <template x-for="(text, i) in group.items" :key="i">
+                            <div class="qa-endmatter-item">
+                                <span class="qa-endmatter-num" x-text="(i + 1) + '.'"></span>
+                                <span class="qa-endmatter-text" x-text="text"></span>
+                            </div>
+                        </template>
                     </div>
                 </template>
             </div>

@@ -47,6 +47,10 @@ RUNNING_HEADER_PATTERNS = [
     re.compile(r'<p[^>]*>\s*Existential\s+Analysis\s*</p>', re.IGNORECASE),
     re.compile(r'<p[^>]*>\s*Book\s+Reviews?\s*</p>', re.IGNORECASE),
     re.compile(r'<p[^>]*>\s*\d{1,3}\s*</p>'),  # Bare page numbers
+    # Issue identifier headers: "Existential Analysis 23.1: January 2012" (bold or plain)
+    re.compile(r'<p[^>]*>\s*(?:<strong[^>]*>\s*)?Existential\s+Analysis\s+\d+\.\d+\s*:\s*\w+\s+\d{4}\s*(?:</strong>\s*)?</p>', re.IGNORECASE),
+    # Same wrapped in <div class="article-header">...</div>
+    re.compile(r'<div\s+class="article-header">\s*<p[^>]*>\s*(?:<strong[^>]*>\s*)?Existential\s+Analysis\s+\d+\.\d+\s*:\s*\w+\s+\d{4}\s*(?:</strong>\s*)?</p>\s*(?:<h[1-6][^>]*>.*?</h[1-6]>\s*)*</div>', re.IGNORECASE | re.DOTALL),
 ]
 
 # Embedded running headers — (pattern, replacement) tuples for headers mixed into content

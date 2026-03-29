@@ -370,21 +370,24 @@ document.addEventListener('alpine:init', () => {
                    (this.classification.provenance || []).length > 0;
         },
 
-        get classificationItems() {
+        get classificationGroups() {
             if (!this.classification) return [];
-            const items = [];
-            const sections = [
-                { key: 'references', label: 'Reference', cls: 'qa-pill-reference' },
-                { key: 'notes', label: 'Note', cls: 'qa-pill-note' },
-                { key: 'bios', label: 'Bio', cls: 'qa-pill-bio' },
-                { key: 'provenance', label: 'Provenance', cls: 'qa-pill-provenance' },
+            const defs = [
+                { key: 'references', label: 'References', cls: 'qa-pill-reference',
+                  hint: 'Extracted from HTML body and imported into OJS citations table. OJS renders these separately on the article page.' },
+                { key: 'notes', label: 'Notes', cls: 'qa-pill-note',
+                  hint: 'Classified as footnotes/endnotes. Rendered in the HTML galley below the body text.' },
+                { key: 'bios', label: 'Author Bios', cls: 'qa-pill-bio',
+                  hint: 'Classified as author biographical notes. Rendered in the HTML galley.' },
+                { key: 'provenance', label: 'Provenance', cls: 'qa-pill-provenance',
+                  hint: 'Publication history, acknowledgements, or source notes. Rendered in the HTML galley.' },
             ];
-            sections.forEach(s => {
-                (this.classification[s.key] || []).forEach(item => {
-                    items.push({ label: s.label, cls: s.cls, text: item.text });
-                });
-            });
-            return items;
+            return defs
+                .map(d => {
+                    const items = (this.classification[d.key] || []).map(item => item.text);
+                    return { ...d, items, count: items.length };
+                })
+                .filter(g => g.count > 0);
         },
 
         // ── Reviews ──
@@ -461,9 +464,23 @@ document.addEventListener('alpine:init', () => {
 
         // ── Filtering ──
 
+        // Articles matching all filters EXCEPT issue (so issue dropdown shows counts within current status/section/search context)
+        get _baseFilteredForIssues() {
+            const q = this.searchQuery.toLowerCase();
+            return this.articles.filter(a => {
+                if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
+                if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
+                if (q && !a.title.toLowerCase().includes(q)
+                    && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                    && !(a.section || '').toLowerCase().includes(q)) return false;
+                return true;
+            });
+        },
+
         get allIssues() {
+            const base = this._baseFilteredForIssues;
             const issues = {};
-            this.articles.forEach(a => {
+            base.forEach(a => {
                 const key = a.volume + '.' + a.number;
                 issues[key] = (issues[key] || 0) + 1;
             });
@@ -476,9 +493,38 @@ document.addEventListener('alpine:init', () => {
                 .map(([k, c]) => ({ key: k, count: c }));
         },
 
+        // Articles matching all filters EXCEPT status (so status pills show counts within the current issue/search/section context)
+        get _baseFiltered() {
+            const q = this.searchQuery.toLowerCase();
+            const issue = this.issueFilter;
+            return this.articles.filter((a, i) => {
+                if (issue && (a.volume + '.' + a.number) !== issue) return false;
+                if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
+                if (q && !a.title.toLowerCase().includes(q)
+                    && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                    && !(a.section || '').toLowerCase().includes(q)) return false;
+                return true;
+            });
+        },
+
+        // Articles matching all filters EXCEPT section (so section pills show counts within the current issue/search/status context)
+        get _baseFilteredForSections() {
+            const q = this.searchQuery.toLowerCase();
+            const issue = this.issueFilter;
+            return this.articles.filter((a, i) => {
+                if (issue && (a.volume + '.' + a.number) !== issue) return false;
+                if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
+                if (q && !a.title.toLowerCase().includes(q)
+                    && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                    && !(a.section || '').toLowerCase().includes(q)) return false;
+                return true;
+            });
+        },
+
         get statusPills() {
+            const base = this._baseFiltered;
             const counts = { approved: 0, needs_fix: 0, unreviewed: 0 };
-            this.articles.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
+            base.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
             return [
                 { key: 'approved', label: 'Approved', count: counts.approved },
                 { key: 'needs_fix', label: 'Needs Fix', count: counts.needs_fix },
@@ -487,8 +533,9 @@ document.addEventListener('alpine:init', () => {
         },
 
         get sectionPills() {
+            const base = this._baseFilteredForSections;
             const counts = {};
-            this.articles.forEach(a => { if (a.section) counts[a.section] = (counts[a.section] || 0) + 1; });
+            base.forEach(a => { if (a.section) counts[a.section] = (counts[a.section] || 0) + 1; });
             return Object.entries(counts)
                 .sort((a, b) => b[1] - a[1])
                 .map(([k, c]) => ({ key: k, label: k, count: c }));

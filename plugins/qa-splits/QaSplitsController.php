@@ -312,6 +312,11 @@ class QaSplitsController extends PKPBaseController
                      ->where('ss.setting_name', '=', 'title')
                      ->where('ss.locale', '=', 'en');
             })
+            ->leftJoin('issue_settings as is_title', function ($join) {
+                $join->on('is_title.issue_id', '=', 'i.issue_id')
+                     ->where('is_title.setting_name', '=', 'title')
+                     ->where('is_title.locale', '=', 'en');
+            })
             ->where('s.context_id', $contextId)
             ->orderBy('i.volume', 'desc')
             ->orderBy('i.number', 'desc')
@@ -325,6 +330,7 @@ class QaSplitsController extends PKPBaseController
                 'i.year',
                 'ps_title.setting_value as title',
                 'ss.setting_value as section',
+                'is_title.setting_value as issue_title',
             ])
             ->get();
 
@@ -374,6 +380,62 @@ class QaSplitsController extends PKPBaseController
             }
         }
 
+        // DOIs — publications.doi_id → dois.doi
+        $dois = [];
+        if ($pubIds) {
+            $doiRows = DB::table('publications as p')
+                ->join('dois as d', 'p.doi_id', '=', 'd.doi_id')
+                ->whereIn('p.publication_id', $pubIds)
+                ->select(['p.publication_id', 'd.doi'])
+                ->get();
+            foreach ($doiRows as $row) {
+                $dois[$row->publication_id] = $row->doi;
+            }
+        }
+
+        // Abstracts
+        $abstracts = [];
+        if ($pubIds) {
+            $absRows = DB::table('publication_settings')
+                ->whereIn('publication_id', $pubIds)
+                ->where('setting_name', 'abstract')
+                ->where('locale', 'en')
+                ->select(['publication_id', 'setting_value'])
+                ->get();
+            foreach ($absRows as $row) {
+                $abstracts[$row->publication_id] = $row->setting_value;
+            }
+        }
+
+        // Keywords (controlled vocab)
+        $keywords = [];
+        if ($pubIds) {
+            $kwRows = DB::table('controlled_vocabs as cv')
+                ->join('controlled_vocab_entries as cve', 'cv.controlled_vocab_id', '=', 'cve.controlled_vocab_id')
+                ->join('controlled_vocab_entry_settings as cves', 'cve.controlled_vocab_entry_id', '=', 'cves.controlled_vocab_entry_id')
+                ->where('cv.symbolic', 'submissionKeyword')
+                ->whereIn('cv.assoc_id', $pubIds)
+                ->orderBy('cve.seq')
+                ->select(['cv.assoc_id as publication_id', 'cves.setting_value as keyword'])
+                ->get();
+            foreach ($kwRows as $row) {
+                $keywords[$row->publication_id][] = $row->keyword;
+            }
+        }
+
+        // Pages
+        $pages = [];
+        if ($pubIds) {
+            $pageRows = DB::table('publication_settings')
+                ->whereIn('publication_id', $pubIds)
+                ->where('setting_name', 'pages')
+                ->select(['publication_id', 'setting_value'])
+                ->get();
+            foreach ($pageRows as $row) {
+                $pages[$row->publication_id] = $row->setting_value;
+            }
+        }
+
         $fileIndex = $this->buildFileIndex();
         $result = [];
         $counts = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'unreviewed' => 0, 'invalidated' => 0];
@@ -397,16 +459,22 @@ class QaSplitsController extends PKPBaseController
             elseif ($status === 'invalidated') $counts['invalidated']++;
             else $counts['unreviewed']++;
 
+            $pubId = (int) $article->publication_id;
             $result[] = [
                 'submission_id'  => (int) $article->submission_id,
-                'publication_id' => (int) $article->publication_id,
+                'publication_id' => $pubId,
                 'title'          => $article->title ?? '(untitled)',
-                'authors'        => $authors[$article->publication_id] ?? [],
+                'authors'        => $authors[$pubId] ?? [],
                 'section'        => $article->section ?? '',
                 'volume'         => (int) $article->volume,
                 'number'         => (int) $article->number,
                 'year'           => (int) $article->year,
+                'issue_title'    => $article->issue_title ?? null,
                 'seq'            => (int) $article->seq,
+                'doi'            => $dois[$pubId] ?? null,
+                'abstract'       => $abstracts[$pubId] ?? null,
+                'keywords'       => $keywords[$pubId] ?? [],
+                'pages'          => $pages[$pubId] ?? null,
                 'status'         => $status,
                 'has_files'      => $hasFiles,
                 'reviewer'       => $review ? $review->username : null,
