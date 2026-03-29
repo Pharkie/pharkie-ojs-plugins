@@ -25,6 +25,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(__file__))
+from lib.citations import looks_like_person_name
+
 
 # ---------------------------------------------------------------
 # Constants
@@ -98,112 +101,6 @@ def normalise_for_match(text: str) -> str:
     return re.sub(r'\s+', ' ', text).strip().lower()
 
 
-# Max words in a text element to be considered a potential name
-NAME_MAX_WORDS = 6
-
-# Words that appear in subtitles/headings but not in names — if ANY of these
-# appear, the text is not a name. Covers common English prepositions, articles,
-# conjunctions that wouldn't appear in a person's name.
-_NOT_NAME_WORDS = frozenset({
-    'a', 'an', 'the',                         # articles
-    'in', 'on', 'at', 'to', 'by', 'of',      # prepositions
-    'for', 'from', 'with', 'about', 'into',
-    'as', 'or', 'but', 'nor', 'yet', 'so',   # conjunctions
-    'is', 'was', 'are', 'were', 'be',         # verbs
-    'some', 'towards', 'between', 'toward',
-    'why', 'how', 'what', 'when', 'where',
-    'not', 'its', 'it', 'this', 'that',
-})
-
-# Words allowed in names (nobiliary particles)
-_NAME_PARTICLES = frozenset({
-    'van', 'de', 'du', 'von', 'le', 'la', 'di', 'el', 'al',
-    'bin', 'del', 'der', 'dos', 'den', 'das', 'ibn',
-})
-
-
-def _looks_like_person_name(text: str) -> bool:
-    """Check if text looks like a person name (not a subtitle or heading).
-
-    Works for Western and non-Western names by checking structure:
-    - Short (within NAME_MAX_WORDS)
-    - No common English words that wouldn't appear in names
-    - Each word is either capitalised, an initial (A.), or a name particle
-    - At least 2 capitalised words (to avoid "A Rejoinder" matching)
-
-    Handles: "Titos Florides", "Emmy van Deurzen", "R.D. Laing",
-    "Ann-Helen Siirala", "Jiří Různička", "Rimantas Koėiūnas",
-    "Evgenia T. Georganda", "Hans W. Cohn"
-    """
-    clean = text.rstrip('.').strip()
-    if not clean or len(clean) > 80:
-        return False
-    if clean[-1] in '?!':
-        return False
-
-    words = clean.split()
-    if len(words) < 2 or len(words) > NAME_MAX_WORDS:
-        return False
-
-    # If ANY lowercase word is a common non-name word, it's not a name.
-    # Only check words that are actually lowercase (not capitalised names
-    # that happen to match — "Del" shouldn't match "del")
-    for w in words:
-        w_clean = w.rstrip('.,;:')
-        if w_clean and w_clean[0].islower() and w_clean.lower() in _NOT_NAME_WORDS:
-            return False
-
-    # "A [Word]" is an English article + noun, not initial + surname
-    if words[0] == 'A' and len(words) == 2:
-        return False
-
-    # For "Name and Name" / "Name & Name", split and check each half
-    if ' and ' in clean or ' & ' in clean:
-        parts = re.split(r'\s+(?:and|&)\s+', clean)
-        if len(parts) == 2 and all(_is_single_name(p.strip()) for p in parts):
-            return True
-
-    return _is_single_name(clean)
-
-
-def _is_single_name(text: str) -> bool:
-    """Check if text is a single person name (no 'and'/'&' connectors)."""
-    words = text.split()
-    if len(words) < 2 or len(words) > NAME_MAX_WORDS:
-        return False
-
-    cap_count = 0
-    for w in words:
-        w_clean = w.rstrip('.,;:')
-        # Nobiliary particles are lowercase by convention (van, de, du).
-        # Only skip if actually lowercase in the text — "Del" as a given
-        # name should not be treated as the particle "del".
-        if w_clean[0].islower() and w_clean.lower() in _NAME_PARTICLES:
-            continue
-        # Initials: "W.", "R.D.", "F." — must have a dot to distinguish
-        # from articles ("A Rejoinder" — "A" without dot is not an initial)
-        if re.match(r'^[A-ZÀ-Ž]\.$', w_clean) or re.match(r'^(?:[A-ZÀ-Ž]\.)+$', w_clean):
-            cap_count += 1
-            continue
-        # Single capital letter without dot — only count if followed by another name
-        # (e.g. "Kirk J Schneider" — "J" is an initial)
-        if re.match(r'^[A-ZÀ-Ž]$', w_clean):
-            cap_count += 1
-            continue
-        # Capitalised word (including hyphenated: Ann-Helen, Merleau-Ponty)
-        if re.match(r'^[A-ZÀ-Ž]', w_clean):
-            cap_count += 1
-            continue
-        # Hyphenated with particle prefix: al-Rashid, el-Sayed
-        if '-' in w_clean:
-            prefix = w_clean.split('-')[0].lower()
-            if prefix in _NAME_PARTICLES:
-                cap_count += 1
-                continue
-        # Lowercase word that isn't a particle = not a name
-        return False
-
-    return cap_count >= 2
 
 
 def text_matches_author(text: str, author_names: list[str]) -> bool:
@@ -360,7 +257,7 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         # known author list (handles middle initials, accents, variants).
         # Pattern: optional title + given name(s) + optional middle initial(s) + family name
         # with optional nobiliary particles (van, de, du, von, etc.)
-        if _looks_like_person_name(text):
+        if looks_like_person_name(text):
             return None
 
         # Skip section headings

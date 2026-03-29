@@ -577,6 +577,118 @@ def is_citation_like(text: str) -> bool:
     return score >= 2 or (score >= 1 and has_year)
 
 
+# ---------------------------------------------------------------
+# Person name detection
+# ---------------------------------------------------------------
+
+# Max words in a text element to be considered a potential person name
+NAME_MAX_WORDS = 6
+
+# Common English words that would not appear in a person's name.
+# Only checked when the word is lowercase in the source text.
+NOT_NAME_WORDS = frozenset({
+    'a', 'an', 'the',                         # articles
+    'in', 'on', 'at', 'to', 'by', 'of',      # prepositions
+    'for', 'from', 'with', 'about', 'into',
+    'as', 'or', 'but', 'nor', 'yet', 'so',   # conjunctions
+    'is', 'was', 'are', 'were', 'be',         # verbs
+    'some', 'towards', 'between', 'toward',
+    'why', 'how', 'what', 'when', 'where',
+    'not', 'its', 'it', 'this', 'that',
+})
+
+# Nobiliary particles allowed in names (only matched when lowercase)
+NAME_PARTICLES = frozenset({
+    'van', 'de', 'du', 'von', 'le', 'la', 'di', 'el', 'al',
+    'bin', 'del', 'der', 'dos', 'den', 'das', 'ibn',
+})
+
+
+def _is_single_person_name(text: str) -> bool:
+    """Check if text is a single person name (no 'and'/'&' connectors).
+
+    Counts capitalised words, initials (with/without dots), and name
+    particles. Returns True if at least 2 capitalised name parts found.
+    """
+    words = text.split()
+    if len(words) < 2 or len(words) > NAME_MAX_WORDS:
+        return False
+
+    cap_count = 0
+    for w in words:
+        w_clean = w.rstrip('.,;:')
+        if not w_clean:
+            continue
+        # Nobiliary particles only match when lowercase (van, de, du).
+        # "Del" as a given name should not match the particle "del".
+        if w_clean[0].islower() and w_clean.lower() in NAME_PARTICLES:
+            continue
+        # Initials with dot: "W.", "R.D.", "F."
+        if re.match(r'^[A-ZÀ-Ž]\.$', w_clean) or re.match(r'^(?:[A-ZÀ-Ž]\.)+$', w_clean):
+            cap_count += 1
+            continue
+        # Single capital letter without dot (e.g. "Kirk J Schneider")
+        if re.match(r'^[A-ZÀ-Ž]$', w_clean):
+            cap_count += 1
+            continue
+        # Capitalised word (including hyphenated: Ann-Helen, Merleau-Ponty)
+        if re.match(r'^[A-ZÀ-Ž]', w_clean):
+            cap_count += 1
+            continue
+        # Hyphenated with particle prefix: al-Rashid, el-Sayed
+        if '-' in w_clean:
+            prefix = w_clean.split('-')[0].lower()
+            if prefix in NAME_PARTICLES:
+                cap_count += 1
+                continue
+        # Lowercase word that isn't a particle = not a name
+        return False
+
+    return cap_count >= 2
+
+
+def looks_like_person_name(text: str) -> bool:
+    """Check if text looks like a person name (not a subtitle or heading).
+
+    Works for Western and non-Western names by checking structure:
+    - Short (within NAME_MAX_WORDS)
+    - No common English words that wouldn't appear in names
+    - Each word is capitalised, an initial, or a name particle
+    - At least 2 capitalised words
+
+    Handles: "Titos Florides", "Emmy van Deurzen", "R.D. Laing",
+    "Ann-Helen Siirala", "Jiří Různička", "Del Loewenthal",
+    "Mohammed al-Rashid", "F. A. Jenner"
+    """
+    clean = text.rstrip('.').strip()
+    if not clean or len(clean) > 80:
+        return False
+    if clean[-1] in '?!':
+        return False
+
+    words = clean.split()
+    if len(words) < 2 or len(words) > NAME_MAX_WORDS:
+        return False
+
+    # If ANY lowercase word is a common non-name word, reject
+    for w in words:
+        w_clean = w.rstrip('.,;:')
+        if w_clean and w_clean[0].islower() and w_clean.lower() in NOT_NAME_WORDS:
+            return False
+
+    # "A [Word]" is an English article + noun, not initial + surname
+    if words[0] == 'A' and len(words) == 2:
+        return False
+
+    # "Name and Name" / "Name & Name" — check each half
+    if ' and ' in clean or ' & ' in clean:
+        parts = re.split(r'\s+(?:and|&)\s+', clean)
+        if len(parts) == 2 and all(_is_single_person_name(p.strip()) for p in parts):
+            return True
+
+    return _is_single_person_name(clean)
+
+
 def is_author_contact(text: str) -> bool:
     """Detect author contact details (address, email, affiliation lines)."""
     return bool(re.match(
@@ -600,37 +712,34 @@ def is_author_bio(text: str) -> bool:
     ]
     has_bio_phrase = any(phrase in text for phrase in bio_phrases)
 
-    # Words that start a sentence but aren't person names — exclude from bio patterns
-    _NOT_NAME = (r'(?!(?:The|This|That|What|Which|Where|When|How|Why|For|From|'
-                 r'With|About|After|Before|Between|During|Into|Through|Under|'
-                 r'As|If|In|On|At|By|To|So|Or|An|No|It|We|He|She|They)\s)')
-
     bio_patterns = [
         r'^[A-Z][A-Z\s\.\-]+\b(is|was|has)\s',  # ALL CAPS: "CHARLES SCOTT is..."
         r'^[A-Z]+\s+(?:van|de|von)\s+[A-Z\-]+\s+(is|was|has)\s',  # ALL CAPS + prefix
-        # Mixed case name (with optional prefix: van, de, du, von):
-        r'^' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+(?:(?:van|de|du|von|le|la)\s+)?[A-Z][a-zà-ü]+(?:-[A-Z][a-zà-ü]+)?(?:\s+[A-Z][a-zà-ü]+)?\s+(is|was|has)\s',
-        # Name + credentials + "is": "Bo Jacobsen, dr. phil., Ph.D., is..." / "Hans W. Cohn, PhD, is..."
-        r'^' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-zà-ü]+.*?(?:PhD|Ph\.D\.|dr\.\s*phil|MSc|MA|UKCP|BPS|BACP).*?\b(is|was|has)\s',
         r'^All (three|four|five|six) authors',
-        r'^(Dr\.?|Professor)\s+[A-Z][a-zà-ü]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-zà-ü]+.*?\s+(is|was|has)\s',
-        r'^' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]+\s+(PhD|MA|MSc|UKCP|BPS)',
     ]
 
     if any(re.match(p, text) for p in bio_patterns):
         return True
 
-    # Bio phrase near start + starts with person's name (not just any word)
-    # Must be: Name Name (is|was|has) — the name patterns above catch the strict cases,
-    # this catches softer ones like "Dr John Smith is a practitioner in private practice"
-    if has_bio_phrase and len(text) > BIO_MIN_LENGTH:
-        # Must start with a plausible person name (2+ capitalised words)
-        starts_with_name = bool(re.match(
-            r'^(?:Dr\.?\s+|Professor\s+)?' + _NOT_NAME + r'[A-Z][a-zà-ü]+\s+[A-Z][a-zà-ü]', text))
-        # Bio phrase must appear in first 150 chars (not buried deep in prose)
-        early_bio = any(phrase in text[:BIO_PHRASE_SEARCH_WINDOW] for phrase in bio_phrases)
-        if starts_with_name and early_bio and not re.search(r'\(\d{4}\)', text[:AUTHOR_YEAR_SEARCH_WINDOW]):
+    # Check if text starts with a person name followed by a bio verb.
+    # Extract the leading words and check with looks_like_person_name.
+    bio_verb = re.search(r'\b(is|was|has)\s', text[:BIO_PHRASE_SEARCH_WINDOW])
+    if bio_verb:
+        leading = text[:bio_verb.start()].strip().rstrip(',')
+        if leading and looks_like_person_name(leading):
             return True
+
+    # Bio phrase near start + starts with person name
+    if has_bio_phrase and len(text) > BIO_MIN_LENGTH:
+        # Extract first 2-5 words as potential name
+        words = text.split()
+        for n in range(min(len(words), NAME_MAX_WORDS), 1, -1):
+            candidate = ' '.join(words[:n])
+            if looks_like_person_name(candidate):
+                early_bio = any(phrase in text[:BIO_PHRASE_SEARCH_WINDOW] for phrase in bio_phrases)
+                if early_bio and not re.search(r'\(\d{4}\)', text[:AUTHOR_YEAR_SEARCH_WINDOW]):
+                    return True
+                break
 
     return False
 
