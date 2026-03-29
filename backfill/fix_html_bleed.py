@@ -93,10 +93,10 @@ BACK_MATTER_HTML_PATTERNS = [
 ]
 
 
-# --- Text normalization ---
+# --- Text normalisation ---
 
-def normalize_for_match(text):
-    """Normalize text for fuzzy matching: lowercase, collapse whitespace, strip HTML tags."""
+def normalise_for_match(text):
+    """Normalise text for fuzzy matching: lowercase, collapse whitespace, strip HTML tags."""
     text = re.sub(r'<[^>]+>', '', text)
     text = unescape(text)
     text = text.lower()
@@ -105,13 +105,13 @@ def normalize_for_match(text):
     return text
 
 
-def normalize_name(name):
-    """Normalize a reviewer name for matching."""
+def normalise_name(name):
+    """Normalise a reviewer name for matching."""
     if not name:
         return ''
     name = name.strip()
     name = re.sub(r'^(reviewed by|review by)\s+', '', name, flags=re.IGNORECASE)
-    return normalize_for_match(name)
+    return normalise_for_match(name)
 
 
 def text_contains(haystack_norm, needle_norm, min_len=3):
@@ -164,7 +164,7 @@ def find_reviewer_byline_positions(html, reviewer_name):
     if not reviewer_name:
         return []
 
-    name_norm = normalize_name(reviewer_name)
+    name_norm = normalise_name(reviewer_name)
     if not name_norm:
         return []
 
@@ -176,7 +176,7 @@ def find_reviewer_byline_positions(html, reviewer_name):
         r'<(?:p|strong)[^>]*>([^<]*(?:<(?:strong|em|b|i)[^>]*>[^<]*</(?:strong|em|b|i)>[^<]*)*)</(?:p|strong)>',
         html, re.IGNORECASE
     ):
-        block_text = normalize_for_match(m.group(0))
+        block_text = normalise_for_match(m.group(0))
         if text_contains(block_text, name_norm) and len(block_text) < max_len:
             positions.append((m.start(), m.end()))
 
@@ -185,7 +185,7 @@ def find_reviewer_byline_positions(html, reviewer_name):
         r'<p[^>]*>\s*<strong[^>]*>(.*?)</strong>\s*</p>',
         html, re.IGNORECASE | re.DOTALL
     ):
-        block_text = normalize_for_match(m.group(1))
+        block_text = normalise_for_match(m.group(1))
         if text_contains(block_text, name_norm) and len(block_text) < max_len:
             if (m.start(), m.end()) not in positions:
                 positions.append((m.start(), m.end()))
@@ -201,11 +201,11 @@ def find_book_title_position(html, book_title):
     if not book_title:
         return None
 
-    title_norm = normalize_for_match(book_title)
+    title_norm = normalise_for_match(book_title)
     if not title_norm or len(title_norm) < MIN_TITLE_LENGTH:
         return None
 
-    html_norm = normalize_for_match(html)
+    html_norm = normalise_for_match(html)
     if not text_contains(html_norm, title_norm):
         return None
 
@@ -214,7 +214,7 @@ def find_book_title_position(html, book_title):
         search = title_norm[:try_len]
         for m in re.finditer(r'<(?:p|h[1-6]|strong|em)[^>]*>.*?</(?:p|h[1-6]|strong|em)>',
                              html, re.IGNORECASE | re.DOTALL):
-            elem_norm = normalize_for_match(m.group(0))
+            elem_norm = normalise_for_match(m.group(0))
             if text_contains(elem_norm, search):
                 return (m.start(), m.end())
 
@@ -307,7 +307,7 @@ def classify_review(review):
     if '<!-- AUTO-EXTRACTED' in html:
         return {'category': 'auto-extracted', 'details': 'PyMuPDF fallback', 'trim_info': None}
 
-    html_norm = normalize_for_match(html)
+    html_norm = normalise_for_match(html)
     book_title = review.get('book_title', '')
     reviewer = review.get('reviewer', '')
     next_review = review.get('next_review')
@@ -327,11 +327,11 @@ def classify_review(review):
     }
 
     # Check presence of book title and reviewer
-    title_norm = normalize_for_match(book_title) if book_title else ''
+    title_norm = normalise_for_match(book_title) if book_title else ''
     if title_norm and text_contains(html_norm, title_norm):
         result['has_book_title'] = True
 
-    reviewer_norm = normalize_name(reviewer) if reviewer else ''
+    reviewer_norm = normalise_name(reviewer) if reviewer else ''
     if reviewer_norm and text_contains(html_norm, reviewer_norm):
         result['has_reviewer'] = True
 
@@ -348,8 +348,8 @@ def classify_review(review):
             result['has_end_bleed'] = True
             result['end_bleed_chars'] = len(tail)
             if next_review and next_review.get('book_title'):
-                next_title_norm = normalize_for_match(next_review['book_title'])
-                if next_title_norm and text_contains(normalize_for_match(tail), next_title_norm):
+                next_title_norm = normalise_for_match(next_review['book_title'])
+                if next_title_norm and text_contains(normalise_for_match(tail), next_title_norm):
                     result['next_title_in_tail'] = True
             result['trim_info']['keep_end'] = keep_end
             result['trim_info']['tail_length'] = len(tail)
@@ -376,8 +376,8 @@ def classify_review(review):
                 prev_review = review.get('prev_review')
                 prev_found = False
                 if prev_review and prev_review.get('reviewer'):
-                    prev_norm = normalize_name(prev_review['reviewer'])
-                    if text_contains(normalize_for_match(preamble), prev_norm):
+                    prev_norm = normalise_name(prev_review['reviewer'])
+                    if text_contains(normalise_for_match(preamble), prev_norm):
                         prev_found = True
 
                 if prev_found or len(preamble) > MIN_PREAMBLE_LARGE:

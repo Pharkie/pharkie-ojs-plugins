@@ -1041,7 +1041,7 @@ def _is_numbered_commentary(after_num: str) -> bool:
         return True
 
     sentence_count = _count_sentences(after_num)
-    if sentence_count >= 2 or len(after_num) > 200:
+    if sentence_count >= 2 or len(after_num) > CITATION_SENTENCE_LENGTH:
         return True
 
     return False

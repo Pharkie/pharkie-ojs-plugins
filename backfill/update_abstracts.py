@@ -17,7 +17,9 @@ import re
 import json
 import glob
 import argparse
-from html import unescape
+
+sys.path.insert(0, os.path.dirname(__file__))
+from lib.citations import strip_html
 
 
 MAX_ABSTRACT_LENGTH = 2000
@@ -25,11 +27,12 @@ MAX_ABSTRACT_PARAGRAPHS = 2
 
 
 def strip_html_tags(html):
-    """Remove HTML tags and normalize whitespace."""
-    text = re.sub(r'<[^>]+>', '', html)
-    text = unescape(text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+    """Remove HTML tags and normalise whitespace.
+
+    Delegates to shared strip_html() then collapses whitespace.
+    """
+    text = strip_html(html)
+    return re.sub(r'\s+', ' ', text).strip()
 
 
 def split_at_h2(html):
