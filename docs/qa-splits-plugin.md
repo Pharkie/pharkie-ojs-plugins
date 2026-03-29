@@ -65,7 +65,7 @@ Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/
 ```
 +------------+---------------------------+---------------------------+
 | SIDEBAR    | PDF Viewer                | Article Metadata          |
-| Search     | Page 3 of 12              | Issue / Title / Authors   |
+| Search     | Page 3 of 12              | Issue #ID / Title / Sub   |
 | Filters    | [scrollable PDF pages]    | DOI / Keywords / Abstract |
 | Article    |                           |─────────────────────────  |
 | list       |                           | HTML Galley               |
@@ -83,7 +83,7 @@ Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/
 
 **Top bar**: Article title/authors (wrapping), status badge, progress counter, Request Fix / Approve buttons.
 
-**Right pane**: Article metadata header (issue, title, authors, DOI, pages, keywords, abstract), then HTML galley body, then end-matter classification panel.
+**Right pane**: Article metadata header (issue + article ID, title, subtitle, authors, DOI, pages, keywords, abstract), then HTML galley body, then end-matter classification panel.
 
 ### End-matter classification
 
