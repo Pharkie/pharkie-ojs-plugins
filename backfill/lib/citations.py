@@ -127,17 +127,90 @@ def extract_text_from_element(el: ET.Element) -> str:
 # JATS section detection (replaces HTML h2-based detection)
 # ---------------------------------------------------------------
 
-def find_jats_reference_sections(body: ET.Element, tail_only: bool = True) -> list[dict]:
+def _normalise_name(name: str) -> str:
+    """Normalise a name for fuzzy matching: lowercase, strip punctuation, collapse spaces."""
+    name = re.sub(r'[^a-zA-Z\s]', '', name)
+    return re.sub(r'\s+', ' ', name).strip().lower()
+
+
+def _is_bio_section(el: ET.Element, ns: str, author_names: list[str] = None) -> bool:
+    """Detect sections that are author bios by structure.
+
+    Matches when the section title is a known article author (from JATS
+    <front> metadata) and the first paragraph starts with a bio verb
+    ("is a", "is an", "was a", "has been", etc.).
+
+    If author_names is not provided, falls back to checking whether the
+    heading looks like a person name (2-5 capitalised words).
+    """
+    title_el = el.find(f'{ns}title')
+    if title_el is None:
+        return False
+    heading = extract_text_from_element(title_el).strip()
+    if not heading:
+        return False
+
+    # Check if heading matches a known author
+    heading_is_author = False
+    if author_names:
+        heading_norm = _normalise_name(heading)
+        for name in author_names:
+            name_norm = _normalise_name(name)
+            if not name_norm:
+                continue
+            # Match if heading contains the author's family name or full name
+            name_parts = name_norm.split()
+            family_name = name_parts[-1] if name_parts else ''
+            if heading_norm == name_norm or (family_name and family_name in heading_norm):
+                heading_is_author = True
+                break
+
+    # Fallback: heading looks like a person name (2-5 capitalised words, short)
+    if not heading_is_author:
+        words = heading.split()
+        if not (2 <= len(words) <= 5) or len(heading) > 60:
+            return False
+        section_words = {'references', 'bibliography', 'notes', 'endnotes',
+                         'footnotes', 'acknowledgements', 'appendix', 'abstract',
+                         'introduction', 'conclusion', 'discussion', 'method',
+                         'results', 'coda', 'postscript', 'epilogue', 'about'}
+        if heading.lower() in section_words or words[0].lower() in section_words:
+            return False
+        if not (words[0][0].isupper() and words[-1][0].isupper()):
+            return False
+
+    # First paragraph must start with a bio-verb phrase
+    bio_starters = re.compile(
+        r'^(is\s+a[n]?\s|was\s+a[n]?\s|has\s+been\s|works\s+|has\s+a\s+'
+        r'|is\s+currently\s|is\s+a\s+|trained\s+|practices\s+|lectures\s+'
+        r'|completed\s+|studied\s+|teaches\s+|holds\s+a\s+)',
+        re.IGNORECASE
+    )
+    for child in el:
+        if _local(child.tag) == 'p':
+            text = extract_text_from_element(child).strip()
+            if text and bio_starters.match(text):
+                return True
+            break  # only check first paragraph
+
+    return False
+
+
+def find_jats_reference_sections(body: ET.Element, tail_only: bool = True,
+                                  author_names: list[str] = None) -> list[dict]:
     """Find reference-like sections in a JATS <body> element.
 
     Returns a list of dicts with 'heading', 'items', 'element' keys.
-    If tail_only=True, only returns contiguous reference sections at the
-    end of the body (matching strip_references.py behaviour).
+    If tail_only=True, only returns contiguous back-matter sections at the
+    end of the body (references, notes, and author bio sections).
+
+    author_names: list of article author names from JATS <front>. Used to
+    detect bio sections whose heading matches a known author.
     """
     ns = _ns(body.tag)
     secs = list(body)  # direct children
 
-    # Build list of (heading_text, is_reference, index, element)
+    # Build list of (heading_text, is_back_matter, index, element)
     sec_info = []
     for i, el in enumerate(secs):
         if _local(el.tag) != 'sec':
@@ -145,16 +218,18 @@ def find_jats_reference_sections(body: ET.Element, tail_only: bool = True) -> li
         title_el = el.find(f'{ns}title')
         heading = extract_text_from_element(title_el) if title_el is not None else ''
         is_ref = bool(REFERENCE_HEADING_RE.match(heading))
-        sec_info.append((heading, is_ref, i, el))
+        is_bio = _is_bio_section(el, ns, author_names=author_names)
+        is_back = is_ref or is_bio
+        sec_info.append((heading, is_back, is_bio, i, el))
 
     if not sec_info:
         return []
 
     if tail_only:
-        # Walk backwards to find contiguous reference sections at the tail
+        # Walk backwards to find contiguous back-matter sections at the tail
         tail_start = None
         for si in range(len(sec_info) - 1, -1, -1):
-            if sec_info[si][1]:  # is_reference
+            if sec_info[si][1]:  # is_back_matter
                 tail_start = si
             else:
                 break
@@ -163,10 +238,14 @@ def find_jats_reference_sections(body: ET.Element, tail_only: bool = True) -> li
         sec_info = sec_info[tail_start:]
 
     result = []
-    for heading, is_ref, idx, el in sec_info:
-        if not is_ref:
+    for heading, is_back, is_bio, idx, el in sec_info:
+        if not is_back:
             continue
         items = _extract_items_from_jats_section(el)
+        # For bio sections, prepend the heading (person name) to first item
+        # so is_author_bio() sees "Name is a ..." instead of just "is a ..."
+        if is_bio and items:
+            items[0] = heading + ' ' + items[0]
         result.append({
             'heading': heading,
             'items': items,
@@ -498,8 +577,19 @@ def is_citation_like(text: str) -> bool:
     return score >= 2 or (score >= 1 and has_year)
 
 
+def is_author_contact(text: str) -> bool:
+    """Detect author contact details (address, email, affiliation lines)."""
+    return bool(re.match(
+        r'^(Contact|Address|Email|E-mail|Correspondence|Tel|Telephone|Fax|Website)\s*:',
+        text, re.IGNORECASE
+    )) or bool(re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$', text.strip()))
+
+
 def is_author_bio(text: str) -> bool:
-    """Detect author biographical notes."""
+    """Detect author biographical notes and contact details."""
+    if is_author_contact(text):
+        return True
+
     bio_phrases = [
         'is a ', 'is an ', 'was a ', 'was an ',
         'private practice', 'in practice', 'practitioner',

@@ -57,7 +57,20 @@ def extract_from_jats(jats_path: Path) -> dict:
         return {'citations': [], 'bios': [], 'provenance': [], 'notes': [],
                 'headings': [], 'sections_to_remove': [], 'tree': tree}
 
-    sections = find_jats_reference_sections(body, tail_only=True)
+    # Extract author names from <front> for bio section detection
+    author_names = []
+    for contrib in root.findall('.//{*}contrib'):
+        if contrib.get('contrib-type') != 'author':
+            continue
+        given = contrib.find('{*}name/{*}given-names')
+        family = contrib.find('{*}name/{*}surname')
+        if given is not None and family is not None:
+            author_names.append(f'{given.text} {family.text}')
+        elif family is not None:
+            author_names.append(family.text)
+
+    sections = find_jats_reference_sections(body, tail_only=True,
+                                            author_names=author_names)
 
     citations = []
     bios = []
@@ -121,12 +134,39 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
     if back is None:
         back = ET.SubElement(root, 'back')
 
-    # Clear existing back matter (we're rewriting it)
+    # Preserve existing back-matter items not found in this extraction pass
+    # (e.g. refs already extracted in a prior run, now body has them removed)
+    existing_refs = []
+    existing_notes = []
+    existing_bios = []
+    existing_prov = []
+    for child in list(back):
+        ltag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if ltag == 'ref-list':
+            for ref in child:
+                mc = ref.find('{*}mixed-citation') if '}' in ref.tag else ref.find('mixed-citation')
+                if mc is not None and mc.text:
+                    existing_refs.append(mc.text.strip())
+        elif ltag == 'fn-group':
+            for fn in child:
+                p = fn.find('{*}p') if '}' in fn.tag else fn.find('p')
+                if p is not None and p.text:
+                    existing_notes.append(p.text.strip())
+        elif ltag == 'bio':
+            p = child.find('{*}p') if '}' in child.tag else child.find('p')
+            if p is not None and p.text:
+                existing_bios.append(p.text.strip())
+        elif ltag == 'notes' and child.get('notes-type') == 'provenance':
+            p = child.find('{*}p') if '}' in child.tag else child.find('p')
+            if p is not None and p.text:
+                existing_prov.append(p.text.strip())
+
+    # Clear existing back matter (we're rewriting it with merged content)
     for child in list(back):
         back.remove(child)
 
-    # Write references
-    citations = extracted['citations']
+    # Merge: new extractions take priority, fall back to existing
+    citations = extracted['citations'] if extracted['citations'] else existing_refs
     if citations:
         ref_list = ET.SubElement(back, 'ref-list')
         for i, ref_text in enumerate(citations, 1):
@@ -135,7 +175,7 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
             mc.text = ref_text
 
     # Write notes (sorted by leading number)
-    notes = extracted['notes']
+    notes = extracted['notes'] if extracted['notes'] else existing_notes
     if notes:
         notes = _sort_notes_by_number(notes)
         fn_group = ET.SubElement(back, 'fn-group')
@@ -145,16 +185,18 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
             p.text = note_text
 
     # Write author bios
-    for bio_text in extracted['bios']:
+    bios = extracted['bios'] if extracted['bios'] else existing_bios
+    for bio_text in bios:
         bio = ET.SubElement(back, 'bio')
         p = ET.SubElement(bio, 'p')
         p.text = bio_text
 
     # Write provenance
-    if extracted['provenance']:
-        prov_text = extracted['provenance'][0]
-        if len(extracted['provenance']) > 1:
-            prov_text = ' '.join(extracted['provenance'])
+    prov = extracted['provenance'] if extracted['provenance'] else existing_prov
+    if prov:
+        prov_text = prov[0]
+        if len(prov) > 1:
+            prov_text = ' '.join(prov)
         notes_el = ET.SubElement(back, 'notes')
         notes_el.set('notes-type', 'provenance')
         p = ET.SubElement(notes_el, 'p')
