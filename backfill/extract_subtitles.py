@@ -2,8 +2,6 @@
 """
 Extract subtitles from raw HTML and split title/subtitle in toc.json.
 
-Also normalises the `authors` field from string to list.
-
 The raw HTML from htmlgen has titles and subtitles as separate elements:
   <h1>Being With Cyril</h1>
   <p>Can Heideggerian language do justice to...</p>
@@ -15,6 +13,7 @@ names, then writes a `subtitle` field to toc.json.
 
 Usage:
     python3 backfill/extract_subtitles.py --report backfill/private/output/*/toc.json
+    python3 backfill/extract_subtitles.py --report --report-file private/reports/subtitle-review.md backfill/private/output/*/toc.json
     python3 backfill/extract_subtitles.py --apply backfill/private/output/23.1/toc.json
     python3 backfill/extract_subtitles.py --apply --dry-run backfill/private/output/*/toc.json
 """
@@ -242,16 +241,18 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         if is_section_heading(text):
             return None
 
-        # Skip book review metadata
-        if is_book_review_metadata(text):
+        # Skip book review metadata — check each line because <br> tags
+        # create multi-line content (e.g. "Book Title\nAuthor (2004). Publisher. 376pp.")
+        text_lines = text.split('\n')
+        if any(is_book_review_metadata(line.strip()) for line in text_lines):
             return None
 
         # Skip provenance notes
         if is_provenance_note(text):
             return None
 
-        # Skip bibliographic citation lines
-        if BIBLIOGRAPHIC_RE.match(text):
+        # Skip bibliographic citation lines (also per-line for <br> content)
+        if any(BIBLIOGRAPHIC_RE.match(line.strip()) for line in text_lines):
             return None
 
         # Skip if too long (body text, not subtitle)
@@ -373,7 +374,7 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
     iss = toc.get('issue', '?')
     vol_dir = os.path.dirname(toc_path)
 
-    stats = {'total': 0, 'subtitles_found': 0, 'authors_normalised': 0, 'details': []}
+    stats = {'total': 0, 'subtitles_found': 0, 'details': []}
     modified = False
 
     for art in toc.get('articles', []):
@@ -389,16 +390,14 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
         if not os.path.exists(raw_path):
             continue
 
-        # Normalise authors from string to list
+        # Parse author names for subtitle detection (toc.json stays as string)
         auth_raw = art.get('authors', '')
-        if isinstance(auth_raw, str) and auth_raw:
+        if isinstance(auth_raw, list):
+            author_list = auth_raw
+        elif auth_raw:
             author_list = parse_author_names(auth_raw)
-            if apply:
-                art['authors'] = author_list
-                modified = True
-            stats['authors_normalised'] += 1
         else:
-            author_list = auth_raw if isinstance(auth_raw, list) else []
+            author_list = []
 
         # Skip if already has subtitle
         if art.get('subtitle'):
@@ -471,16 +470,17 @@ def main():
     mode.add_argument('--report', action='store_true',
                       help='Show detected subtitles without modifying files')
     mode.add_argument('--apply', action='store_true',
-                      help='Write subtitle field to toc.json and normalise authors')
+                      help='Write subtitle field to toc.json')
 
     parser.add_argument('--dry-run', action='store_true',
                         help='With --apply: show changes without writing')
+    parser.add_argument('--report-file', metavar='PATH',
+                        help='Write markdown review table to file (with --report)')
 
     args = parser.parse_args()
 
     total_articles = 0
     total_subtitles = 0
-    total_authors = 0
     all_details = []
 
     for toc_path in args.toc_json:
@@ -491,7 +491,6 @@ def main():
         stats = process_toc(toc_path, apply=args.apply, dry_run=args.dry_run)
         total_articles += stats['total']
         total_subtitles += stats['subtitles_found']
-        total_authors += stats['authors_normalised']
         all_details.extend(stats['details'])
 
     prefix = '[DRY RUN] ' if args.dry_run else ''
@@ -500,7 +499,6 @@ def main():
     print(f'{"=" * 60}')
     print(f'  Articles scanned:     {total_articles}')
     print(f'  Subtitles found:      {total_subtitles}')
-    print(f'  Authors normalised:   {total_authors}')
     print(f'{"=" * 60}\n')
 
     if all_details:
@@ -508,6 +506,18 @@ def main():
             print(f'  {d["vol"]}: "{d["new_title"]}"')
             print(f'       sub: "{d["subtitle"]}"')
             print()
+
+    if args.report_file and all_details:
+        lines = ['# Subtitle Review', '',
+                 '| # | Issue | Proposed Title | Subtitle |',
+                 '|---|-------|---------------|----------|']
+        for i, d in enumerate(all_details, 1):
+            title = d['new_title'].replace('|', '\\|')
+            sub = d['subtitle'].replace('|', '\\|')
+            lines.append(f'| {i} | {d["vol"]} | {title} | {sub} |')
+        with open(args.report_file, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+        print(f'Report written to {args.report_file}')
 
 
 if __name__ == '__main__':

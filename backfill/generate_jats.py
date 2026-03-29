@@ -384,9 +384,14 @@ def generate_article_jats(article: dict, volume: int, issue: int,
     if doi:
         lines.append(f'<article-id pub-id-type="doi">{escape(doi)}</article-id>')
 
-    # Title
+    # Title + subtitle
     title = article.get('title', '')
-    lines.append(f'<title-group><article-title>{escape(title)}</article-title></title-group>')
+    subtitle = article.get('subtitle', '')
+    if subtitle:
+        lines.append(f'<title-group><article-title>{escape(title)}</article-title>'
+                      f'<subtitle>{escape(subtitle)}</subtitle></title-group>')
+    else:
+        lines.append(f'<title-group><article-title>{escape(title)}</article-title></title-group>')
 
     # Authors
     authors_raw = article.get('authors', '')
