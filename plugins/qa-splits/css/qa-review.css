@@ -472,15 +472,24 @@ body {
 .qa-drawer-pin:hover { opacity: 0.8; }
 .qa-drawer-pin.pinned { opacity: 1; color: var(--accent); }
 
-.qa-drawer-close {
-    background: none;
-    border: none;
+.qa-drawer-close-btn {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 8px 12px 12px;
+    padding: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
     color: var(--text-inverse-muted);
-    font-size: 20px;
+    font-family: var(--font-ui);
+    font-size: 13px;
     cursor: pointer;
-    padding: 4px 8px;
+    transition: background 0.15s, color 0.15s;
 }
-.qa-drawer-close:hover { color: var(--text-inverse); }
+.qa-drawer-close-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: var(--text-inverse);
+}
 
 .qa-drawer-filter-row {
     display: flex;

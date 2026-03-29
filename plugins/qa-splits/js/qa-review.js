@@ -1003,7 +1003,7 @@
 
     function bindDrawerEvents() {
         document.getElementById('qa-drawer-tab').addEventListener('click', toggleDrawer);
-        document.getElementById('qa-drawer-close').addEventListener('click', () => { if (!drawerPinned) toggleDrawer(); });
+        document.getElementById('qa-drawer-close').addEventListener('click', toggleDrawer);
         document.getElementById('qa-drawer-pin').addEventListener('click', togglePin);
         document.getElementById('qa-drawer-search').addEventListener('input', refilterDrawer);
         document.getElementById('qa-drawer-issue').addEventListener('change', refilterDrawer);
@@ -1032,15 +1032,12 @@
         drawerPinned = !drawerPinned;
         const layout = document.querySelector('.qa-layout');
         const pinBtn = document.getElementById('qa-drawer-pin');
-        const closeBtn = document.getElementById('qa-drawer-close');
         if (drawerPinned) {
             layout.classList.add('qa-drawer-pinned');
             pinBtn.classList.add('pinned');
-            closeBtn.style.display = 'none';
         } else {
             layout.classList.remove('qa-drawer-pinned');
             pinBtn.classList.remove('pinned');
-            closeBtn.style.display = '';
         }
     }
 
