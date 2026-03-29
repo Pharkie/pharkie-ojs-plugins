@@ -138,6 +138,51 @@ def is_provenance_note(text: str) -> bool:
     return any(p.search(text) for p in PROVENANCE_PATTERNS)
 
 
+# Words that stay lowercase in title case (unless first word)
+TITLE_CASE_LOWERCASE = frozenset({
+    'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'yet', 'so',
+    'in', 'on', 'at', 'to', 'by', 'of', 'as', 'is', 'it',
+})
+
+
+def normalise_caps(text: str) -> str:
+    """Convert ALL CAPS text to title case, preserving quoted phrases.
+
+    Only applies if the entire text (ignoring punctuation) is uppercase.
+    """
+    # Check if text is all caps (ignoring punctuation and whitespace)
+    alpha_chars = [c for c in text if c.isalpha()]
+    if not alpha_chars or not all(c.isupper() for c in alpha_chars):
+        return text
+
+    # Title-case each word, keeping small words lowercase (except first)
+    words = text.split()
+    result = []
+    for i, word in enumerate(words):
+        # Preserve punctuation wrapping: strip, case, re-add
+        prefix = ''
+        suffix = ''
+        core = word
+        while core and not core[0].isalpha():
+            prefix += core[0]
+            core = core[1:]
+        while core and not core[-1].isalpha():
+            suffix = core[-1] + suffix
+            core = core[:-1]
+
+        if not core:
+            result.append(word)
+            continue
+
+        lower = core.lower()
+        if i > 0 and lower in TITLE_CASE_LOWERCASE:
+            result.append(prefix + lower + suffix)
+        else:
+            result.append(prefix + core.capitalize() + suffix)
+
+    return ' '.join(result)
+
+
 def strip_html_tags(html: str) -> str:
     """Remove HTML tags, decode entities."""
     text = re.sub(r'<[^>]+>', '', html)
@@ -217,7 +262,7 @@ def detect_subtitle(raw_html: str, author_names: list[str],
             return None
 
         # This looks like a subtitle
-        return text
+        return normalise_caps(text)
 
     return None
 
