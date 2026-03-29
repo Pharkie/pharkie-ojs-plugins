@@ -73,7 +73,25 @@ BOOK_REVIEW_PATTERNS = [
 PROVENANCE_PATTERNS = [
     re.compile(r'^(?:This\s+)?(?:paper|article|talk|presentation)\s+(?:was\s+)?(?:given|presented|delivered)', re.I),
     re.compile(r'^Presentation\s+given\s+at', re.I),
+    re.compile(r'^Presentation[,\s]', re.I),  # "Presentation, 19 November 2011" / "Presentation given"
+    re.compile(r'^Based\s+on\s+(?:a\s+)?(?:presentation|version|talk|paper|keynote)', re.I),
+    re.compile(r'^(?:Paper|Talk)\s+(?:given|delivered|presented)', re.I),
+    re.compile(r'^Keynote\s+', re.I),
+    re.compile(r'Society\s+for\s+Existential\s+Analysis\s+(?:Annual\s+)?Conference', re.I),
+    re.compile(r'World\s+Congress\s+for\s+Exist', re.I),
+    re.compile(r'Annual\s+Conference', re.I),
+    re.compile(r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)', re.I),
 ]
+
+# Pattern for issue headers misdetected as titles
+ISSUE_HEADER_RE = re.compile(
+    r'^Existential\s+Analysis\s+\d+\.\d+', re.I
+)
+
+# Pattern for bibliographic citation lines (not subtitles)
+BIBLIOGRAPHIC_RE = re.compile(
+    r'^\w+.*?\(\d{4}(?:\s*\[\d{4}\])?\).*?(?:Trans\.|Ed\.|pp\.?|Hardback|Paperback)', re.I
+)
 
 
 # ---------------------------------------------------------------
@@ -233,6 +251,10 @@ def detect_subtitle(raw_html: str, author_names: list[str],
                         'obituary', 'obituaries', 'editorial'):
         return None
 
+    # Skip issue headers misdetected as titles (e.g. "Existential Analysis 13.1: January 2002")
+    if ISSUE_HEADER_RE.match(html_title):
+        return None
+
     rest = html[title_match.end():]
 
     # Look at the next block-level element(s)
@@ -272,6 +294,10 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         if is_provenance_note(text):
             return None
 
+        # Skip bibliographic citation lines
+        if BIBLIOGRAPHIC_RE.match(text):
+            return None
+
         # Skip if too long (body text, not subtitle)
         if len(text) > SUBTITLE_MAX_LENGTH:
             return None
@@ -286,8 +312,20 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         if re.search(r'Existential Analysis\s+\d+\.\d+', text):
             return None
 
+        # Clean up the subtitle
+        subtitle = normalise_caps(text)
+        # Collapse line breaks to spaces
+        subtitle = re.sub(r'\s*\n\s*', ' ', subtitle)
+        # Strip stray footnote markers (single digit immediately after a letter/punctuation,
+        # not preceded by a space — "Job!1" → "Job!", but "May 2015" stays)
+        subtitle = re.sub(r'([a-zA-Z!?."\'])\d$', r'\1', subtitle)
+
+        # Skip if subtitle is just the title repeated (sometimes in ALL CAPS)
+        if normalise_for_match(subtitle) == normalise_for_match(html_title):
+            return None
+
         # This looks like a subtitle — use html_title as the authoritative title
-        return (html_title, normalise_caps(text))
+        return (html_title, subtitle)
 
     return None
 
