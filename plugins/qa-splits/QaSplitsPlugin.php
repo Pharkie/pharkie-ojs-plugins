@@ -339,7 +339,6 @@ HTMLSTART;
                     <div class="qa-endmatter-group">
                         <div class="qa-endmatter-group-header">
                             <span class="qa-pill" :class="group.cls" x-text="group.label + ' (' + group.count + ')'"></span>
-                            <span class="qa-endmatter-hint" x-text="group.hint"></span>
                         </div>
                         <template x-for="(text, i) in group.items" :key="i">
                             <div class="qa-endmatter-item">
