@@ -40,7 +40,7 @@
         'qa-pages', 'qa-progress', 'pdf-page-info', 'pdf-container',
         'html-content', 'endmatter-items',
         'btn-approve', 'btn-reject', 'reject-comment', 'btn-submit-reject',
-        'btn-last-seen', 'btn-prev', 'btn-next', 'btn-random', 'btn-problem',
+        'btn-prev', 'btn-next', 'btn-random',
     ];
 
     function init() {
@@ -72,9 +72,7 @@
 
         els['btn-prev'].addEventListener('click', () => navigate(-1));
         els['btn-next'].addEventListener('click', () => navigate(1));
-        els['btn-last-seen'].addEventListener('click', goToLastSeen);
         els['btn-random'].addEventListener('click', goToRandom);
-        els['btn-problem'].addEventListener('click', goToProblem);
         // Dashboard opened via "View stats" link inside progress, not container click
 
         document.addEventListener('keydown', (e) => {
@@ -355,7 +353,8 @@
 
     // Scale text layers when container resizes (PDF canvas scales via CSS width:100%)
     if (typeof ResizeObserver !== 'undefined') {
-        new ResizeObserver(() => {
+        const pdfEl = document.getElementById('pdf-container');
+        if (pdfEl) new ResizeObserver(() => {
             document.querySelectorAll('.qa-pdf-page').forEach(wrapper => {
                 const renderW = parseFloat(wrapper.style.getPropertyValue('--pdf-render-width'));
                 if (renderW) {
@@ -363,7 +362,7 @@
                     wrapper.style.setProperty('--pdf-css-scale', cssScale);
                 }
             });
-        }).observe(document.getElementById('pdf-container'));
+        }).observe(pdfEl);
     }
 
     function updatePageIndicator() {
