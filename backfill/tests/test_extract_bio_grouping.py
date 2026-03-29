@@ -107,3 +107,26 @@ class TestBioGrouping:
         assert len(result['bios']) == 1, f"Expected 1 bio, got {len(result['bios'])}: {result['bios']}"
         assert 'Paul Gordon is a member' in result['bios'][0]
         assert 'psgordon@talk21.com' in result['bios'][0]
+
+    def test_contact_after_section_bio_merged(self):
+        """Contact <p> outside the section should merge with bio inside it.
+
+        Real pattern: bio is inside a <sec> (caught by section scan),
+        contact <p> follows as a sibling of <body> after the <sec>.
+        """
+        jats = _make_jats("""
+        <sec><title>References</title>
+        <p>Smith, J. (2005). On anxiety. Journal of Existential Analysis.</p>
+        <p>Paul Gordon is a member of the Philadelphia Association.</p>
+        </sec>
+        <p>Contact: 74 Victoria Rd, London NW6 6QA</p>
+        <p>Email: psgordon@talk21.com</p>
+        """)
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert len(result['bios']) == 1, f"Expected 1 bio, got {len(result['bios'])}: {result['bios']}"
+        assert 'Paul Gordon is a member' in result['bios'][0]
+        assert 'psgordon@talk21.com' in result['bios'][0]

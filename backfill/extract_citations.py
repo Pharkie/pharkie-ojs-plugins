@@ -181,10 +181,17 @@ def extract_from_jats(jats_path: Path) -> dict:
             current_bio_parts.append(text)
             current_bio_elements.append(p_el)
         elif is_contact_text and not in_bio:
-            # Orphaned contact — still collect it
-            current_bio_parts = [text]
-            current_bio_elements = [p_el]
-            in_bio = True
+            # Contact without a preceding bio in this scan — append to
+            # the last bio from any source (section scan or earlier).
+            # Stay in "appending to last bio" mode for consecutive contacts.
+            if bios:
+                bios[-1] = bios[-1] + ' ' + text
+                trailing_bio_elements.append(p_el)
+                in_bio = False  # don't start a new group, just keep appending
+            else:
+                current_bio_parts = [text]
+                current_bio_elements = [p_el]
+                in_bio = True
         else:
             # Non-bio content — flush and stop grouping
             if current_bio_parts:
@@ -198,6 +205,9 @@ def extract_from_jats(jats_path: Path) -> dict:
         bios.append(' '.join(current_bio_parts))
         trailing_bio_elements.extend(current_bio_elements)
 
+    # Merge contact-only bios into the preceding bio entry.
+    # This handles cases where the bio was extracted by the section scan
+    # and the contact <p> was picked up separately by the trailing scan.
     return {
         'citations': citations,
         'bios': bios,
