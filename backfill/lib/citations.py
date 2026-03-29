@@ -597,6 +597,17 @@ NOT_NAME_WORDS = frozenset({
     'not', 'its', 'it', 'this', 'that',
 })
 
+# Words that are NEVER part of a person's name, even when capitalised.
+# Contrast with NOT_NAME_WORDS which only match lowercase (because "Van",
+# "Le", etc. can be capitalised name particles). These words have no
+# plausible name interpretation in any case.
+NEVER_NAME_WORDS = frozenset({
+    'on', 'in', 'at', 'to', 'by', 'of',                       # short prepositions
+    'for', 'from', 'with', 'into',
+    'between', 'towards', 'toward', 'through', 'about', 'against',
+    'before', 'after', 'during', 'without', 'within', 'beyond',
+})
+
 # Nobiliary particles allowed in names (only matched when lowercase)
 NAME_PARTICLES = frozenset({
     'van', 'de', 'du', 'von', 'le', 'la', 'di', 'el', 'al',
@@ -673,7 +684,13 @@ def looks_like_person_name(text: str) -> bool:
     # If ANY lowercase word is a common non-name word, reject
     for w in words:
         w_clean = w.rstrip('.,;:')
-        if w_clean and w_clean[0].islower() and w_clean.lower() in NOT_NAME_WORDS:
+        if not w_clean:
+            continue
+        # Words that are never names, even capitalised
+        if w_clean.lower() in NEVER_NAME_WORDS:
+            return False
+        # Other non-name words only rejected when lowercase in source
+        if w_clean[0].islower() and w_clean.lower() in NOT_NAME_WORDS:
             return False
 
     # "A [Word]" is an English article + noun, not initial + surname
@@ -757,7 +774,10 @@ def normalise_allcaps(text: str) -> str:
         before = text[:quote_pos]
         alpha_before = [c for c in before if c.isalpha()]
         if alpha_before and all(c.isupper() for c in alpha_before):
-            return title_case_words(before) + text[quote_pos:]
+            normalised = title_case_words(before.rstrip())
+            # Preserve the whitespace between the caps portion and the quote
+            trailing_ws = before[len(before.rstrip()):]
+            return normalised + trailing_ws + text[quote_pos:]
 
     return text
 
