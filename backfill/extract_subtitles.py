@@ -36,6 +36,18 @@ SUBTITLE_MAX_LENGTH = 200
 # Min length for an author name segment to be used for matching
 AUTHOR_NAME_MIN_MATCH_LENGTH = 4
 
+# Min length for a text element to be considered (skip empty/trivial elements)
+MIN_ELEMENT_TEXT_LENGTH = 5
+
+# How far into the raw HTML to search for subtitle elements after the title
+SUBTITLE_SEARCH_WINDOW = 1000
+
+# Min word length for single-word subtitle match in split_title
+DISTINCTIVE_WORD_MIN_LENGTH = 6
+
+# Subtitle must be found in the latter portion of the toc title (fraction)
+SPLIT_POSITION_MIN_FRACTION = 0.3
+
 # Section headings that indicate end of front matter (not subtitles)
 SECTION_HEADINGS = frozenset({
     'abstract', 'introduction', 'keywords', 'summary', 'preamble',
@@ -134,11 +146,17 @@ def strip_html_tags(html: str) -> str:
     return text.strip()
 
 
-def detect_subtitle(raw_html: str, author_names: list[str]) -> str | None:
+def detect_subtitle(raw_html: str, author_names: list[str],
+                     section: str = '') -> str | None:
     """Detect a subtitle in the raw HTML after the title heading.
 
     Returns the subtitle text, or None if no subtitle detected.
+    Skips book reviews, editorials, and obituaries (title is the full name).
     """
+    # Book reviews keep their full title ("Book Review: [Book Title]")
+    section_lower = section.lower()
+    if 'book review' in section_lower:
+        return None
     # Strip leading issue header ("Existential Analysis X.Y: Month Year")
     html = re.sub(
         r'^\s*(?:<div[^>]*>\s*)?<p[^>]*>\s*(?:<strong[^>]*>\s*)?Existential\s+Analysis\s+\d+\.\d+.*?</p>\s*(?:</div>\s*)?',
@@ -157,7 +175,7 @@ def detect_subtitle(raw_html: str, author_names: list[str]) -> str | None:
     # Look at the next block-level element(s)
     elements = re.finditer(
         r'<(h[1-6]|p)[^>]*>(.*?)</\1>',
-        rest[:1000], re.DOTALL
+        rest[:SUBTITLE_SEARCH_WINDOW], re.DOTALL
     )
 
     for m in elements:
@@ -165,7 +183,7 @@ def detect_subtitle(raw_html: str, author_names: list[str]) -> str | None:
         content_html = m.group(2)
         text = strip_html_tags(content_html).strip()
 
-        if not text or len(text) < 5:
+        if not text or len(text) < MIN_ELEMENT_TEXT_LENGTH:
             continue
 
         # Skip author names
@@ -194,60 +212,63 @@ def detect_subtitle(raw_html: str, author_names: list[str]) -> str | None:
             if not text.endswith('?'):
                 return None
 
+        # Skip citation references (contain "Existential Analysis" journal name + volume)
+        if re.search(r'Existential Analysis\s+\d+\.\d+', text):
+            return None
+
         # This looks like a subtitle
         return text
 
     return None
 
 
+def _clean_split_title(title: str) -> str:
+    """Clean up a title after splitting off the subtitle.
+
+    Removes trailing punctuation that was a separator between title and subtitle
+    (colons, dashes, opening parens/quotes) but preserves meaningful trailing
+    punctuation (question marks, exclamation marks).
+    """
+    # Iteratively strip trailing separator punctuation + whitespace
+    prev = None
+    while title != prev:
+        prev = title
+        title = title.rstrip()
+        title = re.sub(r'[\s:,\-–—(]+$', '', title)
+        # Strip trailing orphaned quotes (opening quote without matching close)
+        # But keep closing quotes that match an opening quote
+        if title.endswith("'") and title.count("'") % 2 == 1:
+            title = title[:-1]
+        if title.endswith('"') and title.count('"') % 2 == 1:
+            title = title[:-1]
+    return title.rstrip()
+
+
 def split_title(toc_title: str, subtitle: str) -> str | None:
     """Try to find where the subtitle starts in the concatenated toc title.
 
-    Returns the title-only portion, or None if the subtitle isn't found in the toc title.
+    Returns the title-only portion (cleaned), or None if the subtitle isn't found.
+    Uses progressive word matching from the subtitle to find the split point.
     """
-    # The toc title is "Title Subtitle" concatenated
-    # Find the subtitle text in the toc title
-    subtitle_norm = normalise_for_match(subtitle)
-    title_norm = normalise_for_match(toc_title)
-
-    if subtitle_norm not in title_norm:
-        # Try first few words of subtitle
-        words = subtitle_norm.split()
-        for n in range(min(len(words), 6), 2, -1):
-            prefix = ' '.join(words[:n])
-            idx = title_norm.find(prefix)
-            if idx > 0:
-                # Found the split point — map back to original string
-                # Walk the original title to find the corresponding position
-                orig_norm_pos = 0
-                for i, ch in enumerate(toc_title):
-                    if ch.isalnum():
-                        if orig_norm_pos == idx:
-                            return toc_title[:i].rstrip()
-                        orig_norm_pos += 1
-                    elif ch == ' ':
-                        if orig_norm_pos < len(title_norm) and title_norm[orig_norm_pos] == ' ':
-                            if orig_norm_pos == idx:
-                                return toc_title[:i].rstrip()
-                            orig_norm_pos += 1
-                break
-
+    subtitle_words = subtitle.split()
+    if not subtitle_words:
         return None
 
-    # Find position in original string
-    idx = title_norm.find(subtitle_norm)
-    if idx == 0:
-        return None  # Subtitle IS the title
+    # Try matching progressively shorter prefixes of the subtitle
+    # against the end of the toc title (case-insensitive)
+    toc_lower = toc_title.lower()
+    for n in range(len(subtitle_words), 1, -1):
+        prefix = ' '.join(subtitle_words[:n]).lower()
+        idx = toc_lower.rfind(prefix)
+        if idx > 0:
+            return _clean_split_title(toc_title[:idx])
 
-    # Map normalised position back to original
-    orig_pos = 0
-    norm_pos = 0
-    for i, ch in enumerate(toc_title):
-        norm_ch = ch.lower() if ch.isalnum() else (' ' if ch == ' ' else '')
-        if norm_ch:
-            if norm_pos == idx:
-                return toc_title[:i].rstrip()
-            norm_pos += 1
+    # Try first word only if it's distinctive enough
+    first_word = subtitle_words[0].lower()
+    if len(first_word) >= DISTINCTIVE_WORD_MIN_LENGTH:
+        idx = toc_lower.rfind(first_word)
+        if idx > len(toc_title) * SPLIT_POSITION_MIN_FRACTION:
+            return _clean_split_title(toc_title[:idx])
 
     return None
 
@@ -297,7 +318,8 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
         with open(raw_path) as f:
             raw_html = f.read()
 
-        subtitle = detect_subtitle(raw_html, author_list)
+        section = art.get('section', '')
+        subtitle = detect_subtitle(raw_html, author_list, section=section)
         if not subtitle:
             continue
 
@@ -309,9 +331,9 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
             stats['subtitles_found'] += 1
             stats['details'].append({
                 'vol': f'{vol}.{iss}',
-                'old_title': toc_title[:80],
-                'new_title': new_title[:60],
-                'subtitle': subtitle[:80],
+                'old_title': toc_title,
+                'new_title': new_title,
+                'subtitle': subtitle,
             })
             if apply:
                 art['title'] = new_title
