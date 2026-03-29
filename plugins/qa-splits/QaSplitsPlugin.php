@@ -191,12 +191,45 @@ class QaSplitsPlugin extends GenericPlugin
     <link rel="stylesheet" href="{$pluginUrl}/css/qa-review.css">
 </head>
 <body>
-    <div class="qa-layout">
-        <!-- Top bar: two rows -->
+    <div class="qa-layout qa-drawer-pinned">
+        <!-- Sidebar: permanent navigation panel -->
+        <div class="qa-drawer" id="qa-drawer">
+            <div class="qa-drawer-brand">
+                <div class="qa-drawer-logo">QA Splits</div>
+                <div class="qa-drawer-strapline">Check PDF splits, HTML accuracy, start/end bleed, end-matter classification
+                    <a href="#" id="qa-drawer-more" class="qa-drawer-more">What to check &rsaquo;</a>
+                </div>
+                <div id="qa-drawer-checklist" class="qa-drawer-checklist" style="display:none">
+                    <ul>
+                        <li>PDF split at the right page</li>
+                        <li>HTML text matches PDF content</li>
+                        <li>No start bleed from previous article</li>
+                        <li>No end bleed into next article</li>
+                        <li>References, notes, bios correctly classified</li>
+                        <li>Excluded content (ads, mastheads) not present</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="qa-drawer-header">
+                <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
+            </div>
+            <div class="qa-drawer-filter-row">
+                <select id="qa-drawer-issue" class="qa-drawer-select"><option value="">All issues</option></select>
+            </div>
+            <div class="qa-drawer-pills" id="qa-drawer-pills"></div>
+            <div class="qa-drawer-list" id="qa-drawer-list"></div>
+            <div class="qa-drawer-nav">
+                <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">&lsaquo; Previous</button>
+                <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">Next &rsaquo;</button>
+                <button id="btn-random" class="qa-btn qa-btn-nav" title="Random unreviewed">Random</button>
+                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Next needing fix">Next Fix</button>
+            </div>
+            <div class="qa-drawer-footer" id="qa-drawer-footer"></div>
+        </div>
+
+        <!-- Top bar: minimal — title detail + actions -->
         <div class="qa-top">
             <div class="qa-row-1">
-                <button id="btn-last-seen" class="qa-back-btn" title="Return to where you were before Random/Problem jump">&larr; Back</button>
-                <span class="qa-app-name">QA Splits</span>
                 <span class="qa-title" id="qa-title">Loading...</span>
                 <span class="qa-authors" id="qa-authors"></span>
                 <span id="qa-section" style="display:none"></span>
@@ -207,10 +240,7 @@ class QaSplitsPlugin extends GenericPlugin
                 <span class="qa-badge" id="qa-status"></span>
                 <div class="qa-progress" id="qa-progress"></div>
                 <span class="qa-row-spacer"></span>
-                <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous article (Left arrow)">&lsaquo; Previous</button>
-                <button id="btn-next" class="qa-btn qa-btn-nav" title="Next article (Right arrow)">Next &rsaquo;</button>
-                <button id="btn-random" class="qa-btn qa-btn-nav" title="Jump to a random unreviewed article">Random</button>
-                <button id="btn-problem" class="qa-btn qa-btn-nav" title="Jump to next article needing fixes">Next Fix</button>
+                <button id="btn-last-seen" class="qa-btn qa-btn-nav" title="Return to previous position">&larr; Back</button>
                 <div class="qa-btn-wrap">
                     <button id="btn-reject" class="qa-btn qa-btn-reject" title="Request Fix (R)">Request Fix</button>
                     <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
@@ -225,24 +255,6 @@ class QaSplitsPlugin extends GenericPlugin
                 <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit fix request (Ctrl+Enter)">Request Fix</button>
                 <span class="qa-reject-hint">Ctrl+Enter to submit, Esc to cancel</span>
             </div>
-        </div>
-
-        <!-- Drawer: collapsible filter/article list panel -->
-        <div class="qa-drawer-tab" id="qa-drawer-tab" title="Open article list">
-            <span id="qa-drawer-tab-text">All</span>
-        </div>
-        <div class="qa-drawer" id="qa-drawer" style="display:none">
-            <div class="qa-drawer-header">
-                <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
-                <button id="qa-drawer-pin" class="qa-drawer-pin" title="Pin sidebar open">&#128204;</button>
-                <button id="qa-drawer-close" class="qa-drawer-close">&times; Close</button>
-            </div>
-            <div class="qa-drawer-filter-row">
-                <select id="qa-drawer-issue" class="qa-drawer-select"><option value="">All issues</option></select>
-            </div>
-            <div class="qa-drawer-pills" id="qa-drawer-pills"></div>
-            <div class="qa-drawer-list" id="qa-drawer-list"></div>
-            <div class="qa-drawer-footer" id="qa-drawer-footer"></div>
         </div>
 
         <!-- Left pane: PDF viewer -->
