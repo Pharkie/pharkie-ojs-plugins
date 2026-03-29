@@ -57,6 +57,18 @@ JATS is the single source of truth for article content. The pipeline direction i
 5. `backfill/jats_to_html.py` — generates HTML galley from JATS (body + notes + bios + provenance; references excluded — OJS renders those from citations table)
 6. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
 
+QA Splits reads from OJS (citations table, HTML galleys, file storage) — not from local JATS files. The QA iteration loop is:
+
+1. Fix the post-processing pipeline (systemic fix, not per-article)
+2. `python3 backfill/reprocess_html.py backfill/private/output/*/toc.json` — reprocess from `.raw.html` (~11 sec)
+3. Run JATS pipeline: `generate_jats.py` → `extract_citations.py --extract` → `split_citation_tiers.py` → `jats_to_html.py`
+4. Regenerate import XML: `python3 backfill/generate_xml.py <toc.json> -o <import.xml>` (per affected issue)
+5. Per-issue reimport: `backfill/import.sh backfill/private/output/<vol.iss> --force` (~1-2 min per issue)
+6. `python3 backfill/restore_ids.py --target dev` (~10 sec)
+7. QA in browser — repeat from step 1 if issues found
+
+For systemic changes affecting all issues, regenerate XML + reimport all (`backfill/import.sh backfill/private/output/* --wipe-articles`, ~20 min). For targeted fixes, reimport only the affected issue(s) with `--force`.
+
 Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, etc.)
 
 toc.json retains issue-level data: PDF page splits, article ordering, section assignments, metadata, `issue_doi`, `issue_id`. Articles with `_manual_html` in toc.json have hand-corrected HTML galleys (same-page bleed the AI can't handle). `htmlgen.py` skips these automatically — delete the HTML file to force regeneration.
