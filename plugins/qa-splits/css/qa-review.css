@@ -459,6 +459,19 @@ body {
 .qa-drawer-search::placeholder { color: rgba(255,255,255,0.35); }
 .qa-drawer-search:focus { outline: none; border-color: var(--accent); }
 
+.qa-drawer-pin {
+    background: none;
+    border: none;
+    color: var(--text-inverse-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 6px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+.qa-drawer-pin:hover { opacity: 0.8; }
+.qa-drawer-pin.pinned { opacity: 1; color: var(--accent); }
+
 .qa-drawer-close {
     background: none;
     border: none;
@@ -468,6 +481,26 @@ body {
     padding: 4px 8px;
 }
 .qa-drawer-close:hover { color: var(--text-inverse); }
+
+.qa-drawer-filter-row {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.qa-drawer-select {
+    flex: 1;
+    padding: 5px 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-inverse);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+}
+.qa-drawer-select option { background: var(--surface-dark); color: var(--text-inverse); }
 
 .qa-drawer-filters {
     display: flex;
@@ -560,6 +593,28 @@ body {
     font-size: 12px;
     text-decoration: underline;
     margin-left: 8px;
+}
+
+/* Pinned drawer: becomes a grid column instead of overlay */
+.qa-layout.qa-drawer-pinned {
+    grid-template-columns: 340px 1fr 1fr;
+}
+
+.qa-layout.qa-drawer-pinned .qa-drawer {
+    position: relative;
+    grid-row: 1 / -1;
+    grid-column: 1;
+    box-shadow: none;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    animation: none;
+}
+
+.qa-layout.qa-drawer-pinned .qa-top {
+    grid-column: 2 / -1;
+}
+
+.qa-layout.qa-drawer-pinned .qa-drawer-tab {
+    display: none;
 }
 
 /* ── Left pane: PDF viewer ── */
