@@ -26,7 +26,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from lib.citations import looks_like_person_name
+from lib.citations import looks_like_person_name, normalise_allcaps
 
 
 # ---------------------------------------------------------------
@@ -164,49 +164,6 @@ def is_provenance_note(text: str) -> bool:
     return any(p.search(text) for p in PROVENANCE_PATTERNS)
 
 
-# Words that stay lowercase in title case (unless first word)
-TITLE_CASE_LOWERCASE = frozenset({
-    'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'yet', 'so',
-    'in', 'on', 'at', 'to', 'by', 'of', 'as', 'is', 'it',
-})
-
-
-def normalise_caps(text: str) -> str:
-    """Convert ALL CAPS text to title case, preserving quoted phrases.
-
-    Only applies if the entire text (ignoring punctuation) is uppercase.
-    """
-    # Check if text is all caps (ignoring punctuation and whitespace)
-    alpha_chars = [c for c in text if c.isalpha()]
-    if not alpha_chars or not all(c.isupper() for c in alpha_chars):
-        return text
-
-    # Title-case each word, keeping small words lowercase (except first)
-    words = text.split()
-    result = []
-    for i, word in enumerate(words):
-        # Preserve punctuation wrapping: strip, case, re-add
-        prefix = ''
-        suffix = ''
-        core = word
-        while core and not core[0].isalpha():
-            prefix += core[0]
-            core = core[1:]
-        while core and not core[-1].isalpha():
-            suffix = core[-1] + suffix
-            core = core[:-1]
-
-        if not core:
-            result.append(word)
-            continue
-
-        lower = core.lower()
-        if i > 0 and lower in TITLE_CASE_LOWERCASE:
-            result.append(prefix + lower + suffix)
-        else:
-            result.append(prefix + core.capitalize() + suffix)
-
-    return ' '.join(result)
 
 
 def strip_html_tags(html: str) -> str:
@@ -218,7 +175,7 @@ def strip_html_tags(html: str) -> str:
 
 
 def detect_subtitle(raw_html: str, author_names: list[str],
-                     section: str = '') -> str | None:
+                     section: str = '', toc_title: str = '') -> str | None:
     """Detect a subtitle in the raw HTML after the title heading.
 
     Returns (html_title, subtitle) tuple, or None if no subtitle detected.
@@ -228,7 +185,7 @@ def detect_subtitle(raw_html: str, author_names: list[str],
     # Skip sections where titles shouldn't be split
     section_lower = section.lower()
     if 'book review' in section_lower:
-        return None  # Book reviews keep full title ("Book Review: [Book Title]")
+        return None  # Reviews keep full title ("Book Review: [Book Title]")
     # Strip leading issue header ("Existential Analysis X.Y: Month Year")
     html = re.sub(
         r'^\s*(?:<div[^>]*>\s*)?<p[^>]*>\s*(?:<strong[^>]*>\s*)?Existential\s+Analysis\s+\d+\.\d+.*?</p>\s*(?:</div>\s*)?',
@@ -242,7 +199,21 @@ def detect_subtitle(raw_html: str, author_names: list[str],
     if not title_match:
         return None
 
-    html_title = normalise_caps(strip_html_tags(title_match.group(1)).strip())
+    raw_title = strip_html_tags(title_match.group(1)).strip()
+    # If HTML heading is ALL CAPS but toc.json has proper case, use toc casing
+    alpha = [c for c in raw_title if c.isalpha()]
+    if alpha and all(c.isupper() for c in alpha) and toc_title:
+        # toc_title may include the subtitle concatenated — extract just the title part
+        # by matching the first N words case-insensitively
+        toc_words = toc_title.split()
+        raw_words = raw_title.split()
+        if len(toc_words) >= len(raw_words):
+            # Check that the toc title starts with the same words (case-folded)
+            match = all(t.lower() == r.lower()
+                        for t, r in zip(toc_words[:len(raw_words)], raw_words))
+            if match:
+                raw_title = ' '.join(toc_words[:len(raw_words)])
+    html_title = normalise_allcaps(raw_title)
 
     # Skip titles that are structural headings (not article titles)
     title_lower = html_title.lower().strip()
@@ -313,7 +284,7 @@ def detect_subtitle(raw_html: str, author_names: list[str],
             return None
 
         # Clean up the subtitle
-        subtitle = normalise_caps(text)
+        subtitle = normalise_allcaps(text)
         # Collapse line breaks to spaces
         subtitle = re.sub(r'\s*\n\s*', ' ', subtitle)
         # Strip stray footnote markers (single digit immediately after a letter/punctuation,
@@ -427,7 +398,9 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
             raw_html = f.read()
 
         section = art.get('section', '')
-        result = detect_subtitle(raw_html, author_list, section=section)
+        toc_title = art.get('title', '')
+        result = detect_subtitle(raw_html, author_list, section=section,
+                                  toc_title=toc_title)
         if not result:
             continue
 
@@ -437,16 +410,33 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
         toc_title = art.get('title', '')
 
         if new_title and subtitle:
-            stats['subtitles_found'] += 1
-            stats['details'].append({
-                'vol': f'{vol}.{iss}',
-                'old_title': toc_title,
-                'new_title': new_title,
-                'subtitle': subtitle,
-            })
-            if apply:
-                art['title'] = new_title
-                art['subtitle'] = subtitle
+            # Review titles (Essay Review, Film Review) — append subtitle to title
+            # instead of creating a separate subtitle field
+            title_lower = new_title.lower().strip()
+            is_review_title = title_lower in ('essay review', 'film review',
+                                               'review', 'book reviews')
+            if is_review_title:
+                combined = new_title.rstrip(':') + ': ' + subtitle
+                stats['subtitles_found'] += 1
+                stats['details'].append({
+                    'vol': f'{vol}.{iss}',
+                    'old_title': toc_title,
+                    'new_title': combined,
+                    'subtitle': '(appended to title)',
+                })
+                if apply:
+                    art['title'] = combined
+            else:
+                stats['subtitles_found'] += 1
+                stats['details'].append({
+                    'vol': f'{vol}.{iss}',
+                    'old_title': toc_title,
+                    'new_title': new_title,
+                    'subtitle': subtitle,
+                })
+                if apply:
+                    art['title'] = new_title
+                    art['subtitle'] = subtitle
                 modified = True
 
     if apply and modified and not dry_run:
