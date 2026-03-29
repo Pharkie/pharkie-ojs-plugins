@@ -874,9 +874,9 @@ body {
     margin-bottom: 6px;
 }
 
-.qa-html-content .jats-notes::before       { content: 'Extracted from JATS \2014  Notes'; }
-.qa-html-content .jats-bios::before        { content: 'Extracted from JATS \2014  Author Bio'; }
-.qa-html-content .jats-provenance::before  { content: 'Extracted from JATS \2014  Provenance'; }
+.qa-html-content .jats-notes::before       { content: 'Notes'; }
+.qa-html-content .jats-bios::before        { content: 'Author bio'; }
+.qa-html-content .jats-provenance::before  { content: 'Provenance'; }
 
 .qa-html-content p {
     margin-bottom: 0.9em;

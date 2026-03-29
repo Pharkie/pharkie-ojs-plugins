@@ -396,9 +396,15 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
     color: #999;
     margin-bottom: 4px;
 }
-.inline-html-galley .value .jats-notes::before       { content: "Notes \2014  extracted from article"; }
-.inline-html-galley .value .jats-bios::before        { content: "Author bio \2014  extracted from article"; }
-.inline-html-galley .value .jats-provenance::before  { content: "Provenance \2014  extracted from article"; }
+.inline-html-galley .value .jats-notes::before       { content: "Notes"; }
+.inline-html-galley .value .jats-bios::before        { content: "Author bio"; }
+.inline-html-galley .value .jats-provenance::before  { content: "Provenance"; }
+.item.references h2.label::after {
+    content: " (structured citations)";
+    font-size: 12px;
+    font-weight: 400;
+    color: #999;
+}
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
