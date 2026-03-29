@@ -181,25 +181,28 @@ class QaSplitsPlugin extends GenericPlugin
         $csrfToken = $request->getSession()->token();
 
         header('Content-Type: text/html; charset=utf-8');
-        echo <<<HTML
+        echo <<<'HTMLSTART'
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>QA Splits</title>
-    <link rel="stylesheet" href="{$pluginUrl}/css/qa-review.css">
+HTMLSTART;
+        echo '<link rel="stylesheet" href="' . $pluginUrl . '/css/qa-review.css">';
+        echo <<<'HTMLBODY'
 </head>
 <body>
-    <div class="qa-layout qa-drawer-pinned">
-        <!-- Sidebar: permanent navigation panel -->
-        <div class="qa-drawer" id="qa-drawer">
+    <div class="qa-layout" x-data="qaApp">
+
+        <!-- Sidebar -->
+        <div class="qa-drawer">
             <div class="qa-drawer-brand">
                 <div class="qa-drawer-logo">QA Splits</div>
                 <div class="qa-drawer-strapline">Check PDF splits, HTML accuracy, start/end bleed, end-matter classification
-                    <a href="#" id="qa-drawer-more" class="qa-drawer-more">What to check &rsaquo;</a>
+                    <a href="#" class="qa-drawer-more" @click.prevent="showChecklist = !showChecklist">What to check &rsaquo;</a>
                 </div>
-                <div id="qa-drawer-checklist" class="qa-drawer-checklist" style="display:none">
+                <div class="qa-drawer-checklist" x-show="showChecklist" x-cloak>
                     <ul>
                         <li>PDF split at the right page</li>
                         <li>HTML text matches PDF content</li>
@@ -210,85 +213,135 @@ class QaSplitsPlugin extends GenericPlugin
                     </ul>
                 </div>
             </div>
-            <div class="qa-drawer-header">
-                <input type="text" id="qa-drawer-search" class="qa-drawer-search" placeholder="Search title, author, keyword...">
-                <button id="qa-search-clear" class="qa-search-clear" style="display:none">&times;</button>
-            </div>
-            <div class="qa-drawer-filter-row">
-                <select id="qa-drawer-issue" class="qa-drawer-select"><option value="">All issues</option></select>
-            </div>
-            <div class="qa-drawer-pills" id="qa-drawer-pills"></div>
-            <div class="qa-drawer-list" id="qa-drawer-list"></div>
-            <div class="qa-drawer-nav">
-                <button id="btn-prev" class="qa-btn qa-btn-nav" title="Previous (Left arrow)">&lsaquo; Previous</button>
-                <button id="btn-next" class="qa-btn qa-btn-nav" title="Next (Right arrow)">Next &rsaquo;</button>
-                <button id="btn-random" class="qa-btn qa-btn-nav qa-btn-random" title="Random unreviewed article">&#127922; Random</button>
 
+            <div class="qa-drawer-header">
+                <input type="text" class="qa-drawer-search" placeholder="Search title, author, keyword..."
+                    x-model="searchQuery" @input="refilter()">
+                <button class="qa-search-clear" x-show="searchQuery" @click="searchQuery=''; refilter()">&times;</button>
             </div>
-            <div class="qa-drawer-footer" id="qa-drawer-footer"></div>
+
+            <div class="qa-drawer-filter-row">
+                <select class="qa-drawer-select" x-model="issueFilter" @change="refilter()">
+                    <option value="">All issues</option>
+                    <template x-for="iss in allIssues" :key="iss.key">
+                        <option :value="iss.key" x-text="'Issue ' + iss.key + ' (' + iss.count + ')'"></option>
+                    </template>
+                </select>
+            </div>
+
+            <div class="qa-drawer-pills">
+                <template x-for="p in statusPills" :key="p.key">
+                    <button class="qa-drawer-pill" :class="{ active: isStatusActive(p.key) }"
+                        @click="toggleStatus(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
+                </template>
+                <template x-for="p in sectionPills" :key="p.key">
+                    <button class="qa-drawer-pill" :class="{ active: isSectionActive(p.key) }"
+                        @click="toggleSection(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
+                </template>
+            </div>
+
+            <div class="qa-drawer-list">
+                <template x-for="item in workingSetArticles" :key="item.artIdx">
+                    <div class="qa-drawer-item" :class="{ active: item.active }" @click="selectArticle(item.si)">
+                        <span class="qa-drawer-item-num" x-text="item.num"></span>
+                        <span :class="item.statusCls" x-text="item.icon"></span>
+                        <span class="qa-drawer-item-title" x-text="item.title"></span>
+                    </div>
+                </template>
+                <div x-show="workingSet.length === 0" style="padding:20px;text-align:center;color:rgba(255,255,255,0.35)">No articles match</div>
+            </div>
+
+            <div class="qa-drawer-nav">
+                <button class="qa-btn qa-btn-nav" :disabled="!canGoPrev" @click="navigate(-1)">&lsaquo; Previous</button>
+                <button class="qa-btn qa-btn-nav" :disabled="!canGoNext" @click="navigate(1)">Next &rsaquo;</button>
+                <button class="qa-btn qa-btn-nav qa-btn-random" @click="goToRandom()">&#127922; Random</button>
+            </div>
+
+            <div class="qa-drawer-footer">
+                <span x-text="positionDisplay"></span>
+                <button class="qa-drawer-clear" x-show="hasFilters" @click="clearFilters()">Clear all filters</button>
+            </div>
         </div>
 
-        <!-- Top bar: minimal — title detail + actions -->
+        <!-- Top bar -->
         <div class="qa-top">
             <div class="qa-row-1">
-                <span class="qa-title" id="qa-title">Loading...</span>
-                <span class="qa-authors" id="qa-authors"></span>
-                <span id="qa-section" style="display:none"></span>
-                <span id="qa-issue" style="display:none"></span>
-                <span id="qa-pages" style="display:none"></span>
+                <span class="qa-title" x-text="titleDisplay"></span>
+                <span class="qa-authors" x-text="authorsDisplay"></span>
             </div>
             <div class="qa-row-2">
-                <span class="qa-badge" id="qa-status"></span>
-                <div class="qa-progress" id="qa-progress"></div>
+                <span :class="statusClass" @click="showFixReason()" :title="article?.comment || ''"
+                    x-text="statusLabel" :style="article?.status === 'needs_fix' ? 'cursor:pointer' : ''"></span>
+                <div class="qa-progress" x-text="progressDisplay" @click="openDashboard()"></div>
                 <span class="qa-row-spacer"></span>
-                <div class="qa-btn-wrap">
-                    <button id="btn-reject" class="qa-btn qa-btn-reject" title="Request Fix (R)">Request Fix</button>
-                    <span id="feedback-reject" class="qa-feedback qa-feedback-reject"></span>
-                </div>
-                <div class="qa-btn-wrap">
-                    <button id="btn-approve" class="qa-btn qa-btn-approve" title="Approve (A)">Approve</button>
-                    <span id="feedback-approve" class="qa-feedback qa-feedback-approve"></span>
-                </div>
+                <template x-if="!showRejectForm">
+                    <div style="display:flex;gap:8px;">
+                        <button class="qa-btn qa-btn-reject" @click="requestFix()" :disabled="submitting"
+                            title="Request Fix (R)">Request Fix</button>
+                        <button class="qa-btn qa-btn-approve" @click="approve()" :disabled="submitting"
+                            title="Approve (A)">Approve</button>
+                    </div>
+                </template>
             </div>
-            <div class="qa-row-reject" id="qa-row-reject" style="display:none">
-                <textarea id="reject-comment" class="qa-textarea" placeholder="What needs fixing? Describe the issue..." rows="3"></textarea>
-                <button id="btn-submit-reject" class="qa-btn qa-btn-reject-submit" title="Submit fix request (Ctrl+Enter)">Request Fix</button>
-                <span class="qa-reject-hint">Ctrl+Enter to submit, Esc to cancel</span>
+            <div class="qa-row-reject" x-show="showRejectForm" x-cloak>
+                <textarea class="qa-textarea" x-model="rejectComment" x-ref="rejectTextarea"
+                    placeholder="What needs fixing? Describe the issue..." rows="3"
+                    @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()" @keydown.escape="cancelFix()"></textarea>
+                <button class="qa-btn qa-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
+                    title="Ctrl+Enter to submit">Request Fix</button>
+                <button class="qa-btn qa-btn-nav" @click="cancelFix()">Cancel</button>
             </div>
         </div>
 
-        <!-- Left pane: PDF viewer -->
+        <!-- PDF viewer -->
         <div class="qa-left">
             <div class="qa-pdf-toolbar">
-                <span id="pdf-page-info">Page - of -</span>
+                <span id="pdf-page-info" x-text="pdfLoading ? 'Loading...' : ''">Page - of -</span>
             </div>
             <div id="pdf-container" class="qa-pdf-container"></div>
         </div>
 
-        <!-- Right pane: HTML galley + end-matter -->
+        <!-- HTML galley + end-matter -->
         <div class="qa-right">
-            <div id="html-content" class="qa-html-content">
-                <p>Loading HTML galley...</p>
+            <div class="qa-html-content">
+                <div x-show="htmlLoading" class="qa-loading">Loading HTML...</div>
+                <div x-show="!htmlLoading" x-html="htmlContent"></div>
             </div>
-            <div id="endmatter-section" class="qa-endmatter">
+            <div class="qa-endmatter" x-show="hasClassification">
                 <h3 class="qa-endmatter-heading">End-Matter Classification</h3>
-                <div id="endmatter-items"></div>
+                <template x-for="item in classificationItems" :key="item.text">
+                    <div class="qa-endmatter-item">
+                        <span class="qa-pill" :class="item.cls" x-text="item.label"></span>
+                        <span class="qa-endmatter-text" x-text="item.text"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Help overlay -->
+        <div class="qa-help-overlay" x-show="showHelp" x-cloak @click="showHelp = false"
+            role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+            <div class="qa-help-box" @click.stop>
+                <h3>Keyboard Shortcuts</h3>
+                <table>
+                    <tr><td><kbd>&larr;</kbd> / <kbd>&rarr;</kbd></td><td>Previous / Next article</td></tr>
+                    <tr><td><kbd>A</kbd></td><td>Approve article</td></tr>
+                    <tr><td><kbd>R</kbd></td><td>Request Fix (opens form)</td></tr>
+                    <tr><td><kbd>Ctrl+Enter</kbd></td><td>Submit fix request</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Cancel / close</td></tr>
+                    <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+                </table>
+                <p>Press any key to close</p>
             </div>
         </div>
     </div>
 
-    <script>
-        window.QA_CONFIG = {
-            apiBase: '{$apiBase}',
-            pluginUrl: '{$pluginUrl}',
-            csrfToken: '{$csrfToken}'
-        };
-    </script>
-    <script src="{$pluginUrl}/js/pdf.min.js"></script>
-    <script src="{$pluginUrl}/js/qa-review.js"></script>
-</body>
-</html>
-HTML;
+HTMLBODY;
+        echo '<script>window.QA_CONFIG = { apiBase: "' . $apiBase . '", pluginUrl: "' . $pluginUrl . '", csrfToken: "' . $csrfToken . '" };</script>';
+        echo '<script src="' . $pluginUrl . '/js/alpine.min.js" defer></script>';
+        echo '<script src="' . $pluginUrl . '/js/pdf.min.js"></script>';
+        echo '<script src="' . $pluginUrl . '/js/qa-app.js"></script>';
+        echo '</body></html>';
         exit;
     }
 }
