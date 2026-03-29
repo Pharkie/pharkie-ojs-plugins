@@ -1,14 +1,10 @@
 # QA Splits Plugin
 
-Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: PDF (left), HTML galley + end-matter classification (right), metadata + review controls (top).
-
-![QA Splits review interface](images/qa-splits-with-content.png)
-
-![QA Progress dashboard](images/qa-splits-dashboard.png)
+Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: sidebar (left), PDF (centre), HTML galley + end-matter classification (right).
 
 ## Purpose
 
-After the backfill pipeline splits issue PDFs into per-article PDFs, generates JATS XML, classifies end-matter, and produces HTML galleys, a human reviewer needs to verify the results visually. This plugin provides a rapid review workflow:
+After the backfill pipeline produces HTML galleys and imports them into OJS, a human reviewer needs to verify the results visually. This plugin provides a rapid review workflow:
 
 1. Compare PDF source against HTML output side-by-side
 2. Verify end-matter classification (references, notes, bios, provenance) is correct
@@ -19,9 +15,8 @@ After the backfill pipeline splits issue PDFs into per-article PDFs, generates J
 ## Requirements
 
 - OJS 3.5+
-- Articles must be imported into OJS before QA (needs OJS submission_id)
-- Backfill output directory mounted in the OJS container (for JATS/PDF/HTML files)
-- Journal Manager or Site Admin role
+- Articles must be imported into OJS (needs submission_id, HTML/PDF galleys, citations)
+- Any authenticated OJS user can access and review
 
 ## Installation
 
@@ -34,210 +29,164 @@ Already configured in `docker-compose.yml`:
 - ./plugins/qa-splits/api/v1/qa-splits:/var/www/html/api/v1/qa-splits:ro
 ```
 
-The plugin is auto-enabled by `scripts/setup-ojs.sh` when `QA_SPLITS_ENABLED=1` (default). Set `QA_SPLITS_ENABLED=0` in `.env` to disable (recommended for live).
+The plugin is auto-enabled by `scripts/setup-ojs.sh` when `QA_SPLITS_ENABLED=1` (default).
 
-### Manual (non-Docker)
+### Manual (non-Docker / live)
 
 1. Copy `plugins/qa-splits/` to `plugins/generic/qaSplits/` in your OJS installation
 2. Copy `plugins/qa-splits/api/v1/qa-splits/` to `api/v1/qa-splits/` in your OJS installation
-3. Add to `config.inc.php`:
-   ```ini
-   [qa-splits]
-   backfill_output_dir = "/path/to/backfill/output"
-   ```
-4. Enable in OJS admin: Website > Plugins > Generic > QA Splits
+3. Enable in OJS admin: Website > Plugins > Generic > QA Splits
 
-## Configuration
+No configuration needed — the plugin reads all data from the OJS database and file storage.
 
-In `config.inc.php`:
+## Data Sources
 
-```ini
-[qa-splits]
-backfill_output_dir = "/data/sample-issues"
-```
+All data comes from OJS — no filesystem access to backfill output is required:
 
-This should point to the directory containing issue subdirectories with JATS, PDF, and HTML files. In Docker dev, this is mounted from `private/backfill/output/`.
+| Data | OJS Source |
+|------|-----------|
+| Article metadata | `publications`, `submissions`, `issues` tables |
+| PDF galley | OJS file storage (`publication_galleys` → `files`) |
+| HTML galley | OJS file storage (includes `jats-*` wrapper divs) |
+| References | `citations` table (structured citations from import) |
+| Notes/Bios/Provenance counts | Counted from `jats-notes`/`jats-bios`/`jats-provenance` divs in HTML galley |
+| Review history | `qa_split_reviews` table (plugin's own table) |
 
 ## Usage
 
 ### Accessing the QA interface
 
-Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requires Journal Manager or Site Admin login. There's also a floating "QA Splits" button on the OJS dashboard (visible to managers only).
+Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requires any authenticated OJS login. There's also a floating "QA Splits" button on the OJS dashboard.
 
-Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/qa-splits?id=9494`.
+Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/qa-splits?id=9207`.
 
 ### Interface layout
 
 ```
-+------------------------------------------------------------------+
-| ← Back | QA SPLITS | 37.1 #2 (2026) Title [section] by Authors  |
-| APPROVED 28MAR26  3 approved / 12 rejected / ... / View stats    |
-|   [‹ Previous] [Next ›] [Random] [Next Rejected] [Approve] [Reject]
-+-------------------------------+----------------------------------+
-| LEFT: PDF Viewer              | RIGHT: HTML Galley               |
-| Page 3 of 12                  | (scrollable, selectable text)    |
-| [scrollable, selectable text] |                                  |
-|                               | ─── End-Matter Classification ─ |
-|                               | [Reference] Smith, J. (2020)... |
-|                               | [Note] See also Winnicott...    |
-+-------------------------------+----------------------------------+
++------------+---------------------------+---------------------------+
+| SIDEBAR    | PDF Viewer                | Article Metadata          |
+| Search     | Page 3 of 12              | Issue / Title / Authors   |
+| Filters    | [scrollable PDF pages]    | DOI / Keywords / Abstract |
+| Article    |                           |─────────────────────────  |
+| list       |                           | HTML Galley               |
+|            |                           | (body text)               |
+| 4/12       |                           |                           |
+| ‹ Prev     |                           | [Author bio]              |
+| Next ›     |                           |───────────────────────────|
+|            |                           | End-Matter Classification |
+|            |                           | Author Bios (1)           |
+|            |                           | References (10)           |
++------------+---------------------------+---------------------------+
 ```
 
-**Row 1**: ← Back (returns to previous position after Random/Problem jump), app name, article title (with issue/sequence/year/section/authors inline).
+**Sidebar**: Search, issue/status/section filter pills, scrollable article list with status icons (✓ approved, ⚠ needs fix, · unreviewed), position counter, navigation.
 
-**Row 2**: Status badge, progress counter (each number clickable to list those articles, "View stats" opens dashboard), navigation buttons, Approve/Reject.
+**Top bar**: Article title/authors (wrapping), status badge, progress counter, Request Fix / Approve buttons.
 
-**Reject row**: Clicking Reject hides the Approve/Reject buttons and expands a full-width textarea row for the rejection reason. Prepopulated with existing comment if re-rejecting. "Reject with Reason" button or Ctrl+Enter to submit, Esc to cancel.
+**Right pane**: Article metadata header (issue, title, authors, DOI, pages, keywords, abstract), then HTML galley body, then end-matter classification panel.
 
-**Approve/Reject auto-advance**: Both actions automatically load the next article after recording the review.
+### End-matter classification
 
-### Progress counter
+The classification panel shows what the pipeline extracted:
 
-The progress bar shows clickable numbers: `3 approved / 12 rejected / 1403 total / 1388 remaining / View stats`. Clicking a number opens a scrollable list of those articles (with rejection reasons shown in red). Click any article in the list to navigate to it. "View stats" opens the full dashboard overlay with donut chart and section breakdown.
+- **Author Bios** — count only (content visible in the HTML above, labelled with "Author bio" CSS marker)
+- **References** — full list from OJS citations table (not in HTML galley — OJS renders these separately)
+- **Notes** — count only (visible in HTML above)
+- **Provenance** — count only (visible in HTML above)
+
+Pipeline-extracted content in the HTML galley is marked with a left border and label via CSS (`jats-notes`, `jats-bios`, `jats-provenance` classes). If content appears without this marker, it wasn't extracted by the pipeline.
+
+### Sidebar filters
+
+- **Search**: filters by title, author, or keyword (client-side, instant)
+- **Issue dropdown**: filter to a single issue
+- **Status pills**: Approved / Needs Fix / Unreviewed (counts reflect current filter context)
+- **Section pills**: Articles / Editorials / Book Reviews etc.
+
+All pill counts are contextual — they show how many articles match if you click that pill, given the other active filters.
 
 ### Keyboard shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Left arrow` | Previous article (sequential) |
-| `Right arrow` | Next article (sequential) |
-| `A` | Approve and advance to next |
-| `R` | Open rejection textarea |
-| `Ctrl+Enter` | Submit rejection (when textarea is focused) |
-| `Escape` | Close rejection textarea / help overlay |
-| `?` | Show keyboard shortcuts help |
+| `←` / `→` | Previous / Next article |
+| `A` | Approve and advance |
+| `R` | Open Request Fix form |
+| `Ctrl+Enter` | Submit fix request |
+| `Escape` | Cancel / close |
+| `?` | Toggle keyboard shortcuts help |
 
 ### Review workflow
 
-1. **Compare**: Look at PDF (left) and HTML (right) side by side. Check that text extraction is correct, formatting is preserved, and no content is missing.
-
-2. **Check end-matter**: Scroll down in the right pane to see classified items with category pills:
-   - **Reference** (blue) — bibliographic citations
-   - **Note** (amber) — editorial notes, cross-references
-   - **Bio** (green) — author biographical information
-   - **Provenance** (gray) — publication history ("This article was originally...")
-
-3. **Decide**: Press `A` to approve or `R` to reject with a comment explaining the issue.
-
-4. **Navigate**: Use arrow keys for sequential review, "Random" for unreviewed articles, or "Problem Case" to find rejected/invalidated articles.
-
-### Navigation modes
-
-- **Sequential** (Prev/Next): Moves through articles ordered by issue (volume desc, number desc) then by sequence within issue. Crosses issue boundaries automatically.
-- **Last Seen**: Returns to the last article you viewed (persisted in browser localStorage).
-- **Random**: Jumps to a random unreviewed article.
-- **Problem Case**: Priority order: rejected articles first, then hash-invalidated (content changed after approval), then unreviewed.
+1. **Compare**: PDF (left) vs HTML (right) side-by-side
+2. **Check metadata**: Title, authors, DOI, abstract correct?
+3. **Check end-matter**: References count reasonable? Bios extracted? Notes present?
+4. **Check HTML markers**: Pipeline-extracted content has border labels. Unmarked content = not extracted.
+5. **Decide**: `A` to approve, `R` to request fix with comment
 
 ### Content invalidation
 
-When a review is submitted, the plugin computes a SHA256 hash of the HTML galley + JATS file content. If either file is regenerated (e.g., re-running `jats_to_html.py` or `extract_citations.py`), the hash changes and the review is marked as **INVALIDATED**. This means the approved content no longer matches what was reviewed.
-
-Invalidated articles appear with an amber "Invalidated" badge and are surfaced by the "Problem Case" button.
+When a review is submitted, a SHA256 hash of the HTML galley is stored. If the galley is reimported with different content, the hash changes and the review is marked **INVALIDATED**.
 
 ## API Endpoints
 
-All endpoints require authenticated Manager/Admin session. Base: `/api/v1/qa-splits/`.
+All endpoints require authenticated session. Base: `/api/v1/qa-splits/`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/articles` | List all articles with issue info, review status, hash validity |
-| `GET` | `/articles/{id}` | Single article metadata + full review history |
-| `GET` | `/articles/{id}/pdf` | Stream PDF galley (backfill files, fallback to OJS storage) |
+| `GET` | `/articles` | List all articles with metadata, review status |
+| `GET` | `/articles/{id}` | Single article + full review history |
+| `GET` | `/articles/{id}/pdf` | Stream PDF galley from OJS storage |
 | `GET` | `/articles/{id}/html` | Return HTML galley body (sandboxed) |
-| `GET` | `/articles/{id}/classification` | JATS back-matter parsed into categorized items |
+| `GET` | `/articles/{id}/classification` | References (from citations table) + notes/bios/provenance counts |
 | `POST` | `/reviews` | Submit review: `{submissionId, decision, comment}` |
 | `GET` | `/nav/random-unreviewed` | Random unreviewed submission_id |
 | `GET` | `/nav/problem-case` | Next problem case with reason |
-| `GET` | `/stats` | QA progress: overall counts, section breakdown, reviewer depth |
+| `GET` | `/stats` | QA progress: overall counts, section breakdown |
 
 ### CSRF protection
 
-The POST endpoint requires an `X-Csrf-Token` header matching the OJS session token. The QA page embeds this token automatically.
+POST requires `X-Csrf-Token` header matching the OJS session token.
 
 ## Database
 
-The plugin creates a `qa_split_reviews` table via migration:
+The plugin creates a `qa_split_reviews` table:
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `review_id` | BIGINT PK | Auto-increment |
 | `submission_id` | BIGINT | OJS submission_id |
 | `publication_id` | BIGINT | OJS publication_id at review time |
-| `user_id` | BIGINT | OJS user_id of reviewer |
-| `username` | VARCHAR(255) | Snapshot of username at review time |
-| `decision` | ENUM | `'approved'` or `'rejected'` |
-| `comment` | TEXT | Rejection reason (null for approvals) |
-| `content_hash` | VARCHAR(64) | SHA256 of HTML+JATS at review time |
+| `user_id` | BIGINT | Reviewer's OJS user_id |
+| `username` | VARCHAR(255) | Snapshot of username |
+| `decision` | ENUM | `'approved'` or `'needs_fix'` |
+| `comment` | TEXT | Fix reason (null for approvals) |
+| `content_hash` | VARCHAR(64) | SHA256 of HTML galley at review time |
 | `created_at` | DATETIME | Timestamp |
 
-Multiple reviews per article are stored (audit trail). The most recent review is the current status.
-
-## File mapping
-
-The plugin maps OJS `submission_id` to backfill files by scanning JATS XML files in the configured output directory and reading `<article-id pub-id-type="publisher-id">`. This publisher-id equals the OJS submission_id (set by `restore_ids.py` after import).
-
-Articles without a publisher-id in their JATS file are flagged as warnings in the articles list response (meaning they haven't been imported into OJS yet).
+Multiple reviews per article stored (audit trail). Most recent = current status.
 
 ## Security
 
-- All endpoints verify Manager or Site Admin role via OJS session auth
+- All endpoints require authenticated OJS session
 - Per-article endpoints validate `context_id` (IDOR protection)
-- HTML galley script tags stripped client-side before rendering
+- HTML galley script tags stripped before rendering
 - HTML endpoint returns `Content-Security-Policy: script-src 'none'`
 - CSRF token validated on review submission
-- File paths validated with `realpath()` to prevent traversal
-- Rejection comments limited to 5000 characters
-- PDF files streamed in 4KB chunks (same as OJS core), not loaded into memory
+- Fix comments limited to 5000 characters
 
 ## CLI Tool
 
-`backfill/qa_review.py` is the command-line equivalent of the web UI — approve, reject, check status, or list reviews. Useful for Claude sessions reviewing pipeline output without a browser.
-
-Articles can be specified three ways:
-- **Backfill path**: `29.2/03-on-the-phenomenon` (looks up publisher-id from JATS)
-- **Submission ID**: `9494` (direct)
-- **Title search**: `"embracing vulnerability"` (searched in OJS DB, must match exactly 1)
+`backfill/qa_review.py` is the command-line equivalent:
 
 ```bash
-# Approve:
-python3 backfill/qa_review.py approve 29.2/03-on-the-phenomenon
-
-# Reject with reason:
+python3 backfill/qa_review.py approve 9494
 python3 backfill/qa_review.py reject 9494 "references mixed with notes"
-
-# Check status + review history:
-python3 backfill/qa_review.py status 29.2/03-on-the-phenomenon
-
-# List problems (rejected):
+python3 backfill/qa_review.py status 9494
 python3 backfill/qa_review.py list
-
-# List all reviews:
-python3 backfill/qa_review.py list --all
-
-# Clear reviews:
-python3 backfill/qa_review.py clear 9494
-
-# Target live:
 python3 backfill/qa_review.py --target live list
 ```
 
-### Collaboration workflow
+## Reporting content issues
 
-The web UI and CLI share the same database table (`qa_split_reviews`). Reviews from either tool are visible in both:
-
-1. **Claude reviews pipeline output** via CLI, flags problems with `reject`
-2. **Human opens QA Splits web UI**, clicks "Next Problem" to see flagged articles
-3. **Human reviews visually** (PDF vs HTML side-by-side), approves or adds detail
-4. **Claude checks** via `qa_review.py status` or `list` to see what needs fixing
-5. **Claude fixes** pipeline scripts, regenerates content
-6. **Content hash invalidation** automatically flags previously-approved articles for re-review
-
-## E2E Tests
-
-Tests are in `e2e/tests/qa-splits/qa-splits.spec.ts`. Run with:
-
-```bash
-npx playwright test qa-splits
-```
-
-Tests cover: access control, page rendering, PDF/HTML display, keyboard navigation, review submission, progress tracking, and API authentication.
+The Inline HTML Galley plugin shows a "report a content issue" link on article pages. Logged-in users can expand a form and submit — this writes to the same `qa_split_reviews` table, visible in QA Splits.
