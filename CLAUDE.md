@@ -50,12 +50,13 @@ Pipeline scripts (called by `split-issue.sh`):
 
 JATS is the single source of truth for article content. The pipeline direction is **PDF → JATS → HTML**:
 
-1. `backfill/htmlgen.py` — sends split PDFs to Claude API, generates initial HTML body content
-2. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + HTML body. Output: `backfill/private/output/<vol.iss>/<seq>-<slug>.jats.xml`
-3. `backfill/extract_citations.py` — reads JATS `<body>`, finds reference sections, extracts items, writes to JATS `<back>` (ref-list, fn-group, bio, notes). Removes ref sections from body.
-4. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
-5. `backfill/jats_to_html.py` — generates HTML galley from JATS (body + notes + bios + provenance; references excluded — OJS renders those from citations table)
-6. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
+1. `backfill/htmlgen.py` — sends split PDFs to Claude API, generates initial HTML body content (`.raw.html`)
+2. `backfill/reprocess_html.py` → `backfill/postprocess_html.py` — deterministic post-processing: strip title/authors/abstract/keywords, trim bleed, normalise ALL CAPS headings to title case. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.html` from `.raw.html`.
+3. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + processed HTML body
+4. `backfill/extract_citations.py` — reads JATS `<body>`, extracts: reference sections (tail) → `<ref-list>`, notes → `<fn-group>`, author bio sections → `<bio>`, leading provenance notes (conference/presentation) → `<notes notes-type="provenance">`. Removes extracted content from body.
+5. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
+6. `backfill/jats_to_html.py` — generates HTML galley from JATS. Body text + notes/bios/provenance (in `jats-*` wrapper divs); references excluded (OJS renders from citations table)
+7. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
 
 QA Splits reads from OJS (citations table, HTML galleys, file storage) — not from local JATS files. The QA iteration loop is:
 
@@ -69,7 +70,7 @@ QA Splits reads from OJS (citations table, HTML galleys, file storage) — not f
 
 **Per-issue iteration takes ~8 seconds.** Always use `--issue` with `restore_ids.py` and `--force` with `import.sh` for single-issue work. Full reimport (`--wipe-articles`, ~20 min) only for systemic changes affecting all issues.
 
-Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, etc.)
+Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, is_provenance, looks_like_person_name, normalise_allcaps, etc.)
 
 toc.json retains issue-level data: PDF page splits, article ordering, section assignments, metadata, `issue_doi`, `issue_id`. Articles with `_manual_html` in toc.json have hand-corrected HTML galleys (same-page bleed the AI can't handle). `htmlgen.py` skips these automatically — delete the HTML file to force regeneration.
 
@@ -93,8 +94,10 @@ Standalone utilities:
 - `backfill/add_page_numbers.py` — auto-detect printed page numbers from source PDFs, populate toc.json
 - `backfill/push_page_numbers.py` — push page numbers to OJS database (dev or live) without re-import
 - `backfill/snapshot_ids.py` — capture submission IDs and DOIs from OJS database into JATS and toc.json
-- `backfill/restore_ids.py` — remap OJS IDs to match JATS publisher-id after import (safety net)
+- `backfill/restore_ids.py` — remap OJS IDs to match JATS publisher-id after import (supports `--issue` for per-issue)
 - `backfill/qa_review.py` — QA Splits CLI: approve, reject, status, list reviews (by path, submission_id, or title search)
+- `backfill/extract_subtitles.py` — detect and split title/subtitle in toc.json from raw HTML structure
+- `backfill/fix_html_bleed.py` — detect and strip start/end bleed, running headers, issue headers from HTML galleys
 
 All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
 
