@@ -58,37 +58,16 @@ class QaSplitsController extends PKPBaseController
     // ---------------------------------------------------------------
 
     /**
-     * Require authenticated user with Manager or Site Admin role.
+     * Require any authenticated user.
      * Returns null on success, or a JsonResponse error.
      */
-    private function requireManager(Request $request): ?JsonResponse
+    private function requireAuthenticated(Request $request): ?JsonResponse
     {
         $ojsRequest = Application::get()->getRequest();
         $user = $ojsRequest->getUser();
         if (!$user) {
             return new JsonResponse(['error' => 'Authentication required'], 401);
         }
-
-        $context = $ojsRequest->getContext();
-        $contextId = $context ? $context->getId() : 0;
-
-        $hasRole = DB::table('user_user_groups')
-            ->join('user_groups', 'user_user_groups.user_group_id', '=', 'user_groups.user_group_id')
-            ->where('user_user_groups.user_id', $user->getId())
-            ->where(function ($q) use ($contextId) {
-                $q->where('user_groups.role_id', Role::ROLE_ID_MANAGER)
-                  ->where('user_groups.context_id', $contextId);
-            })
-            ->orWhere(function ($q) use ($user) {
-                $q->where('user_user_groups.user_id', $user->getId())
-                  ->where('user_groups.role_id', Role::ROLE_ID_SITE_ADMIN);
-            })
-            ->exists();
-
-        if (!$hasRole) {
-            return new JsonResponse(['error' => 'Manager or Site Admin role required'], 403);
-        }
-
         return null;
     }
 
@@ -311,7 +290,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function listArticles(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $contextId = $this->getContextId();
@@ -461,7 +440,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function getArticle(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $submissionId = (int) $request->route('submissionId');
@@ -501,7 +480,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function getArticlePdf(Request $request): Response|JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $submissionId = (int) $request->route('submissionId');
@@ -526,7 +505,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function getArticleHtml(Request $request): Response|JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $submissionId = (int) $request->route('submissionId');
@@ -629,7 +608,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function getClassification(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $submissionId = (int) $request->route('submissionId');
@@ -658,7 +637,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function submitReview(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         // CSRF validation
@@ -717,7 +696,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function randomUnreviewed(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $contextId = $this->getContextId();
@@ -749,7 +728,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function problemCase(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $contextId = $this->getContextId();
@@ -793,7 +772,7 @@ class QaSplitsController extends PKPBaseController
      */
     public function getStats(Request $request): JsonResponse
     {
-        $authError = $this->requireManager($request);
+        $authError = $this->requireAuthenticated($request);
         if ($authError) return $authError;
 
         $contextId = $this->getContextId();
