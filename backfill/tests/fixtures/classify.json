@@ -1,0 +1,19 @@
+{
+  "_doc": "Combined classification test data. Each entry has text and expected class ('reference' or 'note').",
+  "_instructions": "If a test fails, fix the CODE not this file.",
+
+  "cases": [
+    {"text": "Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.", "expected": "reference"},
+    {"text": "Laing, R.D. (1960). The Divided Self. London: Tavistock.", "expected": "reference"},
+    {"text": "Nietzsche, F. (1997). Human, All too Human. Stanford: Stanford University Press.", "expected": "reference"},
+    {"text": "Jaspers, K. (1951) The Way to Wisdom. Trans. Manheim, R. New Haven and London: Yale University Press.", "expected": "reference"},
+    {"text": "Du Plock, S. (2017). Everyday Therapy. Existential Analysis, 28(1): 93-95.", "expected": "reference"},
+    {"text": "See Laing (1960) for further discussion.", "expected": "note"},
+    {"text": "Ibid., p. 45.", "expected": "note"},
+    {"text": "Emmy van Deurzen is a psychotherapist.", "expected": "note"},
+    {"text": "This article was delivered at the SEA conference.", "expected": "note"},
+    {"text": "https://example.com/paper.pdf", "expected": "note"},
+    {"text": "See Marcel 1948 for a fuller discussion of availability.", "expected": "note"},
+    {"text": "http://www.amazon.com/Highest-Duty-Search-Really-Matters/dp/0061924687", "expected": "note"}
+  ]
+}

@@ -215,7 +215,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
                 $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
                     . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
                     . 'This article has been digitally restored from an archive. If you spot errors or formatting issues, try the PDF version instead. Please, '
-                    . '<a href="#" class="ihg-report-link" onclick="document.getElementById(\'ihg-report-form\').style.display=\'block\';this.removeAttribute(\'href\');this.style.color=\'inherit\';this.style.textDecoration=\'none\';this.style.cursor=\'default\';this.onclick=null;return false;">report the content issue</a>.'
+                    . '<a href="#" class="ihg-report-link" onclick="document.getElementById(\'ihg-report-form\').style.display=\'block\';this.removeAttribute(\'href\');this.style.color=\'inherit\';this.style.textDecoration=\'none\';this.style.cursor=\'default\';this.onclick=null;return false;">request a fix</a>.'
                     . '<div id="ihg-report-form" style="display:none;margin-top:10px;">'
                     . '<textarea id="ihg-report-text" placeholder="Describe the issue you found..."'
                     . ' style="width:100%;min-height:80px;padding:8px 10px;border:1px solid #e0d8cc;border-radius:4px;'
@@ -257,7 +257,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
                 $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
                     . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
                     . 'This article has been digitally restored from an archive. If you spot errors or formatting issues, '
-                    . 'try the PDF version instead. Please, email ' . $emailLink . ' to report the issue.</div>';
+                    . 'try the PDF version instead. Please, email ' . $emailLink . ' to request a fix.</div>';
             }
         }
 

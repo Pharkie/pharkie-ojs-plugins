@@ -22,11 +22,12 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-# Import shared utilities from generate_xml.py
+# Import shared utilities
 sys.path.insert(0, os.path.dirname(__file__))
 from generate_xml import (
     parse_date, split_author_name, SECTIONS,
 )
+from lib.citations import sort_notes_by_number
 
 JOURNAL_TITLE = 'Existential Analysis'
 ISSN = '1752-5616'
@@ -343,20 +344,6 @@ def html_to_jats_body(html_content: str) -> str:
 # ---------------------------------------------------------------
 
 
-def _sort_notes_by_number(notes: list[str]) -> list[str]:
-    """Sort notes by their leading number (e.g. '3 Text...' before '4 Text...').
-
-    Notes without a leading number are placed at the end in original order.
-    """
-    def sort_key(note):
-        m = re.match(r'^(\d+)[\.\)\s]', note)
-        if m:
-            return (0, int(m.group(1)))
-        return (1, 0)  # unnumbered notes go last
-
-    return sorted(notes, key=sort_key)
-
-
 def generate_article_jats(article: dict, volume: int, issue: int,
                           date_published: str, html_path: Path | None,
                           doi: str | None,
@@ -487,7 +474,7 @@ def generate_article_jats(article: dict, volume: int, issue: int,
 
         # Notes/endnotes (sorted by leading number if present)
         if notes:
-            sorted_notes = _sort_notes_by_number(notes)
+            sorted_notes = sort_notes_by_number(notes)
             lines.append('<fn-group>')
             for i, note in enumerate(sorted_notes, 1):
                 lines.append(f'<fn id="fn{i}"><p>{escape(note)}</p></fn>')

@@ -1,0 +1,42 @@
+{
+  "_doc": "Note/endnote detection test data.",
+  "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
+
+  "with_reason": [
+    {"text": "See Laing, 1960, pp. 23-45 for further discussion.", "reason": "see-crossref"},
+    {"text": "see also May (1958) on this point.", "reason": "see-crossref"},
+    {"text": "cf. Heidegger (1927), Being and Time, p. 234.", "reason": "see-crossref"},
+    {"text": "Cf. Kierkegaard (1849).", "reason": "see-crossref"},
+    {"text": "See Marcel 1948 for a fuller discussion of availability.", "reason": "see-crossref"},
+    {"text": "See Thompson, 2000, for a thorough discussion of Freud's debt to the sceptic tradition.", "reason": "see-crossref"},
+    {"text": "See Thompson, 2004, for a more detailed discussion of the phenomenological foundation to Freud's treatment method.", "reason": "see-crossref"},
+    {"text": "Ibid., p. 45.", "reason": "ibid"},
+    {"text": "Ibidem.", "reason": "ibid"},
+    {"text": "Op. cit., p. 112.", "reason": "ibid"},
+    {"text": "Emmy van Deurzen is a psychotherapist in private practice.", "reason": "author-bio"},
+    {"text": "This article was delivered at the SEA conference.", "reason": "provenance"},
+    {"text": "https://example.com/paper.pdf", "reason": "url-only"},
+    {"text": "http://www.amazon.com/Highest-Duty-Search-Really-Matters/dp/0061924687", "reason": "url-only"}
+  ],
+
+  "classify_as_note": [
+    "See www.focusing.org for the clinical, research, and philosophical literature referred to in this paper.",
+    "As per regulations when permitted for exercise at the time.",
+    "For Narrative Therapy, see Michael White and David Epston (White & Epston, 1990)."
+  ],
+
+  "not_notes": [
+    "Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.",
+    "Laing, R.D. (1960). The Divided Self. London: Tavistock.",
+    "van Deurzen, E. (2012). Existential Counselling. London: Sage.",
+    "Heidegger, M. (1927). Being and Time. Trans. J. Macquarrie. Oxford: Blackwell.",
+    "Frankl, V. (1946). Man's Search for Meaning. Boston: Beacon Press.",
+    "Cooper, M. and McLeod, J. (2011). Pluralistic Counselling and Psychotherapy. Sage.",
+    "May, R. (1958). Existence. New York: Basic Books, pp. 37-91.",
+    "Yalom, I.D. (1980). Existential Psychotherapy. New York: Basic Books.",
+    "Spinelli, E. (2007). Practising Existential Psychotherapy. London: Sage.",
+    "Nussbaum, M. (2003). Upheavals of Thought: the Intelligence of Emotions. Cambridge University Press.",
+    "Jaspers, K. (1951) The Way to Wisdom. Trans. Manheim, R. Yale University Press.",
+    "Du Plock, S. (2017). Everyday Therapy. Existential Analysis, 28(1): 93-95."
+  ]
+}

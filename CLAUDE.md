@@ -101,6 +101,12 @@ Standalone utilities:
 
 All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
 
+### Regression tests
+
+Fixture-driven tests for all deterministic detection logic: `python3 -m pytest backfill/tests/ -v`
+
+Test data lives in **`backfill/tests/fixtures/*.json`** — one file per category (names, bios, references, notes, provenance, contacts, classify, postprocess). Each has true and false cases. **Never change a test to match implementation** — fixtures are human-verified ground truth. When QA finds a bug: add the case to the fixture (it should fail), then fix the code. See `CONTRIBUTING.md` for full workflow.
+
 ### Fixing a bad split or HTML galley
 
 1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`

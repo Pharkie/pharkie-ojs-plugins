@@ -41,6 +41,43 @@ Modular checks live in `scripts/lib/`.
 
 ## Testing
 
+### Backfill regression tests
+
+Fixture-driven regression tests for the backfill pipeline's deterministic detection logic (name detection, citation classification, HTML post-processing, etc.).
+
+**Test data lives in `backfill/tests/fixtures/*.json`** — human-readable JSON files, one per category. Each fixture has both true cases (should be detected) and false cases (should NOT be detected). Open these files directly to review or update ground truth.
+
+```bash
+# Run all backfill tests
+python3 -m pytest backfill/tests/ -v
+
+# Run a specific test file
+python3 -m pytest backfill/tests/test_citations.py -v
+```
+
+**QA-driven workflow — when you find a bug during QA:**
+
+1. Add the exact text to the relevant fixture JSON (`backfill/tests/fixtures/*.json`) — as a `true` entry if it was missed, or `false` if it was wrongly detected
+2. Run `python3 -m pytest backfill/tests/` — the new case should **fail**
+3. Fix the implementation (in `backfill/lib/citations.py`, `backfill/postprocess_html.py`, etc.)
+4. Run tests again — new case passes, no other tests break
+5. **Never change a test to match implementation.** If a test fails, the code is wrong, not the test. The fixtures are human-verified ground truth.
+
+**Fixture files:**
+
+| File | What it tests |
+|---|---|
+| `names.json` | Person name detection (`looks_like_person_name`) — Western, East Asian, Arabic, South Asian, Turkish, African, Russian, Greek, Spanish, accented, particles, initials, hyphenated; false cases include article titles and English phrases |
+| `bios.json` | Author bio detection (`is_author_bio`) |
+| `references.json` | Bibliographic reference detection (`is_reference`) |
+| `notes.json` | Note/endnote detection with expected reason (`is_note`) |
+| `provenance.json` | Provenance note detection (`is_provenance`) |
+| `contacts.json` | Contact detail detection (`is_author_contact`) |
+| `classify.json` | Combined reference-vs-note classification (`classify`) |
+| `postprocess.json` | HTML post-processing: `strip_title`, `strip_authors`, `strip_abstract`, `strip_keywords`, `strip_start_bleed`, `strip_end_bleed`, `postprocess_article` |
+
+### E2E tests
+
 E2E tests use Playwright. Run from the project root (never from `e2e/`):
 
 ```bash

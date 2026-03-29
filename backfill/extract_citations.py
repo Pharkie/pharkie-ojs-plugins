@@ -31,12 +31,21 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import (
     find_jats_reference_sections, is_junk, is_citation_like, is_author_bio,
-    is_provenance, classify, citation_confidence, note_confidence,
-    bio_confidence, provenance_confidence, extract_text_from_element,
+    is_provenance, classify, extract_text_from_element, sort_notes_by_number,
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "private" / "output"
+
+
+def _vol_sort_key(path):
+    """Sort key for toc.json paths by volume.issue number."""
+    name = path.parent.name
+    parts = name.split('.')
+    try:
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 1)
+    except ValueError:
+        return (999, 999)
 
 
 # ---------------------------------------------------------------
@@ -208,7 +217,7 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
     # Write notes (sorted by leading number)
     notes = extracted['notes'] if extracted['notes'] else existing_notes
     if notes:
-        notes = _sort_notes_by_number(notes)
+        notes = sort_notes_by_number(notes)
         fn_group = ET.SubElement(back, 'fn-group')
         for i, note_text in enumerate(notes, 1):
             fn = ET.SubElement(fn_group, 'fn', id=f'fn{i}')
@@ -245,14 +254,6 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
         f.write('\n')
 
 
-def _sort_notes_by_number(notes: list[str]) -> list[str]:
-    """Sort notes by their leading number."""
-    def sort_key(note):
-        m = re.match(r'^(\d+)[\.\)\s]', note)
-        return (0, int(m.group(1))) if m else (1, 0)
-    return sorted(notes, key=sort_key)
-
-
 # ---------------------------------------------------------------
 # Main processing
 # ---------------------------------------------------------------
@@ -267,15 +268,7 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
     else:
         toc_files = sorted(OUTPUT_DIR.glob('*/toc.json'))
 
-    def vol_sort_key(path):
-        name = path.parent.name
-        parts = name.split('.')
-        try:
-            return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 1)
-        except ValueError:
-            return (999, 999)
-
-    toc_files = sorted(toc_files, key=vol_sort_key)
+    toc_files = sorted(toc_files, key=_vol_sort_key)
     stats = Counter()
 
     for toc_path in toc_files:
@@ -338,7 +331,7 @@ def process_all(volume_filter=None, dry_run=False, verbose=False):
 
 SHEET_HEADERS = [
     'Volume', 'Issue', 'Date', 'Section', 'Article Title', 'Authors',
-    'Seq', 'Heading', 'Class', 'Confidence', 'Text', 'Matched DOI', 'Crossref Citation',
+    'Seq', 'Heading', 'Class', 'Text', 'Matched DOI', 'Crossref Citation',
 ]
 
 
@@ -352,15 +345,7 @@ def load_citations_for_sheet(volume_filter=None):
     else:
         toc_files = sorted(OUTPUT_DIR.glob('*/toc.json'))
 
-    def vol_sort_key(path):
-        name = path.parent.name
-        parts = name.split('.')
-        try:
-            return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 1)
-        except ValueError:
-            return (999, 999)
-
-    toc_files = sorted(toc_files, key=vol_sort_key)
+    toc_files = sorted(toc_files, key=_vol_sort_key)
     rows = []
 
     for toc_path in toc_files:
@@ -396,10 +381,9 @@ def load_citations_for_sheet(volume_filter=None):
                 if ref.text and ref.text.strip():
                     seq += 1
                     text = ref.text.strip()
-                    confidence = citation_confidence(text, 'References')
                     rows.append([
                         volume, issue, date, section, title, authors,
-                        seq, 'References', 'reference', confidence,
+                        seq, 'References', 'reference',
                         text, '', '',
                     ])
 
@@ -408,10 +392,9 @@ def load_citations_for_sheet(volume_filter=None):
                 if p is not None and p.text and p.text.strip():
                     seq += 1
                     text = p.text.strip()
-                    confidence = note_confidence(text)
                     rows.append([
                         volume, issue, date, section, title, authors,
-                        seq, 'Notes', 'note', confidence,
+                        seq, 'Notes', 'note',
                         text, '', '',
                     ])
 
@@ -420,10 +403,9 @@ def load_citations_for_sheet(volume_filter=None):
                 if p is not None and p.text and p.text.strip():
                     seq += 1
                     text = p.text.strip()
-                    confidence = bio_confidence(text)
                     rows.append([
                         volume, issue, date, section, title, authors,
-                        seq, '', 'author_bio', confidence,
+                        seq, '', 'author_bio',
                         text, '', '',
                     ])
 
@@ -433,10 +415,9 @@ def load_citations_for_sheet(volume_filter=None):
                 if p is not None and p.text and p.text.strip():
                     seq += 1
                     text = p.text.strip()
-                    confidence = provenance_confidence(text)
                     rows.append([
                         volume, issue, date, section, title, authors,
-                        seq, '', 'provenance', confidence,
+                        seq, '', 'provenance',
                         text, '', '',
                     ])
 
@@ -481,7 +462,7 @@ def export_to_sheet(rows, dry_run=False):
     num_cols = len(SHEET_HEADERS)
     ws.set_basic_filter(f'A1:{col_letter}{num_rows}')
 
-    confidence_col_index = SHEET_HEADERS.index('Confidence')
+    class_col_index = SHEET_HEADERS.index('Class')
     body = {
         'requests': [{
             'sortRange': {
@@ -493,7 +474,7 @@ def export_to_sheet(rows, dry_run=False):
                     'endColumnIndex': num_cols,
                 },
                 'sortSpecs': [{
-                    'dimensionIndex': confidence_col_index,
+                    'dimensionIndex': class_col_index,
                     'sortOrder': 'ASCENDING',
                 }],
             }
