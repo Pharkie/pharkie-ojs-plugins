@@ -306,7 +306,7 @@ HTMLSTART;
         <!-- HTML galley + end-matter -->
         <div class="qa-right">
             <div class="qa-article-meta" x-show="article">
-                <div class="qa-meta-issue" x-text="(article?.issue_title || '') + ' ' + (article?.volume || '') + '.' + (article?.number || '') + ': ' + (article?.year || '')"></div>
+                <div class="qa-meta-issue" x-text="(article?.issue_title || '') + ' ' + (article?.volume || '') + '.' + (article?.number || '') + ': ' + (article?.year || '') + ' · #' + (article?.submission_id || '')"></div>
                 <h1 class="qa-meta-title" x-text="article?.title"></h1>
                 <h2 class="qa-meta-subtitle" x-show="article?.subtitle" x-text="article?.subtitle"></h2>
                 <div class="qa-meta-authors" x-show="article?.authors?.length">

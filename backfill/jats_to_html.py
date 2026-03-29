@@ -162,10 +162,7 @@ def _element_to_html(element) -> str:
         return f'<p>{_inline_content(element)}</p>'
 
     elif tag == 'disp-quote':
-        inner = []
-        for child in element:
-            inner.append(_element_to_html(child))
-        return f'<blockquote>{"".join(inner)}</blockquote>'
+        return f'<blockquote>{_inline_content(element)}</blockquote>'
 
     elif tag == 'list':
         list_type = element.get('list-type', 'bullet')
