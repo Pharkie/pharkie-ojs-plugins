@@ -187,6 +187,39 @@ python3 backfill/qa_review.py list
 python3 backfill/qa_review.py --target live list
 ```
 
+## QA iteration workflow
+
+QA Splits reads from OJS — pipeline changes require reimport to be visible.
+
+**Per-issue iteration** (~3-4 min, for targeted fixes):
+```bash
+# 1. Fix pipeline code
+# 2. Reprocess from raw
+python3 backfill/reprocess_html.py backfill/private/output/23.1/toc.json
+# 3. JATS pipeline
+python3 backfill/generate_jats.py backfill/private/output/23.1/toc.json
+python3 backfill/extract_citations.py --extract --volume 23.1
+python3 backfill/split_citation_tiers.py
+python3 backfill/jats_to_html.py backfill/private/output/23.1/toc.json
+# 4. Regenerate import XML
+python3 backfill/generate_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
+# 5. Reimport just that issue
+backfill/import.sh backfill/private/output/23.1 --force
+# 6. Restore IDs
+python3 backfill/restore_ids.py --target dev
+# 7. Check in QA Splits
+```
+
+**Full reimport** (~20 min, for systemic changes):
+```bash
+# Reprocess all, run full pipeline on all, regenerate all XML
+for t in backfill/private/output/*/toc.json; do
+  python3 backfill/generate_xml.py "$t" -o "$(dirname "$t")/import.xml"
+done
+backfill/import.sh backfill/private/output/* --wipe-articles
+python3 backfill/restore_ids.py --target dev
+```
+
 ## Reporting content issues
 
-The Inline HTML Galley plugin shows a "report a content issue" link on article pages. Logged-in users can expand a form and submit — this writes to the same `qa_split_reviews` table, visible in QA Splits.
+The Inline HTML Galley plugin shows a "request a fix" link on article pages. Logged-in users can expand a form and submit — this writes to the same `qa_split_reviews` table, visible in QA Splits.
