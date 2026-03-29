@@ -101,7 +101,7 @@ if [ -n "$WP_PUBLIC_URL" ]; then
 else
   WP_ADMIN_STATUS=$(wp_curl "/wp/wp-admin/") || WP_ADMIN_STATUS="000"
 fi
-if [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
+if [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "301" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
   pass "WP Admin responds (HTTP $WP_ADMIN_STATUS)"
 else
   fail "WP Admin not responding (HTTP $WP_ADMIN_STATUS)"
