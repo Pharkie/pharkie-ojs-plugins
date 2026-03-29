@@ -5,6 +5,9 @@
  * PDF.js rendering stays imperative (it's a canvas library).
  */
 
+// Non-reactive state — PDF.js objects can't be proxied (private class fields)
+const _pdf = { doc: null, loadGen: 0, scrollHandler: null };
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('qaApp', () => ({
         // Config
@@ -46,10 +49,6 @@ document.addEventListener('alpine:init', () => {
         // Prefetch
         prefetchCache: new Map(),
 
-        // PDF state (non-reactive, managed imperatively)
-        _pdfDoc: null,
-        _loadGen: 0,
-        _scrollHandler: null,
 
         // ── Lifecycle ──
 
@@ -173,7 +172,7 @@ document.addEventListener('alpine:init', () => {
 
         loadArticle(index) {
             if (index < 0 || index >= this.articles.length) return;
-            this._loadGen++;
+            _pdf.loadGen++;
             this.currentIndex = index;
             const a = this.articles[index];
 
@@ -223,13 +222,13 @@ document.addEventListener('alpine:init', () => {
         // ── PDF ──
 
         async loadPdf(submissionId) {
-            const gen = this._loadGen;
-            if (this._pdfDoc) { this._pdfDoc.destroy(); this._pdfDoc = null; }
+            const gen = _pdf.loadGen;
+            if (_pdf.doc) { _pdf.doc.destroy(); _pdf.doc = null; }
 
             const container = document.getElementById('pdf-container');
-            if (this._scrollHandler) {
-                container.removeEventListener('scroll', this._scrollHandler);
-                this._scrollHandler = null;
+            if (_pdf.scrollHandler) {
+                container.removeEventListener('scroll', _pdf.scrollHandler);
+                _pdf.scrollHandler = null;
             }
             container.innerHTML = '';
             this.pdfLoading = true;
@@ -243,29 +242,29 @@ document.addEventListener('alpine:init', () => {
                 } else {
                     doc = await pdfjsLib.getDocument({ url: this.api + '/articles/' + submissionId + '/pdf', withCredentials: true }).promise;
                 }
-                if (gen !== this._loadGen) { doc.destroy(); return; }
+                if (gen !== _pdf.loadGen) { doc.destroy(); return; }
 
-                this._pdfDoc = doc;
+                _pdf.doc = doc;
                 this.pdfLoading = false;
                 const total = doc.numPages;
                 document.getElementById('pdf-page-info').textContent = total + ' page' + (total !== 1 ? 's' : '');
 
                 for (let i = 1; i <= total; i++) {
-                    if (gen !== this._loadGen) return;
+                    if (gen !== _pdf.loadGen) return;
                     await this.renderPdfPage(i);
                 }
 
-                this._scrollHandler = () => this.updatePageIndicator();
-                container.addEventListener('scroll', this._scrollHandler);
+                _pdf.scrollHandler = () => this.updatePageIndicator();
+                container.addEventListener('scroll', _pdf.scrollHandler);
             } catch (err) {
-                if (gen !== this._loadGen) return;
+                if (gen !== _pdf.loadGen) return;
                 this.pdfLoading = false;
                 document.getElementById('pdf-page-info').textContent = 'PDF not available';
             }
         },
 
         async renderPdfPage(pageNum) {
-            const page = await this._pdfDoc.getPage(pageNum);
+            const page = await _pdf.doc.getPage(pageNum);
             const container = document.getElementById('pdf-container');
             const containerWidth = container.clientWidth - 16;
             const viewport = page.getViewport({ scale: 1 });
@@ -302,7 +301,7 @@ document.addEventListener('alpine:init', () => {
             pages.forEach(p => {
                 if (p.offsetTop <= container.scrollTop + 50) currentPage = parseInt(p.dataset.page, 10);
             });
-            document.getElementById('pdf-page-info').textContent = 'Page ' + currentPage + ' of ' + (this._pdfDoc ? this._pdfDoc.numPages : 0);
+            document.getElementById('pdf-page-info').textContent = 'Page ' + currentPage + ' of ' + (_pdf.doc ? _pdf.doc.numPages : 0);
         },
 
         setupPdfResize() {
@@ -320,7 +319,7 @@ document.addEventListener('alpine:init', () => {
         // ── HTML + Classification ──
 
         async loadHtml(submissionId) {
-            const gen = this._loadGen;
+            const gen = _pdf.loadGen;
             this.htmlLoading = true;
             this.htmlContent = '';
             try {
@@ -330,21 +329,21 @@ document.addEventListener('alpine:init', () => {
                     html = cached.html;
                 } else {
                     const res = await fetch(this.api + '/articles/' + submissionId + '/html', { credentials: 'same-origin' });
-                    if (gen !== this._loadGen) return;
+                    if (gen !== _pdf.loadGen) return;
                     if (!res.ok) { this.htmlLoading = false; return; }
                     html = await res.text();
                 }
-                if (gen !== this._loadGen) return;
+                if (gen !== _pdf.loadGen) return;
                 this.htmlContent = html.replace(/<script[\s\S]*?<\/script>/gi, '');
                 this.htmlLoading = false;
             } catch (err) {
-                if (gen !== this._loadGen) return;
+                if (gen !== _pdf.loadGen) return;
                 this.htmlLoading = false;
             }
         },
 
         async loadClassification(submissionId) {
-            const gen = this._loadGen;
+            const gen = _pdf.loadGen;
             this.classification = null;
             try {
                 const cached = this.prefetchCache.get(submissionId);
@@ -353,13 +352,13 @@ document.addEventListener('alpine:init', () => {
                     data = cached.classification;
                 } else {
                     const res = await fetch(this.api + '/articles/' + submissionId + '/classification', { credentials: 'same-origin' });
-                    if (gen !== this._loadGen) return;
+                    if (gen !== _pdf.loadGen) return;
                     data = await res.json();
                 }
-                if (gen !== this._loadGen) return;
+                if (gen !== _pdf.loadGen) return;
                 this.classification = data;
             } catch (err) {
-                if (gen !== this._loadGen) return;
+                if (gen !== _pdf.loadGen) return;
             }
         },
 
