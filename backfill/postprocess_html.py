@@ -41,6 +41,17 @@ MIN_ABSTRACT_LENGTH = 30
 # legitimate book review in the dataset is ~80 chars of body text.
 # Shortest legitimate article is ~200 chars. 100 catches broken
 # extractions while allowing very short book reviews.
+# Running headers from print layout (journal name, volume info)
+RUNNING_HEADER_RE = re.compile(
+    r'^\s*<p[^>]*>\s*(?:<em>|<i>)?\s*Existential\s+Analysis\s*:\s*Journal\s+of\s+'
+    r'(?:The\s+)?Society\s+for\s+Existential\s+Analysis\s*(?:</em>|</i>)?\s*</p>\s*$',
+    re.IGNORECASE | re.MULTILINE
+)
+# Bare page numbers from print layout (standalone number in a <p>)
+PAGE_NUMBER_RE = re.compile(
+    r'^\s*<p[^>]*>\s*\d{1,4}\s*</p>\s*$',
+    re.MULTILINE
+)
 SHORT_CONTENT_THRESHOLD = 100
 # Avoid matching single words or fragments
 MIN_TARGET_TEXT_LEN = 5
@@ -198,6 +209,42 @@ def strip_title(html, title):
 
     if matched_words and len(matched_words) > len(title_words) * TITLE_WORD_MATCH_RATIO:
         html = html[best_end:].lstrip()
+
+    return html
+
+
+def strip_subtitle(html, subtitle):
+    """Remove the article's subtitle from the HTML body.
+
+    When subtitles are extracted into toc.json, they also need stripping
+    from the HTML body to avoid duplication (subtitle appears as metadata
+    AND in the body text).
+    """
+    if not subtitle:
+        return html
+    subtitle_clean = _clean(subtitle)
+    if not subtitle_clean:
+        return html
+
+    subtitle_words = set(subtitle_clean.split())
+
+    # Look at the first few blocks — subtitle is typically right at the top
+    # (title heading already stripped by strip_title before this runs)
+    blocks = list(re.finditer(r'<(h[1-6]|p)[^>]*>.*?</\1>', html, re.DOTALL))
+
+    for block in blocks[:5]:  # only check first 5 blocks
+        block_text = _clean(_strip_tags(block.group()))
+        block_words = set(block_text.split())
+        overlap = subtitle_words & block_words
+
+        if overlap and len(overlap) > len(subtitle_words) * TITLE_WORD_MATCH_RATIO:
+            # Found the subtitle block — remove it
+            html = html[:block.start()] + html[block.end():]
+            html = html.lstrip()
+            break
+        elif block_words - subtitle_words:
+            # Non-subtitle content found — stop looking
+            break
 
     return html
 
@@ -457,6 +504,7 @@ def postprocess_article(html, article, pdf_path=None):
         # Standard article
         html = strip_start_bleed(html, article.get('title', ''))
         html = strip_title(html, article.get('title', ''))
+        html = strip_subtitle(html, article.get('subtitle', ''))
         html = strip_authors(html, article.get('authors', ''))
         # Conference/presentation notes are preserved in the body — they flow
         # into JATS and are extracted as provenance by extract_citations.py.
@@ -466,6 +514,7 @@ def postprocess_article(html, article, pdf_path=None):
         # After stripping abstract/keywords, a duplicate title heading may
         # now be at the top.
         html = strip_title(html, article.get('title', ''))
+        html = strip_subtitle(html, article.get('subtitle', ''))
         html = strip_end_bleed(html, article.get('_next_title', ''))
 
     # Normalise ALL CAPS headings to title case. Older issues used
@@ -477,6 +526,12 @@ def postprocess_article(html, article, pdf_path=None):
         return tag_open + normalise_allcaps(content) + tag_close
 
     html = re.sub(r'(<h[1-6][^>]*>)(.*?)(</h[1-6]>)', _normalise_heading, html, flags=re.DOTALL)
+
+    # Strip running headers and bare page numbers from print layout.
+    # These are artefacts from PDF→HTML conversion that appear throughout
+    # the body (e.g. "Existential Analysis: Journal of The Society...")
+    html = RUNNING_HEADER_RE.sub('', html)
+    html = PAGE_NUMBER_RE.sub('', html)
 
     html = re.sub(r'\n{3,}', '\n\n', html).strip()
     return html

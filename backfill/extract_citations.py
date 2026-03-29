@@ -31,7 +31,8 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import (
     find_jats_reference_sections, is_junk, is_citation_like, is_author_bio,
-    is_provenance, classify, extract_text_from_element, sort_notes_by_number,
+    is_author_contact, is_provenance, classify, extract_text_from_element,
+    sort_notes_by_number,
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
 
@@ -131,6 +132,43 @@ def extract_from_jats(jats_path: Path) -> dict:
         if sec_bio_parts:
             bios.append(' '.join(sec_bio_parts))
 
+    # Scan trailing <p> elements for bios and contacts that aren't inside
+    # a headed bio section. These are bare paragraphs like
+    # "Del Loewenthal is Emeritus Professor..." at the end of the body,
+    # either as direct children of <body> or inside the last <sec>.
+    trailing_bio_elements = []
+    trailing_bio_parts = []
+
+    # Find the last container to scan: last <sec> if it exists, else <body>
+    removed_elements = set(id(s['element']) for s in sections)
+    body_children = list(body)
+    last_container = body
+    last_container_is_sec = False
+    for child in reversed(body_children):
+        if id(child) in removed_elements:
+            continue
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag == 'sec':
+            last_container = child
+            last_container_is_sec = True
+        break
+
+    # Walk backwards through <p> elements in the container
+    for child in reversed(list(last_container)):
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag != 'p':
+            break
+        text = extract_text_from_element(child).strip()
+        if not text:
+            continue
+        if is_author_bio(text) or is_author_contact(text):
+            trailing_bio_parts.insert(0, text)
+            trailing_bio_elements.insert(0, child)
+        else:
+            break
+    if trailing_bio_parts:
+        bios.append(' '.join(trailing_bio_parts))
+
     return {
         'citations': citations,
         'bios': bios,
@@ -138,6 +176,7 @@ def extract_from_jats(jats_path: Path) -> dict:
         'notes': note_items,
         'headings': headings,
         'sections_to_remove': [sec['element'] for sec in sections],
+        'trailing_bio_elements': trailing_bio_elements,
         'leading_provenance_elements': leading_provenance_elements,
         'tree': tree,
     }
@@ -168,6 +207,24 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
                 body.remove(el)
             except ValueError:
                 pass
+
+    # Remove trailing bio elements (may be in body or inside a <sec>)
+    for el in extracted.get('trailing_bio_elements', []):
+        # Try removing from body first, then search sections
+        removed = False
+        if body is not None:
+            try:
+                body.remove(el)
+                removed = True
+            except ValueError:
+                pass
+        if not removed and body is not None:
+            for sec in body:
+                try:
+                    sec.remove(el)
+                    break
+                except (ValueError, TypeError):
+                    pass
 
     # Find or create <back>
     back = root.find('.//{*}back')
