@@ -299,6 +299,19 @@ def _load_jats_references(pdf_path):
     return refs
 
 
+def _load_jats_subtitle(pdf_path):
+    """Load subtitle from the article's JATS XML file.
+
+    JATS is the single source of truth for article content.
+    Returns subtitle string or None if not found.
+    """
+    tree = _load_jats_tree(pdf_path)
+    if tree is None:
+        return None
+    sub_el = tree.find('.//{*}subtitle')
+    return sub_el.text.strip() if sub_el is not None and sub_el.text else None
+
+
 def _load_jats_doi(pdf_path):
     """Load DOI from the article's JATS XML file.
 
@@ -359,7 +372,7 @@ def load_html_galley(pdf_path):
 </html>"""
 
 
-def generate_article_xml(article, article_idx, date_published, indent='      ', doi=None, enrichment=None):
+def generate_article_xml(article, article_idx, date_published, indent='      ', doi=None, subtitle=None, enrichment=None):
     """Generate XML for a single article."""
     i = indent
     i2 = indent + '  '
@@ -451,6 +464,8 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     if doi:
         lines.append(f'{i3}<id type="doi" advice="update">{escape(doi)}</id>')
     lines.append(f'{i3}<title locale="en">{title}</title>')
+    if subtitle:
+        lines.append(f'{i3}<subtitle locale="en">{escape(subtitle)}</subtitle>')
 
     # Abstract
     if abstract:
@@ -675,10 +690,12 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
         doi = _load_jats_doi(article.get('split_pdf'))
         if doi:
             doi_count += 1
+        subtitle = _load_jats_subtitle(article.get('split_pdf'))
         review_id = article.get('_review_id', '')
         article_enrichment = enrichment_data.get(review_id, {}) if enrichment_data else None
         lines.append(generate_article_xml(article, idx, date_published, indent='      ',
-                                          doi=doi, enrichment=article_enrichment))
+                                          doi=doi, subtitle=subtitle,
+                                          enrichment=article_enrichment))
     lines.append(f'    </articles>')
     if doi_count > 0 or issue_doi:
         parts = []
