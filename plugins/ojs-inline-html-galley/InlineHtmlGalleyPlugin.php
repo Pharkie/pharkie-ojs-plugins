@@ -371,6 +371,32 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 .inline-html-galley { margin-top: 2em; }
 .inline-html-galley .value { line-height: 1.7; font-size: 15px; }
 .inline-html-galley .value p { margin-bottom: 1em; }
+
+/* Pipeline-extracted back matter (from JATS). Subtle border + label so
+   editors/QA reviewers can distinguish extracted content from raw HTML.
+   Invisible to readers who are not looking for it. */
+.inline-html-galley .value .jats-notes,
+.inline-html-galley .value .jats-bios,
+.inline-html-galley .value .jats-provenance {
+    border-left: 2px solid #b0b0b0;
+    padding-left: 14px;
+    margin: 1.5em 0;
+    position: relative;
+}
+.inline-html-galley .value .jats-notes::before,
+.inline-html-galley .value .jats-bios::before,
+.inline-html-galley .value .jats-provenance::before {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #999;
+    margin-bottom: 4px;
+}
+.inline-html-galley .value .jats-notes::before       { content: "Notes \2014  extracted from article"; }
+.inline-html-galley .value .jats-bios::before        { content: "Author bio \2014  extracted from article"; }
+.inline-html-galley .value .jats-provenance::before  { content: "Provenance \2014  extracted from article"; }
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
