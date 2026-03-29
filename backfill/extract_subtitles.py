@@ -108,11 +108,14 @@ def text_matches_author(text: str, author_names: list[str]) -> bool:
         # Full name match
         if text_norm == name_norm:
             return True
-        # Family name match (last word of the name)
+        # Family name in text (catches middle-initial variants like "Evgenia T. Georganda")
         parts = name_norm.split()
         family = parts[-1] if parts else ''
-        if family and len(family) >= AUTHOR_NAME_MIN_MATCH_LENGTH and text_norm == family:
-            return True
+        if family and len(family) >= AUTHOR_NAME_MIN_MATCH_LENGTH and family in text_norm:
+            # Extra check: text should be short (name-length) to avoid matching
+            # "Georganda" inside a long subtitle about Georganda's work
+            if len(text_norm.split()) <= 5:
+                return True
         # Text contains full name
         if name_norm in text_norm:
             return True
@@ -195,13 +198,14 @@ def detect_subtitle(raw_html: str, author_names: list[str],
                      section: str = '') -> str | None:
     """Detect a subtitle in the raw HTML after the title heading.
 
-    Returns the subtitle text, or None if no subtitle detected.
-    Skips book reviews, editorials, and obituaries (title is the full name).
+    Returns (html_title, subtitle) tuple, or None if no subtitle detected.
+    html_title is the text from the <h1>/<h2> heading (source of truth for title).
+    Skips book reviews (title is "Book Review: [Book Title]").
     """
-    # Book reviews keep their full title ("Book Review: [Book Title]")
+    # Skip sections where titles shouldn't be split
     section_lower = section.lower()
     if 'book review' in section_lower:
-        return None
+        return None  # Book reviews keep full title ("Book Review: [Book Title]")
     # Strip leading issue header ("Existential Analysis X.Y: Month Year")
     html = re.sub(
         r'^\s*(?:<div[^>]*>\s*)?<p[^>]*>\s*(?:<strong[^>]*>\s*)?Existential\s+Analysis\s+\d+\.\d+.*?</p>\s*(?:</div>\s*)?',
@@ -213,6 +217,15 @@ def detect_subtitle(raw_html: str, author_names: list[str],
     # Find title heading (h1 or h2)
     title_match = re.match(r'\s*<h[12][^>]*>(.*?)</h[12]>\s*', html, re.DOTALL)
     if not title_match:
+        return None
+
+    html_title = strip_html_tags(title_match.group(1)).strip()
+
+    # Skip titles that are structural headings (not article titles)
+    title_lower = html_title.lower().strip()
+    if title_lower in ('contents', 'letters to the editors', 'letters to the editor',
+                        'letter to the editors', 'letter to the editor',
+                        'obituary', 'obituaries', 'editorial'):
         return None
 
     rest = html[title_match.end():]
@@ -231,9 +244,19 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         if not text or len(text) < MIN_ELEMENT_TEXT_LENGTH:
             continue
 
-        # Skip author names
+        # Skip author names (known from toc.json)
         if text_matches_author(text, author_names):
             return None  # Author comes right after title = no subtitle
+
+        # Skip text that looks like a person name (2-5 capitalised words, short)
+        # even if not in the known author list (handles middle initials, variants)
+        name_words = text.rstrip('.').split()
+        if (len(name_words) <= 5
+                and all(w[0].isupper() or w in ('van', 'de', 'du', 'von', 'le', 'la', 'di')
+                        for w in name_words if w)
+                and len(text) < 60
+                and not text.endswith('?')):
+            return None
 
         # Skip section headings
         if is_section_heading(text):
@@ -261,8 +284,8 @@ def detect_subtitle(raw_html: str, author_names: list[str],
         if re.search(r'Existential Analysis\s+\d+\.\d+', text):
             return None
 
-        # This looks like a subtitle
-        return normalise_caps(text)
+        # This looks like a subtitle — use html_title as the authoritative title
+        return (html_title, normalise_caps(text))
 
     return None
 
@@ -364,15 +387,16 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
             raw_html = f.read()
 
         section = art.get('section', '')
-        subtitle = detect_subtitle(raw_html, author_list, section=section)
-        if not subtitle:
+        result = detect_subtitle(raw_html, author_list, section=section)
+        if not result:
             continue
 
-        # Try to split the toc title
+        # detect_subtitle returns (html_title, subtitle) — use the HTML
+        # heading as the authoritative title (not the concatenated toc title)
+        new_title, subtitle = result
         toc_title = art.get('title', '')
-        new_title = split_title(toc_title, subtitle)
 
-        if new_title and new_title != toc_title:
+        if new_title and subtitle:
             stats['subtitles_found'] += 1
             stats['details'].append({
                 'vol': f'{vol}.{iss}',
