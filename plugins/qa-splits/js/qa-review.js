@@ -27,7 +27,7 @@
     let pdfDoc = null;
     let loadGeneration = 0;
     let scrollHandler = null;
-    let drawerOpen = false;
+    let drawerOpen = true; // Permanently open
 
     // Prefetch cache
     const PREFETCH_AHEAD = 5;
@@ -717,7 +717,6 @@
                 span.addEventListener('click', (e) => {
                     e.stopPropagation();
                     applyFilter('status', filter);
-                    if (!drawerOpen) toggleDrawer();
                 });
             }
             els['qa-progress'].appendChild(span);
@@ -1005,55 +1004,14 @@
 
     // ── Drawer: collapsible article list + filtering ──
 
-    let drawerPinned = false;
-
     function bindDrawerEvents() {
-        document.getElementById('qa-drawer-tab').addEventListener('click', toggleDrawer);
-        document.getElementById('qa-drawer-close').addEventListener('click', toggleDrawer);
-        document.getElementById('qa-drawer-pin').addEventListener('click', togglePin);
         document.getElementById('qa-drawer-search').addEventListener('input', refilterDrawer);
         document.getElementById('qa-drawer-issue').addEventListener('change', refilterDrawer);
-        document.getElementById('qa-drawer-status').addEventListener('change', refilterDrawer);
-        document.getElementById('qa-drawer-section').addEventListener('change', refilterDrawer);
-    }
-
-    function toggleDrawer() {
-        drawerOpen = !drawerOpen;
-        const drawer = document.getElementById('qa-drawer');
-        const tab = document.getElementById('qa-drawer-tab');
-        if (drawerOpen) {
-            drawer.style.display = '';
-            tab.style.display = 'none';
-            if (articles.length > 0) {
-                populateDropdowns();
-                renderDrawerList();
-            }
-            document.getElementById('qa-drawer-search').focus();
-        } else {
-            if (drawerPinned) togglePin();
-            drawer.style.display = 'none';
-            tab.style.display = '';
-        }
-    }
-
-    function togglePin() {
-        drawerPinned = !drawerPinned;
-        const layout = document.querySelector('.qa-layout');
-        const pinBtn = document.getElementById('qa-drawer-pin');
-        if (drawerPinned) {
-            layout.classList.add('qa-drawer-pinned');
-            pinBtn.classList.add('pinned');
-        } else {
-            layout.classList.remove('qa-drawer-pinned');
-            pinBtn.classList.remove('pinned');
-        }
-        // Re-render PDF at new container width after layout reflow
-        if (pdfDoc && currentIndex >= 0) {
-            setTimeout(() => {
-                const gen = loadGeneration;
-                loadPdf(articles[currentIndex].submission_id, gen);
-            }, 100);
-        }
+        document.getElementById('qa-drawer-more').addEventListener('click', (e) => {
+            e.preventDefault();
+            const cl = document.getElementById('qa-drawer-checklist');
+            cl.style.display = cl.style.display === 'none' ? '' : 'none';
+        });
     }
 
     // Active pill toggles (multiple can be on)
@@ -1228,14 +1186,7 @@
         });
     }
 
-    function updateDrawerTab() {
-        const tab = document.getElementById('qa-drawer-tab-text');
-        if (setFilter) {
-            tab.textContent = (setIndex + 1) + '/' + workingSet.length;
-        } else {
-            tab.textContent = (setIndex + 1) + '/' + articles.length;
-        }
-    }
+    function updateDrawerTab() {} // No-op: sidebar is permanent
 
     function updateSetPosition() {
         // Update progress counter to show set position when filtered
@@ -1244,18 +1195,7 @@
                 : setFilter.type === 'author' ? 'by ' + setFilter.query
                 : setFilter.type === 'issue' ? 'Issue ' + setFilter.query
                 : setFilter.query;
-            els['qa-progress'].innerHTML = '';
-            const posText = document.createTextNode((setIndex + 1) + ' / ' + workingSet.length + ' ' + label + ' ');
-            els['qa-progress'].appendChild(posText);
-            const exitLink = document.createElement('span');
-            exitLink.textContent = '× Clear filter';
-            exitLink.className = 'qa-progress-link';
-            exitLink.addEventListener('click', (e) => {
-                e.stopPropagation();
-                applyFilter(null, null);
-                document.getElementById('qa-drawer-search').value = '';
-            });
-            els['qa-progress'].appendChild(exitLink);
+            els['qa-progress'].textContent = (setIndex + 1) + ' / ' + workingSet.length + ' ' + label;
         }
     }
 
