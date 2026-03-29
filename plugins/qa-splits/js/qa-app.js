@@ -25,6 +25,7 @@ document.addEventListener('alpine:init', () => {
         htmlContent: '',
         htmlLoading: true,
         pdfLoading: true,
+        pdfPageInfo: 'Loading...',
         classification: null,
 
         // Working set (filtered subset)
@@ -232,7 +233,7 @@ document.addEventListener('alpine:init', () => {
             }
             container.innerHTML = '';
             this.pdfLoading = true;
-            document.getElementById('pdf-page-info').textContent = 'Loading...';
+            this.pdfPageInfo = 'Loading...';
 
             try {
                 const cached = this.prefetchCache.get(submissionId);
@@ -247,7 +248,7 @@ document.addEventListener('alpine:init', () => {
                 _pdf.doc = doc;
                 this.pdfLoading = false;
                 const total = doc.numPages;
-                document.getElementById('pdf-page-info').textContent = total + ' page' + (total !== 1 ? 's' : '');
+                this.pdfPageInfo = total + ' page' + (total !== 1 ? 's' : '');
 
                 for (let i = 1; i <= total; i++) {
                     if (gen !== _pdf.loadGen) return;
@@ -259,7 +260,7 @@ document.addEventListener('alpine:init', () => {
             } catch (err) {
                 if (gen !== _pdf.loadGen) return;
                 this.pdfLoading = false;
-                document.getElementById('pdf-page-info').textContent = 'PDF not available';
+                this.pdfPageInfo = 'PDF not available';
             }
         },
 
@@ -301,7 +302,7 @@ document.addEventListener('alpine:init', () => {
             pages.forEach(p => {
                 if (p.offsetTop <= container.scrollTop + 50) currentPage = parseInt(p.dataset.page, 10);
             });
-            document.getElementById('pdf-page-info').textContent = 'Page ' + currentPage + ' of ' + (_pdf.doc ? _pdf.doc.numPages : 0);
+            this.pdfPageInfo = 'Page ' + currentPage + ' of ' + (_pdf.doc ? _pdf.doc.numPages : 0);
         },
 
         setupPdfResize() {

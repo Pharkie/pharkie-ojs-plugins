@@ -113,7 +113,8 @@ test.describe('QA Splits plugin', () => {
     test.skip(!articleId, 'No article with galleys found');
 
     await loginAsAdmin(page);
-    await page.goto(QA_URL);
+    // Navigate to a known article with PDF galley
+    await page.goto(`${QA_URL}?id=${articleId}`);
 
     // Wait for PDF canvas to render
     const canvas = page.locator('#pdf-container canvas').first();

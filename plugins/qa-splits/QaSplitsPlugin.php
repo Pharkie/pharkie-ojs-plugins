@@ -298,7 +298,7 @@ HTMLSTART;
         <!-- PDF viewer -->
         <div class="qa-left">
             <div class="qa-pdf-toolbar">
-                <span id="pdf-page-info" x-text="pdfLoading ? 'Loading...' : ''">Page - of -</span>
+                <span id="pdf-page-info" x-text="pdfPageInfo">Loading...</span>
             </div>
             <div id="pdf-container" class="qa-pdf-container"></div>
         </div>
