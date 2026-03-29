@@ -230,7 +230,7 @@ def cmd_reject(target: str, article_ref: str, comment: str) -> None:
         INSERT INTO qa_split_reviews
             (submission_id, publication_id, user_id, username, decision, comment, created_at)
         VALUES
-            ({pub_id}, {publication_id}, 1, 'claude', 'rejected',
+            ({pub_id}, {publication_id}, 1, 'claude', 'needs_fix',
              '{safe_comment}', NOW());
     """)
 
@@ -276,7 +276,7 @@ def cmd_status(target: str, article_ref: str) -> None:
 
 def cmd_list(target: str, show_all: bool) -> None:
     """List reviews. Default: rejected/problem cases only. --all: everything."""
-    where = '' if show_all else "WHERE r.decision = 'rejected'"
+    where = '' if show_all else "WHERE r.decision = 'needs_fix'"
     out = run_sql(target, f"""
         SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
