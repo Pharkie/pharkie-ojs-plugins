@@ -68,7 +68,16 @@ QA Splits reads from OJS (citations table, HTML galleys, file storage) — not f
 6. `python3 backfill/restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)
 7. QA in browser — repeat from step 1 if issues found
 
-**Per-issue iteration takes ~8 seconds.** Always use `--issue` with `restore_ids.py` and `--force` with `import.sh` for single-issue work. Full reimport (`--wipe-articles`, ~20 min) only for systemic changes affecting all issues.
+**Per-issue iteration takes ~8 seconds.** Always use `--issue` with `restore_ids.py` and `--force` with `import.sh` for single-issue work. Full reimport (`--wipe-articles`, ~20 min) only for systemic changes affecting all issues. Full reimport command: `backfill/import.sh backfill/private/output/* --wipe-articles` then `python3 backfill/restore_ids.py --target dev`.
+
+**import.sh flags:**
+- `--wipe-articles` — wipes ALL existing issues/articles first, then imports. Use for full reimport.
+- `--force` — reimports individual issues that already exist (overwrites). Use for per-issue iteration. Does NOT wipe first.
+- No flag — skips issues that already exist. Almost never what you want.
+
+**Pipeline `.html` file collision:** `reprocess_html.py` (step 2) and `jats_to_html.py` (step 6) both write to the same `.html` file. `reprocess_html.py` produces the full body (including references) from `.raw.html`. `jats_to_html.py` produces the HTML galley (references excluded, jats-* divs added). **Steps must run in strict order — never re-run step 2 or 3 after step 6 without re-running the full pipeline.**
+
+**toc.json `authors` field** is always a string (e.g. `"Emmy van Deurzen & Michael R. Montgomery"`). JATS stores structured authors in `<contrib-group>`. Do not convert to list — 8+ downstream scripts expect string.
 
 Shared classification logic: `backfill/lib/citations.py` (is_reference, is_note, is_author_bio, is_provenance, looks_like_person_name, normalise_allcaps, etc.)
 

@@ -212,19 +212,26 @@ python3 backfill/restore_ids.py --target dev --issue 23.1
 
 **Full reimport** (~20 min, only for systemic changes affecting all issues):
 ```bash
-# Reprocess all from raw
+# Steps must run in strict order — jats_to_html overwrites .html files,
+# so generate_jats must not run again after jats_to_html without reprocessing from raw.
+
+# 1. Reprocess all from raw
 python3 backfill/reprocess_html.py backfill/private/output/*/toc.json
-# Full JATS pipeline
+# 2. Generate JATS (reads .html with full body)
 python3 backfill/generate_jats.py backfill/private/output/*/toc.json
+# 3. Extract citations (body → back matter)
 python3 backfill/extract_citations.py --extract
-python3 backfill/split_citation_tiers.py
+# 4. Split citation tiers
+python3 backfill/split_citation_tiers.py backfill/private/output/*/toc.json
+# 5. JATS → HTML galley (OVERWRITES .html — must run after generate_jats, not before)
 python3 backfill/jats_to_html.py backfill/private/output/*/toc.json
-# Regenerate all XML
+# 6. Generate import XML
 for t in backfill/private/output/*/toc.json; do
   python3 backfill/generate_xml.py "$t" -o "$(dirname "$t")/import.xml"
 done
-# Reimport all
+# 7. Reimport all (--wipe-articles wipes first; --force reimports existing without wiping)
 backfill/import.sh backfill/private/output/* --wipe-articles
+# 8. Restore IDs
 python3 backfill/restore_ids.py --target dev
 ```
 
