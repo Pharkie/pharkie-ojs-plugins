@@ -891,6 +891,11 @@ body {
     margin-bottom: 6px;
 }
 
+.qa-html-content .jats-notes ol {
+    list-style-position: inside;
+    padding-left: 0;
+}
+
 .qa-html-content .jats-notes::before       { content: 'Notes'; }
 .qa-html-content .jats-bios::before        { content: 'Author bio'; }
 .qa-html-content .jats-provenance::before  { content: 'Provenance'; }
