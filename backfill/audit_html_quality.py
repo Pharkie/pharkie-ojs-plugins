@@ -227,7 +227,7 @@ def main():
                 continue
 
             slug = os.path.splitext(os.path.basename(sp))[0]
-            html_path = os.path.join(vol_dir, f'{slug}.html')
+            html_path = os.path.join(vol_dir, f'{slug}.post.html')
             if not os.path.exists(html_path):
                 continue
             pdf_path = sp[2:] if sp.startswith('./') else sp

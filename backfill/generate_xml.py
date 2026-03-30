@@ -353,7 +353,7 @@ def load_html_galley(pdf_path):
     if not pdf_path or not os.path.exists(pdf_path):
         return None
 
-    html_path = os.path.splitext(pdf_path)[0] + '.html'
+    html_path = os.path.splitext(pdf_path)[0] + '.galley.html'
     if not os.path.exists(html_path):
         return None
 

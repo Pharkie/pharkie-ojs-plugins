@@ -91,6 +91,11 @@ Include ALL of the following — title, authors, abstract, keywords, body
 paragraphs, section headings, block quotes, footnotes, endnotes,
 references, bibliography, author bio, contact details, ORCID.
 
+If the article has numbered notes or endnotes, include every single one
+in an <ol>. The number of <li> items must match the highest superscript
+number in the text. Do not skip any notes, even if they contain long
+quotes, literary excerpts, or detailed commentary.
+
 If references appear in multiple scripts (e.g. Cyrillic then transliterated
 Latin), include BOTH sets — they are not duplicates."""
 
@@ -119,8 +124,8 @@ def render_page_to_png(page, dpi=150):
 
 
 def html_output_path(split_pdf_path):
-    """Return the .html path for a given split PDF."""
-    return os.path.splitext(split_pdf_path)[0] + '.html'
+    """Return the .post.html path for a given split PDF."""
+    return os.path.splitext(split_pdf_path)[0] + '.post.html'
 
 
 def raw_output_path(split_pdf_path):

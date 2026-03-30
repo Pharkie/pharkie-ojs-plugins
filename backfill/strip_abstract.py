@@ -89,7 +89,7 @@ def main():
     group.add_argument('--apply', action='store_true', help='Modify HTML files')
     args = parser.parse_args()
 
-    html_files = sorted(glob.glob('backfill/private/output/*/*.html'))
+    html_files = sorted(glob.glob('backfill/private/output/*/*.post.html'))
     if not html_files:
         print("No HTML files found in backfill/private/output/*/", file=sys.stderr)
         sys.exit(1)

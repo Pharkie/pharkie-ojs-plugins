@@ -185,7 +185,7 @@ def audit_volume(vol_dir, fix=False, dry_run=False):
         split_pdf = article.get('split_pdf', '')
         if not split_pdf:
             continue
-        html_path = os.path.splitext(split_pdf)[0] + '.html'
+        html_path = os.path.splitext(split_pdf)[0] + '.post.html'
         if not os.path.exists(html_path):
             continue
 
@@ -279,7 +279,7 @@ def main():
             toc = json.load(f)
         html_count = sum(1 for a in toc.get('articles', [])
                          if a.get('split_pdf') and
-                         os.path.exists(os.path.splitext(a['split_pdf'])[0] + '.html'))
+                         os.path.exists(os.path.splitext(a['split_pdf'])[0] + '.post.html'))
         total_checked += html_count
 
         results, fixes = audit_volume(vol_dir, fix=args.fix, dry_run=args.dry_run)

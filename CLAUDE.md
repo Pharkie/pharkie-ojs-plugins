@@ -51,11 +51,11 @@ Pipeline scripts (called by `split-issue.sh`):
 JATS is the single source of truth for article content. The pipeline direction is **PDF → JATS → HTML**:
 
 1. `backfill/htmlgen.py` — sends split PDFs to Claude API, generates initial HTML body content (`.raw.html`)
-2. `backfill/reprocess_html.py` → `backfill/postprocess_html.py` — deterministic post-processing: strip title/subtitle/authors/abstract/keywords, trim bleed, strip running headers and page numbers, normalise ALL CAPS headings to title case. Section-specific handlers for articles, editorials, and book reviews. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.html` from `.raw.html`.
+2. `backfill/reprocess_html.py` → `backfill/postprocess_html.py` — deterministic post-processing: strip title/subtitle/authors/abstract/keywords, trim bleed, strip running headers and page numbers, normalise ALL CAPS headings to title case. Section-specific handlers for articles, editorials, and book reviews. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.post.html` from `.raw.html`.
 3. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + processed HTML body
 4. `backfill/extract_citations.py` — reads JATS `<body>`, extracts: reference sections (tail) → `<ref-list>`, notes → `<fn-group>`, author bio sections → `<bio>`, leading provenance notes (conference/presentation) → `<notes notes-type="provenance">`. Removes extracted content from body.
 5. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
-6. `backfill/jats_to_html.py` — generates HTML galley from JATS. Body text + notes/bios/provenance (in `jats-*` wrapper divs); references excluded (OJS renders from citations table)
+6. `backfill/jats_to_html.py` — generates HTML galley (`.galley.html`) from JATS. Body text + notes/bios/provenance (in `jats-*` wrapper divs); references excluded (OJS renders from citations table)
 7. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
 
 QA Splits reads from OJS (citations table, HTML galleys, file storage) — not from local JATS files. The QA iteration loop is:
@@ -75,7 +75,7 @@ QA Splits reads from OJS (citations table, HTML galleys, file storage) — not f
 - `--force` — reimports individual issues that already exist (overwrites). Use for per-issue iteration. Does NOT wipe first.
 - No flag — skips issues that already exist. Almost never what you want.
 
-**Pipeline `.html` file collision:** `reprocess_html.py` (step 2) and `jats_to_html.py` (step 6) both write to the same `.html` file. `reprocess_html.py` produces the full body (including references) from `.raw.html`. `jats_to_html.py` produces the HTML galley (references excluded, jats-* divs added). **Steps must run in strict order — never re-run step 2 or 3 after step 6 without re-running the full pipeline.**
+**Pipeline HTML files:** Three distinct HTML stages per article: `.raw.html` (Haiku extraction), `.post.html` (post-processed body with refs), `.galley.html` (HTML galley from JATS, refs excluded, jats-* divs). No file collisions — each step writes to its own file.
 
 **toc.json `authors` field** is always a string (e.g. `"Emmy van Deurzen & Michael R. Montgomery"`). JATS stores structured authors in `<contrib-group>`. Do not convert to list — 8+ downstream scripts expect string.
 
@@ -120,7 +120,7 @@ Test data lives in **`backfill/tests/fixtures/*.json`** — one file per categor
 
 1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`
 2. Re-split: `backfill/split-issue.sh backfill/private/input/<vol>.<iss>.pdf`
-3. Delete the affected `.html` file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.html`
+3. Delete the affected galley file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html`
 4. Re-generate HTML: `python3 backfill/htmlgen.py backfill/private/output/<vol>.<iss>/toc.json --yes`
 5. Re-generate XML: `python3 backfill/generate_xml.py backfill/private/output/<vol>.<iss>/toc.json -o backfill/private/output/<vol>.<iss>/import.xml`
 6. Re-import: `backfill/import.sh backfill/private/output/<vol>.<iss> --force`
@@ -143,7 +143,7 @@ Test data lives in **`backfill/tests/fixtures/*.json`** — one file per categor
    ```
 3. Build the full HTML file (repo files are body-only, live files need the DOCTYPE wrapper):
    ```
-   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/private/output/<vol>.<iss>/<seq>-<slug>.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
+   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
    ```
 4. Copy into the live OJS container:
    ```

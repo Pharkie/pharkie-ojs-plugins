@@ -121,7 +121,7 @@ def render_page_to_png(page, dpi=150):
 def find_fallback_articles():
     """Find all HTML files with AUTO-EXTRACTED marker and their toc.json entries."""
     results = []
-    for html_path in sorted(glob.glob('backfill/private/output/*/*.html')):
+    for html_path in sorted(glob.glob('backfill/private/output/*/*.post.html')):
         with open(html_path) as f:
             first_line = f.readline()
         if 'AUTO-EXTRACTED' not in first_line:

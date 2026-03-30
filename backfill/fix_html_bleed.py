@@ -265,7 +265,7 @@ def collect_book_reviews(toc_paths):
             if not article.get('split_pdf'):
                 continue
 
-            html_path = os.path.splitext(article['split_pdf'])[0] + '.html'
+            html_path = os.path.splitext(article['split_pdf'])[0] + '.post.html'
             if not os.path.exists(html_path):
                 continue
 
@@ -597,7 +597,7 @@ def trim_back_matter(toc_paths, dry_run=False):
             split_pdf = article.get('split_pdf', '')
             if not split_pdf:
                 continue
-            html_path = os.path.splitext(split_pdf)[0] + '.html'
+            html_path = os.path.splitext(split_pdf)[0] + '.post.html'
             if not os.path.exists(html_path):
                 continue
 
@@ -703,7 +703,7 @@ def run_clean_headers(toc_paths, dry_run=False):
             split_pdf = article.get('split_pdf', '')
             if not split_pdf:
                 continue
-            html_path = os.path.splitext(split_pdf)[0] + '.html'
+            html_path = os.path.splitext(split_pdf)[0] + '.post.html'
             if not os.path.exists(html_path):
                 continue
 
