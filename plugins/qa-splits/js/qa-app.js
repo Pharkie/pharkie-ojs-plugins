@@ -119,7 +119,7 @@ document.addEventListener('alpine:init', () => {
             const a = this.article;
             if (!a) return this.loading ? 'Loading...' : 'No articles found';
             const section = a.section ? ' [' + a.section.toLowerCase() + ']' : '';
-            return a.volume + '.' + a.number + ' #' + a.seq + ' (' + a.year + ') ' + a.title + section;
+            return a.volume + '.' + a.number + ' #' + a.seq + ' (' + a.year + ') ' + a.title + section + ' [id: ' + a.submission_id + ']';
         },
 
         get authorsDisplay() {
@@ -628,7 +628,7 @@ document.addEventListener('alpine:init', () => {
                     num: si + 1,
                     icon: a.status === 'approved' ? '✓' : a.status === 'needs_fix' ? '⚠' : '·',
                     statusCls: 'qa-drawer-item-status qa-drawer-item-status-' + a.status,
-                    title: a.volume + '.' + a.number + ' (' + a.year + ') ' + a.title,
+                    title: a.volume + '.' + a.number + ' (' + a.year + ') ' + a.title + ' [id: ' + a.submission_id + ']',
                     active: si === this.setIndex,
                 };
             });
