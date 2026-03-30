@@ -35,6 +35,7 @@ REFERENCE_HEADING_RE = re.compile(
     r'|References and further reading'
     r'|Selected Bibliography'
     r'|References:'
+    r'|Author [Ss]tatement'
     r')(?:\s*[&;]\s*\w+)*'  # optional "& Filmography"
     r'(?:\s*\([^)]*\))?'  # optional parenthetical
     r'[.:]?$',
@@ -54,7 +55,7 @@ PURE_REFERENCE_HEADING_RE = re.compile(
 
 # "Notes" headings (only extract citation-like items from these)
 NOTES_HEADING_RE = re.compile(
-    r'^(Notes?|Endnotes?|Footnotes?:?)[.:]?$',
+    r'^(Notes?|Endnotes?|Footnotes?:?|Author [Ss]tatement)[.:]?$',
     re.IGNORECASE
 )
 
@@ -739,7 +740,7 @@ def is_author_bio(text: str) -> bool:
 
     # Structural phrases that indicate biographical content
     bio_phrases = [
-        'private practice', 'in practice', 'working in', 'works with',
+        'private practice', 'in practice', 'working in ', 'works with',
         'works as', 'works at', 'academic interests', 'has been a ',
         'Research Fellow', 'has a particular interest',
         'currently in private', 'currently a ', 'currently training',
@@ -785,14 +786,17 @@ def is_author_bio(text: str) -> bool:
                 r'Although|While|Whereas|Since|Because|After|'
                 r'Afterwards)\b', text):
         return False
+    # Year-in-parens pattern for rejecting references: (1999), (1980b), etc.
+    _YEAR_IN_PARENS = re.compile(r'\(\d{4}[a-d]?\)')
+
     bio_verb = re.search(r'\b(is|was|has)\s', text[:BIO_PHRASE_SEARCH_WINDOW])
     if bio_verb:
         leading = text[:bio_verb.start()].strip().rstrip(',')
         # Reject if possessive before verb ("Name's X is...")
         if "'s " in text[:bio_verb.start()]:
             pass
-        # Reject reference format ("Gans, S.(1999)...")
-        elif re.search(r'\(\d{4}\)', text[:bio_verb.start()]):
+        # Reject reference format ("Gans, S.(1999)...", "Kierkegaard, S. (1980b)...")
+        elif _YEAR_IN_PARENS.search(text[:bio_verb.start()]):
             pass
         elif leading and looks_like_person_name(leading):
             # Must have a profession/role indicator — "Name is/was" alone
@@ -807,8 +811,11 @@ def is_author_bio(text: str) -> bool:
         for n in range(min(len(words), NAME_MAX_WORDS), 1, -1):
             candidate = ' '.join(words[:n])
             if looks_like_person_name(candidate):
-                early_bio = any(phrase in text[:BIO_PHRASE_SEARCH_WINDOW] for phrase in bio_phrases)
-                if early_bio and not re.search(r'\(\d{4}\)', text[:AUTHOR_YEAR_SEARCH_WINDOW]):
+                window = text[:BIO_PHRASE_SEARCH_WINDOW]
+                window_lower = window.lower()
+                early_bio = (any(phrase in window for phrase in bio_phrases)
+                             or any(word in window_lower for word in BIO_ROLE_WORDS))
+                if early_bio and not _YEAR_IN_PARENS.search(text[:AUTHOR_YEAR_SEARCH_WINDOW]):
                     return True
                 break
 
@@ -825,7 +832,17 @@ def is_provenance(text: str) -> bool:
 
     Single source of truth for provenance detection — used by
     extract_citations.py and extract_subtitles.py (via is_provenance_note).
+
+    Provenance describes the origin of THIS article — not editorial text
+    discussing conference papers in general. The subject must be "this
+    paper/article/talk" or an equivalent first-person construction.
     """
+    # Strip leading parentheses/brackets — provenance notes sometimes
+    # appear in parenthetical form: "(This paper is an edited version...)"
+    stripped = text.strip()
+    if stripped.startswith('(') and stripped.endswith(')'):
+        stripped = stripped[1:-1].strip()
+
     provenance_patterns = [
         # "This paper was originally presented at..."
         r'^(This|A version of this|An earlier version of this|A shorter version of this)\s+'
@@ -840,12 +857,30 @@ def is_provenance(text: str) -> bool:
         r'^(?:Paper|Talk|Keynote)\s+(?:given|delivered|presented)',
         # "Adapted/Revised/Expanded from..."
         r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
-        # Conference name patterns
+    ]
+    if any(re.search(p, stripped, re.IGNORECASE) for p in provenance_patterns):
+        return True
+
+    # Conference name patterns — only match when the text is about THIS article's
+    # provenance (subject is "this paper/article"), not editorial text that
+    # merely mentions a conference. Require a self-referential subject.
+    conference_patterns = [
         r'Society\s+for\s+Existential\s+Analysis\s+(?:Annual\s+)?Conference',
         r'World\s+Congress\s+for\s+Exist',
         r'Annual\s+Conference',
     ]
-    return any(re.search(p, text, re.IGNORECASE) for p in provenance_patterns)
+    # Subject must refer to THIS article — not other papers in general
+    self_referential = re.compile(
+        r'(?:^This\s+(?:paper|article|talk|lecture|essay)\s|'
+        r'^A\s+version\s|^Based\s+on\s|'
+        r'^(?:This\s+)?(?:paper|article)\s+was\s)',
+        re.IGNORECASE,
+    )
+    for cp in conference_patterns:
+        if re.search(cp, stripped, re.IGNORECASE) and self_referential.search(stripped):
+            return True
+
+    return False
 
 
 # ---------------------------------------------------------------
