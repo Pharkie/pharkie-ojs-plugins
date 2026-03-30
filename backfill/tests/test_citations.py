@@ -25,11 +25,12 @@ from backfill.lib.citations import (
     is_provenance,
     is_reference,
     is_note,
-    is_junk,
+    is_non_reference,
     is_citation_like,
     is_section_sublabel,
     classify,
     strip_html,
+    strip_note_number,
     _count_sentences,
 )
 
@@ -197,11 +198,11 @@ class TestIsJunk:
         'Yours sincerely.',
         'Kind regards',
     ])
-    def test_is_junk(self, text):
-        assert is_junk(text)
+    def test_is_non_reference(self, text):
+        assert is_non_reference(text)
 
     def test_reference_is_not_junk(self):
-        assert not is_junk(
+        assert not is_non_reference(
             'Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.')
 
 
@@ -251,6 +252,25 @@ class TestIsSectionSublabel:
 # ===============================================================
 # Helpers
 # ===============================================================
+
+class TestStripNoteNumber:
+    def test_strips_number_space(self):
+        assert strip_note_number('1 An alternative translation') == 'An alternative translation'
+
+    def test_strips_number_dot_space(self):
+        assert strip_note_number('3. See Laing (1960)') == 'See Laing (1960)'
+
+    def test_strips_number_paren(self):
+        assert strip_note_number('12) The term Dasein') == 'The term Dasein'
+
+    def test_no_number(self):
+        assert strip_note_number('An alternative translation') == 'An alternative translation'
+
+    def test_preserves_year_start(self):
+        """Don't strip a year that starts a note like '1960 was a key year'."""
+        # Years have 4 digits — the regex only matches short numbers followed by separator
+        assert strip_note_number('1960 was a key year') == '1960 was a key year'
+
 
 class TestStripHtml:
     def test_strips_tags(self):

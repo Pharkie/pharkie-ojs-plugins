@@ -183,6 +183,16 @@ def sort_notes_by_number(notes: list[str]) -> list[str]:
     return sorted(notes, key=sort_key)
 
 
+def strip_note_number(text: str) -> str:
+    """Strip leading number prefix from a note (e.g. '1 Text...' → 'Text...').
+
+    Notes are renumbered by <ol> in the HTML galley, so the original number
+    would be duplicated (e.g. '1. 1 An alternative translation...').
+    Handles: '1 ...', '1. ...', '1) ...', superscript numerals '¹ ...'.
+    """
+    return re.sub(r'^\d{1,3}[\.\)\s]+', '', text).strip()
+
+
 # ---------------------------------------------------------------
 # JATS section detection (replaces HTML h2-based detection)
 # ---------------------------------------------------------------
@@ -427,8 +437,13 @@ CITATION_WEAK_SIGNAL_LENGTH = 400
 # Item classification: junk / citation-like / bio / provenance
 # ---------------------------------------------------------------
 
-def is_junk(text: str) -> bool:
-    """Filter out non-citation junk from reference sections."""
+def is_non_reference(text: str) -> bool:
+    """Return True if this item is NOT a bibliographic reference.
+
+    Items that pass this test are back matter that needs further
+    classification (provenance, bio, note, author sign-off, etc.)
+    rather than a proper reference citation.
+    """
     if len(text) < MIN_CLASSIFIABLE_LENGTH:
         return True
 
