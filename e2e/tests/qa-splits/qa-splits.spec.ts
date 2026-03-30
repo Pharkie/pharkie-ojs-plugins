@@ -13,7 +13,7 @@ async function loginAsAdmin(page: Page): Promise<void> {
   await page.fill('input[name="username"]', ADMIN_USER);
   await page.fill('input[name="password"]', ADMIN_PASS);
   await page.click('button[type="submit"], input[type="submit"]');
-  await page.waitForURL(/.*/, { timeout: 10_000 });
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15_000 });
 }
 
 function qaTableExists(): boolean {
