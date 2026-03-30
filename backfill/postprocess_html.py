@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib.citations import (
     normalise_allcaps, normalise_for_overlap, REFERENCE_HEADING_RE,
-    PUBLISHER_NAMES,
+    PUBLISHER_NAMES, is_provenance,
 )
 
 try:
@@ -195,6 +195,12 @@ def strip_title(html, title):
         block_text = _clean(_strip_tags(block.group()))
         block_words = set(block_text.split())
         overlap = title_words & block_words
+
+        # Skip provenance notes — they sit between title and author
+        # and must be preserved for extraction as JATS provenance.
+        raw_text = _strip_tags(block.group()).strip()
+        if is_provenance(raw_text):
+            continue
 
         # Only consume if: block has title word overlap AND is short
         # enough to be a title/subtitle element (not a body paragraph).

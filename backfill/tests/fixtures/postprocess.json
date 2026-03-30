@@ -184,6 +184,17 @@
       "should_contain": ["real body content", "Kierkegaard"],
       "should_not_contain": ["Previous article tail", "Ernesto Spinelli", "Essentialism, existence"]
     },
+    "preserves_provenance_between_title_and_author": {
+      "html": "<h1>Navigating a Postmodern Turn in Existential Therapies</h1>\n<p><em>Based on a presentation given at the Fifth European Conference 'Building Bridges', Istanbul, May 2024</em></p>\n<p><strong>Simon Wharne</strong></p>\n<h2>Abstract</h2>\n<p>Existential philosophy has contributed to ways of being.</p>\n<h2>Introduction</h2>\n<p>Body text starts here about postmodern therapy approaches.</p>",
+      "article": {
+        "title": "Navigating a Postmodern Turn in Existential Therapies",
+        "authors": "Simon Wharne",
+        "abstract": "Existential philosophy has contributed to ways of being.",
+        "section": "Articles"
+      },
+      "should_contain": ["Based on a presentation", "Body text starts here"],
+      "should_not_contain": ["Simon Wharne"]
+    },
     "auto_extracted_passthrough": {
       "html": "<!-- AUTO-EXTRACTED: pymupdf -->\n<p>Raw PyMuPDF text without structure.</p>",
       "article": {
