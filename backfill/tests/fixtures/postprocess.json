@@ -79,6 +79,18 @@
       "html": "<p>Some Author</p>\n<p>Body text.</p>",
       "authors": "",
       "should_contain": "Some Author"
+    },
+    "removes_author_in_h2_before_abstract": {
+      "html": "<h2>Luis Rodriguez</h2>\n<h2>Abstract</h2>\n<p>Some abstract paragraph.</p>\n<h2>Introduction</h2>\n<p>Body text here.</p>",
+      "authors": "Luis M. Rodriguez",
+      "should_not_contain": "Luis Rodriguez",
+      "should_contain": "Body text here"
+    },
+    "removes_author_missing_middle_initial": {
+      "html": "<p>Edgar Correia</p>\n<h2>Abstract</h2>\n<p>Body text here.</p>",
+      "authors": "Edgar Agrela Correia",
+      "should_not_contain": "Edgar Correia",
+      "should_contain": "Body text here"
     }
   },
 
@@ -108,6 +120,12 @@
       "html": "<h2>Abstract</h2>\n<p>Some paragraph.</p>",
       "abstract": "",
       "should_contain": "Some paragraph"
+    },
+    "strips_abstract_after_author_heading": {
+      "html": "<h2>Abstract</h2>\n<p>Love is an often bandied-about word lost somewhere in the forests of romantic fantasy and sexual desire creating one-dimensional meaning for psychotherapy.</p>\n<h2>Introduction</h2>\n<p>Body text here.</p>",
+      "abstract": "Love is an often bandied-about word lost somewhere in the forests of romantic fantasy and sexual desire creating one-dimensional meaning for psychotherapy.",
+      "should_not_contain": "bandied-about",
+      "should_contain": "Body text here"
     }
   },
 
@@ -194,6 +212,16 @@
       },
       "should_contain": ["Based on a presentation", "Body text starts here"],
       "should_not_contain": ["Simon Wharne"]
+    },
+    "strips_footnote_superscripts_from_headings": {
+      "html": "<h1>Love Is a Hell of a Job!<sup>1</sup></h1>\n<p><strong>Edgar Correia</strong></p>\n<h2><em>Hic Jacet Amor</em><sup>2</sup></h2>\n<p>Body text about love.</p>\n<h2>Human, All To Human<sup>4</sup></h2>\n<p>More body text.</p>",
+      "article": {
+        "title": "Love Is a Hell of a Job!",
+        "authors": "Edgar Correia",
+        "section": "Articles"
+      },
+      "should_contain": ["Body text about love", "More body text"],
+      "should_not_contain": ["Amor2", "Human4"]
     },
     "auto_extracted_passthrough": {
       "html": "<!-- AUTO-EXTRACTED: pymupdf -->\n<p>Raw PyMuPDF text without structure.</p>",

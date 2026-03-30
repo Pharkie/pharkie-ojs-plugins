@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib.citations import (
     normalise_allcaps, normalise_for_overlap, REFERENCE_HEADING_RE,
-    PUBLISHER_NAMES, is_provenance,
+    PUBLISHER_NAMES, is_provenance, looks_like_person_name,
 )
 
 try:
@@ -82,13 +82,18 @@ def _find_first_body_heading(html):
     """Find the position of the first body content heading (Introduction, etc.).
 
     Returns the character position, or len(html) if not found.
-    Skips "Abstract" and "Keywords" headings.
+    Skips "Abstract", "Keywords" headings, and person-name headings
+    (author bylines that Haiku sometimes renders as <h2>).
     """
     skip_headings = {'abstract', 'keywords', 'key words'}
     for m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html, re.DOTALL | re.IGNORECASE):
-        heading_text = _strip_tags(m.group(1)).strip().lower()
-        if heading_text not in skip_headings:
-            return m.start()
+        heading_text = _strip_tags(m.group(1)).strip()
+        if heading_text.lower() in skip_headings:
+            continue
+        # Skip person-name headings (author bylines rendered as h2/h3)
+        if looks_like_person_name(heading_text):
+            continue
+        return m.start()
     return len(html)
 
 
@@ -256,6 +261,34 @@ def strip_subtitle(html, subtitle):
     return html
 
 
+def _author_name_variants(authors):
+    """Generate matching variants for an author name string.
+
+    Handles cases where HTML drops middle names/initials that appear in
+    toc.json. E.g. "Luis M. Rodriguez" → also try "Luis Rodriguez",
+    "Edgar Agrela Correia" → also try "Edgar Correia".
+
+    Returns a list of name strings to try, from most specific to least.
+    """
+    variants = [authors]
+    # Split individual authors (comma or "and" separated)
+    # Then for each, try dropping middle names/initials
+    # Build a first-name + last-name only variant
+    parts = re.split(r',\s*|\s+and\s+', authors)
+    short_parts = []
+    for part in parts:
+        words = part.strip().split()
+        if len(words) > 2:
+            # Try first + last only (drop middle names/initials)
+            short_parts.append(f'{words[0]} {words[-1]}')
+        else:
+            short_parts.append(part.strip())
+    short_variant = ', '.join(short_parts) if ',' in authors else ' and '.join(short_parts) if ' and ' in authors else short_parts[0]
+    if short_variant != authors:
+        variants.append(short_variant)
+    return variants
+
+
 def strip_authors(html, authors):
     """Remove author byline from the HTML.
 
@@ -269,10 +302,13 @@ def strip_authors(html, authors):
     search_end = abstract_pos.start() if abstract_pos else _find_first_body_heading(html)
     if search_end == 0:
         search_end = len(html)
-    start, end = _find_block_by_text(html, authors, search_end=search_end)
-    if start is not None:
-        html = html[:start] + html[end:]
-        html = html.lstrip()
+    # Try full name first, then variants with middle names dropped
+    for variant in _author_name_variants(authors):
+        start, end = _find_block_by_text(html, variant, search_end=search_end)
+        if start is not None:
+            html = html[:start] + html[end:]
+            html = html.lstrip()
+            break
     return html
 
 
@@ -523,6 +559,15 @@ def postprocess_article(html, article, pdf_path=None):
         html = strip_title(html, article.get('title', ''))
         html = strip_subtitle(html, article.get('subtitle', ''))
         html = strip_end_bleed(html, article.get('_next_title', ''))
+
+    # Strip footnote superscripts from headings. PDF extraction preserves
+    # <sup>1</sup> etc. which are endnote markers, not heading content.
+    # Also strip bare trailing digits that result from <sup> tag stripping.
+    html = re.sub(
+        r'(<h[1-6][^>]*>)(.*?)(</h[1-6]>)',
+        lambda m: m.group(1) + re.sub(r'<sup>\d+</sup>', '', m.group(2)) + m.group(3),
+        html, flags=re.DOTALL
+    )
 
     # Normalise ALL CAPS headings to title case. Older issues used
     # ALL CAPS as a print styling convention — not intentional emphasis.
