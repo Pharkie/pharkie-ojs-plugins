@@ -232,7 +232,7 @@ def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:
             continue
 
         jats_path = vol_dir / f'{slug}.jats.xml'
-        html_path = vol_dir / f'{slug}.html'
+        html_path = vol_dir / f'{slug}.galley.html'
 
         stats['total'] += 1
 

@@ -268,7 +268,7 @@ def main():
                 # Try to construct from sequence
                 continue
 
-            html_path = vol_dir / f"{slug}.html"
+            html_path = vol_dir / f"{slug}.post.html"
             if not html_path.exists():
                 continue
 

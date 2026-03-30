@@ -147,9 +147,9 @@ def find_html_for_article(article, issue_dir):
     split_pdf = article.get('split_pdf', '')
     if not split_pdf:
         return None
-    # HTML file has same stem as split PDF but .html extension
+    # HTML file has same stem as split PDF but .post.html extension
     pdf_basename = os.path.basename(split_pdf)
-    html_basename = os.path.splitext(pdf_basename)[0] + '.html'
+    html_basename = os.path.splitext(pdf_basename)[0] + '.post.html'
     html_path = os.path.join(issue_dir, html_basename)
     if os.path.exists(html_path):
         return html_path

@@ -60,7 +60,7 @@ def main():
                 continue
             stem = os.path.splitext(os.path.basename(sp))[0]
             raw_path = os.path.join(vol_dir, f'{stem}.raw.html')
-            final_path = os.path.join(vol_dir, f'{stem}.html')
+            final_path = os.path.join(vol_dir, f'{stem}.post.html')
 
             if not os.path.exists(raw_path):
                 skipped += 1

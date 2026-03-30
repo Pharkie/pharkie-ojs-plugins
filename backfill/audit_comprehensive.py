@@ -153,7 +153,7 @@ def audit_toc_integrity(result):
 
 def audit_html_quality(result):
     """Check all HTML galley files for quality issues."""
-    html_files = sorted(glob.glob('backfill/private/output/*/*.html'))
+    html_files = sorted(glob.glob('backfill/private/output/*/*.post.html'))
     result.stats['html_files'] = len(html_files)
 
     for html_path in html_files:
@@ -247,7 +247,7 @@ def audit_cross_consistency(result):
                 continue
 
             stem = os.path.splitext(os.path.basename(split_pdf))[0]
-            html_path = os.path.join(issue_dir, stem + '.html')
+            html_path = os.path.join(issue_dir, stem + '.post.html')
             prefix = f'{issue_name}/{stem}'
 
             # HTML file exists?
@@ -263,7 +263,7 @@ def audit_cross_consistency(result):
 
 def audit_known_artefacts(result):
     """Scan for known Haiku/PyMuPDF artefacts across all HTML files."""
-    html_files = sorted(glob.glob('backfill/private/output/*/*.html'))
+    html_files = sorted(glob.glob('backfill/private/output/*/*.post.html'))
 
     # Known OCR errors to scan for
     artefact_patterns = [
@@ -313,7 +313,7 @@ def audit_duplicate_content(result):
                 continue
 
             stem = os.path.splitext(os.path.basename(split_pdf))[0]
-            html_path = os.path.join(issue_dir, stem + '.html')
+            html_path = os.path.join(issue_dir, stem + '.post.html')
             if not os.path.exists(html_path):
                 continue
 

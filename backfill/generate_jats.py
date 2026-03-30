@@ -525,8 +525,8 @@ def process_toc(toc_path: Path, dry_run: bool = False,
             stats['no_slug'] += 1
             continue
 
-        # HTML galley path
-        html_path = vol_dir / f'{slug}.html'
+        # Post-processed HTML path (body with refs, before JATS extraction)
+        html_path = vol_dir / f'{slug}.post.html'
 
         # Output path
         jats_path = vol_dir / f'{slug}.jats.xml'
