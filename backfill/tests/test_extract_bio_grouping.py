@@ -108,6 +108,24 @@ class TestBioGrouping:
         assert 'Paul Gordon is a member' in result['bios'][0]
         assert 'psgordon@talk21.com' in result['bios'][0]
 
+    def test_two_authors_two_bios(self):
+        """Two different authors' bios should be separate entries, not merged."""
+        jats = _make_jats("""
+        <sec><title>Discussion</title>
+        <p>Some discussion text.</p>
+        <p>Roly Fletcher is currently undertaking the Practitioner Doctorate in Psychotherapy at the University of Surrey.</p>
+        <p>Dr Martin Milton is a Chartered Counselling Psychologist and a registered psychotherapist.</p>
+        </sec>
+        """)
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert len(result['bios']) == 2, f"Expected 2 bios, got {len(result['bios'])}: {result['bios']}"
+        assert any('Fletcher' in b for b in result['bios'])
+        assert any('Milton' in b for b in result['bios'])
+
     def test_contact_after_section_bio_merged(self):
         """Contact <p> outside the section should merge with bio inside it.
 
