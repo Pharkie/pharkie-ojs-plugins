@@ -129,7 +129,7 @@ Test data lives in **`backfill/tests/fixtures/*.json`** — one file per categor
 
 **Never re-import on live** — it risks duplicates and ID changes. Instead, update the galley file in place:
 
-1. Edit the `.html` file in `backfill/private/output/<vol>.<iss>/` and commit
+1. Edit the `.galley.html` file in `backfill/private/output/<vol>.<iss>/` and commit
 2. Find the galley file path on live:
    ```
    docker compose exec -T ojs-db bash -c 'mysql -u root -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE -e "
