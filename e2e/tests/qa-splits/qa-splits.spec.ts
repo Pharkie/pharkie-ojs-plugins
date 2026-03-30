@@ -240,6 +240,20 @@ test.describe('QA Splits plugin', () => {
     expect(resetCount).toBe(initialCount);
   });
 
+  test('sidebar search by article ID finds the article', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    // Search by submission ID
+    await page.fill('.qa-drawer-search', '8994');
+    await page.waitForTimeout(500);
+
+    const items = page.locator('.qa-drawer-item');
+    await expect(items).toHaveCount(1);
+    await expect(items.first()).toContainText('[id: 8994]');
+  });
+
   // ── Navigation ──
 
   test('navigation with sidebar buttons', async ({ page }) => {
