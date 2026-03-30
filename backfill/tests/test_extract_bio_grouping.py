@@ -257,3 +257,23 @@ class TestBioGrouping:
         assert len(result['bios']) == 1, f"Expected 1 bio, got {len(result['bios'])}: {result['bios']}"
         assert 'Paul Gordon is a member' in result['bios'][0]
         assert 'psgordon@talk21.com' in result['bios'][0]
+
+    def test_author_signoff_not_classified_as_note(self):
+        """Author name at end of book review (after References) is a sign-off, not a note."""
+        jats = _make_jats("""
+        <sec><title>Review</title>
+        <p>This book provides an excellent overview of cognitive therapy.</p>
+        </sec>
+        <sec><title>References</title>
+        <p>Bennett-Levy, J. (2001). The value of self-practice. Behavioural and Cognitive Psychotherapy, 29.</p>
+        <p>Diana Mitchell</p>
+        </sec>
+        """, authors=[('Diana', 'Mitchell')])
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        for note in result['notes']:
+            assert 'Diana Mitchell' not in note, \
+                f"Author sign-off classified as note: {note}"

@@ -30,9 +30,9 @@ from xml.sax.saxutils import escape
 
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import (
-    find_jats_reference_sections, is_junk, is_citation_like, is_author_bio,
+    find_jats_reference_sections, is_non_reference, is_citation_like, is_author_bio,
     is_author_contact, is_provenance, is_reference, is_note, classify, extract_text_from_element,
-    sort_notes_by_number,
+    sort_notes_by_number, strip_note_number,
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
 
@@ -103,6 +103,10 @@ def extract_from_jats(jats_path: Path) -> dict:
     note_items = []
     headings = []
 
+    # Build normalised author name variants for matching
+    author_surnames = [n.split()[-1].lower() for n in author_names if n]
+    author_full = [n.lower() for n in author_names if n]
+
     # When both a Notes section and a separate References section exist,
     # trust the author's separation: ALL items under Notes stay as notes.
     # The is_citation_like filter only applies when there is no separate
@@ -118,12 +122,14 @@ def extract_from_jats(jats_path: Path) -> dict:
         is_notes_section = bool(NOTES_HEADING_RE.match(heading))
 
         for item in sec['items']:
-            if is_junk(item):
-                # Classify filtered items — provenance or note.
+            if is_non_reference(item):
+                # Classify filtered items — provenance, note, or drop.
                 # Bio detection is handled by the trailing scan (with
                 # author matching) so we don't check is_author_bio here.
                 if is_provenance(item):
                     provenance_items.append(item)
+                elif is_note(item) == 'name-only' and item.strip().rstrip('.').lower() in author_full:
+                    pass  # Author sign-off — drop, not a note
                 else:
                     note_items.append(item)
                 continue
@@ -150,10 +156,6 @@ def extract_from_jats(jats_path: Path) -> dict:
     # Don't skip junk items — they may be author bios that the trailing
     # scan (with author matching) should pick up.
     already_extracted = set(citations)
-
-    # Build normalised author name variants for matching
-    author_surnames = [n.split()[-1].lower() for n in author_names if n]
-    author_full = [n.lower() for n in author_names if n]
 
     def _starts_with_author(text):
         """Check if text starts with one of the article's own authors."""
@@ -398,7 +400,7 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
         for i, note_text in enumerate(notes, 1):
             fn = ET.SubElement(fn_group, 'fn', id=f'fn{i}')
             p = ET.SubElement(fn, 'p')
-            p.text = note_text
+            p.text = strip_note_number(note_text)
 
     # Write author bios
     bios = extracted['bios'] if extracted['bios'] else existing_bios
