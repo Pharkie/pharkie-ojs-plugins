@@ -391,7 +391,7 @@ fi
 
 # --- 12. Backup health ---
 echo "12. Backup health"
-BACKUP_CRON=$($SSH_CMD "crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
+BACKUP_CRON=$($SSH_CMD "sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
 if [ -n "$BACKUP_CRON" ]; then
   pass "Backup cron installed"
 else
