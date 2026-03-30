@@ -141,6 +141,31 @@ def extract_from_jats(jats_path: Path) -> dict:
 
             citations.append(item)
 
+    # Scan for inline notes: bare <p> elements with "Notes:" label (in <bold>
+    # or plain text) followed by numbered items like (1), (2), etc.
+    # These appear when the author didn't use a <sec><title>Notes</title> heading.
+    inline_notes_elements = []
+    _INLINE_NOTES_RE = re.compile(r'^Notes?\s*:', re.IGNORECASE)
+    _NUMBERED_ITEM_RE = re.compile(r'^\(\d+\)')
+    for child in list(body):
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag != 'p':
+            continue
+        text = extract_text_from_element(child).strip()
+        if not text:
+            continue
+        if _INLINE_NOTES_RE.match(text):
+            # First inline note — strip "Notes:" prefix and extract note text
+            note_text = _INLINE_NOTES_RE.sub('', text).strip()
+            # The text after "Notes:" may start with (1) — strip the number
+            if note_text:
+                note_items.append(note_text)
+                inline_notes_elements.append(child)
+        elif _NUMBERED_ITEM_RE.match(text) and inline_notes_elements:
+            # Continuation numbered item after the Notes: paragraph
+            note_items.append(text)
+            inline_notes_elements.append(child)
+
     # Scan trailing <p> elements for bios and contacts that aren't inside
     # a headed bio section. These are bare paragraphs like
     # "Del Loewenthal is Emeritus Professor..." at the end of the body,
@@ -299,6 +324,7 @@ def extract_from_jats(jats_path: Path) -> dict:
         'sections_to_remove': [sec['element'] for sec in sections],
         'trailing_bio_elements': trailing_bio_elements,
         'leading_provenance_elements': leading_provenance_elements,
+        'inline_notes_elements': inline_notes_elements,
         'tree': tree,
     }
 
@@ -323,6 +349,14 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
 
     # Remove leading provenance elements from body
     for el in extracted.get('leading_provenance_elements', []):
+        if body is not None:
+            try:
+                body.remove(el)
+            except ValueError:
+                pass
+
+    # Remove inline notes elements from body
+    for el in extracted.get('inline_notes_elements', []):
         if body is not None:
             try:
                 body.remove(el)

@@ -258,6 +258,68 @@ class TestBioGrouping:
         assert 'Paul Gordon is a member' in result['bios'][0]
         assert 'psgordon@talk21.com' in result['bios'][0]
 
+    def test_inline_notes_extracted(self):
+        """Notes in <p><bold>Notes:</bold>(1) text...</p> format should be extracted."""
+        jats = _make_jats("""
+        <sec><title>Introduction</title>
+        <p>Body text about the subject.</p>
+        </sec>
+        <p><bold>Notes:</bold>(1) See "Plato's Pharmacy" in Disseminations, by Jacques Derrida, 1981.</p>
+        <p>(2) The Philadelphia Association, now based at 4 Marty's Yard, London NW3.</p>
+        <p>(3) Sonnets, 38, R.D. Laing, Michael Joseph, 1979.</p>
+        """)
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert len(result['notes']) == 3, f"Expected 3 notes, got {len(result['notes'])}: {result['notes']}"
+        assert any('Plato' in n for n in result['notes']), f"Note 1 missing: {result['notes']}"
+        assert any('Philadelphia' in n for n in result['notes']), f"Note 2 missing: {result['notes']}"
+        assert any('Sonnets' in n for n in result['notes']), f"Note 3 missing: {result['notes']}"
+        # Notes should be removed from body
+        assert 'Plato' not in str(result.get('tree', ''))[:500] or len(result['notes']) == 3
+
+    def test_inline_notes_with_references_section(self):
+        """Inline notes + separate References section: both extracted correctly."""
+        jats = _make_jats("""
+        <sec><title>Discussion</title>
+        <p>Some body text here.</p>
+        </sec>
+        <p><bold>Notes:</bold>(1) See chapter 3 for further discussion.</p>
+        <p>(2) This term is used loosely here.</p>
+        <sec><title>References</title>
+        <p>Laing, R.D. (1960). The Divided Self. Tavistock.</p>
+        <p>Laing, R.D. (1967). The Politics of Experience. Penguin.</p>
+        </sec>
+        """)
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert len(result['notes']) == 2, f"Expected 2 notes, got {len(result['notes'])}: {result['notes']}"
+        assert len(result['citations']) == 2, f"Expected 2 citations, got {len(result['citations'])}: {result['citations']}"
+
+    def test_leading_provenance_extracted(self):
+        """Provenance <p> elements before first <sec> should be extracted."""
+        jats = _make_jats("""
+        <p>Presentation given at the Society for Existential Analysis Annual Conference, London, 10 November 2018</p>
+        <p>* Parts III and IV will be published in Existential Analysis 31.1, in January 2020</p>
+        <sec><title>Introduction</title>
+        <p>Body text about therapy.</p>
+        </sec>
+        """, authors=[('Richard', 'Swann')])
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert len(result['provenance']) >= 2, \
+            f"Expected 2 provenance items, got {len(result['provenance'])}: {result['provenance']}"
+        assert any('Presentation' in p for p in result['provenance'])
+        assert any('Parts III' in p for p in result['provenance'])
+
     def test_author_signoff_not_classified_as_note(self):
         """Author name at end of book review (after References) is a sign-off, not a note."""
         jats = _make_jats("""

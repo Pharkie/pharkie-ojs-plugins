@@ -57,61 +57,15 @@ def jats_to_html(jats_path: Path) -> str | None:
 
 
 def _render_back_matter(back) -> str:
-    """Render JATS <back> elements as HTML (except ref-list)."""
+    """Render JATS <back> elements as HTML (except ref-list).
+
+    Order matches typical journal PDF layout:
+      body → bios → notes → references (refs excluded — OJS renders them)
+    Provenance appears before bios (conference/presentation context).
+    """
     parts = []
 
-    # Notes/endnotes → <h2>Notes</h2> + <ol>
-    fn_group = None
-    for child in back:
-        if _local_name(child.tag) == 'fn-group':
-            fn_group = child
-            break
-
-    if fn_group is not None:
-        notes = []
-        for fn in fn_group:
-            if _local_name(fn.tag) == 'fn':
-                p = fn.find('{*}p') if '}' in fn.tag else fn.find('p')
-                if p is None:
-                    # Try without namespace
-                    for c in fn:
-                        if _local_name(c.tag) == 'p':
-                            p = c
-                            break
-                if p is not None:
-                    text = _text_content(p)
-                    if text.strip():
-                        notes.append(text.strip())
-        if notes:
-            parts.append('\n<div class="jats-notes">')
-            parts.append('<h2>Notes</h2>')
-            parts.append('<ol>')
-            for note in notes:
-                parts.append(f'<li>{note}</li>')
-            parts.append('</ol>')
-            parts.append('</div>')
-
-    # Author bios
-    bios = []
-    for child in back:
-        if _local_name(child.tag) == 'bio':
-            p = child.find('{*}p') if '}' in child.tag else child.find('p')
-            if p is None:
-                for c in child:
-                    if _local_name(c.tag) == 'p':
-                        p = c
-                        break
-            if p is not None:
-                text = _text_content(p)
-                if text.strip():
-                    bios.append(text.strip())
-    if bios:
-        parts.append('\n<div class="jats-bios">')
-        for bio in bios:
-            parts.append(f'<p>{bio}</p>')
-        parts.append('</div>')
-
-    # Provenance notes
+    # Provenance notes (conference/presentation context — before bios)
     prov_items = []
     for child in back:
         if _local_name(child.tag) == 'notes':
@@ -132,6 +86,53 @@ def _render_back_matter(back) -> str:
         for prov in prov_items:
             parts.append(f'<p><em>{prov}</em></p>')
         parts.append('</div>')
+
+    # Author bios
+    bios = []
+    for child in back:
+        if _local_name(child.tag) == 'bio':
+            p = child.find('{*}p') if '}' in child.tag else child.find('p')
+            if p is None:
+                for c in child:
+                    if _local_name(c.tag) == 'p':
+                        p = c
+                        break
+            if p is not None:
+                text = _text_content(p)
+                if text.strip():
+                    bios.append(text.strip())
+    for bio in bios:
+        parts.append(f'\n<div class="jats-bios"><p>{bio}</p></div>')
+
+    # Notes/endnotes → <h2>Notes</h2> + <ol>
+    fn_group = None
+    for child in back:
+        if _local_name(child.tag) == 'fn-group':
+            fn_group = child
+            break
+
+    if fn_group is not None:
+        notes = []
+        for fn in fn_group:
+            if _local_name(fn.tag) == 'fn':
+                p = fn.find('{*}p') if '}' in fn.tag else fn.find('p')
+                if p is None:
+                    for c in fn:
+                        if _local_name(c.tag) == 'p':
+                            p = c
+                            break
+                if p is not None:
+                    text = _text_content(p)
+                    if text.strip():
+                        notes.append(text.strip())
+        if notes:
+            parts.append('\n<div class="jats-notes">')
+            parts.append('<h2>Notes</h2>')
+            parts.append('<ol>')
+            for note in notes:
+                parts.append(f'<li>{note}</li>')
+            parts.append('</ol>')
+            parts.append('</div>')
 
     return '\n'.join(parts)
 
