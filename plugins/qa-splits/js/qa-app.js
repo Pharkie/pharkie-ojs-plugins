@@ -186,6 +186,10 @@ document.addEventListener('alpine:init', () => {
             this.loadPdf(a.submission_id);
             this.loadHtml(a.submission_id);
             this.loadClassification(a.submission_id);
+
+            // Scroll right pane and PDF container to top
+            document.querySelector('.qa-right')?.scrollTo(0, 0);
+            document.querySelector('.qa-pdf-container')?.scrollTo(0, 0);
             this.prefetchNearby(this.setIndex);
         },
 
