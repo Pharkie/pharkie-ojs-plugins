@@ -159,6 +159,11 @@ test.describe('QA Splits plugin', () => {
     await expect(page.locator('.qa-article-meta')).toBeVisible();
     await expect(page.locator('.qa-meta-title')).toBeVisible();
     await expect(page.locator('.qa-meta-issue')).toBeVisible();
+
+    // Article ID should be visible
+    const metaId = page.locator('.qa-meta-id');
+    await expect(metaId).toBeVisible();
+    await expect(metaId).toContainText('Article #');
   });
 
   // ── End-matter classification ──
