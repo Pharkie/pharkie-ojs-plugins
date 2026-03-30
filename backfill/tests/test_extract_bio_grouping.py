@@ -114,6 +114,27 @@ class TestBioGrouping:
         assert 'Paul Gordon is a member' in result['bios'][0]
         assert 'psgordon@talk21.com' in result['bios'][0]
 
+    def test_author_statement_becomes_note(self):
+        """Author statement / funding / COI disclosures should be notes, not body."""
+        jats = _make_jats("""
+        <sec><title>Conclusion</title>
+        <p>Final thoughts on the matter.</p>
+        <p>John Smith is a psychotherapist in private practice.</p>
+        </sec>
+        <p>Author statement</p>
+        <p>Funding statement: the article has not received funding from any source.</p>
+        <p>Conflict of interest: The author declares no conflict of interest.</p>
+        """)
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert any('Funding statement' in n for n in result['notes']), \
+            f"Funding statement not in notes: {result['notes']}"
+        assert any('Conflict of interest' in n for n in result['notes']), \
+            f"COI not in notes: {result['notes']}"
+
     def test_rejects_bio_about_non_author(self):
         """A bio-like paragraph about someone who is NOT the article author
         should NOT be extracted as a bio from the trailing scan."""
