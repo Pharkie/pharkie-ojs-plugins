@@ -487,7 +487,8 @@ document.addEventListener('alpine:init', () => {
                 if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
                 if (q && !a.title.toLowerCase().includes(q)
                     && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                    && !(a.section || '').toLowerCase().includes(q)) return false;
+                    && !(a.section || '').toLowerCase().includes(q)
+                    && !String(a.submission_id).includes(q)) return false;
                 return true;
             });
         },
@@ -517,7 +518,8 @@ document.addEventListener('alpine:init', () => {
                 if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
                 if (q && !a.title.toLowerCase().includes(q)
                     && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                    && !(a.section || '').toLowerCase().includes(q)) return false;
+                    && !(a.section || '').toLowerCase().includes(q)
+                    && !String(a.submission_id).includes(q)) return false;
                 return true;
             });
         },
@@ -531,7 +533,8 @@ document.addEventListener('alpine:init', () => {
                 if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
                 if (q && !a.title.toLowerCase().includes(q)
                     && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                    && !(a.section || '').toLowerCase().includes(q)) return false;
+                    && !(a.section || '').toLowerCase().includes(q)
+                    && !String(a.submission_id).includes(q)) return false;
                 return true;
             });
         },
@@ -582,7 +585,8 @@ document.addEventListener('alpine:init', () => {
                 if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
                 if (q && !a.title.toLowerCase().includes(q)
                     && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                    && !(a.section || '').toLowerCase().includes(q)) return;
+                    && !(a.section || '').toLowerCase().includes(q)
+                    && !String(a.submission_id).includes(q)) return;
                 this.workingSet.push(i);
             });
 
