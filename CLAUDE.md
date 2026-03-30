@@ -54,15 +54,14 @@ JATS is the single source of truth for article content. The pipeline direction i
 2. `backfill/reprocess_html.py` → `backfill/postprocess_html.py` — deterministic post-processing: strip title/subtitle/authors/abstract/keywords, trim bleed, strip running headers and page numbers, normalise ALL CAPS headings to title case. Section-specific handlers for articles, editorials, and book reviews. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.post.html` from `.raw.html`.
 3. `backfill/generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + processed HTML body
 4. `backfill/extract_citations.py` — reads JATS `<body>`, extracts: reference sections (tail) → `<ref-list>`, notes → `<fn-group>`, author bio sections → `<bio>`, leading provenance notes (conference/presentation) → `<notes notes-type="provenance">`. Removes extracted content from body.
-5. `backfill/split_citation_tiers.py` — reads JATS `<ref-list>`, classifies items as reference or note, moves notes to `<fn-group>`
-6. `backfill/jats_to_html.py` — generates HTML galley (`.galley.html`) from JATS. Body text + notes/bios/provenance (in `jats-*` wrapper divs); references excluded (OJS renders from citations table)
-7. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
+5. `backfill/jats_to_html.py` — generates HTML galley (`.galley.html`) from JATS. Body text + notes/bios/provenance (in `jats-*` wrapper divs); references excluded (OJS renders from citations table)
+6. `backfill/generate_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
 
 QA Splits reads from OJS (citations table, HTML galleys, file storage) — not from local JATS files. The QA iteration loop is:
 
 1. Fix the post-processing pipeline (systemic fix, not per-article)
 2. `python3 backfill/reprocess_html.py backfill/private/output/<vol.iss>/toc.json` — reprocess from `.raw.html`
-3. Run JATS pipeline: `generate_jats.py` → `extract_citations.py --extract --volume <vol.iss>` → `split_citation_tiers.py` → `jats_to_html.py`
+3. Run JATS pipeline: `generate_jats.py` → `extract_citations.py --extract --volume <vol.iss>` → `jats_to_html.py`
 4. Regenerate import XML: `python3 backfill/generate_xml.py <toc.json> -o <import.xml>`
 5. Per-issue reimport: `backfill/import.sh backfill/private/output/<vol.iss> --force` (~7 sec)
 6. `python3 backfill/restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)

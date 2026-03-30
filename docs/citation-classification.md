@@ -114,4 +114,3 @@ All classification logic lives in `backfill/lib/citations.py`. The functions are
 
 These are used by:
 - `extract_citations.py` — classifies items during extraction from JATS body
-- `split_citation_tiers.py` — reclassifies items in JATS ref-list/fn-group

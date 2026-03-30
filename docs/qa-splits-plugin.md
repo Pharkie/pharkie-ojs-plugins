@@ -199,7 +199,6 @@ python3 backfill/reprocess_html.py backfill/private/output/23.1/toc.json
 # 3. JATS pipeline
 python3 backfill/generate_jats.py backfill/private/output/23.1/toc.json
 python3 backfill/extract_citations.py --extract --volume 23.1
-python3 backfill/split_citation_tiers.py
 python3 backfill/jats_to_html.py backfill/private/output/23.1/toc.json
 # 4. Regenerate import XML
 python3 backfill/generate_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
@@ -221,9 +220,7 @@ python3 backfill/reprocess_html.py backfill/private/output/*/toc.json
 python3 backfill/generate_jats.py backfill/private/output/*/toc.json
 # 3. Extract citations (body → back matter)
 python3 backfill/extract_citations.py --extract
-# 4. Split citation tiers
-python3 backfill/split_citation_tiers.py backfill/private/output/*/toc.json
-# 5. JATS → HTML galley (.jats.xml → .galley.html)
+# 4. JATS → HTML galley (.jats.xml → .galley.html)
 python3 backfill/jats_to_html.py backfill/private/output/*/toc.json
 # 6. Generate import XML
 for t in backfill/private/output/*/toc.json; do
