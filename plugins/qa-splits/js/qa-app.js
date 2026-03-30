@@ -49,6 +49,7 @@ document.addEventListener('alpine:init', () => {
 
         // Prefetch
         prefetchCache: new Map(),
+        _prefetchController: null,
 
 
         // ── Lifecycle ──
@@ -85,7 +86,9 @@ document.addEventListener('alpine:init', () => {
 
                 if (urlSet && urlQ) {
                     this.applyFilterFromUrl(urlSet, urlQ);
-                    this.goToSetIndex(urlPos > 0 ? urlPos - 1 : 0);
+                    const si = urlPos > 0 ? urlPos - 1 : 0;
+                    this.setIndex = si;
+                    await this.loadArticle(this.workingSet[si]);
                 } else {
                     let start = 0;
                     if (urlId) {
@@ -99,7 +102,7 @@ document.addEventListener('alpine:init', () => {
                         }
                     }
                     this.setIndex = start;
-                    this.loadArticle(start);
+                    await this.loadArticle(start);
                 }
 
                 this.prefetchRandomTarget();
@@ -171,11 +174,18 @@ document.addEventListener('alpine:init', () => {
 
         // ── Navigation ──
 
-        loadArticle(index) {
+        async loadArticle(index) {
             if (index < 0 || index >= this.articles.length) return;
             _pdf.loadGen++;
             this.currentIndex = index;
             const a = this.articles[index];
+
+            // Abort any in-flight prefetch requests so they don't block
+            // PHP-FPM workers needed for the current article.
+            if (this._prefetchController) {
+                this._prefetchController.abort();
+                this._prefetchController = null;
+            }
 
             localStorage.setItem('qa-last-seen', a.submission_id);
             const si = this.workingSet.indexOf(index);
@@ -183,9 +193,12 @@ document.addEventListener('alpine:init', () => {
             this.updateUrl();
             this.showRejectForm = false;
 
-            this.loadPdf(a.submission_id);
-            this.loadHtml(a.submission_id);
-            this.loadClassification(a.submission_id);
+            // Load current article, then prefetch nearby once done.
+            await Promise.all([
+                this.loadPdf(a.submission_id),
+                this.loadHtml(a.submission_id),
+                this.loadClassification(a.submission_id),
+            ]);
 
             // Scroll right pane and PDF container to top
             document.querySelector('.qa-right')?.scrollTo(0, 0);
@@ -683,42 +696,53 @@ document.addEventListener('alpine:init', () => {
 
         // ── Prefetch ──
 
-        prefetchNearby(index) {
-            for (let offset = 1; offset <= 5; offset++) {
-                for (const si of [index + offset, index - offset]) {
-                    if (si >= 0 && si < this.workingSet.length) {
-                        const id = this.articles[this.workingSet[si]].submission_id;
-                        if (!this.prefetchCache.has(id)) {
-                            this.prefetchCache.set(id, { pdf: null, html: null, classification: null });
-                            fetch(this.api + '/articles/' + id + '/pdf', { credentials: 'same-origin' })
-                                .then(r => r.ok ? r.blob() : null)
-                                .then(b => { if (this.prefetchCache.has(id)) this.prefetchCache.get(id).pdf = b; }).catch(() => {});
-                            fetch(this.api + '/articles/' + id + '/html', { credentials: 'same-origin' })
-                                .then(r => r.ok ? r.text() : null)
-                                .then(h => { if (this.prefetchCache.has(id)) this.prefetchCache.get(id).html = h; }).catch(() => {});
-                            fetch(this.api + '/articles/' + id + '/classification', { credentials: 'same-origin' })
-                                .then(r => r.ok ? r.json() : null)
-                                .then(d => { if (this.prefetchCache.has(id)) this.prefetchCache.get(id).classification = d; }).catch(() => {});
-                        }
-                    }
+        async prefetchNearby(index) {
+            this._prefetchController = new AbortController();
+            const signal = this._prefetchController.signal;
+
+            // Collect IDs to prefetch (next 1 article only — keep concurrency low)
+            const ids = [];
+            for (const si of [index + 1, index - 1]) {
+                if (si >= 0 && si < this.workingSet.length) {
+                    const id = this.articles[this.workingSet[si]].submission_id;
+                    if (!this.prefetchCache.has(id)) ids.push(id);
                 }
             }
+
+            // Prefetch sequentially — one article at a time to avoid saturating
+            // Apache workers (~10 under Rosetta). Each article = 3 requests.
+            for (const id of ids) {
+                if (signal.aborted) return;
+                this.prefetchCache.set(id, { pdf: null, html: null, classification: null });
+                try {
+                    const [pdfRes, htmlRes, classRes] = await Promise.all([
+                        fetch(this.api + '/articles/' + id + '/pdf', { credentials: 'same-origin', signal }),
+                        fetch(this.api + '/articles/' + id + '/html', { credentials: 'same-origin', signal }),
+                        fetch(this.api + '/articles/' + id + '/classification', { credentials: 'same-origin', signal }),
+                    ]);
+                    const entry = this.prefetchCache.get(id);
+                    if (!entry) continue;
+                    entry.pdf = pdfRes.ok ? await pdfRes.blob() : null;
+                    entry.html = htmlRes.ok ? await htmlRes.text() : null;
+                    entry.classification = classRes.ok ? await classRes.json() : null;
+                } catch (err) {
+                    // Aborted or network error — remove incomplete cache entry
+                    this.prefetchCache.delete(id);
+                }
+            }
+
             // Evict far entries
             for (const [id] of this.prefetchCache) {
                 const ai = this.articles.findIndex(a => a.submission_id === id);
-                if (ai >= 0 && Math.abs(this.workingSet.indexOf(ai) - index) > 7) this.prefetchCache.delete(id);
+                if (ai >= 0 && Math.abs(this.workingSet.indexOf(ai) - index) > 4) this.prefetchCache.delete(id);
             }
         },
 
         async prefetchRandomTarget() {
-            // Pre-warm one random target
+            // Pre-warm one random target — just fetch the nav endpoint,
+            // don't prefetch article data (would saturate workers)
             try {
-                const res = await fetch(this.api + '/nav/random-unreviewed', { credentials: 'same-origin' });
-                const data = await res.json();
-                if (data.submission_id) {
-                    const idx = this.articles.findIndex(a => a.submission_id === data.submission_id);
-                    if (idx >= 0) this.prefetchNearby(this.workingSet.indexOf(idx));
-                }
+                await fetch(this.api + '/nav/random-unreviewed', { credentials: 'same-origin' });
             } catch (err) {}
         },
 
