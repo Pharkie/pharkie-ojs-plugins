@@ -84,7 +84,8 @@ def main():
             with open(raw_path) as f:
                 raw = f.read()
 
-            final = postprocess_article(raw, art)
+            pdf_path = os.path.join(vol_dir, f'{stem}.pdf')
+            final = postprocess_article(raw, art, pdf_path=pdf_path)
 
             if args.verify:
                 w = verify_postprocessed(raw, final, art)

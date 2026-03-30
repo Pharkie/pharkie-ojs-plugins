@@ -190,7 +190,7 @@ def strip_note_number(text: str) -> str:
     would be duplicated (e.g. '1. 1 An alternative translation...').
     Handles: '1 ...', '1. ...', '1) ...', superscript numerals '¹ ...'.
     """
-    return re.sub(r'^\d{1,3}[\.\)\s]+', '', text).strip()
+    return re.sub(r'^(\(\d{1,3}\)\s*|\d{1,3}[\.\)\s]+)', '', text).strip()
 
 
 # ---------------------------------------------------------------
@@ -463,7 +463,7 @@ def is_non_reference(text: str) -> bool:
             and len(stripped.split()) <= 5):
         return True
 
-    if is_author_bio(text):
+    if is_author_bio(text) and not is_reference(text):
         return True
 
     if is_provenance(text):
@@ -747,9 +747,10 @@ def normalise_allcaps(text: str) -> str:
 def is_author_contact(text: str) -> bool:
     """Detect author contact details (address, email, affiliation lines)."""
     return bool(re.match(
-        r'^(Contact|Address|Email|E-mail|Correspondence|Tel|Telephone|Fax|Website)\s*:',
+        r'^(Contact|Address|Email|E-mail|Correspondence|Tel|Telephone|Fax|Website)(\s+\w+)?\s*:',
         text, re.IGNORECASE
-    )) or bool(re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$', text.strip()))
+    )) or bool(re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$', text.strip())
+    ) or bool(re.search(r'\bE-?mail\s*:\s*[A-Za-z0-9._%+-]+@', text, re.IGNORECASE))
 
 
 def is_author_bio(text: str) -> bool:
@@ -876,6 +877,8 @@ def is_provenance(text: str) -> bool:
         r'^(?:Paper|Talk|Keynote)\s+(?:given|delivered|presented)',
         # "Adapted/Revised/Expanded from..."
         r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
+        # "* Parts III and IV will be published in..." — forthcoming-parts note
+        r'^\*?\s*Parts?\s+[IVX\d]+.*(?:will\s+be\s+published|forthcoming)',
     ]
     if any(re.search(p, stripped, re.IGNORECASE) for p in provenance_patterns):
         return True
@@ -1050,10 +1053,14 @@ def is_reference(text: str) -> bool:
             return False
 
     cite_refs = len(re.findall(r'[A-Z][a-z]+\s*[\(,]\s*\d{4}', clean))
-    semicolon_refs = len(re.findall(r';\s*[A-Z][a-z]+', clean))
+    # Count "Author (year)" pairs separated by semicolons — indicates a
+    # multi-citation note (e.g. "See Smith, 2005; Jones, 2010"). Requires
+    # a year near the name to avoid false-positives on multi-author references
+    # that use semicolons between co-authors (e.g. "Smith, P.K.; Morita, Y.").
+    semicolon_cite_refs = len(re.findall(r';\s*[A-Z][a-z]+[^;]{0,30}\d{4}', clean))
     if cite_refs >= 3:
         return False
-    if (cite_refs + semicolon_refs) >= 4:
+    if (cite_refs + semicolon_cite_refs) >= 4:
         return False
 
     # Long texts: require author-like start + year to avoid classifying

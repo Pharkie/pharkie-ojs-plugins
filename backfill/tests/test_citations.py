@@ -266,6 +266,12 @@ class TestStripNoteNumber:
     def test_no_number(self):
         assert strip_note_number('An alternative translation') == 'An alternative translation'
 
+    def test_strips_parens_number(self):
+        assert strip_note_number('(1) See "Plato\'s Pharmacy"') == 'See "Plato\'s Pharmacy"'
+
+    def test_strips_parens_number_two_digit(self):
+        assert strip_note_number('(12) The Philadelphia Association') == 'The Philadelphia Association'
+
     def test_preserves_year_start(self):
         """Don't strip a year that starts a note like '1960 was a key year'."""
         # Years have 4 digits — the regex only matches short numbers followed by separator

@@ -247,6 +247,13 @@ for DIR in "${SORTED_DIRS[@]}"; do
     fi
   fi
 
+  # Clear any stale jobs before import — OJS's shutdown handler drains the
+  # queue at the end of the import PHP process, and stale jobs from prior
+  # deletes/imports would log INVALID_PAYLOAD errors.
+  if [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
+    ojs_db_query "DELETE FROM jobs;" > /dev/null 2>&1 || true
+  fi
+
   # Copy XML into container
   docker cp "$XML_FILE" "$CONTAINER:/tmp/import.xml"
 
@@ -317,13 +324,14 @@ if [ $SUCCEEDED -gt 0 ]; then
     echo "    docker exec $CONTAINER php tools/rebuildSearchIndex.php"
   fi
 
-  # Drain the queue — rebuildSearchIndex.php only schedules jobs, it doesn't
-  # process them. Without this, indexing trickles through the shutdown handler.
-  # Note: `jobs.php work --stop-when-empty` hangs (OJS bug #13), so we use
-  # `run --once` in a loop instead.
-  echo "  Draining search index queue..."
-  while docker exec "$CONTAINER" php lib/pkp/tools/jobs.php run --once 2>/dev/null | grep -q Processing; do true; done
-  echo "  OK: Search index complete"
+  # Clear remaining search index jobs — the shutdown handler processes them
+  # one-per-request which cripples response times (1400 jobs = every request
+  # blocked). Search works without draining because rebuildSearchIndex.php
+  # processes the core indexing inline; the queued jobs are supplementary.
+  if [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
+    CLEARED=$(ojs_db_query "DELETE FROM jobs; SELECT ROW_COUNT();")
+    echo "  OK: Cleared $CLEARED queued jobs"
+  fi
 fi
 
 # --- Reminder: restore IDs after wipe-articles import ---

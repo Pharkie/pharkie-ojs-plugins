@@ -15,11 +15,16 @@ Pipeline steps for articles (in order):
 7. Strip end bleed (next article's content at bottom)
 
 For book reviews: extract just the target review from full-page HTML.
+
+Uses BeautifulSoup4 for all HTML parsing and manipulation. Regex is
+only used for text-level operations (word matching, prefix stripping).
 """
 
 import os
 import re
 import sys
+
+from bs4 import BeautifulSoup, Tag, NavigableString
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib.citations import (
@@ -41,18 +46,6 @@ MIN_ABSTRACT_LENGTH = 30
 # legitimate book review in the dataset is ~80 chars of body text.
 # Shortest legitimate article is ~200 chars. 100 catches broken
 # extractions while allowing very short book reviews.
-# Running headers from print layout (journal name, volume info)
-RUNNING_HEADER_RE = re.compile(
-    r'^\s*<p[^>]*>\s*(?:<em>|<i>)?\s*(?:Existential\s+Analysis\s*:\s*)?'
-    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis'
-    r'\s*(?:</em>|</i>)?\s*</p>\s*$',
-    re.IGNORECASE | re.MULTILINE
-)
-# Bare page numbers from print layout (standalone number in a <p>)
-PAGE_NUMBER_RE = re.compile(
-    r'^\s*<p[^>]*>\s*\d{1,4}\s*</p>\s*$',
-    re.MULTILINE
-)
 SHORT_CONTENT_THRESHOLD = 100
 # Avoid matching single words or fragments
 MIN_TARGET_TEXT_LEN = 5
@@ -71,31 +64,97 @@ TITLE_FUZZY_MATCH_THRESHOLD = 0.8
 # Use shared normalise_for_overlap as _clean (keeps digits for content matching)
 _clean = normalise_for_overlap
 
+# Running header text pattern (plain text, not HTML)
+_RUNNING_HEADER_TEXT_RE = re.compile(
+    r'^\s*(?:Existential\s+Analysis\s*:\s*)?'
+    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis\s*$',
+    re.IGNORECASE
+)
+# Keep the HTML-level regexes for backward compatibility (used by test imports)
+RUNNING_HEADER_RE = re.compile(
+    r'^\s*<p[^>]*>\s*(?:<em>|<i>)?\s*(?:Existential\s+Analysis\s*:\s*)?'
+    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis'
+    r'\s*(?:</em>|</i>)?\s*</p>\s*$',
+    re.IGNORECASE | re.MULTILINE
+)
+PAGE_NUMBER_RE = re.compile(
+    r'^\s*<p[^>]*>\s*\d{1,4}\s*</p>\s*$',
+    re.MULTILINE
+)
+
+# Element tag sets
+BLOCK_TAGS = frozenset({'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'})
+HEADING_TAGS = frozenset({'h1', 'h2', 'h3', 'h4', 'h5', 'h6'})
+_KEYWORDS_RE = re.compile(r'^Key\s*[Ww]ords?$|^KEYWORDS?$', re.IGNORECASE)
+_KEYWORDS_INLINE_RE = re.compile(r'^\s*(?:Key\s*[Ww]ords?|KEYWORDS?)\s*:', re.IGNORECASE)
+_PUB_MARKERS_RE = re.compile(
+    r'(?:\d{4}|pp\.?\s*\d|ISBN|\$|£|'
+    + PUBLISHER_NAMES +
+    r'|Oxford|Cambridge|London|New York)', re.IGNORECASE)
+
+
+# ---------------------------------------------------------------
+# BS4 helpers
+# ---------------------------------------------------------------
+
+def _parse(html):
+    """Parse HTML fragment into BS4 soup."""
+    return BeautifulSoup(html, 'html.parser')
+
+
+def _serialize(soup):
+    """Serialize soup back to HTML string."""
+    return str(soup)
+
 
 def _strip_tags(html):
-    """Remove HTML tags."""
-    return re.sub(r'<[^>]+>', '', html)
+    """Remove HTML tags, returning plain text."""
+    return BeautifulSoup(html, 'html.parser').get_text()
 
 
+def _el_text(el):
+    """Get plain text content from a BS4 element."""
+    return el.get_text()
 
-def _find_first_body_heading(html):
-    """Find the position of the first body content heading (Introduction, etc.).
 
-    Returns the character position, or len(html) if not found.
-    Skips "Abstract", "Keywords" headings, and person-name headings
-    (author bylines that Haiku sometimes renders as <h2>).
-    """
-    skip_headings = {'abstract', 'keywords', 'key words'}
-    for m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html, re.DOTALL | re.IGNORECASE):
-        heading_text = _strip_tags(m.group(1)).strip()
-        if heading_text.lower() in skip_headings:
-            continue
-        # Skip person-name headings (author bylines rendered as h2/h3)
-        if looks_like_person_name(heading_text):
-            continue
-        return m.start()
-    return len(html)
+def _el_clean_text(el):
+    """Get cleaned (normalised) text from a BS4 element."""
+    return _clean(_el_text(el))
 
+
+def _is_block(el):
+    """Check if a BS4 element is a block-level element."""
+    return isinstance(el, Tag) and el.name in BLOCK_TAGS
+
+
+def _is_heading(el):
+    """Check if a BS4 element is a heading."""
+    return isinstance(el, Tag) and el.name in HEADING_TAGS
+
+
+def _remove_preceding(el):
+    """Remove all content before an element (previous siblings)."""
+    for sibling in list(el.previous_siblings):
+        sibling.extract()
+
+
+def _remove_from(el):
+    """Remove an element and all following siblings."""
+    for sibling in list(el.next_siblings):
+        sibling.extract()
+    el.extract()
+
+
+def _top_level_blocks(soup):
+    """Yield top-level block elements in document order."""
+    for el in soup.children:
+        if _is_block(el):
+            yield el
+
+
+# ---------------------------------------------------------------
+# Text matching (pure text, no HTML)
+# ---------------------------------------------------------------
 
 def _text_to_regex(text):
     """Build a regex from text: words in order, flexible non-alpha gaps between.
@@ -133,6 +192,9 @@ def _find_block_by_text(html, target_text, search_start=0, search_end=None):
 
     Uses ordered word-sequence matching (no threshold).
     Returns (start_pos, end_pos) of the matching block, or (None, None).
+
+    Note: This function returns character positions for backward compatibility
+    with callers that do string slicing. New code should use _find_block_in_soup.
     """
     if not target_text or len(target_text) < MIN_TARGET_TEXT_LEN:
         return None, None
@@ -143,16 +205,403 @@ def _find_block_by_text(html, target_text, search_start=0, search_end=None):
     if rx is None:
         return None, None
 
-    for m in re.finditer(r'<(p|h[1-6]|blockquote)[^>]*>.*?</\1>', region, re.DOTALL):
-        block_text = _clean(_strip_tags(m.group()))
+    soup = _parse(region)
+    for el in soup.find_all(list(BLOCK_TAGS)):
+        block_text = _clean(_el_text(el))
         if rx.search(block_text):
-            return (search_start + m.start(), search_start + m.end())
+            # Find the element's position in the region string
+            el_str = str(el)
+            pos = region.find(el_str)
+            if pos >= 0:
+                return (search_start + pos, search_start + pos + len(el_str))
 
     return None, None
 
 
+def _find_block_in_soup(soup, target_text):
+    """Find a block element in soup whose text matches target_text.
+
+    Returns the BS4 element, or None.
+    """
+    if not target_text or len(target_text) < MIN_TARGET_TEXT_LEN:
+        return None
+    rx = _text_to_regex(target_text)
+    if rx is None:
+        return None
+    for el in soup.find_all(list(BLOCK_TAGS)):
+        if rx.search(_el_clean_text(el)):
+            return el
+    return None
+
+
+def _find_first_body_heading(html):
+    """Find the position of the first body content heading (Introduction, etc.).
+
+    Returns the character position, or len(html) if not found.
+    Skips "Abstract", "Keywords" headings, and person-name headings
+    (author bylines that Haiku sometimes renders as <h2>).
+    """
+    skip_headings = {'abstract', 'keywords', 'key words'}
+    soup = _parse(html)
+    for el in soup.find_all(['h2', 'h3']):
+        heading_text = _el_text(el).strip()
+        if heading_text.lower() in skip_headings:
+            continue
+        if looks_like_person_name(heading_text):
+            continue
+        # Find position in original HTML string
+        el_str = str(el)
+        pos = html.find(el_str)
+        if pos >= 0:
+            return pos
+    return len(html)
+
+
+def _find_first_body_heading_soup(soup):
+    """Find the first body content heading element in soup.
+
+    Returns the BS4 element, or None.
+    """
+    skip_headings = {'abstract', 'keywords', 'key words'}
+    for el in soup.find_all(['h2', 'h3']):
+        heading_text = _el_text(el).strip()
+        if heading_text.lower() in skip_headings:
+            continue
+        if looks_like_person_name(heading_text):
+            continue
+        return el
+    return None
+
+
 # ---------------------------------------------------------------
-# Article post-processing steps
+# Soup-based strip functions (mutate soup in place)
+# ---------------------------------------------------------------
+
+def _strip_start_bleed_soup(soup, own_title):
+    """Remove content before the article's own title."""
+    if not own_title:
+        return
+    el = _find_block_in_soup(soup, own_title)
+    if el is not None:
+        _remove_preceding(el)
+
+
+def _strip_title_soup(soup, title):
+    """Remove title elements from the top of the soup.
+
+    Consumes blocks that have word overlap with the title and are
+    title-sized (short) or headings. Stops at provenance notes or
+    non-matching blocks.
+    """
+    if not title:
+        return
+    title_clean = _clean(title)
+    if not title_clean:
+        return
+
+    title_words = set(title_clean.split())
+    title_len = len(title_clean)
+
+    to_remove = []
+    matched_words = set()
+
+    for el in _top_level_blocks(soup):
+        block_text = _el_clean_text(el)
+        block_words = set(block_text.split())
+        overlap = title_words & block_words
+
+        # Stop at provenance notes
+        raw_text = _el_text(el).strip()
+        if is_provenance(raw_text):
+            break
+
+        is_title_sized = len(block_text) <= title_len * TITLE_BLOCK_MAX_RATIO
+        is_head = _is_heading(el)
+
+        if overlap and (is_title_sized or is_head):
+            matched_words |= overlap
+            to_remove.append(el)
+        else:
+            break
+
+    if matched_words and len(matched_words) > len(title_words) * TITLE_WORD_MATCH_RATIO:
+        for el in to_remove:
+            el.extract()
+
+
+def _strip_subtitle_soup(soup, subtitle):
+    """Remove the subtitle element from the top of the soup."""
+    if not subtitle:
+        return
+    subtitle_clean = _clean(subtitle)
+    if not subtitle_clean:
+        return
+
+    subtitle_words = set(subtitle_clean.split())
+
+    for i, el in enumerate(_top_level_blocks(soup)):
+        if i >= 5:
+            break
+        block_text = _el_clean_text(el)
+        block_words = set(block_text.split())
+        overlap = subtitle_words & block_words
+
+        if overlap and len(overlap) > len(subtitle_words) * TITLE_WORD_MATCH_RATIO:
+            el.extract()
+            return
+        elif block_words - subtitle_words:
+            return
+
+
+def _strip_authors_soup(soup, authors):
+    """Remove author byline element from the soup."""
+    if not authors:
+        return
+    # Search up to Abstract heading or first body heading
+    boundary = _find_first_body_heading_soup(soup)
+    # Also check for Abstract heading
+    abstract_heading = soup.find(['h2', 'h3'], string=re.compile(r'^\s*Abstract\s*$', re.IGNORECASE))
+    if abstract_heading:
+        boundary = abstract_heading
+
+    for variant in _author_name_variants(authors):
+        rx = _text_to_regex(variant)
+        if rx is None:
+            continue
+        for el in soup.find_all(list(BLOCK_TAGS)):
+            # Stop searching past boundary
+            if boundary and el == boundary:
+                break
+            if boundary and _el_comes_after(el, boundary):
+                break
+            if rx.search(_el_clean_text(el)):
+                el.extract()
+                return
+
+
+def _el_comes_after(el, boundary):
+    """Check if el appears after boundary in document order."""
+    # Walk forward from boundary's next siblings
+    for sibling in boundary.next_elements:
+        if sibling is el:
+            return True
+    return False
+
+
+def _strip_abstract_soup(soup, abstract):
+    """Remove abstract heading and paragraph from the soup."""
+    if not abstract or len(abstract) < MIN_ABSTRACT_LENGTH:
+        return
+
+    # Remove "Abstract" heading
+    for heading in soup.find_all(['h2', 'h3']):
+        if re.match(r'^\s*Abstract\s*$', _el_text(heading), re.IGNORECASE):
+            heading.extract()
+            break
+
+    # Find and remove abstract paragraph using fuzzy matching
+    boundary = _find_first_body_heading_soup(soup)
+    abs_clean = _clean(abstract)
+    abs_words = set(abs_clean.split())
+    if not abs_words:
+        return
+
+    for el in soup.find_all('p'):
+        # Stop at first body heading
+        if boundary and (el == boundary or _el_comes_after(el, boundary)):
+            break
+        block_text = _el_clean_text(el)
+        block_words = set(block_text.split())
+        if not block_words:
+            continue
+        overlap = len(abs_words & block_words) / len(abs_words)
+        if overlap > ABSTRACT_OVERLAP_THRESHOLD:
+            el.extract()
+            return
+
+
+def _strip_keywords_soup(soup):
+    """Remove keywords heading + paragraph, or standalone keywords paragraph."""
+    # Pattern 1: Heading (h2/h3 with "Keywords" text) + following paragraph
+    for heading in soup.find_all(['h2', 'h3']):
+        if _KEYWORDS_RE.match(_el_text(heading).strip()):
+            # Remove the heading and the following <p> sibling
+            next_p = heading.find_next_sibling('p')
+            heading.extract()
+            if next_p:
+                next_p.extract()
+            return
+
+    # Pattern 2: Standalone paragraph starting with "Keywords:"
+    for p in soup.find_all('p'):
+        if _KEYWORDS_INLINE_RE.match(_el_text(p)):
+            p.extract()
+            return
+
+
+def _strip_end_bleed_soup(soup, next_title):
+    """Remove content from the next article at the end."""
+    if not next_title:
+        return
+    # Find last back-matter heading
+    last_backmatter = None
+    for heading in soup.find_all(['h2', 'h3']):
+        if REFERENCE_HEADING_RE.match(_el_text(heading).strip()):
+            last_backmatter = heading
+
+    # Search for next title from last back-matter heading onwards
+    rx = _text_to_regex(next_title)
+    if rx is None:
+        return
+
+    # Get elements to search (from last backmatter heading onwards, or all)
+    search_els = soup.find_all(list(BLOCK_TAGS))
+    if last_backmatter:
+        # Only search elements at or after the last backmatter heading
+        start_searching = False
+        filtered = []
+        for el in search_els:
+            if el == last_backmatter:
+                start_searching = True
+            if start_searching:
+                filtered.append(el)
+        search_els = filtered
+
+    for el in search_els:
+        if rx.search(_el_clean_text(el)):
+            _remove_from(el)
+            return
+
+
+def _strip_running_headers_soup(soup):
+    """Remove running headers and bare page numbers from print layout."""
+    for p in list(soup.find_all('p')):
+        text = _el_text(p).strip()
+        # Running header: "Journal of The Society for Existential Analysis"
+        if _RUNNING_HEADER_TEXT_RE.match(text):
+            p.decompose()
+            continue
+        # Bare page number: standalone 1-4 digit number
+        if re.match(r'^\d{1,4}$', text):
+            p.decompose()
+
+
+def _strip_heading_sups_soup(soup):
+    """Strip footnote superscripts from headings."""
+    for heading in soup.find_all(list(HEADING_TAGS)):
+        for sup in heading.find_all('sup'):
+            sup.decompose()
+
+
+def _normalise_headings_soup(soup):
+    """Normalise ALL CAPS headings to title case."""
+    for heading in soup.find_all(list(HEADING_TAGS)):
+        # Only process headings with simple text content (no nested tags
+        # that would be lost by replacing .string)
+        if heading.string is not None:
+            heading.string = normalise_allcaps(heading.string)
+        else:
+            # Mixed content (e.g. <h2><em>TEXT</em></h2>) — process each
+            # text node individually
+            for text_node in heading.find_all(string=True):
+                if text_node.strip():
+                    text_node.replace_with(normalise_allcaps(str(text_node)))
+
+
+_NOTES_HEADING_RE = re.compile(r'^(Notes?|Endnotes?|Footnotes?)\s*$', re.IGNORECASE)
+
+
+def _splice_notes_soup(soup, back_matter_sections):
+    """Replace notes <ol> with PyMuPDF-extracted notes if Haiku dropped any.
+
+    Compares <li> count in the existing notes section against the expected
+    count from PyMuPDF PDF extraction. If the HTML has fewer notes, replaces
+    the entire <ol> (and ensures an <h2> heading exists).
+    """
+    notes_sections = [s for s in back_matter_sections
+                      if _NOTES_HEADING_RE.match(s['heading'])
+                      and s['is_numbered']]
+    if not notes_sections:
+        return
+
+    expected_notes = notes_sections[0]['items']
+    expected_count = len(expected_notes)
+    heading_text = notes_sections[0]['heading']
+
+    # Find the Notes heading in the soup
+    notes_h2 = None
+    refs_h2 = None
+    for h2 in soup.find_all('h2'):
+        text = _el_text(h2).strip()
+        if not notes_h2 and _NOTES_HEADING_RE.match(text):
+            notes_h2 = h2
+        if not refs_h2 and REFERENCE_HEADING_RE.match(text):
+            refs_h2 = h2
+
+    # Find the <ol> that belongs to the notes section
+    notes_ol = None
+    if notes_h2:
+        # Look for the first <ol> after the notes heading
+        for sib in notes_h2.next_siblings:
+            if isinstance(sib, Tag):
+                if sib.name == 'ol':
+                    notes_ol = sib
+                    break
+                # Stop at next heading or references
+                if sib.name in HEADING_TAGS:
+                    break
+    else:
+        # No heading — look for a bare <ol> before References
+        if refs_h2:
+            for el in refs_h2.previous_siblings:
+                if isinstance(el, Tag) and el.name == 'ol':
+                    notes_ol = el
+                    break
+                if isinstance(el, Tag) and el.name in HEADING_TAGS:
+                    break
+
+    # Count existing notes
+    actual_count = len(notes_ol.find_all('li')) if notes_ol else 0
+
+    if actual_count >= expected_count:
+        return
+
+    # Build replacement <ol> with PyMuPDF notes (may contain <em> tags)
+    new_ol = soup.new_tag('ol')
+    for note in expected_notes:
+        li = soup.new_tag('li')
+        # Parse note HTML (may contain <em> tags) into the <li>
+        note_soup = BeautifulSoup(note, 'html.parser')
+        for child in list(note_soup.children):
+            li.append(child)
+        new_ol.append(li)
+
+    if notes_ol:
+        notes_ol.replace_with(new_ol)
+    elif notes_h2:
+        notes_h2.insert_after(new_ol)
+    else:
+        # No heading exists — create one and insert before refs or at end
+        new_h2 = soup.new_tag('h2')
+        new_h2.string = heading_text
+        if refs_h2:
+            refs_h2.insert_before(new_h2)
+            new_h2.insert_after(new_ol)
+        else:
+            soup.append(new_h2)
+            soup.append(new_ol)
+
+
+def _strip_book_reviews_heading_soup(soup):
+    """Remove 'BOOK REVIEWS' heading."""
+    for heading in soup.find_all(['h1', 'h2', 'h3']):
+        if re.match(r'^\s*BOOK\s+REVIEWS?\s*$', _el_text(heading), re.IGNORECASE):
+            heading.extract()
+            return
+
+
+# ---------------------------------------------------------------
+# Public string-based API (backward compatible)
 # ---------------------------------------------------------------
 
 def strip_start_bleed(html, own_title):
@@ -165,10 +614,9 @@ def strip_start_bleed(html, own_title):
     """
     if not own_title:
         return html
-    start, _ = _find_block_by_text(html, own_title)
-    if start is not None and start > 0:
-        html = html[start:]
-    return html
+    soup = _parse(html)
+    _strip_start_bleed_soup(soup, own_title)
+    return _serialize(soup)
 
 
 def strip_title(html, title):
@@ -181,112 +629,18 @@ def strip_title(html, title):
     """
     if not title:
         return html
-    title_clean = _clean(title)
-    if not title_clean:
-        return html
-
-    title_words = set(title_clean.split())
-    title_len = len(title_clean)
-
-    # Look at blocks from the start of the HTML
-    blocks = list(re.finditer(r'<(h[1-6]|p)[^>]*>.*?</\1>', html, re.DOTALL))
-    if not blocks:
-        return html
-
-    best_end = 0
-    matched_words = set()
-
-    for block in blocks:
-        block_text = _clean(_strip_tags(block.group()))
-        block_words = set(block_text.split())
-        overlap = title_words & block_words
-
-        # Skip provenance notes — they sit between title and author
-        # and must be preserved for extraction as JATS provenance.
-        raw_text = _strip_tags(block.group()).strip()
-        if is_provenance(raw_text):
-            continue
-
-        # Only consume if: block has title word overlap AND is short
-        # enough to be a title/subtitle element (not a body paragraph).
-        # A title block should be roughly title-length, not 10x longer.
-        is_title_sized = len(block_text) <= title_len * TITLE_BLOCK_MAX_RATIO
-        is_heading = block.group().startswith('<h')
-
-        if overlap and (is_title_sized or is_heading):
-            matched_words |= overlap
-            best_end = block.end()
-        else:
-            break
-
-    if matched_words and len(matched_words) > len(title_words) * TITLE_WORD_MATCH_RATIO:
-        html = html[best_end:].lstrip()
-
-    return html
+    soup = _parse(html)
+    _strip_title_soup(soup, title)
+    return _serialize(soup)
 
 
 def strip_subtitle(html, subtitle):
-    """Remove the article's subtitle from the HTML body.
-
-    When subtitles are extracted into toc.json, they also need stripping
-    from the HTML body to avoid duplication (subtitle appears as metadata
-    AND in the body text).
-    """
+    """Remove the article's subtitle from the HTML body."""
     if not subtitle:
         return html
-    subtitle_clean = _clean(subtitle)
-    if not subtitle_clean:
-        return html
-
-    subtitle_words = set(subtitle_clean.split())
-
-    # Look at the first few blocks — subtitle is typically right at the top
-    # (title heading already stripped by strip_title before this runs)
-    blocks = list(re.finditer(r'<(h[1-6]|p)[^>]*>.*?</\1>', html, re.DOTALL))
-
-    for block in blocks[:5]:  # only check first 5 blocks
-        block_text = _clean(_strip_tags(block.group()))
-        block_words = set(block_text.split())
-        overlap = subtitle_words & block_words
-
-        if overlap and len(overlap) > len(subtitle_words) * TITLE_WORD_MATCH_RATIO:
-            # Found the subtitle block — remove it
-            html = html[:block.start()] + html[block.end():]
-            html = html.lstrip()
-            break
-        elif block_words - subtitle_words:
-            # Non-subtitle content found — stop looking
-            break
-
-    return html
-
-
-def _author_name_variants(authors):
-    """Generate matching variants for an author name string.
-
-    Handles cases where HTML drops middle names/initials that appear in
-    toc.json. E.g. "Luis M. Rodriguez" → also try "Luis Rodriguez",
-    "Edgar Agrela Correia" → also try "Edgar Correia".
-
-    Returns a list of name strings to try, from most specific to least.
-    """
-    variants = [authors]
-    # Split individual authors (comma or "and" separated)
-    # Then for each, try dropping middle names/initials
-    # Build a first-name + last-name only variant
-    parts = re.split(r',\s*|\s+and\s+', authors)
-    short_parts = []
-    for part in parts:
-        words = part.strip().split()
-        if len(words) > 2:
-            # Try first + last only (drop middle names/initials)
-            short_parts.append(f'{words[0]} {words[-1]}')
-        else:
-            short_parts.append(part.strip())
-    short_variant = ', '.join(short_parts) if ',' in authors else ' and '.join(short_parts) if ' and ' in authors else short_parts[0]
-    if short_variant != authors:
-        variants.append(short_variant)
-    return variants
+    soup = _parse(html)
+    _strip_subtitle_soup(soup, subtitle)
+    return _serialize(soup)
 
 
 def strip_authors(html, authors):
@@ -297,19 +651,9 @@ def strip_authors(html, authors):
     """
     if not authors:
         return html
-    # Search up to Abstract heading or first body heading
-    abstract_pos = re.search(r'<h[23][^>]*>\s*Abstract\s*</h[23]>', html, re.IGNORECASE)
-    search_end = abstract_pos.start() if abstract_pos else _find_first_body_heading(html)
-    if search_end == 0:
-        search_end = len(html)
-    # Try full name first, then variants with middle names dropped
-    for variant in _author_name_variants(authors):
-        start, end = _find_block_by_text(html, variant, search_end=search_end)
-        if start is not None:
-            html = html[:start] + html[end:]
-            html = html.lstrip()
-            break
-    return html
+    soup = _parse(html)
+    _strip_authors_soup(soup, authors)
+    return _serialize(soup)
 
 
 def strip_abstract(html, abstract):
@@ -321,30 +665,9 @@ def strip_abstract(html, abstract):
     """
     if not abstract or len(abstract) < MIN_ABSTRACT_LENGTH:
         return html
-
-    # Remove "Abstract" heading if present
-    html = re.sub(r'<h[23][^>]*>\s*Abstract\s*</h[23]>\s*', '', html, count=1, flags=re.IGNORECASE)
-
-    # Search for the abstract paragraph in early blocks using fuzzy matching
-    search_end = _find_first_body_heading(html)
-    abs_clean = _clean(abstract)
-    abs_words = set(abs_clean.split())
-    if not abs_words:
-        return html
-
-    region = html[:search_end]
-    for m in re.finditer(r'<p[^>]*>.*?</p>', region, re.DOTALL):
-        block_text = _clean(_strip_tags(m.group()))
-        block_words = set(block_text.split())
-        if not block_words:
-            continue
-        overlap = len(abs_words & block_words) / len(abs_words)
-        if overlap > ABSTRACT_OVERLAP_THRESHOLD:
-            html = html[:m.start()] + html[m.end():]
-            html = html.lstrip()
-            break
-
-    return html
+    soup = _parse(html)
+    _strip_abstract_soup(soup, abstract)
+    return _serialize(soup)
 
 
 def strip_keywords(html):
@@ -354,34 +677,18 @@ def strip_keywords(html):
     - <p>Keywords: term1, term2, ...</p>
     - <h2>Key Words</h2>\\n<p>term1, term2, ...</p>
     """
-    # Heading + following paragraph pattern
-    html = re.sub(
-        r'<h[23][^>]*>\s*(?:Key\s*[Ww]ords?|KEYWORDS?)\s*</h[23]>\s*<p[^>]*>.*?</p>\s*',
-        '', html, count=1, flags=re.DOTALL | re.IGNORECASE
-    )
-    # Standalone paragraph pattern
-    html = re.sub(
-        r'<p[^>]*>\s*(?:Key\s*[Ww]ords?|KEYWORDS?)\s*:?\s*.*?</p>\s*',
-        '', html, count=1, flags=re.DOTALL | re.IGNORECASE
-    )
-    return html
+    soup = _parse(html)
+    _strip_keywords_soup(soup)
+    return _serialize(soup)
 
 
 def strip_end_bleed(html, next_title):
     """Remove content from the next article at the end of the HTML."""
     if not next_title:
         return html
-    # Search from the last back-matter heading onwards (references section and after)
-    last_backmatter = len(html)
-    for m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html, re.DOTALL):
-        heading_text = _strip_tags(m.group(1)).strip()
-        if REFERENCE_HEADING_RE.match(heading_text):
-            last_backmatter = m.start()
-    # Search from last back-matter heading to end
-    start, end = _find_block_by_text(html, next_title, search_start=last_backmatter)
-    if start is not None:
-        html = html[:start].rstrip()
-    return html
+    soup = _parse(html)
+    _strip_end_bleed_soup(soup, next_title)
+    return _serialize(soup)
 
 
 # ---------------------------------------------------------------
@@ -398,42 +705,38 @@ def _find_book_publication_details(html, book_title, search_start=0):
     Returns (start_pos, end_pos) or (None, None).
     """
     clean_book = re.sub(r'^Book Review:\s*', '', book_title, flags=re.IGNORECASE)
-    # Handle multi-book reviews: "Title A / Title B" — find earliest part
     book_parts = [p.strip() for p in clean_book.split('/') if p.strip()]
     rx_parts = [_text_to_regex(p) for p in book_parts if p]
     rx_parts = [r for r in rx_parts if r is not None]
     if not rx_parts:
         return None, None
 
-    # Publication detail markers: year, page count, price, or publisher name.
-    # Publisher names imported from citations.py (single source of truth).
-    pub_markers = re.compile(
-        r'(?:\d{4}|pp\.?\s*\d|ISBN|\$|£|'
-        + PUBLISHER_NAMES +
-        r'|Oxford|Cambridge|London|New York)', re.IGNORECASE)
+    region = html[search_start:]
+    soup = _parse(region)
 
     # Find the earliest block matching ANY part with publication details
-    earliest = None
-    for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
-        block_text = _clean(_strip_tags(m.group()))
-        raw_block = _strip_tags(m.group())
+    for el in soup.find_all(list(BLOCK_TAGS - {'blockquote'})):
+        block_text = _el_clean_text(el)
+        raw_block = _el_text(el)
         has_title = any(rx.search(block_text) for rx in rx_parts)
         if not has_title:
             continue
-        has_pub = bool(pub_markers.search(raw_block))
+        has_pub = bool(_PUB_MARKERS_RE.search(raw_block))
         is_short_heading = len(block_text.split()) <= 10
         if has_pub or is_short_heading:
-            earliest = (search_start + m.start(), search_start + m.end())
-            break  # first match = earliest
-
-    if earliest:
-        return earliest
+            el_str = str(el)
+            pos = region.find(el_str)
+            if pos >= 0:
+                return (search_start + pos, search_start + pos + len(el_str))
 
     # Fallback: find earliest block matching any part without pub markers
-    for m in re.finditer(r'<(p|h[1-6])[^>]*>.*?</\1>', html[search_start:], re.DOTALL):
-        block_text = _clean(_strip_tags(m.group()))
+    for el in soup.find_all(list(BLOCK_TAGS - {'blockquote'})):
+        block_text = _el_clean_text(el)
         if any(rx.search(block_text) for rx in rx_parts):
-            return (search_start + m.start(), search_start + m.end())
+            el_str = str(el)
+            pos = region.find(el_str)
+            if pos >= 0:
+                return (search_start + pos, search_start + pos + len(el_str))
 
     return None, None
 
@@ -454,13 +757,10 @@ def extract_book_review(html, book_title, next_book_title=None, reviewer=None,
     if not book_title:
         return html
 
-    # Find the actual review start (publication details, not editorial mention)
     start, _ = _find_book_publication_details(html, book_title)
-
     if start is None:
         return html
 
-    # Find where this review ends
     review_end = len(html)
     if next_book_title and not is_combined_review:
         next_start, _ = _find_book_publication_details(html, next_book_title, search_start=start + 1)
@@ -470,17 +770,42 @@ def extract_book_review(html, book_title, next_book_title=None, reviewer=None,
     return html[start:review_end].strip()
 
 
+def _author_name_variants(authors):
+    """Generate matching variants for an author name string.
+
+    Handles cases where HTML drops middle names/initials that appear in
+    toc.json. E.g. "Luis M. Rodriguez" → also try "Luis Rodriguez",
+    "Edgar Agrela Correia" → also try "Edgar Correia".
+
+    Returns a list of name strings to try, from most specific to least.
+    """
+    variants = [authors]
+    parts = re.split(r',\s*|\s+and\s+', authors)
+    short_parts = []
+    for part in parts:
+        words = part.strip().split()
+        if len(words) > 2:
+            short_parts.append(f'{words[0]} {words[-1]}')
+        else:
+            short_parts.append(part.strip())
+    short_variant = ', '.join(short_parts) if ',' in authors else ' and '.join(short_parts) if ' and ' in authors else short_parts[0]
+    if short_variant != authors:
+        variants.append(short_variant)
+    return variants
+
+
 # ---------------------------------------------------------------
 # Editorial post-processing
 # ---------------------------------------------------------------
 
 def postprocess_editorial(html, article):
     """Post-process an editorial: strip title, keep body."""
-    html = strip_start_bleed(html, article.get('title', ''))
-    html = strip_title(html, article.get('title', ''))
-    html = strip_authors(html, article.get('authors', ''))
-    html = strip_end_bleed(html, article.get('_next_title', ''))
-    return html
+    soup = _parse(html)
+    _strip_start_bleed_soup(soup, article.get('title', ''))
+    _strip_title_soup(soup, article.get('title', ''))
+    _strip_authors_soup(soup, article.get('authors', ''))
+    _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+    return _serialize(soup)
 
 
 def postprocess_book_review_editorial(html, article):
@@ -488,14 +813,11 @@ def postprocess_book_review_editorial(html, article):
 
     Strip the "BOOK REVIEWS" heading, keep the editorial body.
     """
-    html = strip_start_bleed(html, article.get('title', ''))
-    # Remove "BOOK REVIEWS" heading
-    html = re.sub(
-        r'<h[1-3][^>]*>\s*BOOK\s+REVIEWS?\s*</h[1-3]>\s*',
-        '', html, count=1, flags=re.IGNORECASE
-    )
-    html = strip_end_bleed(html, article.get('_next_title', ''))
-    return html
+    soup = _parse(html)
+    _strip_start_bleed_soup(soup, article.get('title', ''))
+    _strip_book_reviews_heading_soup(soup)
+    _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+    return _serialize(soup)
 
 
 # ---------------------------------------------------------------
@@ -524,9 +846,6 @@ def postprocess_article(html, article, pdf_path=None):
     section = article.get('section', '')
 
     if section in ('Book Reviews', 'Book Review'):
-        # Detect combined reviews: consecutive book review entries with identical
-        # page ranges. These are one review covering multiple books —
-        # don't cut at the next entry's title.
         is_combined = (
             article.get('pdf_page_start') is not None
             and article.get('pdf_page_start') == article.get('_next_page_start')
@@ -539,53 +858,55 @@ def postprocess_article(html, article, pdf_path=None):
             reviewer=article.get('reviewer', ''),
             is_combined_review=is_combined,
         )
-    elif section == 'Book Review Editorial':
-        html = postprocess_book_review_editorial(html, article)
+
+    # Parse once for all remaining operations
+    soup = _parse(html)
+
+    if section == 'Book Review Editorial':
+        _strip_start_bleed_soup(soup, article.get('title', ''))
+        _strip_book_reviews_heading_soup(soup)
+        _strip_end_bleed_soup(soup, article.get('_next_title', ''))
     elif section == 'Editorial':
-        html = postprocess_editorial(html, article)
-    else:
+        _strip_start_bleed_soup(soup, article.get('title', ''))
+        _strip_title_soup(soup, article.get('title', ''))
+        _strip_authors_soup(soup, article.get('authors', ''))
+        _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+    elif section not in ('Book Reviews', 'Book Review'):
         # Standard article
-        html = strip_start_bleed(html, article.get('title', ''))
-        html = strip_title(html, article.get('title', ''))
-        html = strip_subtitle(html, article.get('subtitle', ''))
-        html = strip_authors(html, article.get('authors', ''))
+        _strip_start_bleed_soup(soup, article.get('title', ''))
+        _strip_title_soup(soup, article.get('title', ''))
+        _strip_subtitle_soup(soup, article.get('subtitle', ''))
+        _strip_authors_soup(soup, article.get('authors', ''))
         # Conference/presentation notes are preserved in the body — they flow
         # into JATS and are extracted as provenance by extract_citations.py.
-        html = strip_abstract(html, article.get('abstract', ''))
-        html = strip_keywords(html)
+        _strip_abstract_soup(soup, article.get('abstract', ''))
+        _strip_keywords_soup(soup)
         # Second pass: Haiku sometimes renders the title twice (h1 + h2).
-        # After stripping abstract/keywords, a duplicate title heading may
-        # now be at the top.
-        html = strip_title(html, article.get('title', ''))
-        html = strip_subtitle(html, article.get('subtitle', ''))
-        html = strip_end_bleed(html, article.get('_next_title', ''))
+        _strip_title_soup(soup, article.get('title', ''))
+        _strip_subtitle_soup(soup, article.get('subtitle', ''))
+        _strip_end_bleed_soup(soup, article.get('_next_title', ''))
 
-    # Strip footnote superscripts from headings. PDF extraction preserves
-    # <sup>1</sup> etc. which are endnote markers, not heading content.
-    # Also strip bare trailing digits that result from <sup> tag stripping.
-    html = re.sub(
-        r'(<h[1-6][^>]*>)(.*?)(</h[1-6]>)',
-        lambda m: m.group(1) + re.sub(r'<sup>\d+</sup>', '', m.group(2)) + m.group(3),
-        html, flags=re.DOTALL
-    )
+    # Strip footnote superscripts from headings
+    _strip_heading_sups_soup(soup)
 
-    # Normalise ALL CAPS headings to title case. Older issues used
-    # ALL CAPS as a print styling convention — not intentional emphasis.
-    def _normalise_heading(m):
-        tag_open = m.group(1)
-        content = m.group(2)
-        tag_close = m.group(3)
-        return tag_open + normalise_allcaps(content) + tag_close
+    # Normalise ALL CAPS headings to title case
+    _normalise_headings_soup(soup)
 
-    html = re.sub(r'(<h[1-6][^>]*>)(.*?)(</h[1-6]>)', _normalise_heading, html, flags=re.DOTALL)
+    # Strip running headers and bare page numbers
+    _strip_running_headers_soup(soup)
 
-    # Strip running headers and bare page numbers from print layout.
-    # These are artefacts from PDF→HTML conversion that appear throughout
-    # the body (e.g. "Existential Analysis: Journal of The Society...")
-    html = RUNNING_HEADER_RE.sub('', html)
-    html = PAGE_NUMBER_RE.sub('', html)
+    # Splice complete notes from PyMuPDF if Haiku dropped any.
+    if pdf_path and os.path.exists(pdf_path):
+        from htmlgen import extract_pdf_back_matter
+        back_matter = extract_pdf_back_matter(
+            pdf_path, title=article.get('title'),
+            authors=article.get('authors'))
+        if back_matter:
+            _splice_notes_soup(soup, back_matter)
 
+    html = _serialize(soup)
     html = re.sub(r'\n{3,}', '\n\n', html).strip()
+
     return html
 
 
@@ -593,8 +914,6 @@ def postprocess_article(html, article, pdf_path=None):
 # Verification helpers
 # ---------------------------------------------------------------
 
-# Section headings that satisfy the title check as a fallback
-# (letters/editorials may not have their toc.json title in the PDF)
 _SECTION_HEADINGS = frozenset({
     'letters to the editors', 'letters to the editor', 'letter to the editors',
     'letter to the editor', 'letters', 'editorial', 'book reviews',
@@ -655,20 +974,15 @@ def verify_postprocessed(raw_html, final_html, article):
     raw_text = _strip_tags(raw_html)
     final_text = _strip_tags(final_html)
 
-    # CHECK 1: Title must appear in raw HTML (Haiku extracted the right content)
     if stripped_title and not _title_in_text_fuzzy(stripped_title, raw_text):
-        # Fallback for letters/editorials: accept section heading
         if not any(h in raw_text.lower() for h in _SECTION_HEADINGS):
             warnings.append(f'TITLE_NOT_IN_RAW: "{stripped_title[:50]}" not found in raw HTML')
 
-    # CHECK 2: For book reviews, the book title SHOULD be in final HTML.
-    # For multi-book titles ("Title A / Title B"), any part matching is sufficient.
     if is_book_review and stripped_title:
         parts = [p.strip() for p in stripped_title.split('/') if p.strip()]
         if not any(_title_in_text_fuzzy(p, final_text) for p in parts):
             warnings.append(f'BOOK_TITLE_MISSING: "{stripped_title[:50]}" not in final HTML')
 
-    # CHECK 3: Final HTML should not be empty
     if len(final_text.strip()) < SHORT_CONTENT_THRESHOLD:
         warnings.append(f'EMPTY_OUTPUT: final HTML has only {len(final_text.strip())} chars')
 
@@ -690,13 +1004,13 @@ def pdf_has_formal_refs(pdf_path):
 
 def html_has_refs(html):
     """Check if HTML contains a back-matter section."""
-    for m in re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html, re.DOTALL):
-        heading_text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
-        if REFERENCE_HEADING_RE.match(heading_text):
+    soup = _parse(html)
+    for heading in soup.find_all(['h2', 'h3']):
+        if REFERENCE_HEADING_RE.match(_el_text(heading).strip()):
             return True
-    for m in re.finditer(r'<p>\s*<strong>(.*?)</strong>\s*</p>', html, re.DOTALL):
-        heading_text = m.group(1).strip()
-        if REFERENCE_HEADING_RE.match(heading_text):
+    for p in soup.find_all('p'):
+        strong = p.find('strong')
+        if strong and REFERENCE_HEADING_RE.match(_el_text(strong).strip()):
             return True
     return False
 

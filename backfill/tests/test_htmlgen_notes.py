@@ -159,8 +159,15 @@ def extract_highest_superscript(raw_html_path):
 
 
 def _normalize(text):
-    """Normalize text for comparison: lowercase, strip non-alphanumeric."""
-    return re.sub(r'[^a-z0-9]', '', text.lower())
+    """Normalize text for comparison: lowercase, strip non-alphanumeric.
+
+    Also strips leading digits (note numbers that weren't removed).
+    Decodes HTML entities first so &#xfc; matches ü.
+    """
+    import html as html_module
+    text = html_module.unescape(text)
+    text = re.sub(r'[^a-z0-9]', '', text.lower())
+    return re.sub(r'^\d+', '', text)
 
 
 # ---------------------------------------------------------------------------
@@ -173,18 +180,18 @@ class TestArticle8994Notes:
 
     PDF_PATH = os.path.join(PRIVATE_OUTPUT, '18.1',
                             '11-the-madhouse-of-being.pdf')
-    RAW_HTML_PATH = os.path.join(PRIVATE_OUTPUT, '18.1',
-                                 '11-the-madhouse-of-being.raw.html')
+    POST_HTML_PATH = os.path.join(PRIVATE_OUTPUT, '18.1',
+                                  '11-the-madhouse-of-being.post.html')
 
     @pytest.fixture(autouse=True)
     def setup(self):
         if not os.path.exists(self.PDF_PATH):
             pytest.skip(f'PDF not found: {self.PDF_PATH}')
-        if not os.path.exists(self.RAW_HTML_PATH):
-            pytest.skip(f'Raw HTML not found: {self.RAW_HTML_PATH}')
+        if not os.path.exists(self.POST_HTML_PATH):
+            pytest.skip(f'Post HTML not found: {self.POST_HTML_PATH}')
         self.pdf_notes = extract_pdf_notes(self.PDF_PATH)
-        self.html_notes = extract_html_notes(self.RAW_HTML_PATH)
-        self.highest_sup = extract_highest_superscript(self.RAW_HTML_PATH)
+        self.html_notes = extract_html_notes(self.POST_HTML_PATH)
+        self.highest_sup = extract_highest_superscript(self.POST_HTML_PATH)
 
     def test_pdf_has_177_notes(self):
         """Sanity check: PDF should have 177 numbered notes."""
