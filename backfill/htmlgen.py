@@ -52,7 +52,7 @@ from postprocess_html import postprocess_article, verify_postprocessed
 from split import title_in_split_pdf
 
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
-PROMPT_VERSION = 4  # Bump when prompt changes; tracked in toc.json _html_prompt_version
+PROMPT_VERSION = 5  # Bump when prompt changes; tracked in toc.json _html_prompt_version
 
 # Pricing per million tokens (docs.anthropic.com/en/docs/about-claude/pricing)
 MODEL_PRICING = {
@@ -90,11 +90,6 @@ Include EVERYTHING you see on these pages. Do not skip anything.
 Include ALL of the following — title, authors, abstract, keywords, body
 paragraphs, section headings, block quotes, footnotes, endnotes,
 references, bibliography, author bio, contact details, ORCID.
-
-If the article has numbered notes or endnotes, include every single one
-in an <ol>. The number of <li> items must match the highest superscript
-number in the text. Do not skip any notes, even if they contain long
-quotes, literary excerpts, or detailed commentary.
 
 If references appear in multiple scripts (e.g. Cyrillic then transliterated
 Latin), include BOTH sets — they are not duplicates."""
@@ -196,19 +191,293 @@ def strip_code_fences(html):
     return html
 
 
-def build_prompt():
-    """Return the extraction prompt. Same for all article types.
+BACK_MATTER_HEADINGS = re.compile(
+    r'^(Notes?|Endnotes?|Footnotes?|References?|Bibliography|Works Cited'
+    r'|Further Reading|Selected Bibliography|Notes and References'
+    r'|References and Notes)\s*$',
+    re.IGNORECASE,
+)
+
+NOTES_HEADINGS = re.compile(
+    r'^(Notes?|Endnotes?|Footnotes?)\s*$', re.IGNORECASE,
+)
+
+# Running headers/footers to strip from PyMuPDF text.
+RUNNING_TEXT_RE = re.compile(
+    r'^(Existential Analysis.*|Journal of the Society.*|\d{1,3})$',
+    re.IGNORECASE,
+)
+
+
+def extract_pdf_back_matter(pdf_path, title=None, authors=None):
+    """Extract back-matter sections (notes, references) from PDF text.
+
+    Uses PyMuPDF text extraction to find sections by heading. Returns a
+    list of dicts: [{'heading': str, 'items': [str], 'is_numbered': bool}].
+    Only searches the last 50% of pages (back matter is at the end).
+
+    title/authors: article metadata used to filter running headers.
+    """
+    doc = fitz.open(pdf_path)
+    num_pages = len(doc)
+    start_page = max(0, int(num_pages * 0.5))
+
+    # Build running-text filter including article-specific headers
+    skip_patterns = [RUNNING_TEXT_RE]
+    if title:
+        skip_patterns.append(re.compile(re.escape(title.strip()), re.IGNORECASE))
+    if authors:
+        # Author name as it appears in running headers (e.g. "Anthony Stadlen")
+        author_str = authors if isinstance(authors, str) else ' and '.join(authors)
+        for name in re.split(r'\s*[&,;]\s*|\s+and\s+', author_str):
+            name = name.strip()
+            if name and len(name) > 3:
+                skip_patterns.append(
+                    re.compile(r'^' + re.escape(name) + r'$', re.IGNORECASE))
+
+    def is_running_text(line):
+        return any(p.match(line) for p in skip_patterns)
+
+    # Collect all text from the back half, tracking page boundaries
+    all_lines = []
+    for pg in range(start_page, num_pages):
+        text = doc[pg].get_text()
+        for line in text.split('\n'):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # Skip running headers/footers and standalone page numbers
+            if is_running_text(stripped):
+                continue
+            all_lines.append(stripped)
+    doc.close()
+
+    # Find heading positions
+    heading_positions = []
+    for i, line in enumerate(all_lines):
+        if BACK_MATTER_HEADINGS.match(line):
+            heading_positions.append((i, line))
+
+    if not heading_positions:
+        return []
+
+    # Extract items between headings
+    sections = []
+    for idx, (pos, heading) in enumerate(heading_positions):
+        # Items run from after heading to next heading (or end)
+        if idx + 1 < len(heading_positions):
+            end = heading_positions[idx + 1][0]
+        else:
+            end = len(all_lines)
+
+        items_lines = all_lines[pos + 1:end]
+
+        # For notes sections, parse numbered items (rejoin continuations)
+        is_notes = bool(NOTES_HEADINGS.match(heading))
+        if is_notes:
+            items, is_numbered = _parse_numbered_items(items_lines)
+        else:
+            items = _parse_paragraph_items(items_lines)
+            is_numbered = False
+
+        if items:
+            sections.append({
+                'heading': heading,
+                'items': items,
+                'is_numbered': is_numbered,
+            })
+
+    return sections
+
+
+def _parse_numbered_items(lines):
+    """Parse sequentially numbered items from lines.
+
+    Returns (items_list, is_numbered). If items aren't numbered,
+    falls back to paragraph parsing.
+    """
+    items = {}
+    current_num = None
+    current_text = ''
+
+    for line in lines:
+        m = re.match(r'^(\d+)\s+(.+)', line)
+        if m and int(m.group(1)) == (current_num or 0) + 1:
+            if current_num is not None:
+                items[current_num] = current_text.strip()
+            current_num = int(m.group(1))
+            current_text = m.group(2)
+        elif m and current_num is None and int(m.group(1)) == 1:
+            current_num = 1
+            current_text = m.group(2)
+        else:
+            if current_num is not None:
+                current_text += ' ' + line
+
+    if current_num is not None:
+        items[current_num] = current_text.strip()
+
+    if len(items) >= 3:
+        # Clean up whitespace
+        sorted_items = [re.sub(r'\s+', ' ', items[k]).strip()
+                        for k in sorted(items.keys())]
+        return sorted_items, True
+
+    # Not numbered — fall back to paragraph parsing
+    return _parse_paragraph_items(lines), False
+
+
+def _parse_paragraph_items(lines):
+    """Parse paragraph-separated items from lines.
+
+    Joins continuation lines (lines not starting with a capital letter
+    after a name pattern) into the previous item.
+    """
+    items = []
+    current = ''
+
+    for line in lines:
+        # New item: starts with author-like pattern (Surname, Initial)
+        # or is the first line
+        if not current or re.match(r'^[A-ZÀ-Ž]', line):
+            if current:
+                items.append(re.sub(r'\s+', ' ', current).strip())
+            current = line
+        else:
+            current += ' ' + line
+
+    if current:
+        items.append(re.sub(r'\s+', ' ', current).strip())
+
+    return items
+
+
+def build_back_matter_prompt(sections):
+    """Build the dynamic prompt appendix from pre-extracted back matter."""
+    if not sections:
+        return ''
+
+    parts = [
+        '\n\nThe following back-matter sections were extracted from the PDF '
+        'as plain text. Include all of this content in your HTML with proper '
+        'formatting (<em> for italics, etc.). Use the original heading '
+        '(e.g. <h2>Notes</h2>).'
+    ]
+
+    for sec in sections:
+        heading = sec['heading']
+        items = sec['items']
+        is_numbered = sec['is_numbered']
+
+        if is_numbered:
+            parts.append(f'\n=== {heading} ({len(items)} numbered items) ===')
+            parts.append(f'Your notes <ol> must contain exactly {len(items)} '
+                         f'<li> items, matching the {len(items)} notes below.')
+            for i, item in enumerate(items, 1):
+                parts.append(f'{i}. {item}')
+        else:
+            parts.append(f'\n=== {heading} ===')
+            for item in items:
+                parts.append(item)
+
+    return '\n'.join(parts)
+
+
+def validate_and_splice_notes(html, back_matter_sections):
+    """Validate notes in HTML against PyMuPDF extraction. Auto-splice if short.
+
+    If the HTML has fewer notes than PyMuPDF extracted, replaces the notes
+    <ol> with plain-text notes from PyMuPDF. Also ensures <h2>Notes</h2>
+    heading exists.
+
+    Returns (html, spliced) where spliced is True if notes were replaced.
+    """
+    notes_sections = [s for s in back_matter_sections
+                      if NOTES_HEADINGS.match(s['heading']) and s['is_numbered']]
+    if not notes_sections:
+        return html, False
+
+    expected_notes = notes_sections[0]['items']
+    expected_count = len(expected_notes)
+    heading = notes_sections[0]['heading']
+
+    # Count <li> items in the notes <ol>
+    # Find the notes section in HTML (look for Notes heading or bare <ol> before References)
+    notes_heading_match = re.search(r'<h2>Notes?</h2>', html, re.IGNORECASE)
+    refs_heading_match = re.search(r'<h2>References?</h2>', html, re.IGNORECASE)
+
+    if notes_heading_match:
+        # Notes heading exists — find the <ol> after it
+        search_start = notes_heading_match.end()
+        search_end = refs_heading_match.start() if refs_heading_match else len(html)
+        ol_match = re.search(r'<ol>.*?</ol>', html[search_start:search_end], re.DOTALL)
+        if ol_match:
+            ol_start = search_start + ol_match.start()
+            ol_end = search_start + ol_match.end()
+            actual_count = len(re.findall(r'<li>', html[ol_start:ol_end]))
+        else:
+            actual_count = 0
+            ol_start = ol_end = None
+    else:
+        # No heading — look for a bare <ol> before References
+        if refs_heading_match:
+            pre_refs = html[:refs_heading_match.start()]
+        else:
+            pre_refs = html
+        ol_match = re.search(r'<ol>.*?</ol>', pre_refs, re.DOTALL)
+        if ol_match:
+            ol_start = ol_match.start()
+            ol_end = ol_match.end()
+            actual_count = len(re.findall(r'<li>', html[ol_start:ol_end]))
+        else:
+            actual_count = 0
+            ol_start = ol_end = None
+
+    if actual_count >= expected_count:
+        return html, False
+
+    # Build replacement notes <ol>
+    from xml.sax.saxutils import escape
+    li_items = '\n'.join(f'<li>{escape(note)}</li>' for note in expected_notes)
+    replacement = f'<h2>{heading}</h2>\n\n<ol>\n{li_items}\n</ol>'
+
+    if ol_start is not None:
+        # Replace the existing <ol> (and add heading if missing)
+        if notes_heading_match:
+            # Replace from heading through </ol>
+            html = html[:notes_heading_match.start()] + replacement + html[ol_end:]
+        else:
+            # Replace just the <ol> and add heading
+            html = html[:ol_start] + replacement + html[ol_end:]
+    else:
+        # No <ol> found — insert before References
+        if refs_heading_match:
+            insert_pos = refs_heading_match.start()
+            html = html[:insert_pos] + replacement + '\n\n' + html[insert_pos:]
+        else:
+            # Append at end
+            html = html + '\n\n' + replacement
+
+    return html, True
+
+
+def build_prompt(back_matter_sections=None):
+    """Return the extraction prompt with optional back-matter appendix.
 
     Haiku extracts everything — all content decisions (trimming title,
     abstract, keywords, start/end bleed) happen in post-processing.
     """
-    return ARTICLE_PROMPT
+    prompt = ARTICLE_PROMPT
+    if back_matter_sections:
+        prompt += build_back_matter_prompt(back_matter_sections)
+    return prompt
 
 
 MAX_CONTINUATIONS = 5  # Max continuation requests when output is truncated
 
 
-def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8):
+def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8,
+                              article=None):
     """Send all pages of a split PDF to Claude for full text extraction.
 
     Returns (html, input_tokens, output_tokens, num_pages, truncated).
@@ -217,6 +486,11 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
     When the model hits max_tokens, sends continuation requests with the
     assistant turn prefilled so the model picks up where it left off.
     """
+    # Pre-extract back matter from PDF text to help Haiku
+    title = article.get('title') if article else None
+    authors = article.get('authors') if article else None
+    back_matter = extract_pdf_back_matter(split_pdf_path, title=title, authors=authors)
+
     doc = fitz.open(split_pdf_path)
     num_pages = len(doc)
 
@@ -237,7 +511,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
 
     content.append({
         'type': 'text',
-        'text': build_prompt(),
+        'text': build_prompt(back_matter),
     })
 
     for attempt in range(max_retries):
@@ -290,6 +564,14 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
             html = ''.join(html_parts)
             html = strip_code_fences(html)
             html = dedup_paragraphs(html)
+
+            # Auto-splice notes from PyMuPDF if Haiku dropped any
+            if back_matter:
+                html, spliced = validate_and_splice_notes(html, back_matter)
+                if spliced:
+                    print(f"    Notes auto-spliced from PyMuPDF",
+                          file=sys.stderr)
+
             truncated = stop_reason == 'max_tokens'
             return html, input_tokens, output_tokens, num_pages, truncated, continuations
         except anthropic.RateLimitError:
@@ -515,12 +797,12 @@ def main():
                 return
 
             html, inp_tok, out_tok, num_pages, truncated, continuations = generate_html_for_article(
-                client, split_pdf, model_name)
+                client, split_pdf, model_name, article=article)
 
             if html is None:
                 # Content filtered — try PyMuPDF fallback
                 fallback = fallback_html_from_pdf(split_pdf)
-                raw_path = os.path.splitext(out_path)[0] + '.raw.html'
+                raw_path = raw_output_path(split_pdf)
                 if fallback:
                     with open(raw_path, 'w', encoding='utf-8') as f:
                         f.write(fallback)
@@ -539,7 +821,7 @@ def main():
                 return
 
             # Save raw HTML (full extraction, before any trimming)
-            raw_path = os.path.splitext(out_path)[0] + '.raw.html'
+            raw_path = raw_output_path(split_pdf)
             with open(raw_path, 'w', encoding='utf-8') as f:
                 f.write(html)
 

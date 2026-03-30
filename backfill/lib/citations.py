@@ -285,13 +285,17 @@ def find_jats_reference_sections(body: ET.Element, tail_only: bool = True,
         return []
 
     if tail_only:
-        # Walk backwards to find contiguous back-matter sections at the tail
+        # Walk backwards to find the earliest contiguous back-matter section.
+        # Skip trailing non-back-matter sections (e.g. an Appendix after
+        # References) — they don't break the back-matter chain.
         tail_start = None
+        found_back = False
         for si in range(len(sec_info) - 1, -1, -1):
             if sec_info[si][1]:  # is_back_matter
                 tail_start = si
-            else:
-                break
+                found_back = True
+            elif found_back:
+                break  # Non-back-matter before back matter — stop
         if tail_start is None:
             return []
         sec_info = sec_info[tail_start:]

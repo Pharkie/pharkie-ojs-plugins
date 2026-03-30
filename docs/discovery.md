@@ -145,7 +145,7 @@ Consider switching if the OJS 3.5 upgrade takes more than 2 weeks or the custom 
 
 **Status: Dropped.** Evaluated 2026-03-23.
 
-[Anystyle](https://github.com/inukshuk/anystyle) is a Ruby CRF-based bibliographic reference parser. It was evaluated as a validation layer for the backfill citation classification pipeline (`split_citation_tiers.py`), which separates ~16,000 citation items into references (for Crossref DOI matching) and notes (display-only).
+[Anystyle](https://github.com/inukshuk/anystyle) is a Ruby CRF-based bibliographic reference parser. It was evaluated as a validation layer for the backfill citation classification pipeline (`extract_citations.py`), which separates ~16,000 citation items into references (for Crossref DOI matching) and notes (display-only). (`split_citation_tiers.py` was later removed — classification now happens at extraction time.)
 
 **What it did:** Parse each citation and check whether anystyle could extract both author and title fields. If not, demote from reference to note.
 
