@@ -190,6 +190,30 @@ class TestBioGrouping:
         assert any('Fletcher' in b for b in result['bios'])
         assert any('Milton' in b for b in result['bios'])
 
+    def test_non_author_bio_in_ref_section_becomes_note(self):
+        """A bio-like item about a non-author inside a reference section
+        should be classified as a note, not a bio."""
+        jats = _make_jats("""
+        <sec><title>References</title>
+        <p>Smith, J. (2005). On anxiety. Journal of Existential Analysis.</p>
+        <p>Emmy van Deurzen is a philosopher and psychotherapist who founded the New School.</p>
+        <p>Cooper, M. (2003). Existential Therapies. Sage.</p>
+        </sec>
+        <p>John Smith is a psychotherapist in private practice.</p>
+        """)
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        # van Deurzen text should NOT be a bio (she's not the author)
+        for bio in result['bios']:
+            assert 'van Deurzen' not in bio, f"Non-author bio found: {bio[:80]}"
+        # John Smith's bio SHOULD be found (he IS the author)
+        assert any('John Smith' in b for b in result['bios']), f"Author bio not found: {result['bios']}"
+        # van Deurzen text should be in notes
+        assert any('van Deurzen' in n for n in result['notes']), f"Expected van Deurzen in notes: {result['notes']}"
+
     def test_contact_after_section_bio_merged(self):
         """Contact <p> outside the section should merge with bio inside it.
 
@@ -203,7 +227,7 @@ class TestBioGrouping:
         </sec>
         <p>Contact: 74 Victoria Rd, London NW6 6QA</p>
         <p>Email: psgordon@talk21.com</p>
-        """)
+        """, authors=[('Paul', 'Gordon')])
         with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
             f.write(jats)
             f.flush()

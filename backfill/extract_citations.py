@@ -108,16 +108,13 @@ def extract_from_jats(jats_path: Path) -> dict:
         headings.append(heading)
         is_notes_section = bool(NOTES_HEADING_RE.match(heading))
 
-        # Collect bio items from this section to merge into one per author
-        sec_bio_parts = []
-
         for item in sec['items']:
             if is_junk(item):
-                # Classify filtered items (provenance before bio — more specific)
+                # Classify filtered items — provenance or note.
+                # Bio detection is handled by the trailing scan (with
+                # author matching) so we don't check is_author_bio here.
                 if is_provenance(item):
                     provenance_items.append(item)
-                elif is_author_bio(item):
-                    sec_bio_parts.append(item)
                 else:
                     note_items.append(item)
                 continue
@@ -127,10 +124,6 @@ def extract_from_jats(jats_path: Path) -> dict:
                 continue
 
             citations.append(item)
-
-        # Merge consecutive bio items from the same section into one bio
-        if sec_bio_parts:
-            bios.append(' '.join(sec_bio_parts))
 
     # Scan trailing <p> elements for bios and contacts that aren't inside
     # a headed bio section. These are bare paragraphs like
@@ -143,11 +136,10 @@ def extract_from_jats(jats_path: Path) -> dict:
     # Only accept a bio if it starts with one of the author names from
     # JATS front matter. This eliminates false positives from body text
     # discussing other people (e.g. "Emmy van Deurzen is a philosopher").
-    # Skip paragraphs already processed by the reference-section scan.
-    already_extracted = set()
-    for sec in sections:
-        for item in sec.get('items', []):
-            already_extracted.add(item.strip())
+    # Skip paragraphs already classified as citations by the section scan.
+    # Don't skip junk items — they may be author bios that the trailing
+    # scan (with author matching) should pick up.
+    already_extracted = set(citations)
 
     # Build normalised author name variants for matching
     author_surnames = [n.split()[-1].lower() for n in author_names if n]
