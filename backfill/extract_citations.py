@@ -103,6 +103,15 @@ def extract_from_jats(jats_path: Path) -> dict:
     note_items = []
     headings = []
 
+    # When both a Notes section and a separate References section exist,
+    # trust the author's separation: ALL items under Notes stay as notes.
+    # The is_citation_like filter only applies when there is no separate
+    # References section (notes and references may be mixed under one heading).
+    has_separate_references = any(
+        PURE_REFERENCE_HEADING_RE.match(sec['heading'])
+        for sec in sections
+    )
+
     for sec in sections:
         heading = sec['heading']
         headings.append(heading)
@@ -119,9 +128,10 @@ def extract_from_jats(jats_path: Path) -> dict:
                     note_items.append(item)
                 continue
 
-            if is_notes_section and not is_citation_like(item):
-                note_items.append(item)
-                continue
+            if is_notes_section:
+                if has_separate_references or not is_citation_like(item):
+                    note_items.append(item)
+                    continue
 
             citations.append(item)
 
