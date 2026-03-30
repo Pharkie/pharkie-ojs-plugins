@@ -925,6 +925,16 @@ def is_note(text: str) -> str | None:
     if is_provenance(text):
         return 'provenance'
 
+    # Author statements, funding, COI, ethics disclosures
+    if re.match(
+        r'^(Author statement|Funding statement|Funding:|'
+        r'Conflicts? of interest|Declaration of interest|'
+        r'Ethical approval|Ethics statement|'
+        r'Data availability)',
+        text, re.IGNORECASE,
+    ):
+        return 'author-statement'
+
     if re.match(r'^https?://', text.strip()) or re.match(r'^\d+\s+https?://', text.strip()):
         return 'url-only'
 

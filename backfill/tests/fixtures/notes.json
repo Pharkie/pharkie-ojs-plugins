@@ -16,7 +16,13 @@
     {"text": "Emmy van Deurzen is a psychotherapist in private practice.", "reason": "author-bio"},
     {"text": "This article was delivered at the SEA conference.", "reason": "provenance"},
     {"text": "https://example.com/paper.pdf", "reason": "url-only"},
-    {"text": "http://www.amazon.com/Highest-Duty-Search-Really-Matters/dp/0061924687", "reason": "url-only"}
+    {"text": "http://www.amazon.com/Highest-Duty-Search-Really-Matters/dp/0061924687", "reason": "url-only"},
+    {"text": "Author statement\nThis article was developed in the process of teaching students who are studying for a Doctorate in Counselling Psychology or in Psychotherapy.", "reason": "author-statement"},
+    {"text": "Funding statement: the article and related activities have not received funding from any source.", "reason": "author-statement"},
+    {"text": "Conflict of interest: The author declares no conflict of interest.", "reason": "author-statement"},
+    {"text": "Declaration of interest: None.", "reason": "author-statement"},
+    {"text": "Ethical approval: This study was approved by the University Ethics Committee.", "reason": "author-statement"},
+    {"text": "Data availability statement: The data that support the findings of this study are available from the corresponding author upon request.", "reason": "author-statement"}
   ],
 
   "classify_as_note": [

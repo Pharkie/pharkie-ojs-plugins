@@ -31,7 +31,7 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import (
     find_jats_reference_sections, is_junk, is_citation_like, is_author_bio,
-    is_author_contact, is_provenance, is_reference, classify, extract_text_from_element,
+    is_author_contact, is_provenance, is_reference, is_note, classify, extract_text_from_element,
     sort_notes_by_number,
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
@@ -195,6 +195,18 @@ def extract_from_jats(jats_path: Path) -> dict:
                        and not _looks_like_ref
                        and _has_bio_verb)
         is_contact_text = is_author_contact(text)
+        # Author statements (funding, COI, ethics) → notes
+        _note_reason = is_note(text)
+        if _note_reason == 'author-statement':
+            if current_bio_parts:
+                bios.append(' '.join(current_bio_parts))
+                trailing_bio_elements.extend(current_bio_elements)
+                current_bio_parts = []
+                current_bio_elements = []
+            in_bio = False
+            note_items.append(text)
+            trailing_bio_elements.append(p_el)  # remove from body
+            continue
         if is_bio_text:
             # Only accept one bio per author — find which author this
             # bio belongs to, skip if we already have one for them
