@@ -396,6 +396,10 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
     color: #999;
     margin-bottom: 4px;
 }
+.inline-html-galley .value .jats-notes ol {
+    list-style-position: inside;
+    padding-left: 0;
+}
 .inline-html-galley .value .jats-notes::before       { content: "Notes"; }
 .inline-html-galley .value .jats-bios::before        { content: "Author bio"; }
 .inline-html-galley .value .jats-provenance::before  { content: "Provenance"; }
