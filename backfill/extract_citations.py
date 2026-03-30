@@ -152,8 +152,10 @@ def extract_from_jats(jats_path: Path) -> dict:
     all_ps = list(body.iter())
     all_ps = [el for el in all_ps
               if (el.tag.split('}')[-1] if '}' in el.tag else el.tag) == 'p']
-    # Only scan the last half of paragraphs
-    scan_start = len(all_ps) // 2
+    # Scan all paragraphs — is_author_bio requires profession/role keywords
+    # so false positives are controlled. Previous half-scan cutoff missed bios
+    # in articles with many references (refs inflate paragraph count).
+    scan_start = 0
     # Group: when we find a bio <p>, consume following contact <p> elements
     # as part of the same bio. A standalone contact without a preceding bio
     # is still collected (it belongs to a bio extracted by the section scan).
