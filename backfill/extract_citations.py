@@ -31,7 +31,7 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import (
     find_jats_reference_sections, is_junk, is_citation_like, is_author_bio,
-    is_author_contact, is_provenance, classify, extract_text_from_element,
+    is_author_contact, is_provenance, is_reference, classify, extract_text_from_element,
     sort_notes_by_number,
     NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
 )
@@ -183,10 +183,50 @@ def extract_from_jats(jats_path: Path) -> dict:
             continue
         if text in already_extracted:
             continue
+        # Reject reference-format text: "Surname, I. (Year)..." or "Surname, I. Title..."
+        _looks_like_ref = bool(re.match(
+            r'^[A-Z][a-z]+,\s+[A-Z]\.?\s', text
+        ))
+        # Require a bio verb — "Name is/was/has [role]". Without it,
+        # "Dr. Name, Department, University..." is an address, not a bio.
+        _has_bio_verb = bool(re.search(r'\b(is|was|has)\s', text[:200]))
         is_bio_text = (is_author_bio(text) and not is_author_contact(text)
-                       and _starts_with_author(text))
+                       and _starts_with_author(text)
+                       and not _looks_like_ref
+                       and _has_bio_verb)
         is_contact_text = is_author_contact(text)
         if is_bio_text:
+            # Only accept one bio per author — find which author this
+            # bio belongs to, skip if we already have one for them
+            bio_author = None
+            for name in author_full:
+                if text.lower().startswith(name) or any(
+                    text.lower().startswith(p + name) for p in ('dr ', 'prof ', 'professor ')
+                ):
+                    bio_author = name
+                    break
+            if not bio_author:
+                for surname in author_surnames:
+                    if surname in ' '.join(text.split()[:5]).lower():
+                        bio_author = surname
+                        break
+            if bio_author:
+                # If we already have a bio for this author, REPLACE it
+                # with the new one (bios at the end are more likely to be
+                # the real bio than body text earlier that mentions the author).
+                # Match by first name + surname, ignoring middle names/initials
+                # ("Ian R. Owen" vs "Ian Owen").
+                author_parts = bio_author.split()
+                match_first = author_parts[0] if author_parts else ''
+                match_last = author_parts[-1] if len(author_parts) > 1 else ''
+                existing_idx = None
+                for bi, b in enumerate(bios):
+                    b_lower = b.lower()
+                    if match_first and match_last and match_first in b_lower and match_last in b_lower:
+                        existing_idx = bi
+                        break
+                if existing_idx is not None:
+                    bios.pop(existing_idx)
             # Start a new bio group (flush previous if any)
             if current_bio_parts:
                 bios.append(' '.join(current_bio_parts))
