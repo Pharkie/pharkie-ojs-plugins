@@ -755,8 +755,15 @@ body {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-secondary);
-    margin-bottom: 8px;
+    margin-bottom: 2px;
     letter-spacing: 0.01em;
+}
+
+.qa-meta-id {
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    color: var(--text-tertiary, #888);
+    margin-bottom: 8px;
 }
 
 .qa-meta-title {
