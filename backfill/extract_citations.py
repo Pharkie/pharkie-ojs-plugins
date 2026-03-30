@@ -139,36 +139,60 @@ def extract_from_jats(jats_path: Path) -> dict:
     trailing_bio_elements = []
     trailing_bio_parts = []
 
-    # Scan <p> elements in the last quarter of the body for bio/contact
-    # patterns. Bios appear near the end but may be followed by ethics
-    # statements or author declarations. Limit scope to avoid false
-    # positives from body text discussing named philosophers.
+    # Scan all <p> elements for bios about the article's OWN authors.
+    # Only accept a bio if it starts with one of the author names from
+    # JATS front matter. This eliminates false positives from body text
+    # discussing other people (e.g. "Emmy van Deurzen is a philosopher").
     # Skip paragraphs already processed by the reference-section scan.
     already_extracted = set()
     for sec in sections:
         for item in sec.get('items', []):
             already_extracted.add(item.strip())
 
+    # Build normalised author name variants for matching
+    author_surnames = [n.split()[-1].lower() for n in author_names if n]
+    author_full = [n.lower() for n in author_names if n]
+
+    def _starts_with_author(text):
+        """Check if text starts with one of the article's own authors."""
+        text_lower = text.lower()
+        # Match "Dr Martin Milton is..." or "Martin Milton is..."
+        for name in author_full:
+            # Try with optional title prefix (Dr, Prof, Professor)
+            if text_lower.startswith(name):
+                return True
+            # Try with Dr/Prof prefix
+            for prefix in ('dr ', 'prof ', 'professor '):
+                if text_lower.startswith(prefix + name):
+                    return True
+        # Match by surname for ALL CAPS bios ("CHARLES SCOTT is...")
+        for surname in author_surnames:
+            words = text.split()
+            if len(words) >= 2 and words[-1].lower() == surname:
+                return False  # Would need more context
+            # Check if surname appears in first few words
+            first_words = ' '.join(words[:5]).lower()
+            if surname in first_words and len(surname) > 2:
+                return True
+        return False
+
     all_ps = list(body.iter())
     all_ps = [el for el in all_ps
               if (el.tag.split('}')[-1] if '}' in el.tag else el.tag) == 'p']
-    # Scan all paragraphs — is_author_bio requires profession/role keywords
-    # so false positives are controlled. Previous half-scan cutoff missed bios
-    # in articles with many references (refs inflate paragraph count).
-    scan_start = 0
     # Group: when we find a bio <p>, consume following contact <p> elements
     # as part of the same bio. A standalone contact without a preceding bio
     # is still collected (it belongs to a bio extracted by the section scan).
     current_bio_parts = []
     current_bio_elements = []
     in_bio = False
-    for p_el in all_ps[scan_start:]:
+    for p_el in all_ps:
         text = extract_text_from_element(p_el).strip()
         if not text:
             continue
         if text in already_extracted:
             continue
-        is_bio_text = is_author_bio(text) and not is_author_contact(text)
+        is_bio_text = (is_author_bio(text) and not is_author_contact(text)
+                       and _starts_with_author(text))
         is_contact_text = is_author_contact(text)
         if is_bio_text:
             # Start a new bio group (flush previous if any)
