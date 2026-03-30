@@ -200,12 +200,17 @@ def build_prompt():
     return ARTICLE_PROMPT
 
 
+MAX_CONTINUATIONS = 5  # Max continuation requests when output is truncated
+
+
 def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, max_retries=8):
     """Send all pages of a split PDF to Claude for full text extraction.
 
     Returns (html, input_tokens, output_tokens, num_pages, truncated).
     Haiku extracts EVERYTHING — post-processing handles trimming.
     Retries with exponential backoff on rate limit errors.
+    When the model hits max_tokens, sends continuation requests with the
+    assistant turn prefilled so the model picks up where it left off.
     """
     doc = fitz.open(split_pdf_path)
     num_pages = len(doc)
@@ -251,11 +256,37 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
                 input_tokens = response.usage.input_tokens
                 output_tokens = response.usage.output_tokens
                 stop_reason = response.stop_reason
+
+            # Continuation loop: when output is truncated, prefill the
+            # assistant turn with what we have and ask to continue.
+            continuations = 0
+            while stop_reason == 'max_tokens' and continuations < MAX_CONTINUATIONS:
+                continuations += 1
+                html_so_far = ''.join(html_parts)
+                print(f"    Continuation {continuations} "
+                      f"({output_tokens:,} tokens so far)...",
+                      file=sys.stderr)
+                with client.messages.stream(
+                    model=model_name,
+                    max_tokens=50000,
+                    messages=[
+                        {'role': 'user', 'content': content},
+                        {'role': 'assistant', 'content': html_so_far},
+                        {'role': 'user', 'content': 'Continue the HTML exactly from where you stopped. Do not repeat any content already produced.'},
+                    ]
+                ) as stream:
+                    for text in stream.text_stream:
+                        html_parts.append(text)
+                    response = stream.get_final_message()
+                    input_tokens += response.usage.input_tokens
+                    output_tokens += response.usage.output_tokens
+                    stop_reason = response.stop_reason
+
             html = ''.join(html_parts)
             html = strip_code_fences(html)
             html = dedup_paragraphs(html)
             truncated = stop_reason == 'max_tokens'
-            return html, input_tokens, output_tokens, num_pages, truncated
+            return html, input_tokens, output_tokens, num_pages, truncated, continuations
         except anthropic.RateLimitError:
             if attempt < max_retries - 1:
                 wait = 2 ** attempt + 1 + random.uniform(0, 1)
@@ -265,7 +296,7 @@ def generate_html_for_article(client, split_pdf_path, model_name=DEFAULT_MODEL, 
         except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
             if 'content filtering' in str(e).lower():
                 print(f"  FILTERED: {os.path.basename(split_pdf_path)}", file=sys.stderr)
-                return None, 0, 0, num_pages, False
+                return None, 0, 0, num_pages, False, 0
             raise
 
 
@@ -478,7 +509,7 @@ def main():
                     failed += 1
                 return
 
-            html, inp_tok, out_tok, num_pages, truncated = generate_html_for_article(
+            html, inp_tok, out_tok, num_pages, truncated, continuations = generate_html_for_article(
                 client, split_pdf, model_name)
 
             if html is None:
@@ -527,12 +558,13 @@ def main():
                 total_output += out_tok
                 total_pages += num_pages
                 completed += 1
-                completed_articles.append((toc_path, idx))
+                completed_articles.append((toc_path, idx, continuations, truncated))
                 cost_so_far = (total_input / 1_000_000 * pricing['input'] +
                                total_output / 1_000_000 * pricing['output'])
+                cont_flag = f' ({continuations} continuations)' if continuations else ''
                 trunc_flag = ' TRUNCATED' if truncated else ''
                 print(f"  [{completed}/{total_to_do}] {label} ({basename}) "
-                      f"{num_pages}pp ${cost_so_far:.3f}{trunc_flag}", flush=True)
+                      f"{num_pages}pp ${cost_so_far:.3f}{cont_flag}{trunc_flag}", flush=True)
                 if truncated:
                     truncated_articles.append(f"{label} ({basename})")
 
@@ -564,14 +596,22 @@ def main():
             json.dump(toc_data, f, indent=2, ensure_ascii=False)
 
     # Batch-update toc.json with prompt version for completed articles
-    toc_updates = {}  # toc_path -> set of article indices
-    for toc_path, idx in completed_articles:
-        toc_updates.setdefault(toc_path, set()).add(idx)
-    for toc_path, indices in toc_updates.items():
+    toc_updates = {}  # toc_path -> {idx: (continuations, truncated)}
+    for toc_path, idx, cont, trunc in completed_articles:
+        toc_updates.setdefault(toc_path, {})[idx] = (cont, trunc)
+    for toc_path, articles in toc_updates.items():
         with open(toc_path) as f:
             toc_data = json.load(f)
-        for idx in indices:
+        for idx, (cont, trunc) in articles.items():
             toc_data['articles'][idx]['_html_prompt_version'] = PROMPT_VERSION
+            if cont > 0:
+                toc_data['articles'][idx]['_continuations'] = cont
+            elif '_continuations' in toc_data['articles'][idx]:
+                del toc_data['articles'][idx]['_continuations']
+            if trunc:
+                toc_data['articles'][idx]['_truncated'] = True
+            elif '_truncated' in toc_data['articles'][idx]:
+                del toc_data['articles'][idx]['_truncated']
         with open(toc_path, 'w') as f:
             json.dump(toc_data, f, indent=2, ensure_ascii=False)
 
