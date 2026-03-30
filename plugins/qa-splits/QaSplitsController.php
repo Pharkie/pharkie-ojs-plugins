@@ -500,11 +500,25 @@ class QaSplitsController extends PKPBaseController
             ->map(fn ($text) => ['text' => trim($text)])
             ->toArray();
 
-        // Count jats-* divs in the HTML galley
+        // Count individual items inside jats-* divs in the HTML galley
         $html = $this->readGalleyContentFromOjs($pubId, 'text/html');
-        $notesCount = $html ? preg_match_all('/<div\s+class="jats-notes"/', $html) : 0;
-        $biosCount = $html ? preg_match_all('/<div\s+class="jats-bios"/', $html) : 0;
-        $provenanceCount = $html ? preg_match_all('/<div\s+class="jats-provenance"/', $html) : 0;
+        $notesCount = 0;
+        $biosCount = 0;
+        $provenanceCount = 0;
+        if ($html) {
+            // Notes use <ol><li> items
+            if (preg_match('/<div\s+class="jats-notes">(.*?)<\/div>/s', $html, $m)) {
+                $notesCount = preg_match_all('/<li>/', $m[1]);
+            }
+            // Bios use <p> items
+            if (preg_match('/<div\s+class="jats-bios">(.*?)<\/div>/s', $html, $m)) {
+                $biosCount = preg_match_all('/<p>/', $m[1]);
+            }
+            // Provenance uses <p> items
+            if (preg_match('/<div\s+class="jats-provenance">(.*?)<\/div>/s', $html, $m)) {
+                $provenanceCount = preg_match_all('/<p>/', $m[1]);
+            }
+        }
 
         return new JsonResponse([
             'references'       => $references,
