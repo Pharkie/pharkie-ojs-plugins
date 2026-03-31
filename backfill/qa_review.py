@@ -61,12 +61,17 @@ TARGETS = {
 
 def run_sql(target: str, sql: str) -> str:
     """Execute SQL against the target and return output."""
-    proc = subprocess.run(
-        TARGETS[target]['cmd'],
-        input=sql,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        proc = subprocess.run(
+            TARGETS[target]['cmd'],
+            input=sql,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        print('ERROR: SQL timed out after 60 seconds', file=sys.stderr)
+        sys.exit(1)
     stderr = proc.stderr.strip()
     stderr_lines = [l for l in stderr.splitlines()
                     if 'password on the command line' not in l]

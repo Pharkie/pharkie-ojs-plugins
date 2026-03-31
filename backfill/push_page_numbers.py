@@ -57,12 +57,16 @@ class SqlError(Exception):
 def run_sql(target: str, sql: str) -> str:
     """Execute SQL against the target and return output. Raises SqlError on failure."""
     cfg = TARGETS[target]
-    proc = subprocess.run(
-        cfg['cmd'],
-        input=sql,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        proc = subprocess.run(
+            cfg['cmd'],
+            input=sql,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise SqlError('SQL timed out after 60 seconds')
     stderr = proc.stderr.strip()
     # Filter out mysql password warnings (not real errors)
     stderr_lines = [l for l in stderr.splitlines()
@@ -92,6 +96,9 @@ def get_issue_publications(target: str, volume: str, number: str) -> dict[str, d
     Get all publications for an issue, keyed by normalised title.
     Returns {title: {publication_id, current_pages}}.
     """
+    # Validate volume/number are numeric (defense against malformed toc.json)
+    int(volume)
+    int(number)
     sql = f"""
         SELECT p.publication_id,
                ps_title.setting_value AS title,
@@ -207,7 +214,7 @@ def process_issue(toc_path: str, target: str, dry_run: bool) -> dict:
                 already_set += 1
                 continue
             pub_id = pub['publication_id']
-            escaped_pages = pages.replace("'", "\\'")
+            escaped_pages = pages.replace("'", "''")
             if pub['current_pages'] is None:
                 sql_statements.append(
                     f"INSERT INTO publication_settings "

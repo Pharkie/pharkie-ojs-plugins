@@ -74,9 +74,8 @@ class TestBioRendering:
             '<bio><p>Alice.</p></bio>'
             '<bio><p>Bob.</p></bio>'
         )
-        # Should NOT have a single container wrapping both
-        assert html.count('</div>\n\n<div class="jats-bios">') >= 1 or \
-               html.count('</div>\n<div class="jats-bios">') >= 1
+        # Should have two separate bio divs, not one container wrapping both
+        assert html.count('<div class="jats-bios">') == 2
 
     def test_empty_bio_skipped(self):
         html = _html_from_back(

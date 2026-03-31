@@ -74,9 +74,9 @@ def extract_from_jats(jats_path: Path) -> dict:
             continue
         given = contrib.find('{*}name/{*}given-names')
         family = contrib.find('{*}name/{*}surname')
-        if given is not None and family is not None:
+        if given is not None and family is not None and given.text and family.text:
             author_names.append(f'{given.text} {family.text}')
-        elif family is not None:
+        elif family is not None and family.text:
             author_names.append(family.text)
 
     # Scan leading <p> elements (before first <sec>) for provenance notes.

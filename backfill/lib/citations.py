@@ -447,7 +447,7 @@ def is_non_reference(text: str) -> bool:
     if len(text) < MIN_CLASSIFIABLE_LENGTH:
         return True
 
-    has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
+    has_year = bool(re.search(r'\b(1[89]\d{2}|20\d{2})\b', text))
     has_author_pattern = bool(re.search(r'[A-Z][a-zà-ü]+,?\s', text))
 
     if not has_year and not has_author_pattern:
@@ -481,7 +481,7 @@ def is_citation_like(text: str) -> bool:
     if len(text) < MIN_CLASSIFIABLE_LENGTH:
         return False
 
-    has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', text))
+    has_year = bool(re.search(r'\b(1[89]\d{2}|20\d{2})\b', text))
     has_author_pattern = bool(re.search(r'[A-Z][a-zà-ü]+,?\s', text))
     has_publisher = bool(re.search(
         r'(' + PUBLISHER_NAMES + r')', text, re.IGNORECASE))
@@ -1037,7 +1037,7 @@ def is_reference(text: str) -> bool:
         return False
 
     # Rule 2: Contains a year
-    has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)[a-d]?\b', clean))
+    has_year = bool(re.search(r'\b(1[89]\d{2}|20\d{2})[a-d]?\b', clean))
     has_year_fuzzy = has_year or bool(re.search(r'\b1\s?\d{3}\b', clean))
     has_year_fuzzy = has_year_fuzzy or bool(re.search(r'\b[lI]\d{3}\b', clean))
     has_year_fuzzy = has_year_fuzzy or bool(re.search(r'\b(forthcoming|in press|in print|n\.d\.?|undated)\b', clean, re.IGNORECASE))
@@ -1126,7 +1126,7 @@ def _is_short_surname_year(text: str) -> bool:
 
 def _is_numbered_commentary(after_num: str) -> bool:
     """Check if text after stripping number prefix is commentary, not citation."""
-    has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', after_num))
+    has_year = bool(re.search(r'\b(1[89]\d{2}|20\d{2})\b', after_num))
     has_author_year = bool(re.search(r'[A-Z][a-z]+.*\d{4}', after_num[:80]))
 
     if has_year or has_author_year:
