@@ -34,121 +34,40 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 ## Backfill pipeline
 
-Imports journal back-issues (whole-issue PDFs) into OJS. Three steps:
+Imports journal back-issues (whole-issue PDFs) into OJS. See [`backfill/README.md`](backfill/README.md) for the pipeline overview, [`docs/backfill-reference.md`](docs/backfill-reference.md) for command reference, and [`docs/qa-splits-plugin.md`](docs/qa-splits-plugin.md) for the QA workflow.
 
-1. **Create `toc.json`** — Claude reads the PDF and writes `backfill/private/output/<vol>.<iss>/toc.json` with article metadata. See `docs/backfill-toc-guide.md` for schema.
-2. **Validate toc.json** — `python3 backfill/validate_toc.py backfill/private/output/<vol>.<iss>/toc.json`. Both pipelines consume toc.json; validate before running either.
-3. **Split pipeline** — `backfill/split_pipeline/split_issue.sh <issue.pdf>` — split the PDF into per-article PDFs. Requires toc.json.
-4. **HTML pipeline** — numbered steps (pipe1–pipe10) in `backfill/html_pipeline/`. See below.
+Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfill/html_pipeline/` (HTML/JATS/import, pipe1–pipe10), `backfill/lib/` (shared code), `backfill/validate_toc.py`.
 
-### Split pipeline (`backfill/split_pipeline/`)
+### Gotchas
 
-- `split1_preflight.py` — validate PDF, detect vol/issue
-- `split2_split_pdf.py` — split issue PDF into per-article PDFs using PyMuPDF
-- `split3_verify.py` — verify split PDFs match toc.json titles
-- `split4_normalize_authors.py` — normalize author names
-- `split5_preflight_splits.py` — final pre-import checks on split output
-- `split_issue.sh` — orchestrates split1–split4
-- `tools/audit.py` — audit source PDFs for completeness
+- **JATS is the single source of truth** for all per-article data (DOIs, publisher-IDs, page numbers, citations, body content). No registries. `pipe6_ojs_xml.py` reads everything from JATS.
+- **toc.json `authors` field** is always a string (e.g. `"Emmy van Deurzen & Michael R. Montgomery"`). Do not convert to list — 8+ downstream scripts expect string.
+- **`_manual_html` in toc.json** = hand-corrected HTML galleys. `pipe1_haiku_html.py` skips these automatically.
+- **Haiku extraction can drop repeated/multilingual content.** Always verify HTML galleys against source PDFs for articles with non-English references.
+- **Docker in devcontainer requires `sudo`** for `pipe7_import.sh` and `pipe8_restore_ids.py` (they call `docker` directly). Other pipeline steps (pipe1–pipe6) don't need Docker.
+- **`pipe3_generate_jats.py` wipes citations** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`.
+- **Three HTML stages per article:** `.raw.html` (Haiku extraction), `.post.html` (post-processed), `.galley.html` (from JATS). No file collisions.
 
-### HTML pipeline (`backfill/html_pipeline/`)
-
-JATS is the single source of truth for article content. The pipeline direction is **PDF → JATS → HTML**:
-
-1. `pipe1_haiku_html.py` — sends split PDFs to Claude Haiku API, generates initial HTML body content (`.raw.html`)
-2. `pipe2_postprocess.py` → `lib/postprocess.py` — deterministic post-processing: strip title/subtitle/authors/abstract/keywords, trim bleed, strip running headers and page numbers, normalise ALL CAPS headings to title case. Section-specific handlers for articles, editorials, and book reviews. Conference/presentation notes preserved (not stripped) for provenance extraction. Produces `.post.html` from `.raw.html`.
-3. `pipe3_generate_jats.py` — generates JATS 1.3 XML per article from toc.json metadata + processed HTML body
-4. `pipe4_extract_citations.py` — reads JATS `<body>`, extracts: reference sections (tail) → `<ref-list>`, notes → `<fn-group>`, author bio sections → `<bio>`, leading provenance notes (conference/presentation) → `<notes notes-type="provenance">`. Removes extracted content from body.
-5. `pipe5_galley_html.py` — generates HTML galley (`.galley.html`) from JATS. Body text + notes/bios/provenance (in `jats-*` wrapper divs); references excluded (OJS renders from citations table)
-6. `pipe6_ojs_xml.py` — generates OJS Native XML for import. Reads DOIs, publisher-IDs, citations, and page numbers from JATS.
-7. `pipe7_import.sh` — load import XML into OJS via Docker CLI
-8. `pipe8_restore_ids.py` — remap OJS IDs to match JATS publisher-id after import
-9. `pipe9_issue_galleys.sh` — add whole-issue PDF galleys to OJS
-10. `pipe10_verify.py` — post-import verification against OJS database
-- `pipe1b_gemini_html.py` — Gemini fallback for content-filtered articles
-- `tools/snapshot_ids.py` — capture OJS IDs/DOIs → JATS/toc.json
-- `tools/sheets_export.py` — publish toc.json data to Google Sheet
-- `qa/qa_review.py` — QA Splits CLI: approve, reject, status, list reviews
-
-### Shared library (`backfill/lib/`)
-
-- `citations.py` — classification (is_reference, is_note, is_author_bio, is_provenance, looks_like_person_name, normalise_allcaps, etc.)
-- `postprocess.py` — postprocess_article(), all strip functions, verify_postprocessed()
-- `pdf_utils.py` — extract_pdf_back_matter() (PyMuPDF note extraction)
-
-QA Splits reads from OJS (citations table, HTML galleys, file storage) — not from local JATS files. The QA iteration loop is:
+### QA iteration loop
 
 1. Fix the post-processing pipeline (systemic fix, not per-article)
-2. `python3 backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/<vol.iss>/toc.json` — reprocess from `.raw.html`
-3. Run JATS pipeline: `pipe3_generate_jats.py` → `pipe4_extract_citations.py --extract --volume <vol.iss>` → `pipe5_galley_html.py`
-4. Regenerate import XML: `python3 backfill/html_pipeline/pipe6_ojs_xml.py <toc.json> -o <import.xml>`
-5. Per-issue reimport: `backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol.iss> --force` (~7 sec)
-6. `python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)
-7. QA in browser — repeat from step 1 if issues found
+2. `python3 backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/<vol.iss>/toc.json`
+3. `python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/<vol.iss>/toc.json`
+4. `python3 backfill/html_pipeline/pipe4_extract_citations.py --extract --volume <vol.iss>`
+5. `python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/<vol.iss>/toc.json`
+6. `python3 backfill/html_pipeline/pipe6_ojs_xml.py <toc.json> -o <import.xml>`
+7. `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol.iss> --force` (~7 sec)
+8. `sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)
+9. QA in browser — repeat from step 1 if issues found
 
-**Per-issue iteration takes ~8 seconds.** Always use `--issue` with `pipe8_restore_ids.py` and `--force` with `pipe7_import.sh` for single-issue work. Full reimport (`--wipe-articles`, ~20 min) only for systemic changes affecting all issues. Full reimport command: `backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles` then `python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev`.
+**Per-issue iteration takes ~8 seconds.** Full reimport (`--wipe-articles`, ~20 min) only for systemic changes.
 
-**pipe7_import.sh flags:**
-- `--wipe-articles` — wipes ALL existing issues/articles first, then imports. Use for full reimport.
-- `--force` — reimports individual issues that already exist (overwrites). Use for per-issue iteration. Does NOT wipe first.
-- No flag — skips issues that already exist. Almost never what you want.
+### Deploying to live
 
-**Pipeline HTML files:** Three distinct HTML stages per article: `.raw.html` (Haiku extraction), `.post.html` (post-processed body with refs), `.galley.html` (HTML galley from JATS, refs excluded, jats-* divs). No file collisions — each step writes to its own file.
+1. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes articles, reimports all
+2. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — runs locally, sends SQL via SSH
+3. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
 
-**toc.json `authors` field** is always a string (e.g. `"Emmy van Deurzen & Michael R. Montgomery"`). JATS stores structured authors in `<contrib-group>`. Do not convert to list — 8+ downstream scripts expect string.
+### Data and tests
 
-toc.json retains issue-level data: PDF page splits, article ordering, section assignments, metadata, `issue_doi`, `issue_id`. Articles with `_manual_html` in toc.json have hand-corrected HTML galleys (same-page bleed the AI can't handle). `pipe1_haiku_html.py` skips these automatically — delete the HTML file to force regeneration.
-
-**JATS is the single source of truth** for all per-article data. There are no registries — DOIs, publisher-IDs (OJS submission_id), page numbers, citations, and body content all live in JATS. `pipe6_ojs_xml.py` reads everything from JATS. `pipe3_generate_jats.py` preserves existing values (DOI, publisher-id) when regenerating.
-
-Page numbers: `journal_page_start/end` in toc.json. `pipe3_generate_jats.py` reads those and writes `<fpage>`/`<lpage>` to JATS. `pipe6_ojs_xml.py` reads page numbers from JATS only (not toc.json). To update page numbers: edit toc.json → re-run `pipe3_generate_jats.py` → re-run `pipe6_ojs_xml.py`.
-
-OJS IDs and DOIs: JATS stores `<article-id pub-id-type="publisher-id">` (OJS submission_id) and `<article-id pub-id-type="doi">`. These are NOT passed to OJS import XML (OJS rejects `advice="update"` on internal IDs). Instead, `pipe8_restore_ids.py` remaps IDs post-import by reading JATS locally and sending SQL to the target via SSH. Issue-level DOI and ID are in toc.json (`issue_doi`, `issue_id`). To capture IDs from a running OJS instance: `python backfill/html_pipeline/tools/snapshot_ids.py --target live`.
-
-Deploying article/issue updates to live (users, subscriptions, payments, journal config all preserved):
-1. `scripts/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes existing articles/issues, reimports all
-2. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — runs **locally** (reads JATS publisher-id, sends SQL to live DB via SSH). Preserves URLs, DOIs, and payment references.
-3. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs (safe no-op, same DOIs + same URLs)
-
-All journal-specific data lives in the private repo (`private/backfill/`). The public repo has a single symlink: `backfill/private` → `private/backfill/`. Paths like `backfill/private/input/`, `backfill/private/output/`, `backfill/private/authors.json`, and `backfill/private/reports/` all resolve through this symlink. Regenerable files (split PDFs, import.xml) are gitignored in the private repo too. See `private/README.md` for full structure.
-
-### Regression tests
-
-Fixture-driven tests for all deterministic detection logic: `python3 -m pytest backfill/tests/ -v`
-
-Test data lives in **`backfill/tests/fixtures/*.json`** — one file per category (names, bios, references, notes, provenance, contacts, classify, postprocess). Each has true and false cases. **Never change a test to match implementation** — fixtures are human-verified ground truth. When QA finds a bug: add the case to the fixture (it should fail), then fix the code. See `CONTRIBUTING.md` for full workflow.
-
-### Fixing a bad split or HTML galley
-
-1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`
-2. Re-split: `backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf`
-3. Delete the affected galley file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html`
-4. Re-generate HTML: `python3 backfill/html_pipeline/pipe1_haiku_html.py backfill/private/output/<vol>.<iss>/toc.json --yes`
-5. Re-generate XML: `python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/<vol>.<iss>/toc.json -o backfill/private/output/<vol>.<iss>/import.xml`
-6. Re-import: `backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol>.<iss> --force`
-
-### Fixing an HTML galley on live
-
-**Never re-import on live** — it risks duplicates and ID changes. Instead, update the galley file in place:
-
-1. Edit the `.galley.html` file in `backfill/private/output/<vol>.<iss>/` and commit
-2. Find the galley file path on live:
-   ```
-   docker compose exec -T ojs-db bash -c 'mysql -u root -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE -e "
-     SELECT f.path FROM files f
-     JOIN submission_files sf ON f.file_id = sf.file_id
-     JOIN publication_galleys g ON g.submission_file_id = sf.submission_file_id
-     JOIN publications p ON g.publication_id = p.publication_id
-     JOIN publication_settings ps ON p.publication_id = ps.publication_id AND ps.setting_name = \"title\"
-     WHERE ps.setting_value LIKE \"%Article Title%\" AND f.mimetype = \"text/html\";
-   "'
-   ```
-3. Build the full HTML file (repo files are body-only, live files need the DOCTYPE wrapper):
-   ```
-   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
-   ```
-4. Copy into the live OJS container:
-   ```
-   scp /tmp/galley-update.html root@$SERVER_IP:/tmp/
-   ssh root@$SERVER_IP "cd /opt/pharkie-ojs-plugins && docker compose cp /tmp/galley-update.html ojs:/var/www/files/<path-from-step-2>"
-   ```
+All journal-specific data lives in the private repo via symlink: `backfill/private` → `private/backfill/`. Regression tests: `python3 -m pytest backfill/tests/ -v`. See `CONTRIBUTING.md` for the fixture-driven testing workflow.

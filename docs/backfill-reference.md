@@ -19,7 +19,7 @@ backfill/split_pipeline/split_issue.sh path/to/37.1.pdf
 
 # Step 3: Generate XML and import into OJS
 python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o backfill/private/output/37.1/import.xml
-backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1
+sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1
 
 # Step 4: Verify the import
 python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
@@ -269,3 +269,40 @@ To re-run a single step via `split_issue.sh` (uses the same orchestration logic 
 ```bash
 backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 ```
+
+---
+
+## Fixing a bad split or HTML galley
+
+1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`
+2. Re-split: `backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf`
+3. Delete the affected galley file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html`
+4. Re-generate HTML: `python3 backfill/html_pipeline/pipe1_haiku_html.py backfill/private/output/<vol>.<iss>/toc.json --yes`
+5. Re-generate XML: `python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/<vol>.<iss>/toc.json -o backfill/private/output/<vol>.<iss>/import.xml`
+6. Re-import: `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol>.<iss> --force`
+
+## Fixing an HTML galley on live
+
+**Never re-import on live** — it risks duplicates and ID changes. Instead, update the galley file in place:
+
+1. Edit the `.galley.html` file in `backfill/private/output/<vol>.<iss>/` and commit
+2. Find the galley file path on live:
+   ```
+   docker compose exec -T ojs-db bash -c 'mysql -u root -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE -e "
+     SELECT f.path FROM files f
+     JOIN submission_files sf ON f.file_id = sf.file_id
+     JOIN publication_galleys g ON g.submission_file_id = sf.submission_file_id
+     JOIN publications p ON g.publication_id = p.publication_id
+     JOIN publication_settings ps ON p.publication_id = ps.publication_id AND ps.setting_name = \"title\"
+     WHERE ps.setting_value LIKE \"%Article Title%\" AND f.mimetype = \"text/html\";
+   "'
+   ```
+3. Build the full HTML file (repo files are body-only, live files need the DOCTYPE wrapper):
+   ```
+   { echo '<!DOCTYPE html>'; echo '<html lang="en">'; echo '<head><meta charset="utf-8"><title>Full Text</title></head>'; echo '<body>'; cat backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html; echo '</body>'; echo '</html>'; } > /tmp/galley-update.html
+   ```
+4. Copy into the live OJS container:
+   ```
+   scp /tmp/galley-update.html root@$SERVER_IP:/tmp/
+   ssh root@$SERVER_IP "cd /opt/pharkie-ojs-plugins && docker compose cp /tmp/galley-update.html ojs:/var/www/files/<path-from-step-2>"
+   ```
