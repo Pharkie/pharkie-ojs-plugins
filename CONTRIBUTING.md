@@ -97,7 +97,7 @@ See [`docs/docker-setup.md`](docs/docker-setup.md) for Docker setup and [`docs/s
 Quick start:
 
 ```bash
-scripts/rebuild-dev.sh --with-sample-data --skip-tests
+scripts/dev/rebuild-dev.sh --with-sample-data --skip-tests
 ```
 
-This seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. For the full journal archive, run `backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles` after rebuild.
+This seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. For the full journal archive, run `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles` after rebuild.

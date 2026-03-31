@@ -29,7 +29,7 @@ Already configured in `docker-compose.yml`:
 - ./plugins/qa-splits/api/v1/qa-splits:/var/www/html/api/v1/qa-splits:ro
 ```
 
-The plugin is auto-enabled by `scripts/setup-ojs.sh` when `QA_SPLITS_ENABLED=1` (default).
+The plugin is auto-enabled by `scripts/ojs/setup-ojs.sh` when `QA_SPLITS_ENABLED=1` (default).
 
 ### Manual (non-Docker / live)
 
@@ -203,9 +203,9 @@ python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/23.1
 # 4. Regenerate import XML
 python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
 # 5. Reimport just that issue (~7 sec)
-backfill/html_pipeline/pipe7_import.sh backfill/private/output/23.1 --force
+sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/23.1 --force
 # 6. Restore IDs for that issue only (~0.6 sec)
-python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 23.1
+sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 23.1
 # 7. Check in QA Splits
 ```
 
@@ -227,9 +227,9 @@ for t in backfill/private/output/*/toc.json; do
   python3 backfill/html_pipeline/pipe6_ojs_xml.py "$t" -o "$(dirname "$t")/import.xml"
 done
 # 7. Reimport all (--wipe-articles wipes first; --force reimports existing without wiping)
-backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles
+sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles
 # 8. Restore IDs
-python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev
+sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev
 ```
 
 ## Reporting content issues
