@@ -25,7 +25,8 @@ case "$CMD" in
   "nproc")                              ;; # CPU count (exact match)
   "docker inspect --format="*)          ;; # Compose file detection
   "docker logs --since="*)              ;; # Container log checks (time-bounded)
-  "crontab -l"*)                        ;; # Cron listing
+  "crontab -l"*)                        ;; # Cron listing (user)
+  "sudo crontab -l"*)                   ;; # Cron listing (root)
   "dmesg"*)                             ;; # OOM detection
   "journalctl -k "*)                    ;; # OOM detection (kernel messages only)
   "test -f /opt/backups/"*)             ;; # Backup file existence checks
