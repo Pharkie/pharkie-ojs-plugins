@@ -513,7 +513,7 @@ def main():
         print(file=sys.stderr)
 
     # Output files
-    output_dir = os.path.join(os.path.dirname(__file__), "private", "output")
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "private", "output")
     os.makedirs(output_dir, exist_ok=True)
 
     json_path = os.path.join(output_dir, "audit-report.json")

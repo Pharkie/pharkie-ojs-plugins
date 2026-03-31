@@ -100,4 +100,4 @@ Quick start:
 scripts/rebuild-dev.sh --with-sample-data --skip-tests
 ```
 
-This seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. For the full journal archive, run `backfill/import.sh backfill/private/output/* --wipe-articles` after rebuild.
+This seeds ~1400 test WP users + subscriptions and 2 sample OJS issues. For the full journal archive, run `backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles` after rebuild.

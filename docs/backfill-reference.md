@@ -15,48 +15,21 @@ backfill/split_pipeline/split_issue.sh path/to/37.1.pdf
 # Step 2: Human review (see Backfill Pipeline for what to check)
 # 2a: Check split PDFs -- open backfill/private/output/37.1/*.pdf
 #     Verify page alignment, article boundaries, book review splits
-# 2b: Review metadata in spreadsheet
-python3 backfill/export_review.py backfill/private/output/37.1/toc.json -o review.csv
-# ... edit review.csv in Google Sheets ...
-python3 backfill/import_review.py review.csv --dry-run
-python3 backfill/import_review.py review.csv
+# 2b: Review metadata in toc.json directly or via QA Splits
 
-# Step 3: Enrich metadata (optional but recommended)
-python3 backfill/enrich.py backfill/private/output/37.1/toc.json --dry-run
-python3 backfill/enrich.py backfill/private/output/37.1/toc.json
-# ... optionally re-export CSV to review enrichment, then import corrections ...
-
-# Step 4: Generate XML and import into OJS
+# Step 3: Generate XML and import into OJS
 python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o backfill/private/output/37.1/import.xml
 backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1
 
-# Step 5: Verify the import
+# Step 4: Verify the import
 python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
-
-# Optional: Generate archive manifest
-python3 backfill/manifest.py backfill/private/output/*/toc.json
 ```
 
 ### Batch workflows
 
 ```bash
-# Export all issues for review at once
-python3 backfill/export_review.py backfill/private/output/*/toc.json -o review.csv
-
-# Enrich all issues
-python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
-python3 backfill/enrich.py backfill/private/output/*/toc.json
-
-# Re-export after enrichment (includes subjects, disciplines, keywords_enriched)
-python3 backfill/export_review.py backfill/private/output/*/toc.json -o review-enriched.csv
-python3 backfill/import_review.py review-enriched.csv --dry-run
-python3 backfill/import_review.py review-enriched.csv
-
 # Normalize authors across all issues
 python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
-
-# Vocabulary report (after enrichment)
-python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 ```
 
 ### Re-running after corrections
@@ -66,10 +39,7 @@ python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=split
 backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 
-# Undo review corrections (restore from backup)
-python3 backfill/import_review.py review.csv --restore
-
-# Re-run normalization after changing author names in review
+# Re-run normalization after changing author names
 python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
 ```
 
@@ -82,7 +52,6 @@ After `split_issue.sh` completes, each issue gets a directory under `backfill/pr
 ```
 backfill/private/output/37.1/
     toc.json                          # Structured TOC with all metadata
-    enrichment.json                   # Deep enrichment sidecar (from enrich.py)
     import.xml                        # OJS Native XML (large, base64 PDFs)
     01-editorial.pdf                  # Per-article PDFs
     02-therapy-for-the-revolution.pdf
@@ -124,74 +93,6 @@ Each article object:
 Book review articles also have `book_title`, `book_author`, `book_year`, `publisher`, and `reviewer`.
 
 After enrichment review, articles may also have `subjects` (list) and `disciplines` (list) stored directly in toc.json.
-
-### enrichment.json schema
-
-One per issue directory, created by `enrich.py`. Keyed by `_review_id`:
-
-| Top-level field | Description |
-|---|---|
-| `_generated` | ISO 8601 timestamp of last generation |
-| `_model` | Claude model used |
-| `_version` | Schema version (currently 1) |
-| `articles` | Object keyed by `_review_id` |
-
-Each article object:
-
-| Field | Type | Flows to OJS XML | Description |
-|---|---|---|---|
-| `subjects` | string[] | `<subjects>` | Broad topic areas from controlled vocabulary |
-| `disciplines` | string[] | `<disciplines>` | Academic fields |
-| `themes` | string[] | sidecar only | Existential concepts |
-| `thinkers` | string[] | sidecar only | Philosophers/theorists substantially engaged with |
-| `modalities` | string[] | sidecar only | Therapeutic approaches |
-| `methodology` | string? | sidecar only | Research method if applicable |
-| `keywords_enriched` | string[] | replaces `<keywords>` | Superset of original + Claude-suggested keywords |
-| `summary` | string | sidecar only | 2-3 sentence synopsis |
-| `references` | object[] | `<citations>` | Key works cited (author, year, title, internal flag) |
-| `geographical_context` | string? | `<coverage>` | Cultural/regional focus |
-| `clinical_population` | string? | sidecar only | Specific groups discussed |
-| `era_focus` | string? | `<coverage>` | Historical period |
-| `token_count_input` | int | -- | API input tokens used |
-| `token_count_output` | int | -- | API output tokens used |
-| `_enriched_at` | string | -- | ISO 8601 timestamp |
-
-"Flows to OJS XML" fields are searchable and visible in OJS out of the box. "Sidecar only" fields are preserved for future use (browse-by-theme pages, thinker indexes, related articles, corpus analysis, search enhancement). See the [Enrichment section](backfill-pipeline.md#enrichment) for what each field enables.
-
----
-
-## Enrichment details
-
-### Cost
-
-| Model | Per article | 1000 articles |
-|---|---|---|
-| Sonnet 4 (default) | ~$0.03 | ~$32 |
-| Opus 4 | ~$0.16 | ~$158 |
-
-### Enrichment commands
-
-```bash
-# Dry run: estimate cost without calling API
-python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
-
-# Enrich all issues (8 parallel workers by default)
-python3 backfill/enrich.py backfill/private/output/*/toc.json
-
-# More parallelism (if not hitting rate limits)
-python3 backfill/enrich.py backfill/private/output/*/toc.json --concurrency=16
-
-# Force re-enrichment of already-processed articles
-python3 backfill/enrich.py backfill/private/output/37.1/toc.json --force
-
-# Use a different model
-python3 backfill/enrich.py backfill/private/output/*/toc.json --model=claude-opus-4-20250514
-
-# Vocabulary report (flags near-duplicates)
-python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
-```
-
-Enrichment is resumable -- if interrupted, re-running picks up where it left off (articles already in `enrichment.json` are skipped). The `--report` flag gives an overview of extracted vocabulary, useful for spotting inconsistencies before building anything on top.
 
 ---
 
@@ -296,50 +197,14 @@ The `aliases` section is preserved manually for titles that can't be matched aut
 
 ---
 
-## Review pipeline internals
-
-### Validation checks
-
-The review import checks all of these **before writing anything**. If any check fails, no files are touched.
-
-| Check | What it catches |
-|---|---|
-| Missing `id` column | CSV was exported before review IDs existed -- re-export |
-| Empty ID | An `id` cell was accidentally cleared |
-| Unknown ID | ID in CSV doesn't exist in toc.json (typo or wrong file) |
-| Missing article | A toc.json article has no matching CSV row (row deleted) |
-| Duplicate ID | Two CSV rows have the same ID (row duplicated) |
-| Missing toc.json | A file path in the CSV doesn't exist on disk |
-| Invalid section | Section value isn't one of the four valid options |
-
-### Automatic transformations
-
-Applied silently, reported in `--dry-run`:
-
-| Transformation | Why |
-|---|---|
-| Newlines replaced with spaces | Google Sheets allows Ctrl+Enter; newlines break XML generation |
-| Control characters removed | Copy-paste from PDFs can introduce invisible chars that produce invalid XML |
-
-### Testing
-
-```bash
-python3 backfill/test_review.py
-```
-
-14 automated tests covering validation, round-trips, sanitization, dry-run, restore, and idempotency.
-
----
-
 ## Known limitations
 
-- **TOC parser tuned for recent issues.** The `CONTENTS` page format, text extraction patterns, and page offset detection are calibrated against issues from the last ~10 years. Older issues with different layouts may need the `--page-offset=N` flag or manual `toc.json` adjustment.
 - **Book review detection is heuristic.** Individual reviews are identified by publication-line patterns near the top of pages. Reviews that don't start on a new page, or that use unusual citation formats, may be missed or mis-split.
 - **Keyword extraction edge cases.** Keywords are extracted by finding "Key Words", "Keywords", or "Key Word" headings (with or without colons), supporting both comma and semicolon separators. Articles that use other keyword formats (e.g. inline keywords with no heading) may not be captured.
 - **Abstract extraction relies on section headers.** Abstracts are captured between "Abstract" (or "Abstract:") and the next section heading ("Key Words", "Keywords", "Introduction", or a capitalised heading). Unusual article structures may yield incomplete or missing abstracts.
 - **Reviewer name extraction is best-effort.** The pipeline scans backwards from the end of each book review looking for a standalone name line. Long reference sections can cause missed extractions.
 - **Author email placeholders.** OJS requires an email for every author. The XML uses `firstname.lastname@placeholder.invalid` since historical articles don't have author emails.
-- **DOI matching is fuzzy.** The registry lookup handles common differences but unusual title variations may need manual aliases in `doi-registry.json`.
+- **DOI matching is fuzzy.** Unusual title variations may need manual correction in JATS.
 
 ---
 
@@ -349,9 +214,8 @@ python3 backfill/test_review.py
 
 | Flag | Description |
 |---|---|
-| `--no-pdfs` | Generate XML without base64-embedded PDFs. Fast, useful for testing XML structure. |
 | `--only=<step>` | Run a single step only. Valid steps: `preflight`, `split`, `verify_split`, `normalize`. |
-| `--page-offset=N` | Manual page offset for TOC parsing (`pdf_index = journal_page + N`). Use when auto-detection fails. |
+| `--stop-after=<step>` | Run through a step then stop. |
 
 ### pipe7_import.sh
 
@@ -361,39 +225,7 @@ python3 backfill/test_review.py
 | `--journal=<path>` | `ea` | OJS journal path (URL path component). |
 | `--admin=<user>` | `admin` | OJS admin username for the import. |
 | `--force` | Off | Reimport issues that already exist in OJS. |
-
-### export_review.py
-
-| Argument | Default | Description |
-|---|---|---|
-| `toc.json files` | (required) | One or more toc.json files to export |
-| `-o`, `--output` | `review.csv` | Output CSV path |
-
-### import_review.py
-
-| Flag | Description |
-|---|---|
-| `csv_file` | (required) The reviewed CSV file |
-| `--dry-run` | Run all validation and show what would change, without writing files |
-| `--restore` | Restore toc.json files from `.pre-review` backups |
-
-### enrich.py
-
-| Argument | Default | Description |
-|---|---|---|
-| `toc.json files` | (required) | One or more toc.json files to enrich |
-| `--dry-run` | Off | Estimate token count and cost without calling API |
-| `--force` | Off | Re-enrich articles that already have enrichment data |
-| `--model` | `claude-sonnet-4-20250514` | Claude model to use |
-| `--concurrency` | `8` | Number of parallel API calls |
-| `--report` | Off | Generate vocabulary report from enrichment.json files |
-
-### manifest.py
-
-| Argument | Default | Description |
-|---|---|---|
-| `toc.json files` | (required) | One or more toc.json files |
-| `-o`, `--output` | `backfill/private/output/MANIFEST.md` | Output path |
+| `--wipe-articles` | Off | Wipe ALL existing issues/articles before importing. |
 
 ### pipe10_verify.py
 
@@ -413,15 +245,6 @@ Each Python script can be run standalone. This is useful for debugging a specifi
 # Preflight only
 python3 backfill/split_pipeline/split1_preflight.py path/to/issue.pdf
 
-# Parse TOC, write to specific file
-python3 backfill/parse_toc.py path/to/issue.pdf -o backfill/private/output/37.1/toc.json
-
-# Parse TOC with manual page offset
-python3 backfill/parse_toc.py path/to/issue.pdf -o toc.json --page-offset=2
-
-# Parse TOC without per-article metadata extraction (faster)
-python3 backfill/parse_toc.py path/to/issue.pdf --no-metadata -o toc.json
-
 # Split PDF using existing toc.json
 python3 backfill/split_pipeline/split2_split_pdf.py backfill/private/output/37.1/toc.json -o backfill/private/output
 
@@ -430,30 +253,6 @@ python3 backfill/split_pipeline/split3_verify.py backfill/private/output/37.1/to
 
 # Normalize authors across all processed issues
 python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
-
-# Export metadata for review
-python3 backfill/export_review.py backfill/private/output/*/toc.json -o review.csv
-
-# Preview review corrections (dry run)
-python3 backfill/import_review.py review.csv --dry-run
-
-# Apply review corrections
-python3 backfill/import_review.py review.csv
-
-# Undo review corrections
-python3 backfill/import_review.py review.csv --restore
-
-# Enrich metadata (dry run)
-python3 backfill/enrich.py backfill/private/output/*/toc.json --dry-run
-
-# Enrich metadata
-python3 backfill/enrich.py backfill/private/output/*/toc.json
-
-# Vocabulary report
-python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
-
-# Archive manifest
-python3 backfill/manifest.py backfill/private/output/*/toc.json
 
 # Generate XML without PDFs (fast, for testing)
 python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o import.xml --no-pdfs
@@ -465,7 +264,7 @@ python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc
 python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
 ```
 
-To re-run a single step via `split-issue.sh` (uses the same orchestration logic but skips other steps):
+To re-run a single step via `split_issue.sh` (uses the same orchestration logic but skips other steps):
 
 ```bash
 backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
