@@ -4,18 +4,22 @@
 # runs setup, and optionally runs the e2e test suite.
 #
 # Usage:
-#   scripts/rebuild-dev.sh                          # Rebuild + tests
-#   scripts/rebuild-dev.sh --with-sample-data       # Rebuild + sample data + tests
-#   scripts/rebuild-dev.sh --skip-tests             # Rebuild without tests
-#   scripts/rebuild-dev.sh --with-sample-data --skip-tests
+#   scripts/dev/rebuild-dev.sh                          # Rebuild + tests
+#   scripts/dev/rebuild-dev.sh --with-sample-data       # Rebuild + sample data + tests
+#   scripts/dev/rebuild-dev.sh --skip-tests             # Rebuild without tests
+#   scripts/dev/rebuild-dev.sh --with-sample-data --skip-tests
 #
 # Output is always tee'd to logs/rebuild-<timestamp>.log so it's recoverable.
 #
 # Requires HOST_PROJECT_DIR env var (set automatically by devcontainer.json).
-# For portable setup (containers already running), use scripts/setup.sh --env=dev.
+# For portable setup (containers already running), use scripts/infra/setup.sh --env=dev.
 set -eo pipefail
 
-source "$(dirname "$0")/lib/dc.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPTS_ROOT")"
+
+source "$SCRIPTS_ROOT/lib/dc.sh"
 init_dc --env=dev
 
 SAMPLE_DATA=""
@@ -30,7 +34,7 @@ for arg in "$@"; do
 done
 
 # --- Log file setup ---
-LOG_DIR="/workspaces/pharkie-ojs-plugins/logs"
+LOG_DIR="$PROJECT_DIR/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/rebuild-$(date '+%Y%m%d-%H%M%S').log"
 
@@ -42,9 +46,9 @@ exec > >(tee "$LOG_FILE") 2>&1
 trap 'echo ""; echo "=== REBUILD FAILED (exit code $?) ===" >&2; echo "  Log: $LOG_FILE" >&2' ERR
 
 # --- Auto-generate .env if missing ---
-if [ ! -f /workspaces/pharkie-ojs-plugins/.env ]; then
+if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo "--- Generating .env ---"
-  /workspaces/pharkie-ojs-plugins/scripts/generate-env.sh
+  "$SCRIPTS_ROOT/infra/generate-env.sh"
   echo ""
 fi
 
@@ -77,12 +81,12 @@ echo ""
 
 # --- 4. Run setup ---
 echo "--- Running setup-dev.sh $SAMPLE_DATA ---"
-scripts/setup-dev.sh $SAMPLE_DATA
+"$SCRIPTS_ROOT/infra/setup-dev.sh" $SAMPLE_DATA
 echo ""
 
 # --- 5. Port forwarding (DinD) ---
 echo "--- Setting up port forwarding ---"
-scripts/forward-ports.sh
+"$SCRIPT_DIR/forward-ports.sh"
 echo ""
 
 # --- 6. Run tests (unless --skip-tests) ---

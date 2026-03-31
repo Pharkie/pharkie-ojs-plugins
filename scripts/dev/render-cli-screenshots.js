@@ -6,8 +6,8 @@
  * Content is representative mock output, not literal captures.
  *
  * Usage:
- *   node scripts/render-cli-screenshots.js              # all screenshots
- *   node scripts/render-cli-screenshots.js test-connection  # one screenshot
+ *   node scripts/dev/render-cli-screenshots.js              # all screenshots
+ *   node scripts/dev/render-cli-screenshots.js test-connection  # one screenshot
  *
  * Output: docs/images/cli-{name}.png
  *

@@ -1,6 +1,6 @@
 # Docker Setup Guide
 
-`docker-compose.yml` (in the project root) runs four containers — WordPress + MariaDB, OJS + MariaDB — on a shared network so WP can call OJS endpoints directly. Setup scripts (`setup-wp.sh`, `setup-ojs.sh`) run after containers start to create the journal, configure subscriptions, activate plugins, and optionally import sample data. Both plugins are bind-mounted from `plugins/` so edits are reflected immediately. All config comes from `.env`.
+`docker-compose.yml` (in the project root) runs four containers — WordPress + MariaDB, OJS + MariaDB — on a shared network so WP can call OJS endpoints directly. Setup scripts (`scripts/wp/setup-wp.sh`, `scripts/ojs/setup-ojs.sh`) run after containers start to create the journal, configure subscriptions, activate plugins, and optionally import sample data. Both plugins are bind-mounted from `plugins/` so edits are reflected immediately. All config comes from `.env`.
 
 The same stack works locally, on staging, and in production — only the `.env` and compose overrides differ.
 
@@ -16,8 +16,8 @@ docker compose up -d --build
 docker compose logs -f ojs
 
 # 3. Run setup scripts (--with-sample-data imports test users + articles)
-docker compose exec wp bash /var/www/html/scripts/setup-wp.sh --with-sample-data
-docker compose exec ojs bash /scripts/setup-ojs.sh --with-sample-data
+docker compose exec wp bash /var/www/html/scripts/wp/setup-wp.sh --with-sample-data
+docker compose exec ojs bash /scripts/ojs/setup-ojs.sh --with-sample-data
 ```
 
 ## URLs
@@ -35,7 +35,7 @@ Adminer connects to both databases — type `wp-db` or `ojs-db` as the server on
 
 ## Credentials
 
-> **All passwords are randomly generated** — there are no default passwords. Run `scripts/generate-env.sh` to create your `.env`, or let `rebuild-dev.sh` / `setup.sh --env=dev` do it automatically. Check your `.env` file for the actual values.
+> **All passwords are randomly generated** — there are no default passwords. Run `scripts/infra/generate-env.sh` to create your `.env`, or let `rebuild-dev.sh` / `setup.sh --env=dev` do it automatically. Check your `.env` file for the actual values.
 
 | | WordPress | OJS |
 |--|-----------|-----|
@@ -64,17 +64,17 @@ docker compose down
 docker compose down -v
 
 # Reset OJS only (wipes DB + volumes, reinstalls automatically)
-./scripts/reset-ojs.sh
+./scripts/ojs/reset-ojs.sh
 
 # Run WP setup (install core, activate plugins, set options)
-docker compose exec wp bash /var/www/html/scripts/setup-wp.sh
+docker compose exec wp bash /var/www/html/scripts/wp/setup-wp.sh
 # ...with ~1400 anonymised test users + WCS subscriptions:
-docker compose exec wp bash /var/www/html/scripts/setup-wp.sh --with-sample-data
+docker compose exec wp bash /var/www/html/scripts/wp/setup-wp.sh --with-sample-data
 
 # Run OJS setup (create journal, subscription type, enable plugin, enable paywall)
-docker compose exec ojs bash /scripts/setup-ojs.sh
+docker compose exec ojs bash /scripts/ojs/setup-ojs.sh
 # ...with 2 issues + 43 articles from live (issues set to require subscription):
-docker compose exec ojs bash /scripts/setup-ojs.sh --with-sample-data
+docker compose exec ojs bash /scripts/ojs/setup-ojs.sh --with-sample-data
 
 # View logs
 docker compose logs -f        # all
@@ -95,8 +95,8 @@ The `--with-sample-data` flag on `setup-wp.sh` runs a three-step pipeline that p
 | Step | Script | What it does | Speed |
 |------|--------|-------------|-------|
 | 1. Import users | `wp user import-csv` | Imports ~1,400 anonymised users from `docker/data/test-users.csv` as `subscriber` | ~2 min |
-| 2. Apply roles | `scripts/apply-roles.php` | Reads `original_role` column from CSV, updates `wp_usermeta` directly (UM roles can't be assigned via `wp user import-csv`) | ~2s |
-| 3. Seed sample data | `scripts/setup-and-sample-data.php` | Creates 6 WC subscription products, batch-inserts WCS subscription records for ~683 members with `um_custom_role_1–6`, and configures wpojs_* plugin options (type mapping, member roles, journal name) | ~1.5s |
+| 2. Apply roles | `scripts/wp/apply-roles.php` | Reads `original_role` column from CSV, updates `wp_usermeta` directly (UM roles can't be assigned via `wp user import-csv`) | ~2s |
+| 3. Seed sample data | `scripts/wp/setup-and-sample-data.php` | Creates 6 WC subscription products, batch-inserts WCS subscription records for ~683 members with `um_custom_role_1–6`, and configures wpojs_* plugin options (type mapping, member roles, journal name) | ~1.5s |
 
 Step 3 inserts the minimum rows needed for `wcs_get_subscriptions()` to find active subscriptions: `wp_posts` (subscription post), `wp_postmeta` (dates + customer), `wp_woocommerce_order_items` (line item), and `wp_woocommerce_order_itemmeta` (product ID). It also configures the `wpojs_*` plugin options (type mapping, member roles, manual roles, journal name).
 
@@ -111,7 +111,7 @@ All three steps are idempotent — running `setup-wp.sh --with-sample-data` agai
 If OJS gets into a broken state (failed install, version change, corrupt DB), run:
 
 ```bash
-./scripts/reset-ojs.sh
+./scripts/ojs/reset-ojs.sh
 ```
 
 This handles everything in one shot:
@@ -123,7 +123,7 @@ This handles everything in one shot:
 
 **Why all three steps matter:** OJS has state in three places — the database, the code volume (`ojs_data`), and `config.inc.php` (inside `ojs_data`). If any one of these is stale, the install will fail. The reset script handles all three.
 
-**Changing OJS image version:** Docker does not update named volumes when you change image tags. If you change the OJS image in `docker-compose.yml`, you **must** run `./scripts/reset-ojs.sh` — otherwise the old code stays in the volume and you get a version mismatch.
+**Changing OJS image version:** Docker does not update named volumes when you change image tags. If you change the OJS image in `docker-compose.yml`, you **must** run `./scripts/ojs/reset-ojs.sh` — otherwise the old code stays in the volume and you get a version mismatch.
 
 ## Architecture
 

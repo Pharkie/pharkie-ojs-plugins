@@ -2,12 +2,12 @@
 # Drain the OJS job queue using `jobs.php run` in a loop.
 #
 # Usage:
-#   scripts/blast-queue.sh                              # local dev, single worker (foreground)
-#   scripts/blast-queue.sh --host=sea-live              # remote: nohup by default (survives SSH disconnect)
-#   scripts/blast-queue.sh --host=sea-live --no-nohup   # remote: foreground (for debugging)
-#   scripts/blast-queue.sh --workers=3                  # 3 parallel workers
-#   scripts/blast-queue.sh --host=sea-live --purge      # clear queue without processing
-#   scripts/blast-queue.sh --host=sea-live --kill       # kill any stale workers
+#   scripts/ojs/blast-queue.sh                              # local dev, single worker (foreground)
+#   scripts/ojs/blast-queue.sh --host=sea-live              # remote: nohup by default (survives SSH disconnect)
+#   scripts/ojs/blast-queue.sh --host=sea-live --no-nohup   # remote: foreground (for debugging)
+#   scripts/ojs/blast-queue.sh --workers=3                  # 3 parallel workers
+#   scripts/ojs/blast-queue.sh --host=sea-live --purge      # clear queue without processing
+#   scripts/ojs/blast-queue.sh --host=sea-live --kill       # kill any stale workers
 #
 # How it works:
 #   Each worker loops: check queue size → exit if empty → run one batch → repeat.
@@ -92,7 +92,8 @@ if [ -n "$HOST" ]; then
   LOAD_CMD="$SSH uptime"
 else
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  source "$SCRIPT_DIR/lib/dc.sh"
+  SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  source "$SCRIPTS_ROOT/lib/dc.sh"
   init_dc
   CONTAINER=$($DC ps --format '{{.Names}}' | grep ojs-1 | grep -v db)
   DOCKER_EXEC="docker exec $CONTAINER"
@@ -259,7 +260,7 @@ if $NOHUP; then
   echo "Workers started in background on $HOST."
   echo "Monitor with: ssh $HOST tail -f $LOG"
   echo "Check queue:  ssh $HOST docker exec $CONTAINER php $JOBS_PHP total"
-  echo "Kill workers: scripts/blast-queue.sh --host=$HOST --kill"
+  echo "Kill workers: scripts/ojs/blast-queue.sh --host=$HOST --kill"
   exit 0
 fi
 

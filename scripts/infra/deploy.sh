@@ -3,16 +3,16 @@
 # Runs FROM the devcontainer (or any machine with SSH access).
 #
 # Usage:
-#   scripts/deploy.sh                          # Deploy to sea-staging, run setup
-#   scripts/deploy.sh --host=sea-staging       # Explicit host
-#   scripts/deploy.sh --provision              # Install Docker first (fresh VPS)
-#   scripts/deploy.sh --skip-setup             # Sync + restart only, no setup
-#   scripts/deploy.sh --skip-build             # Don't rebuild images
-#   scripts/deploy.sh --ref=some-branch        # Deploy a specific git ref
-#   scripts/deploy.sh --clean                  # Tear down volumes first (fresh DB)
-#   scripts/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
-#   scripts/deploy.sh --ssl                    # Enable Caddy reverse proxy with automatic Let's Encrypt SSL
-#   scripts/deploy.sh --with-sample-data       # Include test users/subscriptions in setup (dev/staging only!)
+#   scripts/infra/deploy.sh                          # Deploy to sea-staging, run setup
+#   scripts/infra/deploy.sh --host=sea-staging       # Explicit host
+#   scripts/infra/deploy.sh --provision              # Install Docker first (fresh VPS)
+#   scripts/infra/deploy.sh --skip-setup             # Sync + restart only, no setup
+#   scripts/infra/deploy.sh --skip-build             # Don't rebuild images
+#   scripts/infra/deploy.sh --ref=some-branch        # Deploy a specific git ref
+#   scripts/infra/deploy.sh --clean                  # Tear down volumes first (fresh DB)
+#   scripts/infra/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
+#   scripts/infra/deploy.sh --ssl                    # Enable Caddy reverse proxy with automatic Let's Encrypt SSL
+#   scripts/infra/deploy.sh --with-sample-data       # Include test users/subscriptions in setup (dev/staging only!)
 #
 # Prerequisites:
 #   - hcloud CLI with active context (resolves server IP automatically)
@@ -50,9 +50,10 @@ if [ -n "$SSL" ]; then
   COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.caddy.yml"
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPTS_ROOT")"
 
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
 DEPLOY_START=$(date +%s)
@@ -146,7 +147,7 @@ if ! $SSH_CMD "test -f $REMOTE_DIR/.env"; then
   echo ""
   echo "ERROR: No .env file on $SSH_HOST:$REMOTE_DIR/.env"
   echo "Re-run with --env-file to copy it:"
-  echo "  scripts/deploy.sh --host=$SSH_HOST --env-file=.env.staging"
+  echo "  scripts/infra/deploy.sh --host=$SSH_HOST --env-file=.env.staging"
   exit 1
 fi
 # Ensure .env is readable by container processes (scp creates 600 by default, Apache needs to read it)
@@ -257,19 +258,23 @@ echo "$(phase_time) Stack is up."
 # --- Run setup ---
 if [ -z "$SKIP_SETUP" ]; then
   echo "--- Running setup ---"
-  $SSH_CMD "cd $REMOTE_DIR && bash scripts/setup.sh --env=staging $SAMPLE_DATA"
+  $SSH_CMD "cd $REMOTE_DIR && bash scripts/infra/setup.sh --env=staging $SAMPLE_DATA"
   echo "$(phase_time) Setup complete."
 fi
 
 # --- Ensure backup cron is installed ---
 echo "--- Checking backup cron ---"
 $SSH_CMD "
-  chmod +x $REMOTE_DIR/scripts/backup-ojs-db.sh 2>/dev/null
-  if sudo crontab -l 2>/dev/null | grep -qF 'backup-ojs-db.sh'; then
+  chmod +x $REMOTE_DIR/scripts/ojs/backup-ojs-db.sh 2>/dev/null
+  CRONTAB_CURRENT=\$(sudo crontab -l 2>/dev/null) || CRONTAB_CURRENT=''
+  if echo \"\$CRONTAB_CURRENT\" | grep -qF 'scripts/backup-ojs-db.sh' && ! echo \"\$CRONTAB_CURRENT\" | grep -qF 'scripts/ojs/backup-ojs-db.sh'; then
+    echo \"\$CRONTAB_CURRENT\" | sed 's|scripts/backup-ojs-db.sh|scripts/ojs/backup-ojs-db.sh|g' | sudo crontab -
+    echo '[ok] Backup cron migrated to new path.'
+  elif echo \"\$CRONTAB_CURRENT\" | grep -qF 'scripts/ojs/backup-ojs-db.sh'; then
     echo '[ok] Backup cron already installed.'
-  elif [ -f $REMOTE_DIR/scripts/backup-ojs-db.sh ]; then
+  elif [ -f $REMOTE_DIR/scripts/ojs/backup-ojs-db.sh ]; then
     sudo mkdir -p /opt/backups/ojs/daily /opt/backups/ojs/weekly
-    (sudo crontab -l 2>/dev/null; echo '0 3 * * * /opt/pharkie-ojs-plugins/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | sudo crontab -
+    (echo \"\$CRONTAB_CURRENT\"; echo '0 3 * * * /opt/pharkie-ojs-plugins/scripts/ojs/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | sudo crontab -
     echo '[ok] Backup cron installed (daily 03:00 UTC).'
   else
     echo '[skip] backup-ojs-db.sh not found, skipping cron.'

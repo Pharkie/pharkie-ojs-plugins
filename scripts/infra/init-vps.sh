@@ -3,15 +3,15 @@
 # Runs FROM the devcontainer. Requires hcloud CLI with an active context.
 #
 # Usage:
-#   scripts/init-vps.sh --name=sea-staging                     # Create new server
-#   scripts/init-vps.sh --name=sea-staging --ssl                # Also open ports 80/443
-#   scripts/init-vps.sh --name=sea-staging --type=cpx22         # Custom server type
-#   scripts/init-vps.sh --name=sea-staging --location=fsn1      # Custom location
-#   scripts/init-vps.sh --name=sea-staging --skip-server        # Skip server creation (already exists)
+#   scripts/infra/init-vps.sh --name=sea-staging                     # Create new server
+#   scripts/infra/init-vps.sh --name=sea-staging --ssl                # Also open ports 80/443
+#   scripts/infra/init-vps.sh --name=sea-staging --type=cpx22         # Custom server type
+#   scripts/infra/init-vps.sh --name=sea-staging --location=fsn1      # Custom location
+#   scripts/infra/init-vps.sh --name=sea-staging --skip-server        # Skip server creation (already exists)
 #
 # After this script completes, run:
 #   1. Create .env from .env.example and edit it
-#   2. scripts/deploy.sh --host=<name> --provision --env-file=.env.staging
+#   2. scripts/infra/deploy.sh --host=<name> --provision --env-file=.env.staging
 set -eo pipefail
 
 # --- Defaults ---
@@ -35,11 +35,12 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPTS_ROOT")"
 
 if [ -z "$SERVER_NAME" ]; then
   echo "ERROR: --name is required"
-  echo "Usage: scripts/init-vps.sh --name=sea-staging"
+  echo "Usage: scripts/infra/init-vps.sh --name=sea-staging"
   exit 1
 fi
 
@@ -204,7 +205,7 @@ echo "     cp .env.example .env.staging"
 echo "     # Edit .env.staging: set URLs, passwords, API keys"
 echo ""
 echo "  2. Deploy:"
-echo "     scripts/deploy.sh --host=$SERVER_NAME --provision --env-file=.env.staging"
+echo "     scripts/infra/deploy.sh --host=$SERVER_NAME --provision --env-file=.env.staging"
 echo ""
 echo "  3. Verify:"
-echo "     scripts/smoke-test.sh --host=$SERVER_NAME"
+echo "     scripts/monitoring/smoke-test.sh --host=$SERVER_NAME"

@@ -2,11 +2,11 @@
 # Sync backfill import XMLs to a remote server and run the OJS import.
 #
 # Usage:
-#   scripts/backfill-remote.sh                        # Sync + import on sea-staging
-#   scripts/backfill-remote.sh --host=sea-staging     # Explicit host
-#   scripts/backfill-remote.sh --sync-only            # Upload XMLs but don't import
-#   scripts/backfill-remote.sh --import-only           # Import (XMLs already on server)
-#   scripts/backfill-remote.sh --force                 # Reimport issues that already exist
+#   scripts/dev/backfill-remote.sh                        # Sync + import on sea-staging
+#   scripts/dev/backfill-remote.sh --host=sea-staging     # Explicit host
+#   scripts/dev/backfill-remote.sh --sync-only            # Upload XMLs but don't import
+#   scripts/dev/backfill-remote.sh --import-only           # Import (XMLs already on server)
+#   scripts/dev/backfill-remote.sh --force                 # Reimport issues that already exist
 #
 # Prerequisites:
 #   - hcloud CLI with active context
@@ -15,7 +15,8 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPTS_ROOT")"
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
 
 # --- Parse arguments ---
@@ -36,7 +37,7 @@ for arg in "$@"; do
   esac
 done
 
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
 START=$(date +%s)
@@ -93,7 +94,7 @@ echo "--- Running import on $SSH_HOST ---"
 # Verify OJS container is running
 if ! $SSH_CMD "docker ps --format '{{.Names}}' | grep -qE '\-ojs-?1?\$'"; then
   echo "ERROR: No OJS container running on $SSH_HOST"
-  echo "Deploy first: scripts/deploy.sh --host=$SSH_HOST"
+  echo "Deploy first: scripts/infra/deploy.sh --host=$SSH_HOST"
   exit 1
 fi
 

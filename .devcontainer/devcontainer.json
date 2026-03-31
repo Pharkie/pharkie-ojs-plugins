@@ -36,7 +36,7 @@
   // Start socat port forwarders on every devcontainer start (DinD can't use
   // compose port mappings — socat bridges localhost to Docker network hostnames).
   // Silenced: services may not be running yet; rebuild-dev.sh re-runs this anyway.
-  "postStartCommand": "scripts/forward-ports.sh 2>/dev/null || true",
+  "postStartCommand": "scripts/dev/forward-ports.sh 2>/dev/null || true",
 
   // VS Code Ports tab entries — socat makes these actually reachable in DinD
   "forwardPorts": [8080, 8081, 8082],

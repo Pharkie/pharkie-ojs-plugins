@@ -4,9 +4,9 @@
 # Monitors server resources (CPU, memory, Docker) during the test.
 #
 # Usage:
-#   scripts/load-test.sh                      # Test sea-staging
-#   scripts/load-test.sh --host=prod-server   # Test any SSH host
-#   scripts/load-test.sh --light              # Lighter load (10 concurrent)
+#   scripts/monitoring/load-test.sh                      # Test sea-staging
+#   scripts/monitoring/load-test.sh --host=prod-server   # Test any SSH host
+#   scripts/monitoring/load-test.sh --light              # Lighter load (10 concurrent)
 #
 # Requires: hey (https://github.com/rakyll/hey)
 set -o pipefail
@@ -26,8 +26,9 @@ done
 
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
 # Check hey is installed

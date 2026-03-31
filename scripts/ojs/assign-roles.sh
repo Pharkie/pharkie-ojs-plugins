@@ -9,10 +9,10 @@
 # Idempotent — safe to re-run.
 #
 # Usage (inside OJS container, called by setup.sh):
-#   bash /scripts/assign-roles.sh
+#   bash /scripts/ojs/assign-roles.sh
 #
 # Usage (standalone via docker exec):
-#   $DC exec -T ojs bash /scripts/assign-roles.sh
+#   $DC exec -T ojs bash /scripts/ojs/assign-roles.sh
 set -eo pipefail
 
 ROLES_FILE="/data/editorial-roles.json"

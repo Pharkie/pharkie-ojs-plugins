@@ -2,10 +2,10 @@
 # Query the old PKP-hosted OJS instance via session-authenticated API.
 #
 # Usage:
-#   scripts/pkp-api.sh /contexts/1          # GET journal settings
-#   scripts/pkp-api.sh /users               # GET all users
-#   scripts/pkp-api.sh /issues              # GET all issues
-#   scripts/pkp-api.sh /submissions         # GET all submissions
+#   scripts/ojs/pkp-api.sh /contexts/1          # GET journal settings
+#   scripts/ojs/pkp-api.sh /users               # GET all users
+#   scripts/ojs/pkp-api.sh /issues              # GET all issues
+#   scripts/ojs/pkp-api.sh /submissions         # GET all submissions
 #
 # Authenticates via session cookie (auto-refreshes on 403).
 # Requires curl and python3.

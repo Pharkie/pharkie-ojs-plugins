@@ -28,6 +28,6 @@ find wordpress/themes/seacomm/custom/images -name "*.png" -exec pngquant --quali
 
 ## How they're deployed
 
-- **Staging/prod:** `scripts/deploy.sh` rsyncs `wordpress/themes/` to `wordpress/web/app/themes/` on the VPS
-- **Local dev:** `scripts/setup-wp.sh` copies them into the Bedrock theme path on container start
+- **Staging/prod:** `scripts/infra/deploy.sh` rsyncs `wordpress/themes/` to `wordpress/web/app/themes/` on the VPS
+- **Local dev:** `scripts/wp/setup-wp.sh` copies them into the Bedrock theme path on container start
 - **Gantry 5** plugin is installed via Composer (`wpackagist-plugin/gantry5`)

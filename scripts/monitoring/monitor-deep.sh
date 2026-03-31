@@ -4,11 +4,12 @@
 # sync round-trip, backup health, search index, reconciliation, DB size.
 #
 # Usage:
-#   scripts/monitor-deep.sh                      # Test sea-staging
-#   scripts/monitor-deep.sh --host=sea-live      # Test live
+#   scripts/monitoring/monitor-deep.sh                      # Test sea-staging
+#   scripts/monitoring/monitor-deep.sh --host=sea-live      # Test live
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # --- Parse arguments (pass through to monitor-safe.sh) ---
 SSH_HOST="sea-staging"
@@ -27,10 +28,10 @@ echo "================================================================"
 SAFE_EXIT=$?
 
 # Re-establish SSH connection and env vars for deep checks
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
-source "$SCRIPT_DIR/lib/monitor-helpers.sh"
+source "$SCRIPTS_ROOT/lib/monitor-helpers.sh"
 
 detect_compose
 

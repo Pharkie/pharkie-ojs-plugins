@@ -36,7 +36,7 @@ OJS and WordPress both run PHP — they benefit from CPU and RAM more than disk.
 
 ## Security hardening
 
-`provision-vps.sh` (run via `deploy.sh --provision`) applies OS-level hardening automatically. All steps are idempotent.
+`provision-vps.sh` (run via `scripts/infra/deploy.sh --provision`) applies OS-level hardening automatically. All steps are idempotent.
 
 | What | How | Detail |
 |---|---|---|
@@ -64,17 +64,17 @@ There are two phases: **init** (run once per server) and **deploy** (run every t
 
 | Script | Phase | What it does |
 |---|---|---|
-| `scripts/init-vps.sh` | Init | Creates server, firewall, SSH config ([Hetzner](hetzner-setup.md)) |
-| `scripts/provision-vps.sh` | Init | Installs Docker on VPS (called by deploy.sh `--provision`) |
-| `scripts/deploy.sh` | Deploy | Pulls code, builds images, starts stack, runs setup |
-| `scripts/setup.sh` | Deploy | Configures WP + OJS inside running containers |
-| `scripts/smoke-test.sh` | Test | Lightweight health checks (curl + WP-CLI via SSH) |
-| `scripts/load-test.sh` | Test | Performance tests with server monitoring |
+| `scripts/infra/init-vps.sh` | Init | Creates server, firewall, SSH config ([Hetzner](hetzner-setup.md)) |
+| `scripts/infra/provision-vps.sh` | Init | Installs Docker on VPS (called by deploy.sh `--provision`) |
+| `scripts/infra/deploy.sh` | Deploy | Pulls code, builds images, starts stack, runs setup |
+| `scripts/infra/setup.sh` | Deploy | Configures WP + OJS inside running containers |
+| `scripts/monitoring/smoke-test.sh` | Test | Lightweight health checks (curl + WP-CLI via SSH) |
+| `scripts/monitoring/load-test.sh` | Test | Performance tests with server monitoring |
 
 ### deploy.sh flags
 
 ```bash
-scripts/deploy.sh [flags]
+scripts/infra/deploy.sh [flags]
 ```
 
 | Flag | Effect |
@@ -127,28 +127,28 @@ The `.env` file on the VPS controls all configuration. It is **not in git** — 
 
 ```bash
 # 1. Create server + infrastructure (Hetzner)
-scripts/init-vps.sh --name=your-server
-# For production with SSL: scripts/init-vps.sh --name=your-server --ssl
+scripts/infra/init-vps.sh --name=your-server
+# For production with SSL: scripts/infra/init-vps.sh --name=your-server --ssl
 
 # 2. Create .env from template
 cp .env.example .env.staging
 # Edit: set URLs, passwords, salts, API keys
 
 # 3. Provision + deploy (single command — --env-file copies .env after clone)
-scripts/deploy.sh --host=your-server --provision --env-file=.env.staging
+scripts/infra/deploy.sh --host=your-server --provision --env-file=.env.staging
 
 # 4. Verify (22 checks)
-scripts/smoke-test.sh --host=your-server
+scripts/monitoring/smoke-test.sh --host=your-server
 ```
 
 For a **full grave-and-repave** (wipe server and start fresh):
 
 ```bash
 hcloud server delete your-server && hcloud firewall delete your-server-fw
-scripts/init-vps.sh --name=your-server
-scripts/deploy.sh --host=your-server --provision --clean --env-file=.env.staging
+scripts/infra/init-vps.sh --name=your-server
+scripts/infra/deploy.sh --host=your-server --provision --clean --env-file=.env.staging
 # Wait ~7-10 min for setup + sample data import to complete
-scripts/smoke-test.sh --host=your-server
+scripts/monitoring/smoke-test.sh --host=your-server
 ```
 
 ### Day-to-day code updates
@@ -178,13 +178,13 @@ Reserve `deploy.sh` for infrastructure changes — not routine code updates.
 
 ```bash
 # Dockerfile or compose changes (need image rebuild)
-scripts/deploy.sh --host=your-server
+scripts/infra/deploy.sh --host=your-server
 
 # Deploy a specific branch
-scripts/deploy.sh --host=your-server --ref=feature-branch
+scripts/infra/deploy.sh --host=your-server --ref=feature-branch
 
 # Full teardown + fresh databases
-scripts/deploy.sh --host=your-server --clean
+scripts/infra/deploy.sh --host=your-server --clean
 ```
 
 Use `deploy.sh` when:
@@ -223,7 +223,7 @@ Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
 Lightweight health checks — no Node or Playwright needed on the VPS. Runs from your local machine via SSH + curl.
 
 ```bash
-scripts/smoke-test.sh --host=your-server
+scripts/monitoring/smoke-test.sh --host=your-server
 ```
 
 Checks (22 total):
@@ -252,10 +252,10 @@ curl -sfL https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64 \
   -o /usr/local/bin/hey && chmod +x /usr/local/bin/hey
 
 # Standard load (50 concurrent, 500 requests per endpoint)
-scripts/load-test.sh --host=your-server
+scripts/monitoring/load-test.sh --host=your-server
 
 # Lighter load (10 concurrent, 100 requests)
-scripts/load-test.sh --host=your-server --light
+scripts/monitoring/load-test.sh --host=your-server --light
 ```
 
 Endpoints tested:

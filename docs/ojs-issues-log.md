@@ -364,11 +364,11 @@ Two separate issues confirmed:
 - UK and US sandbox buyer accounts
 - GBP and USD currencies
 - UK IP and US VPN
-- Via OJS and via standalone script (`scripts/test-paypal.js`) — confirms the issue is 100% PayPal sandbox, not the integration
+- Via OJS and via standalone script (`scripts/dev/test-paypal.js`) — confirms the issue is 100% PayPal sandbox, not the integration
 
 Upstream reports confirm the problem affects non-US accounts generally (Japan, Germany also confirmed), not just UK.
 
 - **Reported upstream:** [paypal/paypal-js#511](https://github.com/paypal/paypal-js/issues/511) — closed for inactivity (2025-03-26). PayPal's Checkout team could not reproduce. Related: [woocommerce/woocommerce-paypal-payments#3608](https://github.com/woocommerce/woocommerce-paypal-payments/issues/3608) (same error message).
-- **Standalone reproduction:** `node scripts/test-paypal.js` — creates a PayPal order via REST API, opens sandbox checkout in Playwright, logs in as buyer, captures the rejection. No OJS involved. Screenshot saved to `scripts/paypal-sandbox-result.png`.
+- **Standalone reproduction:** `node scripts/dev/test-paypal.js` — creates a PayPal order via REST API, opens sandbox checkout in Playwright, logs in as buyer, captures the rejection. No OJS involved. Screenshot saved to `scripts/paypal-sandbox-result.png`.
 - **Impact:** Cannot complete the PayPal purchase flow from a developer environment. The OJS integration is correct (creates order, redirects to PayPal, return URL wired up), but the sandbox buyer approval step is blocked.
 - **Resolution:** PayPal abandoned in favour of Stripe (2026-03-22). See `private/stripe-live-checklist.md`.

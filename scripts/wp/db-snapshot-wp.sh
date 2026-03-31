@@ -1,6 +1,6 @@
 #!/bin/bash
 # Export + sanitise WordPress database.
-# Usage: ./scripts/db-snapshot-wp.sh [output-file]
+# Usage: ./scripts/wp/db-snapshot-wp.sh [output-file]
 set -e
 
 OUTPUT=${1:-docker/snapshots/wp-$(date +%Y%m%d).sql}

@@ -3,9 +3,9 @@
 # Idempotent — checks for existing monitors by name before creating.
 #
 # Usage:
-#   scripts/setup-betterstack.sh --host=sea-live                 # Create monitors
-#   scripts/setup-betterstack.sh --host=sea-live --dry-run       # Show what would be created
-#   scripts/setup-betterstack.sh --host=sea-live --delete-all    # Remove all SEA monitors
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live                 # Create monitors
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --dry-run       # Show what would be created
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --delete-all    # Remove all SEA monitors
 #
 # Public status page: https://status.existentialanalysis.org.uk/
 # Admin dashboard:    https://uptime.betterstack.com
@@ -28,7 +28,7 @@ done
 
 if [ -z "$SSH_HOST" ]; then
   echo "ERROR: --host=<server> is required"
-  echo "Usage: scripts/setup-betterstack.sh --host=sea-live [--dry-run]"
+  echo "Usage: scripts/monitoring/setup-betterstack.sh --host=sea-live [--dry-run]"
   exit 1
 fi
 
@@ -40,9 +40,10 @@ fi
 
 API_BASE="https://uptime.betterstack.com/api/v2"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # --- Resolve server and read URLs ---
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
