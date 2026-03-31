@@ -62,12 +62,16 @@ class SqlError(Exception):
 def run_sql(target: str, sql: str) -> str:
     """Execute SQL against the target and return output."""
     cfg = TARGETS[target]
-    proc = subprocess.run(
-        cfg['cmd'],
-        input=sql,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        proc = subprocess.run(
+            cfg['cmd'],
+            input=sql,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise SqlError('SQL timed out after 60 seconds')
     stderr = proc.stderr.strip()
     stderr_lines = [l for l in stderr.splitlines()
                     if 'password on the command line' not in l]
@@ -94,7 +98,11 @@ def snapshot_articles(target: str, issue_filter: str | None = None) -> list[dict
     """Query all published articles with their IDs and DOIs."""
     where_clause = ""
     if issue_filter:
-        vol, num = issue_filter.split('.')
+        parts = issue_filter.split('.')
+        if len(parts) != 2:
+            raise ValueError(f"--issue must be VOL.ISS format, got '{issue_filter}'")
+        vol, num = parts
+        int(vol); int(num)  # validate numeric
         where_clause = f"AND i.volume = '{vol}' AND i.number = '{num}'"
 
     sql = f"""
@@ -134,7 +142,11 @@ def snapshot_issues(target: str, issue_filter: str | None = None) -> list[dict]:
     """Query all issues with their IDs and DOIs."""
     where_clause = ""
     if issue_filter:
-        vol, num = issue_filter.split('.')
+        parts = issue_filter.split('.')
+        if len(parts) != 2:
+            raise ValueError(f"--issue must be VOL.ISS format, got '{issue_filter}'")
+        vol, num = parts
+        int(vol); int(num)  # validate numeric
         where_clause = f"AND i.volume = '{vol}' AND i.number = '{num}'"
 
     sql = f"""

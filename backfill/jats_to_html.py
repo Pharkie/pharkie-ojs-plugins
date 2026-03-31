@@ -12,14 +12,22 @@ Usage:
 
 import argparse
 import os
-import re
 import sys
 from collections import Counter
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from bs4 import BeautifulSoup, NavigableString
+
 sys.path.insert(0, os.path.dirname(__file__))
 from lib.citations import local_name, extract_text_from_element
+
+_INLINE_TAG_MAP = {
+    'italic': 'em',
+    'bold': 'strong',
+    'sup': 'sup',
+    'sub': 'sub',
+}
 
 
 def jats_to_html(jats_path: Path) -> str | None:
@@ -44,175 +52,175 @@ def jats_to_html(jats_path: Path) -> str | None:
     if body is None:
         return None
 
-    parts = [_element_to_html(body)]
+    soup = BeautifulSoup('', 'html.parser')
+
+    # Convert body children
+    for child in body:
+        _convert_element(child, soup, soup)
 
     # Render back matter (except references)
     back = root.find('.//{*}back')
     if back is not None:
-        back_html = _render_back_matter(back)
-        if back_html:
-            parts.append(back_html)
+        _render_back_matter(back, soup)
 
-    return '\n'.join(parts)
+    return soup.decode_contents()
 
 
-def _render_back_matter(back) -> str:
-    """Render JATS <back> elements as HTML (except ref-list).
+def _convert_element(et_el, parent, soup):
+    """Recursively convert an ElementTree element to BS4 tags."""
+    tag_name = local_name(et_el.tag)
+
+    if tag_name == 'sec':
+        title_el = et_el.find('{*}title')
+        if title_el is None:
+            title_el = et_el.find('title')
+        if title_el is not None:
+            title_text = extract_text_from_element(title_el)
+            if title_text:
+                h2 = soup.new_tag('h2')
+                h2.string = title_text
+                parent.append(h2)
+        for child in et_el:
+            if local_name(child.tag) != 'title':
+                _convert_element(child, parent, soup)
+
+    elif tag_name == 'p':
+        p = soup.new_tag('p')
+        _add_inline_content(et_el, p, soup)
+        parent.append(p)
+
+    elif tag_name == 'disp-quote':
+        bq = soup.new_tag('blockquote')
+        _add_inline_content(et_el, bq, soup)
+        parent.append(bq)
+
+    elif tag_name == 'list':
+        list_type = et_el.get('list-type', 'bullet')
+        html_tag = 'ol' if list_type == 'order' else 'ul'
+        lst = soup.new_tag(html_tag)
+        for item in et_el:
+            if local_name(item.tag) == 'list-item':
+                li = soup.new_tag('li')
+                children = list(item)
+                # Single-paragraph list items: unwrap the <p>
+                if len(children) == 1 and local_name(children[0].tag) == 'p':
+                    _add_inline_content(children[0], li, soup)
+                else:
+                    for child in item:
+                        _convert_element(child, li, soup)
+                lst.append(li)
+        parent.append(lst)
+
+    elif tag_name in _INLINE_TAG_MAP:
+        el = soup.new_tag(_INLINE_TAG_MAP[tag_name])
+        _add_inline_content(et_el, el, soup)
+        parent.append(el)
+
+    elif tag_name == 'ext-link':
+        href = et_el.get('{http://www.w3.org/1999/xlink}href', '')
+        a = soup.new_tag('a', href=href)
+        _add_inline_content(et_el, a, soup)
+        parent.append(a)
+
+    elif tag_name == 'break':
+        parent.append(soup.new_tag('br'))
+
+    else:
+        # Unknown element — render inline content directly into parent
+        _add_inline_content(et_el, parent, soup)
+
+
+def _add_inline_content(et_el, parent, soup):
+    """Add mixed content (text + children) from ET element to BS4 parent.
+
+    BS4 auto-escapes text nodes on serialisation, so &, <, > in text
+    are handled correctly without manual html.escape() calls.
+    """
+    if et_el.text:
+        parent.append(NavigableString(et_el.text))
+    for child in et_el:
+        _convert_element(child, parent, soup)
+        if child.tail:
+            parent.append(NavigableString(child.tail))
+
+
+def _render_back_matter(back, soup):
+    """Render JATS <back> elements as BS4 tags (except ref-list).
 
     Order matches typical journal PDF layout:
-      body → bios → notes → references (refs excluded — OJS renders them)
-    Provenance appears before bios (conference/presentation context).
+      body → provenance → bios → notes → references (refs excluded)
     """
-    parts = []
-
     # Provenance notes (conference/presentation context — before bios)
     prov_items = []
     for child in back:
-        if _local_name(child.tag) == 'notes':
-            notes_type = child.get('notes-type', '')
-            if notes_type == 'provenance':
-                p = child.find('{*}p') if '}' in child.tag else child.find('p')
-                if p is None:
-                    for c in child:
-                        if _local_name(c.tag) == 'p':
-                            p = c
-                            break
+        if local_name(child.tag) == 'notes':
+            if child.get('notes-type', '') == 'provenance':
+                p = _find_p(child)
                 if p is not None:
-                    text = _text_content(p)
-                    if text.strip():
-                        prov_items.append(text.strip())
+                    text = extract_text_from_element(p).strip()
+                    if text:
+                        prov_items.append(text)
     if prov_items:
-        parts.append('\n<div class="jats-provenance">')
+        div = soup.new_tag('div', attrs={'class': 'jats-provenance'})
         for prov in prov_items:
-            parts.append(f'<p><em>{prov}</em></p>')
-        parts.append('</div>')
+            p = soup.new_tag('p')
+            em = soup.new_tag('em')
+            em.string = prov
+            p.append(em)
+            div.append(p)
+        soup.append(div)
 
     # Author bios
-    bios = []
     for child in back:
-        if _local_name(child.tag) == 'bio':
-            p = child.find('{*}p') if '}' in child.tag else child.find('p')
-            if p is None:
-                for c in child:
-                    if _local_name(c.tag) == 'p':
-                        p = c
-                        break
-            if p is not None:
-                text = _text_content(p)
-                if text.strip():
-                    bios.append(text.strip())
-    for bio in bios:
-        parts.append(f'\n<div class="jats-bios"><p>{bio}</p></div>')
+        if local_name(child.tag) == 'bio':
+            p_el = _find_p(child)
+            if p_el is not None:
+                text = extract_text_from_element(p_el).strip()
+                if text:
+                    div = soup.new_tag('div', attrs={'class': 'jats-bios'})
+                    p = soup.new_tag('p')
+                    p.string = text
+                    div.append(p)
+                    soup.append(div)
 
     # Notes/endnotes → <h2>Notes</h2> + <ol>
     fn_group = None
     for child in back:
-        if _local_name(child.tag) == 'fn-group':
+        if local_name(child.tag) == 'fn-group':
             fn_group = child
             break
 
     if fn_group is not None:
         notes = []
         for fn in fn_group:
-            if _local_name(fn.tag) == 'fn':
-                p = fn.find('{*}p') if '}' in fn.tag else fn.find('p')
-                if p is None:
-                    for c in fn:
-                        if _local_name(c.tag) == 'p':
-                            p = c
-                            break
-                if p is not None:
-                    text = _text_content(p)
-                    if text.strip():
-                        notes.append(text.strip())
+            if local_name(fn.tag) == 'fn':
+                p_el = _find_p(fn)
+                if p_el is not None:
+                    text = extract_text_from_element(p_el).strip()
+                    if text:
+                        notes.append(text)
         if notes:
-            parts.append('\n<div class="jats-notes">')
-            parts.append('<h2>Notes</h2>')
-            parts.append('<ol>')
+            div = soup.new_tag('div', attrs={'class': 'jats-notes'})
+            h2 = soup.new_tag('h2')
+            h2.string = 'Notes'
+            div.append(h2)
+            ol = soup.new_tag('ol')
             for note in notes:
-                parts.append(f'<li>{note}</li>')
-            parts.append('</ol>')
-            parts.append('</div>')
-
-    return '\n'.join(parts)
-
-
-def _element_to_html(element) -> str:
-    """Recursively convert a JATS element tree to HTML."""
-    tag = _local_name(element.tag)
-    parts = []
-
-    if tag == 'body':
-        for child in element:
-            parts.append(_element_to_html(child))
-        return '\n'.join(parts)
-
-    elif tag == 'sec':
-        title_el = element.find('{*}title') if '}' in (element.tag or '') else element.find('title')
-        if title_el is None:
-            title_el = element.find('{*}title')
-        title_text = _text_content(title_el) if title_el is not None else ''
-        if title_text:
-            parts.append(f'<h2>{title_text}</h2>')
-        for child in element:
-            if _local_name(child.tag) != 'title':
-                parts.append(_element_to_html(child))
-        return '\n\n'.join(parts)
-
-    elif tag == 'p':
-        return f'<p>{_inline_content(element)}</p>'
-
-    elif tag == 'disp-quote':
-        return f'<blockquote>{_inline_content(element)}</blockquote>'
-
-    elif tag == 'list':
-        list_type = element.get('list-type', 'bullet')
-        html_tag = 'ol' if list_type == 'order' else 'ul'
-        items = []
-        for item in element:
-            if _local_name(item.tag) == 'list-item':
-                item_parts = []
-                for child in item:
-                    item_parts.append(_element_to_html(child))
-                # Strip <p> wrapper from single-paragraph list items
-                content = ''.join(item_parts)
-                content = re.sub(r'^<p>(.*)</p>$', r'\1', content, flags=re.DOTALL)
-                items.append(f'<li>{content}</li>')
-        return f'<{html_tag}>{"".join(items)}</{html_tag}>'
-
-    elif tag in ('italic', 'bold', 'sup', 'sub'):
-        html_map = {'italic': 'em', 'bold': 'strong', 'sup': 'sup', 'sub': 'sub'}
-        html_tag = html_map[tag]
-        return f'<{html_tag}>{_inline_content(element)}</{html_tag}>'
-
-    elif tag == 'ext-link':
-        href = element.get('{http://www.w3.org/1999/xlink}href', '')
-        return f'<a href="{href}">{_inline_content(element)}</a>'
-
-    elif tag == 'break':
-        return '<br>'
-
-    else:
-        # Unknown element — render content only
-        return _inline_content(element)
+                li = soup.new_tag('li')
+                li.string = note
+                ol.append(li)
+            div.append(ol)
+            soup.append(div)
 
 
-def _inline_content(element) -> str:
-    """Get mixed content (text + child elements) as HTML."""
-    parts = []
-    if element.text:
-        parts.append(element.text)
-    for child in element:
-        parts.append(_element_to_html(child))
-        if child.tail:
-            parts.append(child.tail)
-    return ''.join(parts)
-
-
-# _text_content and _local_name are now imported from lib/citations.py
-# as extract_text_from_element and local_name respectively.
-_text_content = extract_text_from_element
-_local_name = local_name
+def _find_p(et_el):
+    """Find first <p> child, handling namespace prefixes."""
+    p = et_el.find('{*}p') if '}' in et_el.tag else et_el.find('p')
+    if p is None:
+        for c in et_el:
+            if local_name(c.tag) == 'p':
+                return c
+    return p
 
 
 def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:
@@ -258,7 +266,7 @@ def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:
                 f.write('\n')
 
         if verbose:
-            print(f'  ✓ {vol_dir.name}/{slug}.html')
+            print(f'  {vol_dir.name}/{slug}.html')
 
     return stats
 

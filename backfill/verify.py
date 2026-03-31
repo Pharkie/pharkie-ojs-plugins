@@ -47,7 +47,7 @@ def run_db_query(query, docker_container=None, db_host=None, db_port=None,
         ]
         env = {**os.environ, 'MYSQL_PWD': db_pass}
 
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=60)
     if result.returncode != 0:
         print(f"  DB ERROR: {result.stderr.strip()}", file=sys.stderr)
         return []

@@ -436,6 +436,7 @@ def process_toc(toc_path: str, apply: bool = False, dry_run: bool = False) -> di
                 })
                 if apply:
                     art['title'] = combined
+                    modified = True
             else:
                 stats['subtitles_found'] += 1
                 stats['details'].append({

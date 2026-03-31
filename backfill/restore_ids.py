@@ -68,12 +68,16 @@ class SqlError(Exception):
 def run_sql(target: str, sql: str) -> str:
     """Execute SQL against the target and return output."""
     cfg = TARGETS[target]
-    proc = subprocess.run(
-        cfg['cmd'],
-        input=sql,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        proc = subprocess.run(
+            cfg['cmd'],
+            input=sql,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise SqlError('SQL timed out after 60 seconds')
     stderr = proc.stderr.strip()
     stderr_lines = [l for l in stderr.splitlines()
                     if 'password on the command line' not in l]
@@ -102,6 +106,9 @@ def get_current_articles(target: str, volume: str, number: str) -> dict[str, lis
     Returns {title: [list of articles]} to handle duplicate titles within
     an issue. Each article includes first_author for disambiguation.
     """
+    # Validate volume/number are numeric (defense against malformed toc.json)
+    int(volume)
+    int(number)
     sql = f"""
         SELECT sub.submission_id, p.publication_id,
                ps_title.setting_value AS title,
@@ -223,7 +230,10 @@ def main():
         iss = str(toc['issue'])
 
         if args.issue:
-            fv, fn = args.issue.split('.')
+            parts = args.issue.split('.')
+            if len(parts) != 2:
+                sys.exit(f"ERROR: --issue must be VOL.ISS format, got '{args.issue}'")
+            fv, fn = parts
             if vol != fv or iss != fn:
                 continue
 
