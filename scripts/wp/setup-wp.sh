@@ -3,11 +3,11 @@
 # Idempotent — safe to run repeatedly.
 #
 # Usage:
-#   scripts/setup-wp.sh                    # Base setup only
-#   scripts/setup-wp.sh --with-sample-data # Base setup + import ~1400 test users + seed subscriptions
+#   scripts/wp/setup-wp.sh                    # Base setup only
+#   scripts/wp/setup-wp.sh --with-sample-data # Base setup + import ~1400 test users + seed subscriptions
 #
 # Run inside the WP container:
-#   docker compose exec wp bash /var/www/html/scripts/setup-wp.sh [--with-sample-data]
+#   docker compose exec wp bash /var/www/html/scripts/wp/setup-wp.sh [--with-sample-data]
 set -eo pipefail
 
 SAMPLE_DATA=false
@@ -215,13 +215,13 @@ add_filter('doing_it_wrong_trigger_error', function ($trigger, $function_name) {
 MUEOF
 
 # Create UM core pages (suppresses "needs to create pages" notice)
-wp_quiet eval-file /var/www/html/scripts/create-um-pages.php
+wp_quiet eval-file /var/www/html/scripts/wp/create-um-pages.php
 
 # Dismiss UM license + exif notices, WC onboarding/store notices
-wp_quiet eval-file /var/www/html/scripts/dismiss-notices.php
+wp_quiet eval-file /var/www/html/scripts/wp/dismiss-notices.php
 
 # Create navigation menus and static front page (matches live site layout)
-wp_quiet eval-file /var/www/html/scripts/setup-theme-content.php
+wp_quiet eval-file /var/www/html/scripts/wp/setup-theme-content.php
 
 echo "[ok] WordPress base setup complete."
 
@@ -230,7 +230,7 @@ if [ "$SAMPLE_DATA" = true ]; then
   CSV="/data/test-users.csv"
   if [ ! -f "$CSV" ]; then
     echo "ERROR: Sample data CSV not found at $CSV"
-    echo "Run scripts/anonymize-users.py on the host first to generate it."
+    echo "Run scripts/wp/anonymize-users.py on the host first to generate it."
     exit 1
   fi
 
@@ -286,10 +286,10 @@ if [ "$SAMPLE_DATA" = true ]; then
     # wp user import-csv can't assign UM/WCS roles (validates before UM registers them),
     # so we imported as 'subscriber' and now update wp_usermeta directly via PHP.
     echo "Applying original roles (UM/WCS)..."
-    wp_quiet eval-file /var/www/html/scripts/apply-roles.php "$CSV"
+    wp_quiet eval-file /var/www/html/scripts/wp/apply-roles.php "$CSV"
 
     echo "Seeding sample data and plugin config..."
-    wp_quiet eval-file /var/www/html/scripts/setup-and-sample-data.php "$CSV"
+    wp_quiet eval-file /var/www/html/scripts/wp/setup-and-sample-data.php "$CSV"
 
     # Validate: check subscription count (use wp eval for reliable cross-version DB access)
     SUB_COUNT=$(wp eval 'global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type=\"shop_subscription\"");' --allow-root 2>&1 | grep -v -E '_load_textdomain|^Deprecated:' | tr -d '[:space:]') || true

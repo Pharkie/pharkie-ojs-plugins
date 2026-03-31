@@ -4,8 +4,8 @@
 # No Node, no Playwright — just curl + WP-CLI via SSH.
 #
 # Usage:
-#   scripts/smoke-test.sh                      # Test sea-staging
-#   scripts/smoke-test.sh --host=prod-server   # Test any SSH host
+#   scripts/monitoring/smoke-test.sh                      # Test sea-staging
+#   scripts/monitoring/smoke-test.sh --host=prod-server   # Test any SSH host
 set -o pipefail
 
 # --- Parse arguments ---
@@ -19,8 +19,9 @@ done
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
 # Read env values from remote .env
@@ -395,7 +396,7 @@ BACKUP_CRON=$($SSH_CMD "sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh'
 if [ -n "$BACKUP_CRON" ]; then
   pass "Backup cron installed"
 else
-  fail "Backup cron not installed (run: scripts/pull-ojs-backup.sh --install-cron)"
+  fail "Backup cron not installed (run: scripts/infra/pull-ojs-backup.sh --install-cron)"
 fi
 
 BACKUP_KEY=$($SSH_CMD "test -f /opt/backups/ojs/.backup-key && echo 'exists' || echo 'missing'")

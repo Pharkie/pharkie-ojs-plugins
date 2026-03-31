@@ -3,18 +3,18 @@
 # Runs FROM the devcontainer (or any machine with SSH access to sea-live).
 #
 # Usage:
-#   scripts/pull-ojs-backup.sh                     # Pull latest daily backup
-#   scripts/pull-ojs-backup.sh --all               # Pull all backups (daily + weekly)
-#   scripts/pull-ojs-backup.sh --list              # List available backups on VPS
-#   scripts/pull-ojs-backup.sh --install-cron      # Install daily cron job on VPS
-#   scripts/pull-ojs-backup.sh --remove-cron       # Remove cron job from VPS
-#   scripts/pull-ojs-backup.sh --decrypt=FILE      # Decrypt a pulled backup (needs --key=)
-#   scripts/pull-ojs-backup.sh --host=sea-live     # Explicit SSH host (default: sea-live)
-#   scripts/pull-ojs-backup.sh --dest=./backups    # Local destination (default: backups/ojs/)
-#   scripts/pull-ojs-backup.sh --key=/path/to/key  # Encryption key file (for --decrypt)
+#   scripts/infra/pull-ojs-backup.sh                     # Pull latest daily backup
+#   scripts/infra/pull-ojs-backup.sh --all               # Pull all backups (daily + weekly)
+#   scripts/infra/pull-ojs-backup.sh --list              # List available backups on VPS
+#   scripts/infra/pull-ojs-backup.sh --install-cron      # Install daily cron job on VPS
+#   scripts/infra/pull-ojs-backup.sh --remove-cron       # Remove cron job from VPS
+#   scripts/infra/pull-ojs-backup.sh --decrypt=FILE      # Decrypt a pulled backup (needs --key=)
+#   scripts/infra/pull-ojs-backup.sh --host=sea-live     # Explicit SSH host (default: sea-live)
+#   scripts/infra/pull-ojs-backup.sh --dest=./backups    # Local destination (default: backups/ojs/)
+#   scripts/infra/pull-ojs-backup.sh --key=/path/to/key  # Encryption key file (for --decrypt)
 #
 # Backups are AES-256-CBC encrypted on the VPS. To restore:
-#   scripts/pull-ojs-backup.sh --decrypt=backups/ojs/ojs-20260322.sql.gz.enc --key=/path/to/.backup-key
+#   scripts/infra/pull-ojs-backup.sh --decrypt=backups/ojs/ojs-20260322.sql.gz.enc --key=/path/to/.backup-key
 #   # produces ojs-20260322.sql.gz → pipe to: gunzip | mariadb -u root -p"$PASS" ojs
 set -eo pipefail
 
@@ -40,7 +40,7 @@ done
 REMOTE_BACKUP_DIR="/opt/backups/ojs"
 REMOTE_PROJECT_DIR="/opt/pharkie-ojs-plugins"
 CRON_SCHEDULE="0 3 * * *"
-CRON_CMD="$REMOTE_PROJECT_DIR/scripts/backup-ojs-db.sh >> $REMOTE_BACKUP_DIR/backup.log 2>&1"
+CRON_CMD="$REMOTE_PROJECT_DIR/scripts/ojs/backup-ojs-db.sh >> $REMOTE_BACKUP_DIR/backup.log 2>&1"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -127,7 +127,7 @@ case "$MODE" in
     ssh "$SSH_HOST" "mkdir -p $REMOTE_BACKUP_DIR/daily $REMOTE_BACKUP_DIR/weekly"
 
     # Make backup script executable
-    ssh "$SSH_HOST" "chmod +x $REMOTE_PROJECT_DIR/scripts/backup-ojs-db.sh"
+    ssh "$SSH_HOST" "chmod +x $REMOTE_PROJECT_DIR/scripts/ojs/backup-ojs-db.sh"
 
     # Check if cron already installed
     EXISTING=$(ssh "$SSH_HOST" "crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
@@ -145,7 +145,7 @@ case "$MODE" in
 
     # Run a test backup now
     log "Running first backup now..."
-    ssh "$SSH_HOST" "$REMOTE_PROJECT_DIR/scripts/backup-ojs-db.sh"
+    ssh "$SSH_HOST" "$REMOTE_PROJECT_DIR/scripts/ojs/backup-ojs-db.sh"
     log "First backup complete. Check with: $0 --list"
     ;;
 

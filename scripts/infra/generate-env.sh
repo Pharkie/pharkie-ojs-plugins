@@ -3,11 +3,11 @@
 # Refuses to overwrite an existing .env file.
 #
 # Usage:
-#   scripts/generate-env.sh              # Generate .env in project root
-#   scripts/generate-env.sh /path/to/.env  # Generate at a specific path
+#   scripts/infra/generate-env.sh              # Generate .env in project root
+#   scripts/infra/generate-env.sh /path/to/.env  # Generate at a specific path
 set -eo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ENV_FILE="${1:-$PROJECT_ROOT/.env}"
 
 if [ -f "$ENV_FILE" ]; then

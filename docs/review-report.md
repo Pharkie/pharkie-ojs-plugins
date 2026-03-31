@@ -74,7 +74,7 @@ Documentation says "56 tests across 15 spec files" but actual count is 61 tests 
 ### I3. Smoke test lacks password login verification
 
 **Agent:** Test Coverage
-**File:** `scripts/smoke-test.sh`
+**File:** `scripts/monitoring/smoke-test.sh`
 
 The smoke test creates a user, syncs them to OJS, verifies the user exists, then deletes. But it never verifies the user can **log in to OJS with their WP password** — the #1 user-facing feature.
 
@@ -119,7 +119,7 @@ If an `email_change` sync action fails and is retried via the admin UI, the retr
 ### I8. Smoke test missing status change, email change, and GDPR verification
 
 **Agent:** Test Coverage
-**File:** `scripts/smoke-test.sh`
+**File:** `scripts/monitoring/smoke-test.sh`
 
 The smoke test only tests the create path. It doesn't verify:
 - Subscription expiry/cancellation
@@ -139,7 +139,7 @@ The smoke test only tests the create path. It doesn't verify:
 
 ### M2. No post-deployment health check in deploy script
 **Agent:** Production Readiness
-**File:** `scripts/deploy.sh`
+**File:** `scripts/infra/deploy.sh`
 **Fix:** Add `wp ojs-sync test-connection` after setup completes.
 
 ### M3. Admin alert specification lacks detail

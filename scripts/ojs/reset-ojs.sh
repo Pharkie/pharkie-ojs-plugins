@@ -1,9 +1,9 @@
 #!/bin/bash
 # Reset OJS to a clean state. Entrypoint generates config + runs install automatically.
-# Usage: ./scripts/reset-ojs.sh
+# Usage: ./scripts/ojs/reset-ojs.sh
 set -e
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # Load .env for DB credentials
 ENV_FILE="$(pwd)/.env"
@@ -38,7 +38,7 @@ for i in $(seq 1 60); do
         echo "==> OJS reset + install complete."
         echo "    URL:      http://localhost:8081"
         echo "    Admin:    admin / \$OJS_ADMIN_PASSWORD from .env"
-        echo "    Next:     docker compose exec ojs bash /scripts/setup-ojs.sh"
+        echo "    Next:     docker compose exec ojs bash /scripts/ojs/setup-ojs.sh"
         exit 0
     fi
     sleep 2

@@ -11,7 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Password hash sync — bulk sync and ongoing password changes push WP hashes to OJS; members log in with existing WP credentials (no separate "set your password" step)
 - `--bulk` flag required for bulk sync (prevents accidental full syncs)
 - Load-based backpressure replaces count-based rate limiting
-- `scripts/generate-env.sh` — random credential generation for all environments
+- `scripts/infra/generate-env.sh` — random credential generation for all environments
 - Deployment tooling: `init-vps.sh`, `deploy.sh`, `smoke-test.sh`, `load-test.sh`
 - Concurrent Playwright run protection (lockfile guard)
 
@@ -24,7 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Security
 
 - All hardcoded dev passwords eliminated — Docker Compose fails fast if secrets unset
-- `scripts/generate-env.sh` generates random credentials for every environment
+- `scripts/infra/generate-env.sh` generates random credentials for every environment
 
 ### Docs
 

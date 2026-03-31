@@ -1,6 +1,6 @@
 # Hetzner Cloud Setup
 
-This guide covers [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging and production hosting. Good value, EU data centres, straightforward API. `scripts/init-vps.sh` automates the full setup: SSH key, server creation, firewall, and SSH config. After init, use [deploy.sh](vps-deployment.md) to deploy the stack.
+This guide covers [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging and production hosting. Good value, EU data centres, straightforward API. `scripts/infra/init-vps.sh` automates the full setup: SSH key, server creation, firewall, and SSH config. After init, use [deploy.sh](vps-deployment.md) to deploy the stack.
 
 ## Recommended plan
 
@@ -10,13 +10,13 @@ This guide covers [Hetzner Cloud](https://www.hetzner.com/cloud/) for staging an
 
 ```bash
 # Requires hcloud CLI with an active context (hcloud context use <name>)
-scripts/init-vps.sh --name=my-server
+scripts/infra/init-vps.sh --name=my-server
 
 # With SSL ports (production)
-scripts/init-vps.sh --name=my-server --ssl
+scripts/infra/init-vps.sh --name=my-server --ssl
 
 # Custom server type or location
-scripts/init-vps.sh --name=my-server --type=cpx32 --location=fsn1
+scripts/infra/init-vps.sh --name=my-server --type=cpx32 --location=fsn1
 ```
 
 ## Manual hcloud commands (reference)

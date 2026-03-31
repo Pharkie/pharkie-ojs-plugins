@@ -3,8 +3,8 @@
 # Runs ON the VPS (called by cron or manually).
 #
 # Usage:
-#   scripts/backup-ojs-db.sh              # Dump + compress + encrypt + rotate
-#   scripts/backup-ojs-db.sh --dry-run    # Show what would happen
+#   scripts/ojs/backup-ojs-db.sh              # Dump + compress + encrypt + rotate
+#   scripts/ojs/backup-ojs-db.sh --dry-run    # Show what would happen
 #
 # Output: AES-256-CBC encrypted gzip files (.sql.gz.enc)
 # Encryption key: /opt/backups/ojs/.backup-key (create once, back up separately)
@@ -13,7 +13,7 @@
 # Backups stored in /opt/backups/ojs/
 #
 # Cron (installed by --install-cron from pull-ojs-backup.sh):
-#   0 3 * * * /opt/pharkie-ojs-plugins/scripts/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1
+#   0 3 * * * /opt/pharkie-ojs-plugins/scripts/ojs/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1
 #
 # To restore:
 #   openssl enc -aes-256-cbc -d -pbkdf2 -in backup.sql.gz.enc -pass file:/path/to/.backup-key | gunzip | mariadb -u root -p"$PASS" ojs

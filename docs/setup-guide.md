@@ -4,11 +4,11 @@ Dev environment setup, secrets management, and devcontainer details. For Docker 
 
 ## Dev environment scripts
 
-- **`scripts/rebuild-dev.sh`** — full grave-and-pave: tears down containers+volumes, rebuilds images, brings up stack, runs setup, runs tests. Devcontainer-only (hardcoded host path for DinD volume mounts). Flags: `--with-sample-data`, `--skip-tests`.
-  - **For full dev environment with all content:** run `rebuild-dev.sh --with-sample-data --skip-tests` (seeds ~1400 test WP users + subscriptions), then `backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles` (imports all issues with HTML + PDF galleys). The `--wipe-articles` flag wipes existing issues/articles first (users/subscriptions/payments kept).
+- **`scripts/dev/rebuild-dev.sh`** — full grave-and-pave: tears down containers+volumes, rebuilds images, brings up stack, runs setup, runs tests. Devcontainer-only (hardcoded host path for DinD volume mounts). Flags: `--with-sample-data`, `--skip-tests`.
+  - **For full dev environment with all content:** run `rebuild-dev.sh --with-sample-data --skip-tests` (seeds ~1400 test WP users + subscriptions), then `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles` (imports all issues with HTML + PDF galleys). The `--wipe-articles` flag wipes existing issues/articles first (users/subscriptions/payments kept).
   - **For quick dev cycle:** `rebuild-dev.sh --with-sample-data` gives 2 sample issues + test users — enough for sync testing without the backfill wait.
-- **`scripts/setup.sh`** — unified setup for all environments. Assumes containers are already running. Flags: `--env=dev|staging|prod`, `--with-sample-data`. Sample data is always opt-in (never auto-included).
-- **`scripts/setup-dev.sh`** — thin shim, runs `setup.sh --env=dev`. Kept for backwards compatibility.
+- **`scripts/infra/setup.sh`** — unified setup for all environments. Assumes containers are already running. Flags: `--env=dev|staging|prod`, `--with-sample-data`. Sample data is always opt-in (never auto-included).
+- **`scripts/infra/setup-dev.sh`** — thin shim, runs `setup.sh --env=dev`. Kept for backwards compatibility.
 
 ### Why two scripts?
 
@@ -20,12 +20,12 @@ Docker-in-Docker in the devcontainer requires the host path for `--project-direc
 
 ## Deployment scripts
 
-- **`scripts/init-vps.sh`** — one-time VPS setup (Hetzner): creates server, firewall, SSH config. Run once per server.
-- **`scripts/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`, `--env-file`.
-- **`scripts/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). Includes backup health checks.
-- **`scripts/load-test.sh`** — performance tests using `hey` with server resource monitoring.
-- **`scripts/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB → gzip → AES-256-CBC encrypt → rotate (7 daily + 4 weekly).
-- **`scripts/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → a private backup repo (daily schedule).
+- **`scripts/infra/init-vps.sh`** — one-time VPS setup (Hetzner): creates server, firewall, SSH config. Run once per server.
+- **`scripts/infra/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`, `--env-file`.
+- **`scripts/monitoring/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). Includes backup health checks.
+- **`scripts/monitoring/load-test.sh`** — performance tests using `hey` with server resource monitoring.
+- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB → gzip → AES-256-CBC encrypt → rotate (7 daily + 4 weekly).
+- **`scripts/infra/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → a private backup repo (daily schedule).
 
 ## Secrets management
 
@@ -69,7 +69,7 @@ sops -d private/.env.live | grep NEW_VAR
 rm /tmp/.env.live*
 
 # Deploy (deploy.sh auto-detects SOPS and decrypts before SCP)
-scripts/deploy.sh --host=<your-server> --ssl --env-file=.env.live
+scripts/infra/deploy.sh --host=<your-server> --ssl --env-file=.env.live
 
 # Decrypt to a temp file (for manual inspection)
 sops -d private/.env.live > /tmp/.env.live

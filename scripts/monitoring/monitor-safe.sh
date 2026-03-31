@@ -4,8 +4,8 @@
 # Does NOT create test users or modify any state on the server.
 #
 # Usage:
-#   scripts/monitor-safe.sh                      # Test sea-staging
-#   scripts/monitor-safe.sh --host=sea-live      # Test live
+#   scripts/monitoring/monitor-safe.sh                      # Test sea-staging
+#   scripts/monitoring/monitor-safe.sh --host=sea-live      # Test live
 set -o pipefail
 
 # --- Parse arguments ---
@@ -17,11 +17,12 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-source "$SCRIPT_DIR/lib/resolve-ssh.sh"
+source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
-source "$SCRIPT_DIR/lib/monitor-helpers.sh"
+source "$SCRIPTS_ROOT/lib/monitor-helpers.sh"
 
 # --- Initialise: read env, detect compose ---
 detect_compose

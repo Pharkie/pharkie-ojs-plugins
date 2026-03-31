@@ -1,10 +1,10 @@
 #!/bin/bash
 # Import a database snapshot into the current Docker environment.
-# Usage: ./scripts/db-import.sh <wp|ojs> <snapshot.sql>
+# Usage: ./scripts/infra/db-import.sh <wp|ojs> <snapshot.sql>
 set -e
 
 # Load .env for DB credentials
-ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env"
+ENV_FILE="$(cd "$(dirname "$0")/../.." && pwd)/.env"
 [ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
 SERVICE=$1

@@ -3,10 +3,10 @@
 # Waits for services, runs both setup scripts, validates.
 #
 # Usage:
-#   scripts/setup.sh --env=dev                     # Local dev (DinD in devcontainer)
-#   scripts/setup.sh --env=staging                  # Staging VPS (sample data on by default)
-#   scripts/setup.sh --env=prod                     # Production VPS (no sample data)
-#   scripts/setup.sh --env=dev --with-sample-data   # Dev + test data
+#   scripts/infra/setup.sh --env=dev                     # Local dev (DinD in devcontainer)
+#   scripts/infra/setup.sh --env=staging                  # Staging VPS (sample data on by default)
+#   scripts/infra/setup.sh --env=prod                     # Production VPS (no sample data)
+#   scripts/infra/setup.sh --env=dev --with-sample-data   # Dev + test data
 #
 # Compose modes:
 #   IP-only (default):  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
@@ -27,20 +27,24 @@ for arg in "$@"; do
 done
 
 if [ -z "$ENV" ]; then
-  echo "Usage: scripts/setup.sh --env=dev|staging|prod [--with-sample-data]"
+  echo "Usage: scripts/infra/setup.sh --env=dev|staging|prod [--with-sample-data]"
   exit 1
 fi
 
 # --- Environment-specific compose command and defaults ---
-source "$(dirname "$0")/lib/dc.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPTS_ROOT")"
+
+source "$SCRIPTS_ROOT/lib/dc.sh"
 init_dc --env="$ENV"
 
 ## Sample data is always opt-in — pass --with-sample-data explicitly.
 
 # --- Auto-generate .env if missing (dev only) ---
-if [ "$ENV" = "dev" ] && [ ! -f /workspaces/pharkie-ojs-plugins/.env ]; then
+if [ "$ENV" = "dev" ] && [ ! -f "$PROJECT_DIR/.env" ]; then
   echo "--- Generating .env ---"
-  /workspaces/pharkie-ojs-plugins/scripts/generate-env.sh
+  "$SCRIPT_DIR/generate-env.sh"
   echo ""
 fi
 
@@ -76,21 +80,23 @@ done
 echo "[ok] OJS responding."
 
 # --- Run OJS setup ---
+# Container paths differ: OJS mounts ./scripts at /scripts (container root),
+# WP mounts at /var/www/html/scripts (Bedrock web root). See docker-compose.yml volumes.
 echo ""
 echo "=== OJS setup ==="
-$DC exec -T ojs bash /scripts/setup-ojs.sh $SAMPLE_DATA
+$DC exec -T ojs bash /scripts/ojs/setup-ojs.sh $SAMPLE_DATA
 
 # --- Assign editorial roles (prod/staging only) ---
 if [ "$ENV" != "dev" ]; then
   echo ""
   echo "=== Editorial roles ==="
-  $DC exec -T ojs bash /scripts/assign-roles.sh
+  $DC exec -T ojs bash /scripts/ojs/assign-roles.sh
 fi
 
 # --- Run WP setup ---
 echo ""
 echo "=== WP setup ==="
-$DC exec -T wp bash /var/www/html/scripts/setup-wp.sh $SAMPLE_DATA
+$DC exec -T wp bash /var/www/html/scripts/wp/setup-wp.sh $SAMPLE_DATA
 
 # --- Summary ---
 echo ""

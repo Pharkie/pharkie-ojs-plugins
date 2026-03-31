@@ -6,25 +6,25 @@ Drains the OJS job queue (DOI deposits, notifications, etc.) by running `jobs.ph
 
 ```bash
 # Local dev, single worker (foreground)
-scripts/blast-queue.sh
+scripts/ojs/blast-queue.sh
 
 # Remote server, detached (survives SSH disconnect)
-scripts/blast-queue.sh --host=<your-server>
+scripts/ojs/blast-queue.sh --host=<your-server>
 
 # Remote, foreground (for debugging)
-scripts/blast-queue.sh --host=<your-server> --no-nohup
+scripts/ojs/blast-queue.sh --host=<your-server> --no-nohup
 
 # 3 parallel workers
-scripts/blast-queue.sh --workers=3
+scripts/ojs/blast-queue.sh --workers=3
 
 # Purge the queue without processing
-scripts/blast-queue.sh --host=<your-server> --purge
+scripts/ojs/blast-queue.sh --host=<your-server> --purge
 
 # Kill stale workers from a previous run
-scripts/blast-queue.sh --host=<your-server> --kill
+scripts/ojs/blast-queue.sh --host=<your-server> --kill
 
 # Custom timeout (seconds) and retry count
-scripts/blast-queue.sh --host=<your-server> --timeout=3600 --tries=1
+scripts/ojs/blast-queue.sh --host=<your-server> --timeout=3600 --tries=1
 ```
 
 ### Flags

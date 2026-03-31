@@ -2,7 +2,7 @@
 # Docker Compose wrapper that handles DinD (devcontainer) vs regular Docker.
 #
 # Source this in any script that needs to call docker compose:
-#   source "$(dirname "$0")/lib/dc.sh"
+#   source "$(dirname "$0")/../lib/dc.sh"
 #   init_dc [--env=dev|staging|prod] [--ssl]
 #
 # After init_dc, use $DC everywhere:

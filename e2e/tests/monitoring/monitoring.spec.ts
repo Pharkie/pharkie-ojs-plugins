@@ -18,7 +18,7 @@ const PROJECT_ROOT = resolve(__dirname, '..', '..', '..');
 
 test.describe('Monitoring script validation', () => {
   test('monitor-safe.sh passes syntax check', () => {
-    const result = execSync(`bash -n ${PROJECT_ROOT}/scripts/monitor-safe.sh 2>&1`, {
+    const result = execSync(`bash -n ${PROJECT_ROOT}/scripts/monitoring/monitor-safe.sh 2>&1`, {
       encoding: 'utf-8',
     });
     // bash -n returns empty string on success
@@ -26,14 +26,14 @@ test.describe('Monitoring script validation', () => {
   });
 
   test('monitor-deep.sh passes syntax check', () => {
-    const result = execSync(`bash -n ${PROJECT_ROOT}/scripts/monitor-deep.sh 2>&1`, {
+    const result = execSync(`bash -n ${PROJECT_ROOT}/scripts/monitoring/monitor-deep.sh 2>&1`, {
       encoding: 'utf-8',
     });
     expect(result.trim()).toBe('');
   });
 
   test('setup-betterstack.sh passes syntax check', () => {
-    const result = execSync(`bash -n ${PROJECT_ROOT}/scripts/setup-betterstack.sh 2>&1`, {
+    const result = execSync(`bash -n ${PROJECT_ROOT}/scripts/monitoring/setup-betterstack.sh 2>&1`, {
       encoding: 'utf-8',
     });
     expect(result.trim()).toBe('');
@@ -41,7 +41,7 @@ test.describe('Monitoring script validation', () => {
 
   test('setup-betterstack.sh --dry-run requires --host', () => {
     try {
-      execSync(`${PROJECT_ROOT}/scripts/setup-betterstack.sh --dry-run 2>&1`, {
+      execSync(`${PROJECT_ROOT}/scripts/monitoring/setup-betterstack.sh --dry-run 2>&1`, {
         encoding: 'utf-8',
       });
       expect(true).toBe(false); // Should have thrown
@@ -54,7 +54,7 @@ test.describe('Monitoring script validation', () => {
 
   test('setup-betterstack.sh requires BETTERSTACK_API_TOKEN', () => {
     try {
-      execSync(`${PROJECT_ROOT}/scripts/setup-betterstack.sh --host=test --dry-run 2>&1`, {
+      execSync(`${PROJECT_ROOT}/scripts/monitoring/setup-betterstack.sh --host=test --dry-run 2>&1`, {
         encoding: 'utf-8',
         env: { ...process.env, BETTERSTACK_API_TOKEN: '' },
       });
@@ -67,7 +67,7 @@ test.describe('Monitoring script validation', () => {
   });
 
   test('monitor scripts are executable', () => {
-    const scripts = ['monitor-safe.sh', 'monitor-deep.sh', 'setup-betterstack.sh'];
+    const scripts = ['monitoring/monitor-safe.sh', 'monitoring/monitor-deep.sh', 'monitoring/setup-betterstack.sh'];
     for (const script of scripts) {
       const path = `${PROJECT_ROOT}/scripts/${script}`;
       const result = execSync(`test -x ${path} && echo "executable" || echo "not executable"`, {

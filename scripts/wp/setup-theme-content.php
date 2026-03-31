@@ -5,7 +5,7 @@
  * Idempotent — safe to run repeatedly.
  *
  * Run inside WP container:
- *   wp eval-file /var/www/html/scripts/setup-theme-content.php --allow-root
+ *   wp eval-file /var/www/html/scripts/wp/setup-theme-content.php --allow-root
  */
 
 // --- 1. Create "mainnav" menu (referenced by Gantry layout config) ---

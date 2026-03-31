@@ -3,9 +3,9 @@
  * Stripe integration test — standalone, no OJS involved.
  *
  * Modes:
- *   node scripts/test-stripe.js              Test mode: auth + create checkout session
- *   node scripts/test-stripe.js --live       Live auth + order creation only (no charge)
- *   node scripts/test-stripe.js --live-buy   Live £0.10 test purchase (opens browser)
+ *   node scripts/dev/test-stripe.js              Test mode: auth + create checkout session
+ *   node scripts/dev/test-stripe.js --live       Live auth + order creation only (no charge)
+ *   node scripts/dev/test-stripe.js --live-buy   Live £0.10 test purchase (opens browser)
  *
  * Env vars:
  *   OJS_STRIPE_SECRET_KEY   (required)
@@ -64,7 +64,7 @@ const amountLabel = isLiveBuy ? '£0.10' : '£3.00';
       }],
       metadata: {
         test: 'true',
-        source: 'scripts/test-stripe.js',
+        source: 'scripts/dev/test-stripe.js',
       },
       success_url: 'https://example.com/return?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://example.com/cancel',
