@@ -14,7 +14,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from jats_to_html import jats_to_html
+from html_pipeline.pipe5_galley_html import jats_to_html
 
 
 def _make_jats(back_content, body='<p>Body text.</p>'):

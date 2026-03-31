@@ -1,12 +1,12 @@
 #!/bin/bash
 # Import split issues into OJS.
 #
-# Takes the output of backfill/split-issue.sh (a directory containing import.xml)
+# Takes the output of backfill/split_pipeline/split_issue.sh (a directory containing import.xml)
 # and loads it into OJS via the Native Import/Export CLI.
 #
 # Usage:
-#   backfill/import.sh backfill/private/output/37.1       # Import one issue
-#   backfill/import.sh backfill/private/output/*                  # Import all prepared issues
+#   backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1       # Import one issue
+#   backfill/html_pipeline/pipe7_import.sh backfill/private/output/*                  # Import all prepared issues
 #
 # Requires: OJS running in Docker (auto-detected), or --container=<name>.
 #
@@ -15,7 +15,7 @@
 #   2. Runs: php tools/importExport.php NativeImportExportPlugin import ...
 #   3. Reports success/failure
 #
-# To split issues first, run: backfill/split-issue.sh <issue.pdf>
+# To split issues first, run: backfill/split_pipeline/split_issue.sh <issue.pdf>
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -54,7 +54,7 @@ if ! [[ "$ADMIN_USER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
 fi
 
 if [ ${#DIRS[@]} -eq 0 ]; then
-  echo "Usage: backfill/import.sh <issue-dir> [<issue-dir>...] [--container=<name>] [--force]"
+  echo "Usage: backfill/html_pipeline/pipe7_import.sh <issue-dir> [<issue-dir>...] [--container=<name>] [--force]"
   echo
   echo "Options:"
   echo "  --container=<name>  OJS Docker container (auto-detected if omitted)"
@@ -63,8 +63,8 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --force             Reimport issues that already exist in OJS"
   echo "  --wipe-articles     Wipe all existing issues/articles before importing (users/subs/payments kept)"
   echo
-  echo "Example: backfill/import.sh backfill/private/output/37.1"
-  echo "         backfill/import.sh backfill/private/output/*"
+  echo "Example: backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1"
+  echo "         backfill/html_pipeline/pipe7_import.sh backfill/private/output/*"
   exit 1
 fi
 
@@ -113,7 +113,7 @@ unset IFS
 if [ ${#SORTED_DIRS[@]} -ge 5 ] && [ "$CLEAN" = "0" ]; then
   echo "WARNING: Importing ${#SORTED_DIRS[@]} issues without --wipe-articles."
   echo "  Existing issues will be skipped unless you also pass --force."
-  echo "  For a full re-import, use: backfill/import.sh backfill/private/output/* --wipe-articles"
+  echo "  For a full re-import, use: backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles"
   echo
 fi
 
@@ -338,7 +338,7 @@ fi
 if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ]; then
   echo ""
   echo "NOTE: This was a --wipe-articles import. Restore IDs to preserve URLs/DOIs:"
-  echo "  python backfill/restore_ids.py --target dev"
+  echo "  python backfill/html_pipeline/pipe8_restore_ids.py --target dev"
   echo "(runs locally, reads JATS publisher-id, sends SQL to target via SSH)"
 fi
 

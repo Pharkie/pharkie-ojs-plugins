@@ -26,7 +26,7 @@ import sys
 
 from bs4 import BeautifulSoup, Tag, NavigableString
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.citations import (
     normalise_allcaps, normalise_for_overlap, REFERENCE_HEADING_RE,
     PUBLISHER_NAMES, is_provenance, looks_like_person_name,
@@ -955,7 +955,7 @@ def postprocess_article(html, article, pdf_path=None):
 
     # Splice complete notes from PyMuPDF if Haiku dropped any.
     if pdf_path and os.path.exists(pdf_path):
-        from htmlgen import extract_pdf_back_matter
+        from lib.pdf_utils import extract_pdf_back_matter
         back_matter = extract_pdf_back_matter(
             pdf_path, title=article.get('title'),
             authors=article.get('authors'))

@@ -13,7 +13,7 @@
 #   backfill/add-issue-galleys.sh --dry-run backfill/private/output/*  # preview only
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 HOST=""
 DRY_RUN=""
 ISSUE_DIRS=()

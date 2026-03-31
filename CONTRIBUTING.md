@@ -14,9 +14,9 @@
 
 ## Backfill pipeline rules
 
-- **Haiku prompt is frozen.** Once the extraction prompt produces good raw HTML, never modify it. All content fixes go in `postprocess_html.py`.
+- **Haiku prompt is frozen.** Once the extraction prompt produces good raw HTML, never modify it. All content fixes go in `backfill/lib/postprocess.py`.
 - **No magic numbers.** Thresholds must be named constants (e.g. `MATCH_THRESHOLD`). Search boundaries must use structural landmarks (e.g. "up to the first body heading"), not arbitrary percentages like "first 20% of HTML".
-- **Raw HTML is preserved.** `htmlgen.py` saves `.raw.html` (full extraction) and `.html` (post-processed). Post-processing can be rerun from raw without API calls.
+- **Raw HTML is preserved.** `pipe1_haiku_html.py` saves `.raw.html` (full extraction). `pipe2_postprocess.py` produces `.post.html`. Post-processing can be rerun from raw without API calls.
 
 ## Don't
 
@@ -59,7 +59,7 @@ python3 -m pytest backfill/tests/test_citations.py -v
 
 1. Add the exact text to the relevant fixture JSON (`backfill/tests/fixtures/*.json`) — as a `true` entry if it was missed, or `false` if it was wrongly detected
 2. Run `python3 -m pytest backfill/tests/` — the new case should **fail**
-3. Fix the implementation (in `backfill/lib/citations.py`, `backfill/postprocess_html.py`, etc.)
+3. Fix the implementation (in `backfill/lib/citations.py`, `backfill/lib/postprocess.py`, etc.)
 4. Run tests again — new case passes, no other tests break
 5. **Never change a test to match implementation.** If a test fails, the code is wrong, not the test. The fixtures are human-verified ground truth.
 

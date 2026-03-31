@@ -14,16 +14,16 @@ import XML with advice="update", preserving URLs and DOIs.
 
 Usage:
     # Snapshot from dev:
-    python backfill/snapshot_ids.py --target dev
+    python backfill/html_pipeline/tools/snapshot_ids.py --target dev
 
     # Snapshot from live:
-    python backfill/snapshot_ids.py --target live
+    python backfill/html_pipeline/tools/snapshot_ids.py --target live
 
     # Single issue:
-    python backfill/snapshot_ids.py --target dev --issue 35.2
+    python backfill/html_pipeline/tools/snapshot_ids.py --target dev --issue 35.2
 
     # Preview without writing:
-    python backfill/snapshot_ids.py --target dev --dry-run
+    python backfill/html_pipeline/tools/snapshot_ids.py --target dev --dry-run
 """
 
 import argparse

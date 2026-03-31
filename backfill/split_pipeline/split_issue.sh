@@ -5,40 +5,37 @@
 # See docs/backfill-toc-guide.md for how to create toc.json files.
 #
 # Usage:
-#   backfill/split-issue.sh <issue.pdf>                    # Split one issue
-#   backfill/split-issue.sh /path/to/pdf-folder            # Split all PDFs in folder
-#   backfill/split-issue.sh <issue.pdf> --no-pdfs           # XML without embedded PDFs (fast, for testing XML structure)
-#   backfill/split-issue.sh <issue.pdf> --only=split        # Run one step only
-#   backfill/split-issue.sh <issue.pdf> --stop-after=normalize  # Run through normalize, export review CSV, stop
+#   backfill/split_pipeline/split_issue.sh <issue.pdf>                    # Split one issue
+#   backfill/split_pipeline/split_issue.sh /path/to/pdf-folder            # Split all PDFs in folder
+#   backfill/split_pipeline/split_issue.sh <issue.pdf> --only=split       # Run one step only
+#   backfill/split_pipeline/split_issue.sh <issue.pdf> --stop-after=normalize  # Stop after normalize
 #
 # Steps (run in order):
 #   preflight    — validate PDF is readable, extract vol/issue
 #   split        — split issue PDF into one PDF per article
 #   verify_split — check each split PDF's first page matches its TOC title
 #   normalize    — normalize author names
-#   generate_xml — generate OJS Native XML with base64-embedded PDFs
 #
 # Output: backfill/private/output/<vol>.<iss>/
-#   toc.json (pre-existing), per-article PDFs, import.xml
+#   toc.json (pre-existing), per-article PDFs
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-OUTPUT_DIR="$SCRIPT_DIR/private/output"
+BACKFILL_DIR="$(dirname "$SCRIPT_DIR")"
+OUTPUT_DIR="$BACKFILL_DIR/private/output"
 
 CLEANUP_FILES=()
 cleanup() { rm -f "${CLEANUP_FILES[@]}"; }
 trap cleanup EXIT
 
 # --- Parse arguments ---
-VALID_STEPS="preflight split verify_split normalize generate_xml"
+VALID_STEPS="preflight split verify_split normalize"
 
 PDFS=()
-NO_PDFS=""
 ONLY_STEP=""
 STOP_AFTER=""
 for arg in "$@"; do
   case "$arg" in
-    --no-pdfs) NO_PDFS="--no-pdfs" ;;
     --only=*)
       ONLY_STEP="${arg#--only=}"
       if ! echo "$VALID_STEPS" | grep -qw "$ONLY_STEP"; then
@@ -64,7 +61,7 @@ for arg in "$@"; do
 done
 
 if [ ${#PDFS[@]} -eq 0 ]; then
-  echo "Usage: backfill/split-issue.sh <issue.pdf|folder> [--no-pdfs] [--only=<step>] [--stop-after=<step>]"
+  echo "Usage: backfill/split_pipeline/split_issue.sh <issue.pdf|folder> [--only=<step>] [--stop-after=<step>]"
   echo "Steps: $VALID_STEPS"
   exit 1
 fi
@@ -92,7 +89,6 @@ fi
 echo "=========================================="
 echo "Prepare: ${#EXPANDED_PDFS[@]} PDF(s)"
 echo "Output: $OUTPUT_DIR"
-[ -n "$NO_PDFS" ] && echo "Mode: --no-pdfs (XML without embedded PDFs)"
 [ -n "$ONLY_STEP" ] && echo "Step: $ONLY_STEP only"
 [ -n "$STOP_AFTER" ] && echo "Stop after: $STOP_AFTER"
 echo "=========================================="
@@ -133,7 +129,7 @@ for PDF in "${EXPANDED_PDFS[@]}"; do
     echo "--- Step 1: Preflight ---"
     PREFLIGHT_TMP=$(mktemp /tmp/preflight-XXXXXX.json)
     CLEANUP_FILES+=("$PREFLIGHT_TMP")
-    if ! python3 "$SCRIPT_DIR/preflight.py" "$PDF_ABS" > "$PREFLIGHT_TMP"; then
+    if ! python3 "$SCRIPT_DIR/split1_preflight.py" "$PDF_ABS" > "$PREFLIGHT_TMP"; then
       echo "  ERROR: Preflight failed, skipping this PDF"
       rm -f "$PREFLIGHT_TMP"
       FAILED=$((FAILED + 1))
@@ -220,7 +216,7 @@ with open(sys.argv[1], 'w') as f:
   if should_run "split"; then
     echo
     echo "--- Step 2: Split PDF ---"
-    if ! python3 "$SCRIPT_DIR/split.py" "$TOC_JSON" -o "$OUTPUT_DIR"; then
+    if ! python3 "$SCRIPT_DIR/split2_split_pdf.py" "$TOC_JSON" -o "$OUTPUT_DIR"; then
       echo "  ERROR: PDF splitting failed"
       FAILED=$((FAILED + 1))
       continue
@@ -237,7 +233,7 @@ with open(sys.argv[1], 'w') as f:
   if should_run "verify_split"; then
     echo
     echo "--- Step 2b: Verify split ---"
-    if ! python3 "$SCRIPT_DIR/verify_split.py" "$TOC_JSON"; then
+    if ! python3 "$SCRIPT_DIR/split3_verify.py" "$TOC_JSON"; then
       echo "  WARNING: Some split PDFs don't match their TOC titles"
       echo "  Check page offsets and TOC entries before importing."
     fi
@@ -252,37 +248,18 @@ with open(sys.argv[1], 'w') as f:
   if should_run "normalize"; then
     echo
     echo "--- Step 3: Normalize authors ---"
-    python3 "$SCRIPT_DIR/author_normalize.py" "$TOC_JSON"
+    python3 "$SCRIPT_DIR/split4_normalize_authors.py" "$TOC_JSON"
   fi
 
-  # Stop after normalize: export review CSV
   if should_stop_after "normalize"; then
-    REVIEW_CSV="$ISSUE_DIR/review.csv"
-    echo
-    echo "--- Exporting review CSV ---"
-    python3 "$SCRIPT_DIR/export_review.py" "$TOC_JSON" -o "$REVIEW_CSV"
-    echo
-    echo "  Review CSV: $REVIEW_CSV"
     SUCCEEDED=$((SUCCEEDED + 1))
     continue
-  fi
-
-  # Step 4: Generate XML
-  if should_run "generate_xml"; then
-    echo
-    echo "--- Step 4: Generate OJS XML ---"
-    XML_OUT="$ISSUE_DIR/import.xml"
-    if ! python3 "$SCRIPT_DIR/generate_xml.py" "$TOC_JSON" -o "$XML_OUT" $NO_PDFS; then
-      echo "  ERROR: XML generation failed"
-      FAILED=$((FAILED + 1))
-      continue
-    fi
   fi
 
   SUCCEEDED=$((SUCCEEDED + 1))
   echo
   echo "  Done: $(basename "$PDF") → $ISSUE_DIR"
-  echo "  To import: backfill/import.sh $ISSUE_DIR"
+  echo "  Next: run html_pipeline (pipe1-pipe6) then pipe7_import.sh $ISSUE_DIR"
 done
 
 echo

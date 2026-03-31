@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.extract_citations import extract_from_jats
+from backfill.html_pipeline.pipe4_extract_citations import extract_from_jats
 from pathlib import Path
 
 

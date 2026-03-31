@@ -6,10 +6,10 @@ Compares the TOC JSON (expected) against the OJS database (actual) to
 catch missing articles, wrong sections, missing PDFs, etc.
 
 Usage:
-    python backfill/verify.py <toc.json> [--db-host 127.0.0.1] [--db-port 3306]
+    python backfill/html_pipeline/pipe10_verify.py <toc.json> [--db-host 127.0.0.1] [--db-port 3306]
 
     # Dev environment (Docker):
-    python backfill/verify.py backfill/private/output/37.1/toc.json --docker
+    python backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
 
 Checks:
 - Issue exists with correct volume/number/year

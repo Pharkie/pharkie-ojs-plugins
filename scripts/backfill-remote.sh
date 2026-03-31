@@ -103,7 +103,7 @@ CLEAN_FLAG=""
 if [ -z "$FORCE" ]; then
   CLEAN_FLAG="--wipe-articles"
 fi
-$SSH_CMD "cd $REMOTE_DIR && bash backfill/import.sh backfill/private/output/* $FORCE $CLEAN_FLAG"
+$SSH_CMD "cd $REMOTE_DIR && bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* $FORCE $CLEAN_FLAG"
 
 echo ""
 echo "$(phase_time) === Backfill complete ==="

@@ -27,10 +27,9 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from split import title_in_split_pdf
-
-BACKFILL_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKFILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BACKFILL_DIR)
+from split_pipeline.split2_split_pdf import title_in_split_pdf
 OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
 
 

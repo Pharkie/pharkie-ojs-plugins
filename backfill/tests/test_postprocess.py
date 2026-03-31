@@ -1,4 +1,4 @@
-"""Tests for backfill/postprocess_html.py — HTML post-processing pipeline.
+"""Tests for backfill/lib/postprocess.py — HTML post-processing pipeline.
 
 IMPORTANT: These tests encode what the CORRECT behaviour should be, determined
 by human judgement — NOT by observing what the code currently does. If a test
@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.postprocess_html import (
+from backfill.lib.postprocess import (
     strip_title,
     strip_subtitle,
     strip_authors,

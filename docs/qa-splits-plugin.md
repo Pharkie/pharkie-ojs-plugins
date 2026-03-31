@@ -177,14 +177,14 @@ Multiple reviews per article stored (audit trail). Most recent = current status.
 
 ## CLI Tool
 
-`backfill/qa_review.py` is the command-line equivalent:
+`backfill/html_pipeline/qa/qa_review.py` is the command-line equivalent:
 
 ```bash
-python3 backfill/qa_review.py approve 9494
-python3 backfill/qa_review.py reject 9494 "references mixed with notes"
-python3 backfill/qa_review.py status 9494
-python3 backfill/qa_review.py list
-python3 backfill/qa_review.py --target live list
+python3 backfill/html_pipeline/qa/qa_review.py approve 9494
+python3 backfill/html_pipeline/qa/qa_review.py reject 9494 "references mixed with notes"
+python3 backfill/html_pipeline/qa/qa_review.py status 9494
+python3 backfill/html_pipeline/qa/qa_review.py list
+python3 backfill/html_pipeline/qa/qa_review.py --target live list
 ```
 
 ## QA iteration workflow
@@ -195,17 +195,17 @@ QA Splits reads from OJS — pipeline changes require reimport to be visible. Al
 ```bash
 # 1. Fix pipeline code
 # 2. Reprocess from raw (~11 sec for all, or target one issue)
-python3 backfill/reprocess_html.py backfill/private/output/23.1/toc.json
+python3 backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/23.1/toc.json
 # 3. JATS pipeline
-python3 backfill/generate_jats.py backfill/private/output/23.1/toc.json
-python3 backfill/extract_citations.py --extract --volume 23.1
-python3 backfill/jats_to_html.py backfill/private/output/23.1/toc.json
+python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/23.1/toc.json
+python3 backfill/html_pipeline/pipe4_extract_citations.py --extract --volume 23.1
+python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/23.1/toc.json
 # 4. Regenerate import XML
-python3 backfill/generate_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
 # 5. Reimport just that issue (~7 sec)
-backfill/import.sh backfill/private/output/23.1 --force
+backfill/html_pipeline/pipe7_import.sh backfill/private/output/23.1 --force
 # 6. Restore IDs for that issue only (~0.6 sec)
-python3 backfill/restore_ids.py --target dev --issue 23.1
+python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 23.1
 # 7. Check in QA Splits
 ```
 
@@ -215,21 +215,21 @@ python3 backfill/restore_ids.py --target dev --issue 23.1
 # .raw.html → .post.html → .jats.xml → .galley.html
 
 # 1. Reprocess all from raw (.raw.html → .post.html)
-python3 backfill/reprocess_html.py backfill/private/output/*/toc.json
+python3 backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/*/toc.json
 # 2. Generate JATS (reads .post.html)
-python3 backfill/generate_jats.py backfill/private/output/*/toc.json
+python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/*/toc.json
 # 3. Extract citations (body → back matter)
-python3 backfill/extract_citations.py --extract
+python3 backfill/html_pipeline/pipe4_extract_citations.py --extract
 # 4. JATS → HTML galley (.jats.xml → .galley.html)
-python3 backfill/jats_to_html.py backfill/private/output/*/toc.json
+python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/*/toc.json
 # 6. Generate import XML
 for t in backfill/private/output/*/toc.json; do
-  python3 backfill/generate_xml.py "$t" -o "$(dirname "$t")/import.xml"
+  python3 backfill/html_pipeline/pipe6_ojs_xml.py "$t" -o "$(dirname "$t")/import.xml"
 done
 # 7. Reimport all (--wipe-articles wipes first; --force reimports existing without wiping)
-backfill/import.sh backfill/private/output/* --wipe-articles
+backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles
 # 8. Restore IDs
-python3 backfill/restore_ids.py --target dev
+python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev
 ```
 
 ## Reporting content issues
