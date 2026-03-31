@@ -186,6 +186,12 @@
       "html": "<p>Body text.</p>\n<p>Trailing content.</p>",
       "next_title": "",
       "should_contain": "Trailing content"
+    },
+    "next_title_in_body_text_only_matches_heading": {
+      "html": "<p>This issue features a review of <em>The Other Side of You</em> by Salley Vickers.</p>\n<h2>The Other Side of You</h2>\n<p>Sally Vickers. (2006). London: Fourth Estate.</p>",
+      "next_title": "The Other Side of You",
+      "should_contain": "features a review",
+      "should_not_contain": "Fourth Estate"
     }
   },
 
@@ -230,6 +236,27 @@
         "section": "Articles"
       },
       "should_contain": ["Raw PyMuPDF text"]
+    },
+    "editorial_with_contents_section": {
+      "html": "<h1>CONTENTS</h1>\n<p><strong>Editorial</strong> — 193</p>\n<p><strong>A Short Note Underlying Reflection on Psychotherapy Research</strong> — 194<br><em>Daniel Sousa</em></p>\n<p><strong>Nietzsche and Psychoanalysis</strong> — 203<br><em>M. Guy Thompson</em></p>\n<hr>\n<h2>EDITORIAL</h2>\n<p>The editors are pleased to open this edition with a paper by Daniel Sousa.</p>\n<p><strong>Simon du Plock</strong></p>",
+      "article": {
+        "title": "Editorial",
+        "authors": "Simon du Plock",
+        "section": "Editorial",
+        "_next_title": "A Short Note Underlying Reflection on Psychotherapy Research"
+      },
+      "should_contain": ["editors are pleased"],
+      "should_not_contain": ["CONTENTS", "Nietzsche and Psychoanalysis"]
+    },
+    "book_review_editorial_next_title_in_body": {
+      "html": "<h2>BOOK REVIEWS</h2>\n<p>This issue features a review of <em>The Other Side of You</em> by Salley Vickers and other books.</p>\n<h2>The Other Side of You</h2>\n<p>Sally Vickers. (2006). London: Fourth Estate.</p>\n<p>This novel touches on philosophical themes.</p>",
+      "article": {
+        "title": "Book Reviews",
+        "section": "Book Review Editorial",
+        "_next_title": "Book Review: The Other Side of You"
+      },
+      "should_contain": ["features a review"],
+      "should_not_contain": ["Fourth Estate", "philosophical themes"]
     }
   },
 

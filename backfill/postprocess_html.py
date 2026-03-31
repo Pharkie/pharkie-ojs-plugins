@@ -454,18 +454,19 @@ def _strip_end_bleed_soup(soup, next_title):
     if rx is None:
         return
 
-    # Get elements to search (from last backmatter heading onwards, or all)
-    search_els = soup.find_all(list(BLOCK_TAGS))
     if last_backmatter:
-        # Only search elements at or after the last backmatter heading
+        # Search all block elements at or after the last backmatter heading
+        search_els = []
         start_searching = False
-        filtered = []
-        for el in search_els:
+        for el in soup.find_all(list(BLOCK_TAGS)):
             if el == last_backmatter:
                 start_searching = True
             if start_searching:
-                filtered.append(el)
-        search_els = filtered
+                search_els.append(el)
+    else:
+        # No backmatter heading: only match in headings to avoid false
+        # positives in body text that merely mentions the next title
+        search_els = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
 
     for el in search_els:
         if rx.search(_el_clean_text(el)):
@@ -598,6 +599,59 @@ def _strip_book_reviews_heading_soup(soup):
         if re.match(r'^\s*BOOK\s+REVIEWS?\s*$', _el_text(heading), re.IGNORECASE):
             heading.extract()
             return
+
+
+def _strip_contents_section_soup(soup):
+    """Remove a CONTENTS/TOC section that lists all articles in an issue.
+
+    Some raw editorial HTML begins with a full table of contents before the
+    actual article body. The TOC ends at an <hr> tag or the first real
+    section heading (EDITORIAL, BOOK REVIEWS, etc.).
+    """
+    contents_heading = None
+    for heading in soup.find_all(['h1', 'h2']):
+        if re.match(r'^\s*CONTENTS\s*$', _el_text(heading).strip(), re.IGNORECASE):
+            contents_heading = heading
+            break
+    if contents_heading is None:
+        return
+
+    _SECTION_HEADINGS_RE = re.compile(
+        r'^\s*(EDITORIAL|BOOK\s+REVIEWS?)\s*$', re.IGNORECASE)
+
+    to_remove = [contents_heading]
+    for sibling in list(contents_heading.next_siblings):
+        if not hasattr(sibling, 'name'):
+            to_remove.append(sibling)
+            continue
+        if sibling.name == 'hr':
+            to_remove.append(sibling)
+            break
+        if sibling.name in ('h1', 'h2') and \
+                _SECTION_HEADINGS_RE.match(_el_text(sibling).strip()):
+            break
+        to_remove.append(sibling)
+
+    for el in to_remove:
+        el.extract()
+
+
+def _strip_book_review_editorial_tail_soup(soup):
+    """Remove individual book reviews after the editorial intro.
+
+    For Book Review Editorial articles, the raw HTML contains the editorial
+    intro paragraphs followed by individual review headings and content.
+    Strip from the first <h2> that isn't a section-level heading.
+    """
+    _SECTION_RE = re.compile(
+        r'^\s*(BOOK\s+REVIEWS?|EDITORIAL)\s*$', re.IGNORECASE)
+    for heading in soup.find_all(['h2', 'h3']):
+        text = _el_text(heading).strip()
+        if _SECTION_RE.match(text):
+            continue
+        # This is the first individual review heading — remove from here
+        _remove_from(heading)
+        return
 
 
 # ---------------------------------------------------------------
@@ -814,9 +868,10 @@ def postprocess_book_review_editorial(html, article):
     Strip the "BOOK REVIEWS" heading, keep the editorial body.
     """
     soup = _parse(html)
+    _strip_contents_section_soup(soup)
     _strip_start_bleed_soup(soup, article.get('title', ''))
     _strip_book_reviews_heading_soup(soup)
-    _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+    _strip_book_review_editorial_tail_soup(soup)
     return _serialize(soup)
 
 
@@ -862,10 +917,13 @@ def postprocess_article(html, article, pdf_path=None):
     # Parse once for all remaining operations
     soup = _parse(html)
 
+    # Strip CONTENTS/TOC sections before any other processing
+    _strip_contents_section_soup(soup)
+
     if section == 'Book Review Editorial':
         _strip_start_bleed_soup(soup, article.get('title', ''))
         _strip_book_reviews_heading_soup(soup)
-        _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+        _strip_book_review_editorial_tail_soup(soup)
     elif section == 'Editorial':
         _strip_start_bleed_soup(soup, article.get('title', ''))
         _strip_title_soup(soup, article.get('title', ''))
@@ -906,6 +964,10 @@ def postprocess_article(html, article, pdf_path=None):
 
     html = _serialize(soup)
     html = re.sub(r'\n{3,}', '\n\n', html).strip()
+
+    # Strip control characters that break XML parsing downstream.
+    # These occasionally appear in Haiku-extracted text from scanned PDFs.
+    html = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', html)
 
     return html
 

@@ -63,6 +63,8 @@ def jats_to_html(jats_path: Path) -> str | None:
     if back is not None:
         _render_back_matter(back, soup)
 
+    # decode_contents() not prettify() — prettify() inserts newlines inside
+    # inline tags (<em>, <strong>) which browsers collapse to visible spaces.
     return soup.decode_contents()
 
 
