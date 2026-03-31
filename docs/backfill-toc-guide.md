@@ -173,8 +173,8 @@ When setting page boundaries for book reviews, watch for:
 3. **Trailing boilerplate** — "Publications received for review" and "The Society for Existential Analysis" pages are NOT article content. Don't include them in the last article's `pdf_page_end`.
 4. **Reviews share pages** — one review ends and the next begins mid-page. Both the ending review AND the starting review should include the shared page in their range.
 5. **Errors cascade** — when one boundary is wrong, check ALL neighbouring articles. A wrong `pdf_page_end` on one review means the next review's `pdf_page_start` may also be wrong.
-6. **HTML bleed on shared pages** — when two articles share a page, the HTML galley for each will include the tail/head of the adjacent article. The `fix_html_bleed.py` tool trims book review bleed automatically. For non-book-review articles, `htmlgen.py` uses a shared-page prompt addendum to tell Haiku to extract only the right article's content.
-7. **Same reviewer for consecutive reviews** — when the same person reviews two adjacent books, Haiku can't distinguish which review to extract from shared pages without the book title. `htmlgen.py` always passes the `book_title` to the prompt for book reviews.
+6. **HTML bleed on shared pages** — when two articles share a page, the HTML galley for each will include the tail/head of the adjacent article. Post-processing (`lib/postprocess.py`) trims bleed automatically. For non-book-review articles, `pipe1_haiku_html.py` uses a shared-page prompt addendum to tell Haiku to extract only the right article's content.
+7. **Same reviewer for consecutive reviews** — when the same person reviews two adjacent books, Haiku can't distinguish which review to extract from shared pages without the book title. `pipe1_haiku_html.py` always passes the `book_title` to the prompt for book reviews.
 8. **Reviewer name spelling** — always verify the reviewer name against the actual PDF byline, not the CONTENTS page. Common discrepancies: trailing periods ("Zinovieff."), spelling variants (Ticktin/Tickin, Sorensen/Sorenson).
 
 ## Journal-specific lessons learned

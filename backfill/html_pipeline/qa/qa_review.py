@@ -38,7 +38,7 @@ import subprocess
 import sys
 from xml.etree import ElementTree as ET
 
-BACKFILL_DIR = os.path.dirname(__file__)
+BACKFILL_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUTPUT_DIR = os.path.join(BACKFILL_DIR, 'private', 'output')
 
 TARGETS = {

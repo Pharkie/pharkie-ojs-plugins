@@ -33,8 +33,8 @@ import unicodedata
 from difflib import SequenceMatcher
 
 
-REGISTRY_PATH = os.path.join(os.path.dirname(__file__), 'private', 'authors.json')
-REVIEW_PATH = os.path.join(os.path.dirname(__file__), 'private', 'authors-review.json')
+REGISTRY_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'private', 'authors.json')
+REVIEW_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'private', 'authors-review.json')
 
 
 def normalize_key(name):

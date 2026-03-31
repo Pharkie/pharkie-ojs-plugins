@@ -17,7 +17,7 @@ from pathlib import Path
 SHEET_KEY = '189pMpS12ZuxYtMS2iLYiHKhwp6N972nZSTuNrea8Mos'
 CREDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data-export',
                           'sea-journal-87a19feadadd.json')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'private', 'output')
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'private', 'output')
 
 HEADERS = [
     'Volume', 'Issue', 'Date', 'Section', 'Title', 'Authors', 'DOI',
