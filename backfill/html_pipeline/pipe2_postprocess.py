@@ -8,10 +8,10 @@ to produce .html files. No API calls — instant, free, repeatable.
 Use after fixing post-processing bugs to update all articles at once.
 
 Usage:
-    python backfill/reprocess_html.py backfill/private/output/*/toc.json     # all issues
-    python backfill/reprocess_html.py backfill/private/output/36.1/toc.json  # one issue
-    python backfill/reprocess_html.py backfill/private/output/*/toc.json --article=8  # one article
-    python backfill/reprocess_html.py backfill/private/output/*/toc.json --verify     # reprocess + verify
+    python backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/*/toc.json     # all issues
+    python backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/36.1/toc.json  # one issue
+    python backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/*/toc.json --article=8  # one article
+    python backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/*/toc.json --verify     # reprocess + verify
 """
 
 import argparse
@@ -21,8 +21,8 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from postprocess_html import postprocess_article, verify_postprocessed
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from lib.postprocess import postprocess_article, verify_postprocessed
 
 
 def main():

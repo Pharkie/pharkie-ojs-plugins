@@ -87,7 +87,7 @@ The `<id type="internal" advice="ignore">` attribute in the XML is the only ID-r
 A prior PR attempt ([pkp/pkp-lib#5331](https://github.com/pkp/pkp-lib/pull/5331), 2019, stalled) revealed that the update path triggers destructive behaviour in the DAO layer — submissions getting deleted mid-update. Related upstream issues: [pkp/pkp-lib#5132](https://github.com/pkp/pkp-lib/issues/5132), [pkp/pkp-lib#7898](https://github.com/pkp/pkp-lib/issues/7898).
 
 - **Not reported upstream** — appears to be by-design. The importer is built for one-time migration, not iterative sync.
-- **Workaround:** `backfill/add-issue-galleys.sh` inserts issue galleys directly via SQL + file copy, bypassing the XML importer entirely. For article-level fixes, edit the database directly.
+- **Workaround:** `backfill/html_pipeline/pipe9_issue_galleys.sh` inserts issue galleys directly via SQL + file copy, bypassing the XML importer entirely. For article-level fixes, edit the database directly.
 
 ## API gaps
 

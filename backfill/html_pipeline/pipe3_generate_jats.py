@@ -23,8 +23,8 @@ from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
 # Import shared utilities
-sys.path.insert(0, os.path.dirname(__file__))
-from generate_xml import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from html_pipeline.pipe6_ojs_xml import (
     parse_date, split_author_name, SECTIONS,
 )
 from lib.citations import sort_notes_by_number

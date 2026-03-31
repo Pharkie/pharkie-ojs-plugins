@@ -6,7 +6,7 @@ from xml.etree import ElementTree as ET
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.generate_xml import (
+from backfill.html_pipeline.pipe6_ojs_xml import (
     parse_date,
     split_author_name,
     generate_xml,

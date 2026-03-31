@@ -13,8 +13,8 @@ from xml.etree import ElementTree as ET
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.generate_xml import generate_xml, SECTIONS
-from backfill.verify_split import extract_title_words, verify_split
+from backfill.html_pipeline.pipe6_ojs_xml import generate_xml, SECTIONS
+from backfill.split_pipeline.split3_verify import extract_title_words, verify_split
 
 # Namespace for OJS XML
 NS = {'pkp': 'http://pkp.sfu.ca'}
@@ -327,7 +327,7 @@ class TestJatsPreservation:
     def test_doi_preserved_on_regeneration(self, tmp_path):
         """Regenerating JATS should preserve existing DOI."""
         from pathlib import Path
-        from backfill.generate_jats import process_toc
+        from backfill.html_pipeline.pipe3_generate_jats import process_toc
 
         # Create toc.json
         toc = {
@@ -373,7 +373,7 @@ class TestJatsPreservation:
     def test_no_doi_for_new_article(self, tmp_path):
         """New article without existing JATS should have no DOI."""
         from pathlib import Path
-        from backfill.generate_jats import process_toc
+        from backfill.html_pipeline.pipe3_generate_jats import process_toc
 
         toc = {
             'volume': 99, 'issue': 1, 'date': 'January 2026',

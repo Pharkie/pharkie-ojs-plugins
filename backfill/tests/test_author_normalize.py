@@ -7,7 +7,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.author_normalize import (
+from backfill.split_pipeline.split4_normalize_authors import (
     normalize_key,
     extract_surname,
     extract_first_initial,

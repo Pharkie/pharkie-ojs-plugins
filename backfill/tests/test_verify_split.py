@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from backfill.verify_split import extract_title_words, verify_title_in_pdf
+from backfill.split_pipeline.split3_verify import extract_title_words, verify_title_in_pdf
 
 
 class TestExtractTitleWords:

@@ -7,7 +7,7 @@ Native XML file that can be imported via:
     php tools/importExport.php NativeImportExportPlugin import file.xml journal admin
 
 Usage:
-    python backfill/generate_xml.py <toc.json> [--output import.xml]
+    python backfill/html_pipeline/pipe6_ojs_xml.py <toc.json> [--output import.xml]
 
 The XML includes:
 - Issue metadata (volume, number, year, date)

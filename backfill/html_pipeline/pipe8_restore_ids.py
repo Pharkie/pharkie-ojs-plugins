@@ -17,16 +17,16 @@ Uses a two-pass remap to avoid primary key collisions:
 
 Usage:
     # Preview SQL without executing:
-    python backfill/restore_ids.py --dry-run --target dev
+    python backfill/html_pipeline/pipe8_restore_ids.py --dry-run --target dev
 
     # Execute against dev:
-    python backfill/restore_ids.py --target dev
+    python backfill/html_pipeline/pipe8_restore_ids.py --target dev
 
     # Execute against live (requires --confirm):
-    python backfill/restore_ids.py --target live --confirm
+    python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm
 
     # Single issue:
-    python backfill/restore_ids.py --target dev --issue 35.2
+    python backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 35.2
 """
 
 import argparse

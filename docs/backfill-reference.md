@@ -10,7 +10,7 @@ Technical reference for the backfill pipeline. For the process overview and revi
 
 ```bash
 # Step 1: Split the issue PDF into articles
-backfill/split-issue.sh path/to/37.1.pdf
+backfill/split_pipeline/split_issue.sh path/to/37.1.pdf
 
 # Step 2: Human review (see Backfill Pipeline for what to check)
 # 2a: Check split PDFs -- open backfill/private/output/37.1/*.pdf
@@ -27,11 +27,11 @@ python3 backfill/enrich.py backfill/private/output/37.1/toc.json
 # ... optionally re-export CSV to review enrichment, then import corrections ...
 
 # Step 4: Generate XML and import into OJS
-backfill/split-issue.sh path/to/37.1.pdf --only=generate_xml
-backfill/import.sh backfill/private/output/37.1
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o backfill/private/output/37.1/import.xml
+backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1
 
 # Step 5: Verify the import
-backfill/verify.py backfill/private/output/37.1/toc.json --docker
+python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
 
 # Optional: Generate archive manifest
 python3 backfill/manifest.py backfill/private/output/*/toc.json
@@ -53,7 +53,7 @@ python3 backfill/import_review.py review-enriched.csv --dry-run
 python3 backfill/import_review.py review-enriched.csv
 
 # Normalize authors across all issues
-python3 backfill/author_normalize.py backfill/private/output/*/toc.json
+python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
 
 # Vocabulary report (after enrichment)
 python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
@@ -63,22 +63,21 @@ python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 
 ```bash
 # Re-run a single step (e.g. after editing toc.json)
-backfill/split-issue.sh path/to/issue.pdf --only=split
-backfill/split-issue.sh path/to/issue.pdf --only=normalize
-backfill/split-issue.sh path/to/issue.pdf --only=generate_xml
+backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=split
+backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 
 # Undo review corrections (restore from backup)
 python3 backfill/import_review.py review.csv --restore
 
 # Re-run normalization after changing author names in review
-python3 backfill/author_normalize.py backfill/private/output/*/toc.json
+python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
 ```
 
 ---
 
 ## Output structure
 
-After `split-issue.sh` completes, each issue gets a directory under `backfill/private/output/`:
+After `split_issue.sh` completes, each issue gets a directory under `backfill/private/output/`:
 
 ```
 backfill/private/output/37.1/
@@ -227,13 +226,13 @@ When the normalizer encounters ambiguous matches, it writes them to `backfill/pr
 
 ```bash
 # Show stats
-python3 backfill/author_normalize.py --stats
+python3 backfill/split_pipeline/split4_normalize_authors.py --stats
 
 # List all authors
-python3 backfill/author_normalize.py --list
+python3 backfill/split_pipeline/split4_normalize_authors.py --list
 
 # Process all issues at once
-python3 backfill/author_normalize.py backfill/private/output/*/toc.json
+python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
 ```
 
 ---
@@ -346,15 +345,15 @@ python3 backfill/test_review.py
 
 ## Flags reference
 
-### split-issue.sh
+### split_issue.sh
 
 | Flag | Description |
 |---|---|
 | `--no-pdfs` | Generate XML without base64-embedded PDFs. Fast, useful for testing XML structure. |
-| `--only=<step>` | Run a single step only. Valid steps: `preflight`, `parse_toc`, `split`, `verify_split`, `normalize`, `generate_xml`. |
+| `--only=<step>` | Run a single step only. Valid steps: `preflight`, `split`, `verify_split`, `normalize`. |
 | `--page-offset=N` | Manual page offset for TOC parsing (`pdf_index = journal_page + N`). Use when auto-detection fails. |
 
-### import.sh
+### pipe7_import.sh
 
 | Flag | Default | Description |
 |---|---|---|
@@ -396,7 +395,7 @@ python3 backfill/test_review.py
 | `toc.json files` | (required) | One or more toc.json files |
 | `-o`, `--output` | `backfill/private/output/MANIFEST.md` | Output path |
 
-### verify.py
+### pipe10_verify.py
 
 | Flag | Description |
 |---|---|
@@ -412,7 +411,7 @@ Each Python script can be run standalone. This is useful for debugging a specifi
 
 ```bash
 # Preflight only
-python3 backfill/preflight.py path/to/issue.pdf
+python3 backfill/split_pipeline/split1_preflight.py path/to/issue.pdf
 
 # Parse TOC, write to specific file
 python3 backfill/parse_toc.py path/to/issue.pdf -o backfill/private/output/37.1/toc.json
@@ -424,13 +423,13 @@ python3 backfill/parse_toc.py path/to/issue.pdf -o toc.json --page-offset=2
 python3 backfill/parse_toc.py path/to/issue.pdf --no-metadata -o toc.json
 
 # Split PDF using existing toc.json
-python3 backfill/split.py backfill/private/output/37.1/toc.json -o backfill/private/output
+python3 backfill/split_pipeline/split2_split_pdf.py backfill/private/output/37.1/toc.json -o backfill/private/output
 
 # Verify split PDFs match their TOC titles
-python3 backfill/verify_split.py backfill/private/output/37.1/toc.json
+python3 backfill/split_pipeline/split3_verify.py backfill/private/output/37.1/toc.json
 
 # Normalize authors across all processed issues
-python3 backfill/author_normalize.py backfill/private/output/*/toc.json
+python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
 
 # Export metadata for review
 python3 backfill/export_review.py backfill/private/output/*/toc.json -o review.csv
@@ -457,18 +456,17 @@ python3 backfill/enrich.py --report backfill/private/output/*/enrichment.json
 python3 backfill/manifest.py backfill/private/output/*/toc.json
 
 # Generate XML without PDFs (fast, for testing)
-python3 backfill/generate_xml.py backfill/private/output/37.1/toc.json -o import.xml --no-pdfs
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o import.xml --no-pdfs
 
 # Generate XML with embedded PDFs
-python3 backfill/generate_xml.py backfill/private/output/37.1/toc.json -o import.xml
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o import.xml
 
 # Verify import against OJS database
-python3 backfill/verify.py backfill/private/output/37.1/toc.json --docker
+python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
 ```
 
 To re-run a single step via `split-issue.sh` (uses the same orchestration logic but skips other steps):
 
 ```bash
-backfill/split-issue.sh path/to/issue.pdf --only=normalize
-backfill/split-issue.sh path/to/issue.pdf --only=generate_xml
+backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 ```

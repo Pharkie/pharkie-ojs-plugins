@@ -28,7 +28,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.citations import (
     find_jats_reference_sections, is_non_reference, is_citation_like, is_author_bio,
     is_author_contact, is_provenance, is_reference, is_note, classify, extract_text_from_element,
