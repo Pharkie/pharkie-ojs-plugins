@@ -1,7 +1,9 @@
-"""Tests for backfill/generate_xml.py — OJS Native XML generation."""
+"""Tests for backfill/generate_xml.py — OJS Native XML generation and JATS generation."""
 
 import os
 import sys
+import tempfile
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -11,6 +13,9 @@ from backfill.html_pipeline.pipe6_ojs_xml import (
     split_author_name,
     generate_xml,
     SECTIONS,
+)
+from backfill.html_pipeline.pipe3_generate_jats import (
+    generate_article_jats,
 )
 
 
@@ -388,3 +393,97 @@ class TestDoiInXml:
         assert len(issue_ids) == 1
         assert issue_ids[0].text == '475'
         assert issue_ids[0].get('advice') == 'ignore'
+
+
+# ── JATS <product> generation (pipe3) ──
+
+class TestJatsProduct:
+    """Test that pipe3 generates <product> for book reviews."""
+
+    def _book_review_article(self, **overrides):
+        article = {
+            'title': 'Book Review: Anxiety',
+            'authors': 'Andrew Miller',
+            'section': 'Book Reviews',
+            'book_title': 'Anxiety: A philosophical guide',
+            'book_author': 'Samir Chopra',
+            'book_year': 2024,
+            'publisher': 'Princeton: Princeton University Press',
+            'journal_page_start': 201,
+            'journal_page_end': 203,
+        }
+        article.update(overrides)
+        return article
+
+    def _parse_jats(self, article, **kwargs):
+        jats_str = generate_article_jats(
+            article, volume=36, issue=1,
+            date_published='2025-01-01', html_path=None, doi=None,
+            **kwargs,
+        )
+        return ET.fromstring(jats_str)
+
+    def test_product_present_for_book_review(self):
+        root = self._parse_jats(self._book_review_article())
+        product = root.find('.//{*}product')
+        assert product is not None
+
+    def test_product_absent_for_regular_article(self):
+        article = {
+            'title': 'Test Article', 'authors': 'John Doe',
+            'section': 'Articles',
+            'journal_page_start': 1, 'journal_page_end': 10,
+        }
+        root = self._parse_jats(article)
+        product = root.find('.//{*}product')
+        assert product is None
+
+    def test_product_absent_without_book_title(self):
+        root = self._parse_jats(self._book_review_article(book_title=None))
+        product = root.find('.//{*}product')
+        assert product is None
+
+    def test_product_source(self):
+        root = self._parse_jats(self._book_review_article())
+        source = root.find('.//{*}product/{*}source')
+        assert source is not None
+        assert source.text == 'Anxiety: A philosophical guide'
+
+    def test_product_year(self):
+        root = self._parse_jats(self._book_review_article())
+        year = root.find('.//{*}product/{*}year')
+        assert year is not None
+        assert year.text == '2024'
+
+    def test_product_author(self):
+        root = self._parse_jats(self._book_review_article())
+        pg = root.find('.//{*}product/{*}person-group')
+        assert pg is not None
+        assert pg.get('person-group-type') == 'author'
+        surname = pg.find('.//{*}surname')
+        assert surname.text == 'Chopra'
+
+    def test_product_editor_annotation(self):
+        root = self._parse_jats(self._book_review_article(
+            book_author='Emmy van Deurzen & Susan Iacovou (eds.)',
+        ))
+        pg = root.find('.//{*}product/{*}person-group')
+        assert pg.get('person-group-type') == 'editor'
+        names = pg.findall('{*}name')
+        assert len(names) == 2
+
+    def test_product_publisher_split(self):
+        root = self._parse_jats(self._book_review_article())
+        pub_loc = root.find('.//{*}product/{*}publisher-loc')
+        pub_name = root.find('.//{*}product/{*}publisher-name')
+        assert pub_loc.text == 'Princeton'
+        assert pub_name.text == 'Princeton University Press'
+
+    def test_product_publisher_no_location(self):
+        root = self._parse_jats(self._book_review_article(
+            publisher='Open Press',
+        ))
+        pub_loc = root.find('.//{*}product/{*}publisher-loc')
+        pub_name = root.find('.//{*}product/{*}publisher-name')
+        assert pub_loc is None
+        assert pub_name.text == 'Open Press'

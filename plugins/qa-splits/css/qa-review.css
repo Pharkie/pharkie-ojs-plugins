@@ -669,10 +669,95 @@ body {
     font-size: 12px;
     font-weight: 500;
     color: rgba(255,255,255,0.65);
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     flex-shrink: 0;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+}
+
+/* ── PDF search ── */
+
+.qa-pdf-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.qa-pdf-search-toggle {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    border-radius: 3px;
+}
+
+.qa-pdf-search-toggle:hover,
+.qa-pdf-search.open .qa-pdf-search-toggle {
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.1);
+}
+
+.qa-pdf-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.qa-pdf-search-bar input {
+    width: 140px;
+    padding: 3px 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.3);
+    color: rgba(255,255,255,0.85);
+    font-size: 12px;
+    font-family: var(--font-ui);
+    outline: none;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.qa-pdf-search-bar input:focus {
+    border-color: rgba(255,255,255,0.4);
+    background: rgba(0,0,0,0.4);
+}
+
+.qa-pdf-search-bar input::placeholder {
+    color: rgba(255,255,255,0.35);
+}
+
+.qa-pdf-search-info {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    min-width: 50px;
+    text-align: center;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.qa-pdf-search-bar button {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    color: rgba(255,255,255,0.65);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.qa-pdf-search-bar button:hover {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.85);
+}
+
+.qa-pdf-search-bar button:disabled {
+    opacity: 0.3;
+    cursor: default;
 }
 
 .qa-pdf-container {
@@ -699,27 +784,119 @@ body {
     height: auto;
 }
 
-.qa-pdf-text-layer {
+/*
+ * pdf.js v5 text layer — official rules from pdfjs-dist/web/pdf_viewer.css
+ * DO NOT hand-edit these; update from the upstream file when upgrading pdf.js.
+ */
+.textLayer {
+    --csstools-color-scheme--light: initial;
+    color-scheme: only light;
     position: absolute;
-    top: 0;
-    left: 0;
-    width: var(--pdf-render-width);
-    height: var(--pdf-render-height);
-    transform-origin: top left;
-    transform: scale(var(--pdf-css-scale, 1));
-    overflow: hidden;
+    text-align: initial;
+    inset: 0;
+    overflow: clip;
+    opacity: 1;
     line-height: 1;
+    -webkit-text-size-adjust: none;
+    -moz-text-size-adjust: none;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    z-index: 0;
 }
-
-.qa-pdf-text-layer span {
-    position: absolute;
+.textLayer.highlighting { touch-action: none; }
+.textLayer :is(span, br) {
     color: transparent;
+    position: absolute;
     white-space: pre;
     cursor: text;
+    transform-origin: 0% 0%;
+}
+.textLayer {
+    --min-font-size: 1;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+    --font-height: 0;
+    font-size: calc(var(--text-scale-factor) * var(--font-height));
+    --scale-x: 1;
+    --rotate: 0deg;
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent { display: contents; }
+.textLayer span[role="img"] {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    cursor: default;
+}
+.textLayer .highlight {
+    --highlight-bg-color: rgb(180 0 170 / 0.25);
+    --highlight-selected-bg-color: rgb(0 100 0 / 0.25);
+    --highlight-backdrop-filter: none;
+    --highlight-selected-backdrop-filter: none;
+    margin: -1px;
+    padding: 1px;
+    background-color: var(--highlight-bg-color);
+    -webkit-backdrop-filter: var(--highlight-backdrop-filter);
+    backdrop-filter: var(--highlight-backdrop-filter);
+    border-radius: 4px;
+}
+.appended:is(.textLayer .highlight) { position: initial; }
+.begin:is(.textLayer .highlight) { border-radius: 4px 0 0 4px; }
+.end:is(.textLayer .highlight) { border-radius: 0 4px 4px 0; }
+.middle:is(.textLayer .highlight) { border-radius: 0; }
+.selected:is(.textLayer .highlight) {
+    background-color: var(--highlight-selected-bg-color);
+    -webkit-backdrop-filter: var(--highlight-selected-backdrop-filter);
+    backdrop-filter: var(--highlight-selected-backdrop-filter);
+    scroll-margin-top: 50px;
+}
+.textLayer ::-moz-selection {
+    background: rgba(0 0 255 / 0.25);
+    background: color-mix(in srgb, AccentColor, transparent 75%);
+}
+.textLayer ::selection {
+    background: rgba(0 0 255 / 0.25);
+    background: color-mix(in srgb, AccentColor, transparent 75%);
+}
+.textLayer br::-moz-selection { background: transparent; }
+.textLayer br::selection { background: transparent; }
+.textLayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+.textLayer.selecting .endOfContent { top: 0; }
+
+/*
+ * QA override: define --total-scale-factor from --scale-factor (set per-page
+ * in JS). This mirrors the official pdf.js viewer's CSS variable chain.
+ * setLayerDimensions() (called by TextLayer constructor) sizes the text layer
+ * as calc(--total-scale-factor * pageWidth), so it dynamically matches the
+ * displayed canvas width. No CSS transform needed — pointer events work natively.
+ */
+.qa-pdf-page {
+    --scale-factor: 1;
+    --total-scale-factor: var(--scale-factor);
 }
 
-.qa-pdf-text-layer ::selection {
-    background: rgba(90, 122, 155, 0.3);
+/* Override pdf.js highlight colors for search — amber instead of purple */
+.textLayer .highlight {
+    --highlight-bg-color: rgba(255, 200, 0, 0.35);
+    --highlight-selected-bg-color: rgba(255, 120, 0, 0.5);
+}
+.selected:is(.textLayer .highlight) {
+    outline: 2px solid rgba(255, 120, 0, 0.8);
 }
 
 /* Custom scrollbar for PDF pane */
@@ -837,7 +1014,7 @@ body {
 
 .qa-meta-abstract {
     margin-bottom: 0;
-    padding-bottom: 24px;
+    padding-bottom: 8px;
 }
 
 .qa-meta-abstract h3 {
@@ -857,11 +1034,16 @@ body {
 }
 
 .qa-html-content {
-    padding: 28px 32px;
+    padding: 12px 32px 28px;
     font-family: var(--font-display);
     font-size: 16px;
     line-height: 1.75;
     color: var(--text-primary);
+}
+
+.qa-html-content > :first-child,
+.qa-html-content > div > :first-child {
+    margin-top: 0;
 }
 
 .qa-html-content h1, .qa-html-content h2, .qa-html-content h3 {

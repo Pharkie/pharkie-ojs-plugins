@@ -326,6 +326,84 @@ def _load_jats_doi(pdf_path):
 
 
 
+def _load_jats_source(pdf_path):
+    """Load book review source citation from the article's JATS <product>.
+
+    JATS is the single source of truth for article content.
+    Returns author-first citation string, or None if no <product> found.
+    """
+    tree = _load_jats_tree(pdf_path)
+    if tree is None:
+        return None
+
+    product = tree.find('.//{*}product')
+    if product is None:
+        return None
+
+    # Authors from person-group
+    authors = []
+    for pg in product:
+        tag = pg.tag.split('}')[-1] if '}' in pg.tag else pg.tag
+        if tag == 'person-group':
+            for name_el in pg:
+                ntag = name_el.tag.split('}')[-1] if '}' in name_el.tag else name_el.tag
+                if ntag == 'name':
+                    given_el = name_el.find('{*}given-names')
+                    if given_el is None:
+                        given_el = name_el.find('given-names')
+                    surname_el = name_el.find('{*}surname')
+                    if surname_el is None:
+                        surname_el = name_el.find('surname')
+                    parts = []
+                    if given_el is not None and given_el.text:
+                        parts.append(given_el.text.strip())
+                    if surname_el is not None and surname_el.text:
+                        parts.append(surname_el.text.strip())
+                    if parts:
+                        authors.append(' '.join(parts))
+
+    year_el = product.find('{*}year')
+    if year_el is None:
+        year_el = product.find('year')
+    year_text = year_el.text.strip() if year_el is not None and year_el.text else ''
+
+    source_el = product.find('{*}source')
+    if source_el is None:
+        source_el = product.find('source')
+    title_text = source_el.text.strip() if source_el is not None and source_el.text else ''
+
+    pub_name_el = product.find('{*}publisher-name')
+    if pub_name_el is None:
+        pub_name_el = product.find('publisher-name')
+    pub_loc_el = product.find('{*}publisher-loc')
+    if pub_loc_el is None:
+        pub_loc_el = product.find('publisher-loc')
+    pub_parts = []
+    if pub_loc_el is not None and pub_loc_el.text:
+        pub_parts.append(pub_loc_el.text.strip())
+    if pub_name_el is not None and pub_name_el.text:
+        pub_parts.append(pub_name_el.text.strip())
+    publisher_text = ': '.join(pub_parts)
+
+    # Author-first citation: Author (Year). Title. Publisher
+    citation_parts = []
+    if authors:
+        citation_parts.append(', '.join(authors))
+    if year_text:
+        citation_parts.append(f'({year_text})')
+    prefix = ' '.join(citation_parts)
+
+    result_parts = []
+    if prefix:
+        result_parts.append(prefix + '.')
+    if title_text:
+        title_end = title_text if title_text.endswith(('?', '!', '.')) else title_text + '.'
+        result_parts.append(title_end)
+    if publisher_text:
+        result_parts.append(publisher_text)
+    return ' '.join(result_parts) if result_parts else None
+
+
 def _load_jats_pages(pdf_path):
     """Load page numbers from the article's JATS XML file.
 
@@ -512,6 +590,11 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
             coverage_parts.append(era)
         if coverage_parts:
             lines.append(f'{i3}<coverage locale="en">{escape("; ".join(coverage_parts))}</coverage>')
+
+    # Source — book review citation from JATS <product> (single source of truth)
+    source_citation = _load_jats_source(pdf_path)
+    if source_citation:
+        lines.append(f'{i3}<source locale="en">{escape(source_citation)}</source>')
 
     # Pages — from JATS (single source of truth for article content)
     page_start, page_end = _load_jats_pages(pdf_path)
@@ -716,7 +799,8 @@ def main():
     parser = argparse.ArgumentParser(
         description='Generate OJS Native XML from TOC JSON')
     parser.add_argument('toc_json', help='TOC JSON file (see docs/backfill-toc-guide.md)')
-    parser.add_argument('--output', '-o', help='Output XML file (default: stdout)')
+    parser.add_argument('--output', '-o',
+                        help='Output XML file (default: import.xml next to toc.json)')
     parser.add_argument('--no-pdfs', action='store_true',
                         help='Skip PDF embedding (much faster, for testing XML structure)')
     parser.add_argument('--no-issue-galley', action='store_true',
@@ -794,13 +878,11 @@ def main():
         print(f"ERROR: XML validation failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if args.output:
-        with open(args.output, 'w', encoding='utf-8') as f:
-            f.write(xml)
-        size_mb = os.path.getsize(args.output) / (1024 * 1024)
-        print(f"Written to {args.output} ({size_mb:.1f}MB)", file=sys.stderr)
-    else:
-        print(xml)
+    output_path = args.output or os.path.join(os.path.dirname(args.toc_json), 'import.xml')
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(xml)
+    size_mb = os.path.getsize(output_path) / (1024 * 1024)
+    print(f"Written to {output_path} ({size_mb:.1f}MB)", file=sys.stderr)
 
 
 if __name__ == '__main__':

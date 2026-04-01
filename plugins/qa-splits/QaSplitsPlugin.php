@@ -309,6 +309,21 @@ HTMLSTART;
         <div class="qa-left">
             <div class="qa-pdf-toolbar">
                 <span id="pdf-page-info" x-text="pdfPageInfo">Loading...</span>
+                <div class="qa-pdf-search" :class="{ open: pdfSearchOpen }">
+                    <button class="qa-pdf-search-toggle" @click="togglePdfSearch()" title="Search PDF (Ctrl+F)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </button>
+                    <template x-if="pdfSearchOpen">
+                        <div class="qa-pdf-search-bar">
+                            <input id="pdf-search-input" x-ref="pdfSearchInput" type="text" placeholder="Find in PDF..."
+                                @input.debounce.300ms="pdfSearch($el.value)">
+                            <span class="qa-pdf-search-info" x-text="pdfSearchInfo"></span>
+                            <button @click="pdfSearchPrev()" :disabled="pdfSearchMatches.length === 0" title="Previous (Shift+Enter)">&lsaquo;</button>
+                            <button @click="pdfSearchNext()" :disabled="pdfSearchMatches.length === 0" title="Next (Enter)">&rsaquo;</button>
+                            <button @click="clearPdfSearch(); $refs.pdfSearchInput.value = ''; $refs.pdfSearchInput.focus()" title="Clear">&times;</button>
+                        </div>
+                    </template>
+                </div>
             </div>
             <div id="pdf-container" class="qa-pdf-container"></div>
         </div>
@@ -346,7 +361,6 @@ HTMLSTART;
                 <div x-show="!htmlLoading" x-html="htmlContent"></div>
             </div>
             <div class="qa-endmatter" x-show="hasClassification">
-                <h3 class="qa-endmatter-heading">End-Matter Classification</h3>
                 <template x-for="group in classificationGroups" :key="group.label">
                     <div class="qa-endmatter-group">
                         <div class="qa-endmatter-group-header">
@@ -383,9 +397,7 @@ HTMLSTART;
 
 HTMLBODY;
         echo '<script>window.QA_CONFIG = { apiBase: "' . $apiBase . '", pluginUrl: "' . $pluginUrl . '", csrfToken: "' . $csrfToken . '", username: "' . htmlspecialchars($currentUsername, ENT_QUOTES) . '" };</script>';
-        echo '<script src="' . $pluginUrl . '/js/alpine.min.js" defer></script>';
-        echo '<script src="' . $pluginUrl . '/js/pdf.min.js"></script>';
-        echo '<script src="' . $pluginUrl . '/js/qa-app.js"></script>';
+        echo '<script type="module" src="' . $pluginUrl . '/js/qa-app.mjs"></script>';
         echo '</body></html>';
         exit;
     }

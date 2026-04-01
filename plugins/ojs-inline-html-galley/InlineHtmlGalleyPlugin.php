@@ -370,13 +370,17 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         }
 
         $templateMgr->addHeader('inline-html-galley-styles', '<style>
-.inline-html-galley { margin-top: 2em; }
+/* Tighten spacing between article metadata sections */
+.obj_article_details .main_entry > .item { padding-top: 0.5em; padding-bottom: 0.5em; }
+.obj_article_details .main_entry > .item.authors { padding-bottom: 0.25em; }
+.inline-html-galley { margin-top: 0; }
 .inline-html-galley .value { line-height: 1.7; font-size: 15px; }
 .inline-html-galley .value p { margin-bottom: 1em; }
 
 /* Pipeline-extracted back matter (from JATS). Subtle border + label so
    editors/QA reviewers can distinguish extracted content from raw HTML.
    Invisible to readers who are not looking for it. */
+.inline-html-galley .value .jats-reviewed-work,
 .inline-html-galley .value .jats-notes,
 .inline-html-galley .value .jats-bios,
 .inline-html-galley .value .jats-provenance {
@@ -385,6 +389,10 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
     margin: 1.5em 0;
     position: relative;
 }
+.inline-html-galley .value .jats-reviewed-work:first-child {
+    margin-top: 0;
+}
+.inline-html-galley .value .jats-reviewed-work::before,
 .inline-html-galley .value .jats-notes::before,
 .inline-html-galley .value .jats-bios::before,
 .inline-html-galley .value .jats-provenance::before {
@@ -400,9 +408,10 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
     list-style-position: inside;
     padding-left: 0;
 }
-.inline-html-galley .value .jats-notes::before       { content: "Notes"; }
-.inline-html-galley .value .jats-bios::before        { content: "Author bio"; }
-.inline-html-galley .value .jats-provenance::before  { content: "Provenance"; }
+.inline-html-galley .value .jats-reviewed-work::before { content: "Reviewed work"; }
+.inline-html-galley .value .jats-notes::before        { content: "Notes"; }
+.inline-html-galley .value .jats-bios::before         { content: "Author bio"; }
+.inline-html-galley .value .jats-provenance::before   { content: "Provenance"; }
 .item.references h2.label::after {
     content: " (structured citations)";
     font-size: 12px;
