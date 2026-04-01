@@ -127,7 +127,7 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 
 - **Text selection**: Select and copy text directly from the PDF
 - **Search**: Click the magnifying glass icon or press `Ctrl+F` to search within the current PDF. Matches are highlighted with next/previous navigation.
-- Uses pdf.js v5 with official `TextLayerBuilder` and `PDFFindController` components
+- Uses the official pdf.js v5 `PDFViewer` with `PDFFindController` — full-featured rendering, text layer, and search
 
 ### Review workflow
 
