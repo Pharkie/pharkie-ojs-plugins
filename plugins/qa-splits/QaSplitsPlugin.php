@@ -190,6 +190,7 @@ class QaSplitsPlugin extends GenericPlugin
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>QA Splits</title>
 HTMLSTART;
+        echo '<link rel="stylesheet" href="' . $pluginUrl . '/css/pdf_viewer.css">';
         echo '<link rel="stylesheet" href="' . $pluginUrl . '/css/qa-review.css">';
         echo <<<'HTMLBODY'
 </head>
