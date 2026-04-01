@@ -317,7 +317,13 @@ Alpine.data('qaApp', () => ({
             _linkService.setDocument(doc);
             _viewer.setDocument(doc);
 
-            // Wait for first page to render
+            // Fit to container width once pages are ready
+            await new Promise(resolve => {
+                _eventBus.on('pagesloaded', resolve, { once: true });
+            });
+            _viewer.currentScaleValue = 'page-width';
+
+            // Wait for first page to render at correct scale
             await new Promise(resolve => {
                 _eventBus.on('pagerendered', resolve, { once: true });
             });
