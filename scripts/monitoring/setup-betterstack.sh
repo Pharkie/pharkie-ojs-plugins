@@ -309,11 +309,27 @@ create_monitor "SEA: OJS Login Page" "$(cat <<EOF
 EOF
 )"
 
-# 8. Stripe webhook route exists (GET returns 405 Method Not Allowed, not 404)
+# 8. OJS /ea/index redirect (verifies Caddy redirect rule works)
+create_monitor "SEA: OJS Index Redirect" "$(cat <<EOF
+{
+  "monitor_type": "status",
+  "url": "$OJS_BASE_URL/ea/index",
+  "pronounceable_name": "SEA: OJS Index Redirect",
+  "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
+  "request_timeout": 15,
+  "email": true,
+  "follow_redirects": true,
+  "regions": ["eu", "us"]
+}
+EOF
+)"
+
+# 9. Stripe webhook route exists (GET returns 405 Method Not Allowed, not 404)
 # Dropped: Better Stack treats 400/405 as failure. Stripe config is verified
 # by the hourly SSH checks instead (Stripe API key valid, plugin active).
 
-# 9. TCP: HTTPS port
+# 10. TCP: HTTPS port
 create_monitor "SEA: HTTPS Port" "$(cat <<EOF
 {
   "monitor_type": "tcp",
