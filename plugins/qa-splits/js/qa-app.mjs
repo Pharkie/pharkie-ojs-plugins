@@ -98,6 +98,13 @@ Alpine.data('qaApp', () => ({
             this.pdfPageInfo = 'Page ' + pageNumber + ' of ' + (_pdf.doc ? _pdf.doc.numPages : 0);
         });
 
+        // Re-fit PDF to container width on resize
+        new ResizeObserver(() => {
+            if (_viewer.currentScaleValue === 'page-width') {
+                _viewer.currentScaleValue = 'page-width';
+            }
+        }).observe(document.getElementById('pdf-container'));
+
         await this.loadArticles();
     },
 
