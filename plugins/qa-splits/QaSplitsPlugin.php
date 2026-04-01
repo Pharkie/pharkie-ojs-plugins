@@ -325,7 +325,7 @@ HTMLSTART;
                     </template>
                 </div>
             </div>
-            <div id="pdf-container" class="qa-pdf-container"></div>
+            <div class="qa-pdf-container-wrap"><div id="pdf-container" class="qa-pdf-container"><div id="pdf-viewer"></div></div></div>
         </div>
 
         <!-- HTML galley + end-matter -->
