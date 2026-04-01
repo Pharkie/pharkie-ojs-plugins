@@ -2,7 +2,9 @@ import { createConnection } from 'net';
 import { execSync, spawn } from 'child_process';
 import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { resolve } from 'path';
-import { getDCCommand } from './helpers/docker';
+import { getDCCommand, needsSudo } from './helpers/docker';
+
+const SUDO = needsSudo ? 'sudo ' : '';
 
 const LOCKFILE = resolve(__dirname, '..', '.playwright-lock');
 
@@ -36,7 +38,7 @@ export default async function globalSetup() {
   // Connect to compose network (idempotent).
   try {
     execSync(
-      'docker network connect pharkie-ojs-plugins_sea-net $(hostname) 2>/dev/null || true',
+      `${SUDO}docker network connect pharkie-ojs-plugins_sea-net $(hostname) 2>/dev/null || true`,
       { shell: '/bin/bash', timeout: 5000 },
     );
   } catch {}

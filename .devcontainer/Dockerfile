@@ -44,6 +44,12 @@ RUN curl -Lo /usr/local/bin/sops https://github.com/getsops/sops/releases/downlo
 RUN curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz \
     | tar xz -C /usr/local/bin/
 
+# Ensure vscode user is in the docker group at image build time.
+# The docker socket is bind-mounted from the host; its GID varies, so
+# postCreateCommand re-creates the group with the right GID. But having
+# the group in the image means new shells pick it up immediately.
+RUN groupadd -f docker && usermod -aG docker vscode
+
 # Claude Code CLI — install as vscode user to avoid npm permission errors
 USER vscode
 RUN mkdir -p /home/vscode/.npm-global \

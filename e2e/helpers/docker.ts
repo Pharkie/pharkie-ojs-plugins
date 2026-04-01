@@ -1,7 +1,21 @@
-import { spawnSync } from 'child_process';
+import { spawnSync, execSync } from 'child_process';
 import { resolve } from 'path';
 
 const REPO_ROOT = resolve(__dirname, '..', '..');
+
+/**
+ * True when the current process can't talk to Docker without sudo.
+ * This happens in devcontainers where vscode is added to the docker group
+ * at postCreateCommand time but the current shell predates that change.
+ */
+const NEEDS_SUDO = (() => {
+  try {
+    execSync('docker info', { stdio: 'ignore', timeout: 5000 });
+    return false;
+  } catch {
+    return true;
+  }
+})();
 
 /**
  * Build the docker compose command args, matching scripts/lib/dc.sh logic.
@@ -25,7 +39,8 @@ function getDCArgs(): string[] {
 
 /** Get a full "docker compose ..." command string for use with execSync/shell. */
 export function getDCCommand(): string {
-  return `docker ${getDCArgs().join(' ')}`;
+  const prefix = NEEDS_SUDO ? 'sudo docker' : 'docker';
+  return `${prefix} ${getDCArgs().join(' ')}`;
 }
 
 export interface DockerExecOptions {
@@ -55,7 +70,9 @@ export function dockerExec(
   args.push(service, 'bash', '-c', command);
 
   try {
-    const result = spawnSync('docker', args, {
+    const cmd = NEEDS_SUDO ? 'sudo' : 'docker';
+    const spawnArgs = NEEDS_SUDO ? ['docker', ...args] : args;
+    const result = spawnSync(cmd, spawnArgs, {
       cwd: REPO_ROOT,
       timeout,
       encoding: 'utf-8',

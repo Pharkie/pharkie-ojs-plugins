@@ -245,6 +245,7 @@ def main():
             })
 
         # Article IDs from JATS publisher-id
+        no_publisher_id = []
         for art in toc.get('articles', []):
             sp = art.get('split_pdf', '')
             if not sp:
@@ -263,8 +264,13 @@ def main():
                         'volume': vol, 'issue': iss,
                         'submission_id': int(pid_el.text.strip()),
                     })
+                else:
+                    no_publisher_id.append(f'{vol}.{iss}: {art.get("title", "")[:60]}')
             except (ET.ParseError, ValueError):
                 continue
+        if no_publisher_id:
+            for msg in no_publisher_id:
+                print(f'WARNING: No publisher-id in JATS — cannot remap: {msg}')
 
     print(f'Loaded from JATS/toc.json: {len(reg_articles)} articles, {len(reg_issues)} issues')
 

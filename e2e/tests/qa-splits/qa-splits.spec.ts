@@ -125,6 +125,55 @@ test.describe('QA Splits plugin', () => {
     expect(pageInfo).toMatch(/page/i);
   });
 
+  test('PDF text layer renders for selection', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${QA_URL}?id=${articleId}`);
+
+    // Wait for text layer to render (pdf.js v5 TextLayer class)
+    const textSpan = page.locator('#pdf-container .textLayer span').first();
+    await expect(textSpan).toBeAttached({ timeout: 60_000 });
+
+    // Text layer should have multiple spans with content
+    const spanCount = await page.locator('#pdf-container .textLayer span').count();
+    expect(spanCount).toBeGreaterThan(0);
+  });
+
+  test('PDF search finds and highlights text', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${QA_URL}?id=${articleId}`);
+
+    // Wait for PDF text layer
+    await expect(page.locator('#pdf-container .textLayer span').first()).toBeAttached({ timeout: 60_000 });
+
+    // Open search via the toggle button
+    await page.click('.qa-pdf-search-toggle');
+    const searchInput = page.locator('#pdf-search-input');
+    await expect(searchInput).toBeVisible();
+
+    // Search for a common word — "the" should appear in most articles
+    await searchInput.fill('the');
+    await page.waitForTimeout(500); // debounce
+
+    // Should have highlights (official pdf.js .highlight class inside text layer)
+    const highlights = page.locator('.textLayer .highlight');
+    await expect(highlights.first()).toBeAttached({ timeout: 5000 });
+    const highlightCount = await highlights.count();
+    expect(highlightCount).toBeGreaterThan(0);
+
+    // Search info should show match count
+    const info = await page.locator('.qa-pdf-search-info').textContent();
+    expect(info).toMatch(/\d+ \/ \d+/);
+
+    // Escape should close search and clear highlights
+    await searchInput.press('Escape');
+    await expect(searchInput).not.toBeVisible();
+    await expect(page.locator('.textLayer .highlight')).toHaveCount(0);
+  });
+
   // ── HTML galley ──
 
   test('renders HTML galley in right pane', async ({ page }) => {

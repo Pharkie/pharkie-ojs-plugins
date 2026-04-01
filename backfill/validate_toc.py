@@ -52,6 +52,19 @@ def validate_toc(toc_path: Path) -> list[str]:
         if isinstance(start, int) and isinstance(end, int) and start > end:
             errors.append(f'{prefix}: pdf_page_start ({start}) > pdf_page_end ({end})')
 
+        # Book review metadata
+        section = article.get('section', '')
+        if section in ('Book Reviews', 'Book Review'):
+            # "/" in title = multi-book review, no individual book metadata expected
+            is_multi = '/' in article.get('title', '')
+            if not is_multi:
+                for field in ('book_title', 'book_author', 'book_year'):
+                    if not article.get(field):
+                        errors.append(f'{prefix}: book review missing "{field}"')
+                pub = article.get('publisher', '')
+                if pub and pub.rstrip().endswith(':'):
+                    errors.append(f'{prefix}: publisher "{pub}" looks truncated (missing name after city)')
+
     return errors
 
 
