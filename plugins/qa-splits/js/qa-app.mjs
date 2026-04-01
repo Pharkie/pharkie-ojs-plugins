@@ -6,14 +6,16 @@
  */
 
 import * as pdfjsLib from './pdf.min.mjs';
-import { EventBus, PDFFindController, SimpleLinkService, TextLayerBuilder } from './pdf_viewer.mjs';
+import { EventBus, PDFFindController, PDFLinkService, TextLayerBuilder } from './pdf_viewer.mjs';
 import Alpine from './alpine.esm.min.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.mjs', import.meta.url).href;
 
 // pdf.js viewer infrastructure — shared across all pages
 const _eventBus = new EventBus();
-const _linkService = new SimpleLinkService();
+const _linkService = new PDFLinkService({ eventBus: _eventBus });
+// PDFLinkService.page reads pdfViewer.currentPageNumber — provide a stub
+_linkService.pdfViewer = { currentPageNumber: 1, set currentPageNumber(v) {} };
 const _findController = new PDFFindController({ linkService: _linkService, eventBus: _eventBus });
 
 /**
@@ -209,6 +211,7 @@ Alpine.data('qaApp', () => ({
     // PDF search
     pdfSearchQuery: '',
     pdfSearchOpen: false,
+    _findTick: 0,
 
     // Prefetch
     prefetchCache: new Map(),
@@ -221,17 +224,9 @@ Alpine.data('qaApp', () => ({
         this.bindKeys();
         this.setupPdfResize();
 
-        // Update search match count display when find controller reports results
-        _eventBus.on('updatefindmatchescount', ({ matchesCount }) => {
-            this._pdfFindCurrent = matchesCount.current;
-            this._pdfFindTotal = matchesCount.total;
-        });
-        _eventBus.on('updatefindcontrolstate', ({ matchesCount }) => {
-            if (matchesCount) {
-                this._pdfFindCurrent = matchesCount.current;
-                this._pdfFindTotal = matchesCount.total;
-            }
-        });
+        // Trigger Alpine reactivity when find controller updates
+        _eventBus.on('updatefindmatchescount', () => { this._findTick++; });
+        _eventBus.on('updatefindcontrolstate', () => { this._findTick++; });
         // All pages are visible (we render them all at once, no virtual scrolling)
         _findController.onIsPageVisible = () => true;
 
@@ -460,6 +455,7 @@ Alpine.data('qaApp', () => ({
 
             _pdf.doc = doc;
             _pdf.textBuilders = [];
+            _linkService.setDocument(doc);
             _findController.setDocument(doc);
             this.pdfLoading = false;
             const total = doc.numPages;
@@ -607,13 +603,21 @@ Alpine.data('qaApp', () => ({
         _eventBus.dispatch('findbarclose', {});
     },
 
-    _pdfFindCurrent: 0,
-    _pdfFindTotal: 0,
-
     get pdfSearchInfo() {
+        void this._findTick; // reactive dependency
         if (!this.pdfSearchQuery || this.pdfSearchQuery.length < 2) return '';
-        if (this._pdfFindTotal === 0) return 'No matches';
-        return this._pdfFindCurrent + ' / ' + this._pdfFindTotal;
+        const pageMatches = _findController.pageMatches || [];
+        const total = pageMatches.reduce((sum, m) => sum + (m?.length || 0), 0);
+        if (total === 0) return 'No matches';
+        const selected = _findController.selected;
+        let current = 0;
+        if (selected && selected.matchIdx !== -1) {
+            for (let i = 0; i < selected.pageIdx; i++) {
+                current += pageMatches[i]?.length || 0;
+            }
+            current += selected.matchIdx + 1;
+        }
+        return (current || 1) + ' / ' + total;
     },
 
     // ── HTML + Classification ──

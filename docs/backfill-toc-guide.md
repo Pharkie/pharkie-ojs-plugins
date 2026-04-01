@@ -53,7 +53,8 @@ Book reviews have additional fields:
 | `book_author` | yes | Author of the book. |
 | `book_year` | yes | Publication year (int). |
 | `publisher` | no | Publisher, e.g. "London: Routledge". |
-| `reviewer` | yes | Name of the person who wrote the review. Same as `authors`. |
+
+Note: for book reviews, `authors` is the **reviewer** (the person who wrote the review), not the book author.
 
 ### Sections
 
@@ -159,8 +160,7 @@ The CONTENTS page is the primary source for titles and authors. However:
   "book_title": "Heidegger's Contribution to the Understanding of Work-Based Studies",
   "book_author": "Paul Gibbs",
   "book_year": 2011,
-  "publisher": "London: Springer",
-  "reviewer": "Mo Mandic"
+  "publisher": "London: Springer"
 }
 ```
 

@@ -843,7 +843,7 @@ def _find_book_publication_details(html, book_title, search_start=0):
     return None, None
 
 
-def extract_book_review(html, book_title, next_book_title=None, reviewer=None,
+def extract_book_review(html, book_title, next_book_title=None,
                         is_combined_review=False):
     """Extract a single book review from full-page HTML extraction.
 
@@ -958,7 +958,6 @@ def postprocess_article(html, article, pdf_path=None):
             html,
             book_title=article.get('title', ''),
             next_book_title=article.get('_next_title', ''),
-            reviewer=article.get('reviewer', ''),
             is_combined_review=is_combined,
         )
 

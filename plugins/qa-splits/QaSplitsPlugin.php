@@ -318,8 +318,8 @@ HTMLSTART;
                             <input id="pdf-search-input" x-ref="pdfSearchInput" type="text" placeholder="Find in PDF..."
                                 @input.debounce.300ms="pdfSearch($el.value)">
                             <span class="qa-pdf-search-info" x-text="pdfSearchInfo"></span>
-                            <button @click="pdfSearchPrev()" :disabled="pdfSearchMatches.length === 0" title="Previous (Shift+Enter)">&lsaquo;</button>
-                            <button @click="pdfSearchNext()" :disabled="pdfSearchMatches.length === 0" title="Next (Enter)">&rsaquo;</button>
+                            <button @click="pdfSearchPrev()" :disabled="pdfSearchInfo === 'No matches'" title="Previous (Shift+Enter)">&lsaquo;</button>
+                            <button @click="pdfSearchNext()" :disabled="pdfSearchInfo === 'No matches'" title="Next (Enter)">&rsaquo;</button>
                             <button @click="clearPdfSearch(); $refs.pdfSearchInput.value = ''; $refs.pdfSearchInput.focus()" title="Clear">&times;</button>
                         </div>
                     </template>

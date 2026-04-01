@@ -53,6 +53,18 @@ if ! [[ "$ADMIN_USER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
+# If a single directory is passed that contains issue subdirectories, expand it
+if [ ${#DIRS[@]} -eq 1 ] && [ -d "${DIRS[0]}" ]; then
+  # Check if this looks like a parent dir (contains numbered subdirs) rather than an issue dir
+  has_subdirs=0
+  for sub in "${DIRS[0]}"/*/; do
+    [ -d "$sub" ] && has_subdirs=1 && break
+  done
+  if [ "$has_subdirs" = "1" ] && [ ! -f "${DIRS[0]}/import.xml" ]; then
+    DIRS=("${DIRS[0]}"/*/)
+  fi
+fi
+
 if [ ${#DIRS[@]} -eq 0 ]; then
   echo "Usage: backfill/html_pipeline/pipe7_import.sh <issue-dir> [<issue-dir>...] [--container=<name>] [--force]"
   echo
