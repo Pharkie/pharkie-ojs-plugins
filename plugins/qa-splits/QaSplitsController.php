@@ -607,13 +607,14 @@ class QaSplitsController extends PKPBaseController
             ->whereNull('r.review_id')
             ->select('s.submission_id')
             ->inRandomOrder()
-            ->first();
+            ->limit(10)
+            ->get();
 
-        if (!$unreviewed) {
-            return new JsonResponse(['submission_id' => null, 'message' => 'All articles have been reviewed']);
+        if ($unreviewed->isEmpty()) {
+            return new JsonResponse(['submission_ids' => [], 'message' => 'All articles have been reviewed']);
         }
 
-        return new JsonResponse(['submission_id' => $unreviewed->submission_id]);
+        return new JsonResponse(['submission_ids' => $unreviewed->pluck('submission_id')->values()->toArray()]);
     }
 
     /**

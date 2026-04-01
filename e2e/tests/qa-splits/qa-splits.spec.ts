@@ -245,13 +245,97 @@ test.describe('QA Splits plugin', () => {
     await page.goto(QA_URL);
     await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    // Search by submission ID
+    // Search by submission ID — numeric queries must match exact ID only
     await page.fill('.qa-drawer-search', '8994');
     await page.waitForTimeout(500);
 
     const items = page.locator('.qa-drawer-item');
     await expect(items).toHaveCount(1);
     await expect(items.first()).toContainText('[id: 8994]');
+
+    // Verify numeric search doesn't match text content in other articles
+    await page.fill('.qa-drawer-search', '99999');
+    await page.waitForTimeout(500);
+    await expect(page.locator('.qa-drawer-item')).toHaveCount(0);
+  });
+
+  // ── Reviewer pills ──
+
+  test('reviewer pills appear and filter the sidebar', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    const totalCount = await page.locator('.qa-drawer-item').count();
+
+    // Reviewer pills should exist (at least one of "By me" / "By others")
+    const reviewerPills = page.locator('.qa-drawer-pill-reviewer');
+    const pillCount = await reviewerPills.count();
+    expect(pillCount).toBeGreaterThan(0);
+
+    // Each pill should show a label and count
+    for (let i = 0; i < pillCount; i++) {
+      const text = await reviewerPills.nth(i).textContent();
+      expect(text).toMatch(/\(\d+\)/);
+    }
+
+    // Click the first reviewer pill — should filter the sidebar
+    await reviewerPills.first().click();
+    await page.waitForTimeout(300);
+    const filteredCount = await page.locator('.qa-drawer-item').count();
+    expect(filteredCount).toBeLessThan(totalCount);
+    expect(filteredCount).toBeGreaterThan(0);
+
+    // Pill should be active
+    await expect(reviewerPills.first()).toHaveClass(/active/);
+  });
+
+  test('reviewer pills combine with status pills', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    // Click "Approved" status pill
+    const approvedPill = page.locator('.qa-drawer-pill-status', { hasText: 'Approved' });
+    if (await approvedPill.count() > 0) {
+      await approvedPill.click();
+      await page.waitForTimeout(300);
+      const afterStatusFilter = await page.locator('.qa-drawer-item').count();
+
+      // Now also click a reviewer pill — should further narrow results
+      const reviewerPills = page.locator('.qa-drawer-pill-reviewer');
+      if (await reviewerPills.count() > 0) {
+        await reviewerPills.first().click();
+        await page.waitForTimeout(300);
+        const afterBothFilters = await page.locator('.qa-drawer-item').count();
+        expect(afterBothFilters).toBeLessThanOrEqual(afterStatusFilter);
+      }
+    }
+  });
+
+  test('clear filters resets reviewer pills', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    const totalCount = await page.locator('.qa-drawer-item').count();
+
+    // Click a reviewer pill to filter
+    const reviewerPills = page.locator('.qa-drawer-pill-reviewer');
+    if (await reviewerPills.count() > 0) {
+      await reviewerPills.first().click();
+      await page.waitForTimeout(300);
+
+      // Click "Clear all filters"
+      await page.click('.qa-drawer-clear');
+      await page.waitForTimeout(300);
+
+      const resetCount = await page.locator('.qa-drawer-item').count();
+      expect(resetCount).toBe(totalCount);
+
+      // Pill should no longer be active
+      await expect(reviewerPills.first()).not.toHaveClass(/active/);
+    }
   });
 
   // ── Navigation ──

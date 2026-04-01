@@ -561,8 +561,19 @@ def _splice_notes_soup(soup, back_matter_sections):
                 if isinstance(el, Tag) and el.name in HEADING_TAGS:
                     break
 
-    # Count existing notes
+    # Count existing notes — check both <ol>/<li> and <sup>-numbered paragraphs
     actual_count = len(notes_ol.find_all('li')) if notes_ol else 0
+
+    if actual_count == 0 and notes_h2:
+        # Haiku sometimes renders notes as <p><sup>1</sup>...</p> instead of <ol>
+        sup_re = re.compile(r'^\d+$')
+        for sib in notes_h2.next_siblings:
+            if isinstance(sib, Tag):
+                if sib.name in HEADING_TAGS:
+                    break
+                sup = sib.find('sup')
+                if sup and sup_re.match(sup.get_text(strip=True)):
+                    actual_count += 1
 
     if actual_count >= expected_count:
         return
@@ -599,6 +610,37 @@ def _strip_book_reviews_heading_soup(soup):
         if re.match(r'^\s*BOOK\s+REVIEWS?\s*$', _el_text(heading), re.IGNORECASE):
             heading.extract()
             return
+
+
+def _strip_book_listing_soup(soup):
+    """Strip book title headings and publication detail paragraphs from start.
+
+    For multi-book reviews, the body begins with <h1>Title</h1><p>Author,
+    year. Publisher.</p> pairs for each book.  Since the titles are already
+    in the OJS article title, strip them from the body.
+
+    Publication detail lines are short (author, year, publisher) — typically
+    under 150 chars.  Body paragraphs are much longer and must not be stripped.
+    """
+    max_pub_detail_len = 150
+    to_remove = []
+    for el in soup.children:
+        if not isinstance(el, Tag):
+            # skip NavigableString (whitespace)
+            if isinstance(el, str) and el.strip() == '':
+                to_remove.append(el)
+                continue
+            break
+        if el.name in HEADING_TAGS:
+            to_remove.append(el)
+        elif (el.name == 'p'
+              and len(_el_text(el)) <= max_pub_detail_len
+              and _PUB_MARKERS_RE.search(_el_text(el))):
+            to_remove.append(el)
+        else:
+            break
+    for el in to_remove:
+        el.extract()
 
 
 def _strip_contents_section_soup(soup):
@@ -777,6 +819,12 @@ def _find_book_publication_details(html, book_title, search_start=0):
             continue
         has_pub = bool(_PUB_MARKERS_RE.search(raw_block))
         is_short_heading = len(block_text.split()) <= 10
+        # For headings, also check the next sibling for pub markers
+        # (book title in <h1>, pub details in the following <p>)
+        if not has_pub and el.name in HEADING_TAGS:
+            next_sib = el.find_next_sibling(list(BLOCK_TAGS))
+            if next_sib:
+                has_pub = bool(_PUB_MARKERS_RE.search(_el_text(next_sib)))
         if has_pub or is_short_heading:
             el_str = str(el)
             pos = region.find(el_str)
@@ -919,6 +967,11 @@ def postprocess_article(html, article, pdf_path=None):
 
     # Strip CONTENTS/TOC sections before any other processing
     _strip_contents_section_soup(soup)
+
+    # Strip book title headings and publication detail lines from
+    # book review bodies — these are metadata already in toc.json/OJS title.
+    if section in ('Book Reviews', 'Book Review'):
+        _strip_book_listing_soup(soup)
 
     if section == 'Book Review Editorial':
         _strip_start_bleed_soup(soup, article.get('title', ''))

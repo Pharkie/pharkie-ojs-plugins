@@ -179,6 +179,7 @@ class QaSplitsPlugin extends GenericPlugin
         $pluginUrl = $baseUrl . '/plugins/generic/qaSplits';
 
         $csrfToken = $request->getSession()->token();
+        $currentUsername = $request->getUser()->getUsername();
 
         header('Content-Type: text/html; charset=utf-8');
         echo <<<'HTMLSTART'
@@ -241,6 +242,15 @@ HTMLSTART;
                         @click="toggleSection(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
             </div>
+            <div class="qa-drawer-pills" x-show="reviewerPills.length > 0">
+                <template x-for="p in reviewerPills" :key="p.key">
+                    <button class="qa-drawer-pill qa-drawer-pill-reviewer" :class="{ active: isReviewerActive(p.key) }"
+                        @click="toggleReviewer(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
+                </template>
+            </div>
+            <div class="qa-drawer-clear-row" x-show="hasFilters">
+                <button class="qa-drawer-clear" @click="clearFilters()">Clear all filters</button>
+            </div>
 
             <div class="qa-drawer-list">
                 <template x-for="item in workingSetArticles" :key="item.artIdx">
@@ -261,7 +271,7 @@ HTMLSTART;
 
             <div class="qa-drawer-footer">
                 <span x-text="positionDisplay"></span>
-                <button class="qa-drawer-clear" x-show="hasFilters" @click="clearFilters()">Clear all filters</button>
+                <span class="qa-drawer-random-label" x-show="setFilter && setFilter.type === 'random'">Random batch</span>
             </div>
         </div>
 
@@ -372,7 +382,7 @@ HTMLSTART;
     </div>
 
 HTMLBODY;
-        echo '<script>window.QA_CONFIG = { apiBase: "' . $apiBase . '", pluginUrl: "' . $pluginUrl . '", csrfToken: "' . $csrfToken . '" };</script>';
+        echo '<script>window.QA_CONFIG = { apiBase: "' . $apiBase . '", pluginUrl: "' . $pluginUrl . '", csrfToken: "' . $csrfToken . '", username: "' . htmlspecialchars($currentUsername, ENT_QUOTES) . '" };</script>';
         echo '<script src="' . $pluginUrl . '/js/alpine.min.js" defer></script>';
         echo '<script src="' . $pluginUrl . '/js/pdf.min.js"></script>';
         echo '<script src="' . $pluginUrl . '/js/qa-app.js"></script>';
