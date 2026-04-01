@@ -58,7 +58,7 @@ All data comes from OJS — no filesystem access to backfill output is required:
 
 Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requires any authenticated OJS login. There's also a floating "QA Splits" button on the OJS dashboard.
 
-Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/qa-splits?id=9207`.
+Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/qa-splits?id=9207`. The URL always reflects all active filters, so you can copy and share it to show someone exactly what you're looking at.
 
 ### Interface layout
 
@@ -102,8 +102,13 @@ Pipeline-extracted content in the HTML galley is marked with a left border and l
 - **Issue dropdown**: filter to a single issue
 - **Status pills**: Approved / Needs Fix / Unreviewed (counts reflect current filter context)
 - **Section pills**: Articles / Editorials / Book Reviews etc.
+- **Reviewer pills**: By me / By others — filter by who reviewed
 
 All pill counts are contextual — they show how many articles match if you click that pill, given the other active filters.
+
+### Shareable URLs
+
+All filters are serialised into URL params: `issue`, `status`, `section`, `reviewer`, `q` (search), and `id` (current article). Copy the URL to share your exact view — the recipient gets the same filters and article position.
 
 ### Keyboard shortcuts
 
@@ -140,7 +145,7 @@ All endpoints require authenticated session. Base: `/api/v1/qa-splits/`.
 | `GET` | `/articles/{id}/html` | Return HTML galley body (sandboxed) |
 | `GET` | `/articles/{id}/classification` | References (from citations table) + notes/bios/provenance counts |
 | `POST` | `/reviews` | Submit review: `{submissionId, decision, comment}` |
-| `GET` | `/nav/random-unreviewed` | Random unreviewed submission_id |
+| `GET` | `/nav/random-unreviewed` | Batch of random unreviewed submission_ids |
 | `GET` | `/nav/problem-case` | Next problem case with reason |
 | `GET` | `/stats` | QA progress: overall counts, section breakdown |
 

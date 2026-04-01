@@ -555,9 +555,9 @@ body {
 
 .qa-drawer-item {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 6px 12px;
     cursor: pointer;
     font-family: var(--font-ui);
     font-size: 13px;
@@ -594,11 +594,9 @@ body {
 .qa-drawer-item-status-needs_fix { color: var(--color-fix); font-weight: 700; }
 
 .qa-drawer-item-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     flex: 1;
     min-width: 0;
+    line-height: 1.35;
 }
 
 .qa-drawer-nav {
@@ -633,15 +631,25 @@ body {
     text-align: center;
 }
 
+.qa-drawer-random-label {
+    color: var(--accent);
+    margin-left: 8px;
+    font-style: italic;
+}
+
+.qa-drawer-clear-row {
+    padding: 2px 12px 6px;
+    text-align: right;
+}
+
 .qa-drawer-clear {
     background: none;
     border: none;
     color: var(--accent);
     cursor: pointer;
     font-family: var(--font-ui);
-    font-size: 12px;
+    font-size: 11px;
     text-decoration: underline;
-    margin-left: 8px;
 }
 
 

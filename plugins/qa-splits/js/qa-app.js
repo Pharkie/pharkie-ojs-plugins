@@ -14,6 +14,7 @@ document.addEventListener('alpine:init', () => {
         api: window.QA_CONFIG.apiBase,
         pluginUrl: window.QA_CONFIG.pluginUrl,
         csrfToken: window.QA_CONFIG.csrfToken,
+        currentUsername: window.QA_CONFIG.username,
 
         // Article data
         articles: [],
@@ -38,6 +39,7 @@ document.addEventListener('alpine:init', () => {
         issueFilter: '',
         activeStatuses: new Set(),
         activeSections: new Set(),
+        activeReviewers: new Set(),
 
         // Review UI
         showRejectForm: false,
@@ -77,16 +79,26 @@ document.addEventListener('alpine:init', () => {
 
                 this.workingSet = this.articles.map((_, i) => i);
 
-                // Parse URL params
+                // Parse URL params — restore all filters
                 const params = new URL(window.location).searchParams;
-                const urlSet = params.get('set');
-                const urlQ = params.get('q');
-                const urlPos = parseInt(params.get('pos'), 10);
                 const urlId = parseInt(params.get('id'), 10);
+                let hasFilters = false;
 
-                if (urlSet && urlQ) {
-                    this.applyFilterFromUrl(urlSet, urlQ);
-                    const si = urlPos > 0 ? urlPos - 1 : 0;
+                if (params.get('issue')) { this.issueFilter = params.get('issue'); hasFilters = true; }
+                if (params.get('status')) { params.get('status').split(',').forEach(s => this.activeStatuses.add(s)); hasFilters = true; }
+                if (params.get('section')) { params.get('section').split(',').forEach(s => this.activeSections.add(s)); hasFilters = true; }
+                if (params.get('reviewer')) { params.get('reviewer').split(',').forEach(s => this.activeReviewers.add(s)); hasFilters = true; }
+                if (params.get('q')) { this.searchQuery = params.get('q'); hasFilters = true; }
+                if (hasFilters) this.refilter();
+
+                if (hasFilters) {
+                    // Navigate to the URL article within the filtered set, or first match
+                    let si = 0;
+                    if (urlId) {
+                        const artIdx = this.articles.findIndex(a => a.submission_id === urlId);
+                        const found = this.workingSet.indexOf(artIdx);
+                        if (found >= 0) si = found;
+                    }
                     this.setIndex = si;
                     await this.loadArticle(this.workingSet[si]);
                 } else {
@@ -221,14 +233,22 @@ document.addEventListener('alpine:init', () => {
             try {
                 const res = await fetch(this.api + '/nav/random-unreviewed', { credentials: 'same-origin' });
                 const data = await res.json();
-                if (data.submission_id) {
-                    const idx = this.articles.findIndex(a => a.submission_id === data.submission_id);
-                    if (idx >= 0) {
-                        const si = this.workingSet.indexOf(idx);
-                        if (si >= 0) this.goToSetIndex(si);
-                        else this.loadArticle(idx);
-                    }
-                }
+                const ids = data.submission_ids || [];
+                if (ids.length === 0) return;
+
+                const indices = ids
+                    .map(id => this.articles.findIndex(a => a.submission_id === id))
+                    .filter(i => i >= 0);
+                if (indices.length === 0) return;
+
+                this.searchQuery = '';
+                this.issueFilter = '';
+                this.activeStatuses.clear();
+                this.activeSections.clear();
+                this.activeReviewers.clear();
+                this.workingSet = indices;
+                this.setFilter = { type: 'random', query: 'random' };
+                this.goToSetIndex(0);
             } catch (err) {
                 console.error('Random navigation error:', err);
             }
@@ -572,6 +592,35 @@ document.addEventListener('alpine:init', () => {
                 .map(([k, c]) => ({ key: k, label: k, count: c }));
         },
 
+        get _baseFilteredForReviewers() {
+            const q = this.searchQuery.toLowerCase();
+            const issue = this.issueFilter;
+            return this.articles.filter(a => {
+                if (issue && (a.volume + '.' + a.number) !== issue) return false;
+                if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
+                if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
+                if (q && !a.title.toLowerCase().includes(q)
+                    && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                    && !(a.section || '').toLowerCase().includes(q)
+                    && !String(a.submission_id).includes(q)) return false;
+                return true;
+            });
+        },
+
+        get reviewerPills() {
+            const base = this._baseFilteredForReviewers;
+            let byMe = 0, byOthers = 0;
+            base.forEach(a => {
+                if (!a.reviewer) return;
+                if (a.reviewer === 'you' || a.reviewer === this.currentUsername) byMe++;
+                else byOthers++;
+            });
+            return [
+                { key: 'me', label: 'By me', count: byMe },
+                { key: 'others', label: 'By others', count: byOthers },
+            ].filter(p => p.count > 0);
+        },
+
         toggleStatus(key) {
             if (this.activeStatuses.has(key)) this.activeStatuses.delete(key);
             else this.activeStatuses.add(key);
@@ -587,6 +636,13 @@ document.addEventListener('alpine:init', () => {
         isStatusActive(key) { return this.activeStatuses.has(key); },
         isSectionActive(key) { return this.activeSections.has(key); },
 
+        toggleReviewer(key) {
+            if (this.activeReviewers.has(key)) this.activeReviewers.delete(key);
+            else this.activeReviewers.add(key);
+            this.refilter();
+        },
+        isReviewerActive(key) { return this.activeReviewers.has(key); },
+
         refilter() {
             const q = this.searchQuery.toLowerCase();
             const issue = this.issueFilter;
@@ -596,18 +652,29 @@ document.addEventListener('alpine:init', () => {
                 if (issue && (a.volume + '.' + a.number) !== issue) return;
                 if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
                 if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
-                if (q && !a.title.toLowerCase().includes(q)
-                    && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                    && !(a.section || '').toLowerCase().includes(q)
-                    && !String(a.submission_id).includes(q)) return;
+                if (this.activeReviewers.size > 0) {
+                    const isMine = a.reviewer === 'you' || a.reviewer === this.currentUsername;
+                    const byMe = this.activeReviewers.has('me');
+                    const byOthers = this.activeReviewers.has('others');
+                    if (byMe && !byOthers && !isMine) return;
+                    if (byOthers && !byMe && (isMine || !a.reviewer)) return;
+                    if (byMe && byOthers && !a.reviewer) return;
+                }
+                if (q) {
+                    const isNumeric = /^\d+$/.test(q);
+                    if (isNumeric) {
+                        if (String(a.submission_id) !== q) return;
+                    } else {
+                        if (!a.title.toLowerCase().includes(q)
+                            && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                            && !(a.section || '').toLowerCase().includes(q)
+                            && String(a.submission_id) !== q) return;
+                    }
+                }
                 this.workingSet.push(i);
             });
 
-            if (issue) this.setFilter = { type: 'issue', query: issue };
-            else if (this.activeStatuses.size === 1) this.setFilter = { type: 'status', query: [...this.activeStatuses][0] };
-            else if (q) this.setFilter = { type: 'search', query: this.searchQuery };
-            else this.setFilter = null;
-
+            this.setFilter = this.hasFilters ? { type: 'filters' } : null;
             this.setIndex = this.workingSet.indexOf(this.currentIndex);
             if (this.setIndex < 0 && this.workingSet.length > 0) {
                 this.goToSetIndex(0);
@@ -620,18 +687,12 @@ document.addEventListener('alpine:init', () => {
             this.issueFilter = '';
             this.activeStatuses.clear();
             this.activeSections.clear();
+            this.activeReviewers.clear();
             this.refilter();
         },
 
         get hasFilters() {
-            return this.searchQuery || this.issueFilter || this.activeStatuses.size > 0 || this.activeSections.size > 0;
-        },
-
-        applyFilterFromUrl(type, query) {
-            if (type === 'issue') this.issueFilter = query;
-            else if (type === 'status') this.activeStatuses.add(query);
-            else if (type === 'search') this.searchQuery = query;
-            this.refilter();
+            return this.searchQuery || this.issueFilter || this.activeStatuses.size > 0 || this.activeSections.size > 0 || this.activeReviewers.size > 0 || (this.setFilter && this.setFilter.type === 'random');
         },
 
         // ── Working set article list ──
@@ -659,17 +720,23 @@ document.addEventListener('alpine:init', () => {
 
         updateUrl() {
             const url = new URL(window.location);
-            if (this.setFilter) {
-                url.searchParams.set('set', this.setFilter.type);
-                url.searchParams.set('q', this.setFilter.query);
-                url.searchParams.set('pos', String(this.setIndex + 1));
-                url.searchParams.delete('id');
-            } else {
-                url.searchParams.delete('set');
-                url.searchParams.delete('q');
-                url.searchParams.delete('pos');
-                if (this.currentIndex >= 0) url.searchParams.set('id', this.articles[this.currentIndex].submission_id);
-            }
+            // Clear legacy params
+            url.searchParams.delete('set');
+            url.searchParams.delete('pos');
+
+            // Serialize all active filters
+            const setOrDelete = (key, val) => val ? url.searchParams.set(key, val) : url.searchParams.delete(key);
+
+            setOrDelete('issue', this.issueFilter);
+            setOrDelete('status', this.activeStatuses.size > 0 ? [...this.activeStatuses].sort().join(',') : '');
+            setOrDelete('section', this.activeSections.size > 0 ? [...this.activeSections].sort().join(',') : '');
+            setOrDelete('reviewer', this.activeReviewers.size > 0 ? [...this.activeReviewers].sort().join(',') : '');
+            setOrDelete('q', this.searchQuery);
+
+            // Always store current article ID for direct linking
+            if (this.currentIndex >= 0) url.searchParams.set('id', this.articles[this.currentIndex].submission_id);
+            else url.searchParams.delete('id');
+
             history.replaceState(null, '', url);
         },
 
