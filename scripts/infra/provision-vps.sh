@@ -91,6 +91,17 @@ ufw allow 8081/tcp comment 'OJS staging' > /dev/null
 ufw --force enable
 echo "[ok] ufw active (22, 80, 443, 8080, 8081 allowed)."
 
+# --- DNS fallback ---
+echo "--- DNS fallback ---"
+RESOLVED_CONF="/etc/systemd/resolved.conf"
+if grep -q '^FallbackDNS=' "$RESOLVED_CONF" 2>/dev/null; then
+  echo "[ok] Fallback DNS already configured."
+else
+  sed -i 's/^#FallbackDNS=$/FallbackDNS=1.1.1.1 8.8.8.8/' "$RESOLVED_CONF"
+  systemctl restart systemd-resolved
+  echo "[ok] Fallback DNS set (1.1.1.1, 8.8.8.8)."
+fi
+
 # --- Docker log rotation ---
 echo "--- Docker log rotation ---"
 DAEMON_JSON="/etc/docker/daemon.json"
