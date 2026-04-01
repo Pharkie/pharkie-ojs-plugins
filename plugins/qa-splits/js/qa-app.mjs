@@ -224,9 +224,9 @@ Alpine.data('qaApp', () => ({
         this.bindKeys();
         this.setupPdfResize();
 
-        // Trigger Alpine reactivity when find controller updates
-        _eventBus.on('updatefindmatchescount', () => { this._findTick++; });
-        _eventBus.on('updatefindcontrolstate', () => { this._findTick++; });
+        // Trigger Alpine reactivity when find controller updates, scroll to active match
+        _eventBus.on('updatefindmatchescount', () => { this._findTick++; this._scrollToActiveMatch(); });
+        _eventBus.on('updatefindcontrolstate', () => { this._findTick++; this._scrollToActiveMatch(); });
         // All pages are visible (we render them all at once, no virtual scrolling)
         _findController.onIsPageVisible = () => true;
 
@@ -601,6 +601,13 @@ Alpine.data('qaApp', () => ({
     clearPdfSearch() {
         this.pdfSearchQuery = '';
         _eventBus.dispatch('findbarclose', {});
+    },
+
+    _scrollToActiveMatch() {
+        requestAnimationFrame(() => {
+            const el = document.querySelector('#pdf-container .highlight.selected');
+            if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
     },
 
     get pdfSearchInfo() {

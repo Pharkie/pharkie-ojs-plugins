@@ -118,8 +118,16 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 | `A` | Approve and advance |
 | `R` | Open Request Fix form |
 | `Ctrl+Enter` | Submit fix request |
+| `Ctrl+F` / `Cmd+F` | Search within PDF |
+| `Enter` / `Shift+Enter` | Next / previous search match |
 | `Escape` | Cancel / close |
 | `?` | Toggle keyboard shortcuts help |
+
+### PDF viewer
+
+- **Text selection**: Select and copy text directly from the PDF
+- **Search**: Click the magnifying glass icon or press `Ctrl+F` to search within the current PDF. Matches are highlighted with next/previous navigation.
+- Uses pdf.js v5 with official `TextLayerBuilder` and `PDFFindController` components
 
 ### Review workflow
 
