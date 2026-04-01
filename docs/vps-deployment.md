@@ -44,6 +44,7 @@ OJS and WordPress both run PHP — they benefit from CPU and RAM more than disk.
 | fail2ban | Default install + enable | Protects SSH against brute force. Docker services not covered (logs not in host syslog). |
 | Unattended upgrades | `unattended-upgrades` package | Security-only patches applied automatically (Ubuntu 24.04 default). |
 | Host firewall (ufw) | Allow 22, 80, 443, 8080, 8081; default deny | Backup to Hetzner cloud firewall. |
+| DNS fallback | `FallbackDNS=1.1.1.1 8.8.8.8` in `resolved.conf` | Prevents backup failures and service timeouts during upstream DNS outages. |
 | Docker log rotation | `daemon.json` (10m x 3 files) | Requires Docker restart (brief container restart). |
 | Deploy user | `deploy` user with docker group + limited sudoers | All scripts use `deploy@` (not root). Root key auth kept as emergency backdoor. |
 | Container security | `cap_drop: ALL` + per-service `cap_add` | `no-new-privileges` on all. Web (wp, ojs): CHOWN, DAC_OVERRIDE, FOWNER, NET_BIND_SERVICE, SETGID, SETUID. DB: same minus NET_BIND_SERVICE. Caddy: NET_BIND_SERVICE only. |
