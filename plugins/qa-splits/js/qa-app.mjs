@@ -15,8 +15,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.mjs', import.
 const _eventBus = new EventBus();
 const _linkService = new PDFLinkService({ eventBus: _eventBus });
 // PDFLinkService.page reads pdfViewer.currentPageNumber — provide a stub
-_linkService.pdfViewer = { currentPageNumber: 1, set currentPageNumber(v) {} };
+_linkService.pdfViewer = { _pageNum: 1, get currentPageNumber() { return this._pageNum; }, set currentPageNumber(v) { this._pageNum = v; } };
 const _findController = new PDFFindController({ linkService: _linkService, eventBus: _eventBus });
+
+// Expose for debugging (remove in production if desired)
+window._pdfFindController = _findController;
 
 /**
  * Minimal TextHighlighter compatible with TextLayerBuilder.
@@ -80,65 +83,86 @@ class _TextHighlighter {
         }
         return result;
     }
+    // Copied from pdf.js TextHighlighter._renderMatches — handles text node
+    // splitting, multi-div matches, selected state, and scrollMatchIntoView.
     _renderMatches(matches) {
         if (matches.length === 0) return;
-        const { findController, textDivs, textContentItemsStr } = this;
-        const isSelected = (idx, mIdx) =>
-            mIdx === findController.selected.matchIdx && idx === findController.selected.pageIdx;
+        const { findController, pageIdx, textContentItemsStr, textDivs } = this;
+        const isSelectedPage = pageIdx === findController.selected.pageIdx;
+        const selectedMatchIdx = findController.selected.matchIdx;
+        const highlightAll = findController.state.highlightAll;
+        let prevEnd = null;
         const infinity = { divIdx: -1, offset: undefined };
 
-        for (let m = 0, mm = matches.length; m < mm; m++) {
-            let match = matches[m];
-            let begin = match.begin;
-            const end = match.end;
-            const isSelectedMatch = isSelected(this.pageIdx, m);
+        function beginText(begin, className) {
+            textDivs[begin.divIdx].textContent = '';
+            return appendTextToDiv(begin.divIdx, 0, begin.offset, className);
+        }
+        function appendTextToDiv(divIdx, fromOffset, toOffset, className) {
+            let div = textDivs[divIdx];
+            if (div.nodeType === Node.TEXT_NODE) {
+                const span = document.createElement('span');
+                div.before(span);
+                span.append(div);
+                textDivs[divIdx] = span;
+                div = span;
+            }
+            const content = textContentItemsStr[divIdx].substring(fromOffset, toOffset);
+            const node = document.createTextNode(content);
+            if (className) {
+                const span = document.createElement('span');
+                span.className = `${className} appended`;
+                span.append(node);
+                div.append(span);
+                return className.includes('selected') ? span : null;
+            }
+            div.append(node);
+            return 0;
+        }
 
-            if (isSelectedMatch) {
+        let i0 = selectedMatchIdx, i1 = i0 + 1;
+        if (highlightAll) { i0 = 0; i1 = matches.length; }
+        else if (!isSelectedPage) return;
+
+        let lastDivIdx = -1, lastOffset = -1;
+        for (let i = i0; i < i1; i++) {
+            const match = matches[i];
+            const begin = match.begin;
+            if (begin.divIdx === lastDivIdx && begin.offset === lastOffset) continue;
+            lastDivIdx = begin.divIdx;
+            lastOffset = begin.offset;
+            const end = match.end;
+            const isSelected = isSelectedPage && i === selectedMatchIdx;
+            const highlightSuffix = isSelected ? ' selected' : '';
+            let selectedSpan = null;
+
+            if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
+                if (prevEnd !== null) appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+                beginText(begin);
+            } else {
+                appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
+            }
+
+            if (begin.divIdx === end.divIdx) {
+                selectedSpan = appendTextToDiv(begin.divIdx, begin.offset, end.offset, 'highlight' + highlightSuffix);
+            } else {
+                selectedSpan = appendTextToDiv(begin.divIdx, begin.offset, infinity.offset, 'highlight begin' + highlightSuffix);
+                for (let n = begin.divIdx + 1; n < end.divIdx; n++) {
+                    textDivs[n].className = 'highlight middle' + highlightSuffix;
+                }
+                beginText(end, 'highlight end' + highlightSuffix);
+            }
+            prevEnd = end;
+
+            if (isSelected) {
                 findController.scrollMatchIntoView({
-                    element: textDivs[begin.divIdx],
-                    selectedLeft: 0, pageIndex: this.pageIdx, matchIndex: m
+                    element: selectedSpan,
+                    pageIndex: pageIdx,
+                    matchIndex: selectedMatchIdx,
                 });
             }
-
-            if (!begin.divIdx !== undefined && begin.divIdx === end.divIdx) {
-                // Single div match
-                const div = textDivs[begin.divIdx];
-                const content = textContentItemsStr[begin.divIdx];
-                const before = content.substring(0, begin.offset);
-                const mid = content.substring(begin.offset, end.offset);
-                const after = content.substring(end.offset);
-                div.textContent = '';
-                if (before) div.append(before);
-                const span = document.createElement('span');
-                span.className = 'highlight' + (isSelectedMatch ? ' selected' : '');
-                span.append(mid);
-                div.append(span);
-                if (after) div.append(after);
-            } else {
-                // Multi-div match
-                for (let n = begin.divIdx; n <= end.divIdx; n++) {
-                    const div = textDivs[n];
-                    const content = textContentItemsStr[n];
-                    const startOff = n === begin.divIdx ? begin.offset : 0;
-                    const endOff = n === end.divIdx ? end.offset : content.length;
-                    const before = content.substring(0, startOff);
-                    const mid = content.substring(startOff, endOff);
-                    const after = content.substring(endOff);
-                    div.textContent = '';
-                    if (before) div.append(before);
-                    const span = document.createElement('span');
-                    let cls = 'highlight';
-                    if (n === begin.divIdx) cls += ' begin';
-                    else if (n === end.divIdx) cls += ' end';
-                    else cls += ' middle';
-                    if (isSelectedMatch) cls += ' selected';
-                    span.className = cls;
-                    span.append(mid);
-                    div.append(span);
-                    if (after) div.append(after);
-                }
-            }
         }
+        if (prevEnd) appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
     }
     _updateMatches(reset = false) {
         if (!this.enabled && !reset) return;
@@ -605,7 +629,8 @@ Alpine.data('qaApp', () => ({
 
     _scrollToActiveMatch() {
         requestAnimationFrame(() => {
-            const el = document.querySelector('#pdf-container .highlight.selected');
+            const el = document.querySelector('#pdf-container .highlight.selected')
+                    || document.querySelector('#pdf-container .highlight');
             if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         });
     },

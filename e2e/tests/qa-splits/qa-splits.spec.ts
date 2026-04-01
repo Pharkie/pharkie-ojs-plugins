@@ -174,6 +174,38 @@ test.describe('QA Splits plugin', () => {
     await expect(page.locator('.textLayer .highlight')).toHaveCount(0);
   });
 
+  test('PDF search navigates between matches', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${QA_URL}?id=${articleId}`);
+    await expect(page.locator('#pdf-container .textLayer span').first()).toBeAttached({ timeout: 60_000 });
+
+    await page.click('.qa-pdf-search-toggle');
+    const searchInput = page.locator('#pdf-search-input');
+    await searchInput.fill('the');
+    await page.waitForTimeout(1500);
+
+    // Should show "1 / N" initially
+    const info1 = await page.locator('.qa-pdf-search-info').textContent();
+    expect(info1).toMatch(/^1 \/ \d+$/);
+
+    // Should have one selected highlight
+    await expect(page.locator('.highlight.selected')).toHaveCount(1);
+
+    // Enter advances to next match
+    await searchInput.press('Enter');
+    await page.waitForTimeout(500);
+    const info2 = await page.locator('.qa-pdf-search-info').textContent();
+    expect(info2).toMatch(/^2 \/ \d+$/);
+
+    // Shift+Enter goes back
+    await searchInput.press('Shift+Enter');
+    await page.waitForTimeout(500);
+    const info3 = await page.locator('.qa-pdf-search-info').textContent();
+    expect(info3).toMatch(/^1 \/ \d+$/);
+  });
+
   // ── HTML galley ──
 
   test('renders HTML galley in right pane', async ({ page }) => {
