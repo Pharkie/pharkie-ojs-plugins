@@ -6,191 +6,21 @@
  */
 
 import * as pdfjsLib from './pdf.min.mjs';
-import { EventBus, PDFFindController, PDFLinkService, TextLayerBuilder } from './pdf_viewer.mjs';
+import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from './pdf_viewer.mjs';
 import Alpine from './alpine.esm.min.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.mjs', import.meta.url).href;
 
-// pdf.js viewer infrastructure — shared across all pages
+// pdf.js viewer infrastructure
 const _eventBus = new EventBus();
 const _linkService = new PDFLinkService({ eventBus: _eventBus });
-// PDFLinkService.page reads pdfViewer.currentPageNumber — provide a stub
-_linkService.pdfViewer = { _pageNum: 1, get currentPageNumber() { return this._pageNum; }, set currentPageNumber(v) { this._pageNum = v; } };
 const _findController = new PDFFindController({ linkService: _linkService, eventBus: _eventBus });
 
-// Expose for debugging (remove in production if desired)
-window._pdfFindController = _findController;
+// Full PDFViewer — handles canvas, text layer, find highlighting, resize, everything
+let _viewer = null;
 
-/**
- * Minimal TextHighlighter compatible with TextLayerBuilder.
- * Mirrors the unexported TextHighlighter from pdf_viewer.mjs — same interface,
- * wired to our shared findController/eventBus.
- */
-class _TextHighlighter {
-    #eventAbortController = null;
-    constructor(pageIndex) {
-        this.findController = _findController;
-        this.eventBus = _eventBus;
-        this.pageIdx = pageIndex;
-        this.matches = [];
-        this.textDivs = null;
-        this.textContentItemsStr = null;
-        this.enabled = false;
-    }
-    setTextMapping(divs, texts) {
-        this.textDivs = divs;
-        this.textContentItemsStr = texts;
-    }
-    enable() {
-        if (!this.textDivs?.length) return;
-        if (this.enabled) return;
-        this.enabled = true;
-        this.#eventAbortController = new AbortController();
-        this.eventBus._on('updatetextlayermatches', evt => {
-            if (evt.pageIndex === this.pageIdx || evt.pageIndex === -1) {
-                this._updateMatches();
-            }
-        }, { signal: this.#eventAbortController.signal });
-        this._updateMatches();
-    }
-    disable() {
-        if (!this.enabled) return;
-        this.enabled = false;
-        this.#eventAbortController?.abort();
-        this.#eventAbortController = null;
-        this._updateMatches(true);
-    }
-    _convertMatches(matches, matchesLength) {
-        if (!matches) return [];
-        const { textContentItemsStr } = this;
-        let i = 0, iIndex = 0;
-        const end = textContentItemsStr.length - 1;
-        const result = [];
-        for (let m = 0, mm = matches.length; m < mm; m++) {
-            let matchIdx = matches[m];
-            while (i !== end && matchIdx >= iIndex + textContentItemsStr[i].length) {
-                iIndex += textContentItemsStr[i].length;
-                i++;
-            }
-            if (i === end && matchIdx >= iIndex + textContentItemsStr[i].length) continue;
-            const begin = { divIdx: i, offset: matchIdx - iIndex };
-            matchIdx += matchesLength ? matchesLength[m] : this.findController.state.query.length;
-            while (i !== end && matchIdx > iIndex + textContentItemsStr[i].length) {
-                iIndex += textContentItemsStr[i].length;
-                i++;
-            }
-            result.push({ begin, end: { divIdx: i, offset: matchIdx - iIndex } });
-        }
-        return result;
-    }
-    // Copied from pdf.js TextHighlighter._renderMatches — handles text node
-    // splitting, multi-div matches, selected state, and scrollMatchIntoView.
-    _renderMatches(matches) {
-        if (matches.length === 0) return;
-        const { findController, pageIdx, textContentItemsStr, textDivs } = this;
-        const isSelectedPage = pageIdx === findController.selected.pageIdx;
-        const selectedMatchIdx = findController.selected.matchIdx;
-        const highlightAll = findController.state.highlightAll;
-        let prevEnd = null;
-        const infinity = { divIdx: -1, offset: undefined };
-
-        function beginText(begin, className) {
-            textDivs[begin.divIdx].textContent = '';
-            return appendTextToDiv(begin.divIdx, 0, begin.offset, className);
-        }
-        function appendTextToDiv(divIdx, fromOffset, toOffset, className) {
-            let div = textDivs[divIdx];
-            if (div.nodeType === Node.TEXT_NODE) {
-                const span = document.createElement('span');
-                div.before(span);
-                span.append(div);
-                textDivs[divIdx] = span;
-                div = span;
-            }
-            const content = textContentItemsStr[divIdx].substring(fromOffset, toOffset);
-            const node = document.createTextNode(content);
-            if (className) {
-                const span = document.createElement('span');
-                span.className = `${className} appended`;
-                span.append(node);
-                div.append(span);
-                return className.includes('selected') ? span : null;
-            }
-            div.append(node);
-            return 0;
-        }
-
-        let i0 = selectedMatchIdx, i1 = i0 + 1;
-        if (highlightAll) { i0 = 0; i1 = matches.length; }
-        else if (!isSelectedPage) return;
-
-        let lastDivIdx = -1, lastOffset = -1;
-        for (let i = i0; i < i1; i++) {
-            const match = matches[i];
-            const begin = match.begin;
-            if (begin.divIdx === lastDivIdx && begin.offset === lastOffset) continue;
-            lastDivIdx = begin.divIdx;
-            lastOffset = begin.offset;
-            const end = match.end;
-            const isSelected = isSelectedPage && i === selectedMatchIdx;
-            const highlightSuffix = isSelected ? ' selected' : '';
-            let selectedSpan = null;
-
-            if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
-                if (prevEnd !== null) appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
-                beginText(begin);
-            } else {
-                appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
-            }
-
-            if (begin.divIdx === end.divIdx) {
-                selectedSpan = appendTextToDiv(begin.divIdx, begin.offset, end.offset, 'highlight' + highlightSuffix);
-            } else {
-                selectedSpan = appendTextToDiv(begin.divIdx, begin.offset, infinity.offset, 'highlight begin' + highlightSuffix);
-                for (let n = begin.divIdx + 1; n < end.divIdx; n++) {
-                    textDivs[n].className = 'highlight middle' + highlightSuffix;
-                }
-                beginText(end, 'highlight end' + highlightSuffix);
-            }
-            prevEnd = end;
-
-            if (isSelected) {
-                findController.scrollMatchIntoView({
-                    element: selectedSpan,
-                    pageIndex: pageIdx,
-                    matchIndex: selectedMatchIdx,
-                });
-            }
-        }
-        if (prevEnd) appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
-    }
-    _updateMatches(reset = false) {
-        if (!this.enabled && !reset) return;
-        const { findController, matches, textContentItemsStr, textDivs } = this;
-        // Clear previous highlights
-        let clearedUntilDivIdx = -1;
-        for (const match of matches) {
-            const begin = Math.max(clearedUntilDivIdx, match.begin.divIdx);
-            for (let n = begin; n <= match.end.divIdx; n++) {
-                const div = textDivs[n];
-                div.textContent = textContentItemsStr[n];
-                div.className = '';
-            }
-            clearedUntilDivIdx = match.end.divIdx + 1;
-        }
-        if (!findController?.highlightMatches || reset) {
-            this.matches = [];
-            return;
-        }
-        const pageMatches = findController.pageMatches[this.pageIdx] || null;
-        const pageMatchesLength = findController.pageMatchesLength[this.pageIdx] || null;
-        this.matches = this._convertMatches(pageMatches, pageMatchesLength);
-        this._renderMatches(this.matches);
-    }
-}
-
-// Non-reactive state — PDF.js objects can't be proxied (private class fields)
-const _pdf = { doc: null, loadGen: 0, scrollHandler: null, textBuilders: [] };
+// Non-reactive state
+const _pdf = { doc: null, loadGen: 0 };
 
 Alpine.data('qaApp', () => ({
     // Config
@@ -246,13 +76,27 @@ Alpine.data('qaApp', () => ({
 
     async init() {
         this.bindKeys();
-        this.setupPdfResize();
 
-        // Trigger Alpine reactivity when find controller updates, scroll to active match
-        _eventBus.on('updatefindmatchescount', () => { this._findTick++; this._scrollToActiveMatch(); });
-        _eventBus.on('updatefindcontrolstate', () => { this._findTick++; this._scrollToActiveMatch(); });
-        // All pages are visible (we render them all at once, no virtual scrolling)
-        _findController.onIsPageVisible = () => true;
+        // Create the PDFViewer — it manages all page rendering, text layers, find
+        _viewer = new PDFViewer({
+            container: document.getElementById('pdf-container'),
+            viewer: document.getElementById('pdf-viewer'),
+            eventBus: _eventBus,
+            linkService: _linkService,
+            findController: _findController,
+            annotationMode: 0, // DISABLE
+            removePageBorders: true,
+        });
+        _linkService.setViewer(_viewer);
+
+        // Trigger Alpine reactivity when find controller updates
+        _eventBus.on('updatefindmatchescount', () => { this._findTick++; });
+        _eventBus.on('updatefindcontrolstate', () => { this._findTick++; });
+
+        // Update page indicator on scroll
+        _eventBus.on('pagechanging', ({ pageNumber }) => {
+            this.pdfPageInfo = 'Page ' + pageNumber + ' of ' + (_pdf.doc ? _pdf.doc.numPages : 0);
+        });
 
         await this.loadArticles();
     },
@@ -406,7 +250,7 @@ Alpine.data('qaApp', () => ({
 
         // Scroll right pane and PDF container to top
         document.querySelector('.qa-right')?.scrollTo(0, 0);
-        document.querySelector('.qa-pdf-container')?.scrollTo(0, 0);
+        document.getElementById('pdf-container')?.scrollTo(0, 0);
         this.prefetchNearby(this.setIndex);
     },
 
@@ -453,14 +297,6 @@ Alpine.data('qaApp', () => ({
 
     async loadPdf(submissionId) {
         const gen = _pdf.loadGen;
-        if (_pdf.doc) { _pdf.doc.destroy(); _pdf.doc = null; }
-
-        const container = document.getElementById('pdf-container');
-        if (_pdf.scrollHandler) {
-            container.removeEventListener('scroll', _pdf.scrollHandler);
-            _pdf.scrollHandler = null;
-        }
-        container.innerHTML = '';
         this.clearPdfSearch();
         const searchInput = document.getElementById('pdf-search-input');
         if (searchInput) searchInput.value = '';
@@ -478,85 +314,21 @@ Alpine.data('qaApp', () => ({
             if (gen !== _pdf.loadGen) { doc.destroy(); return; }
 
             _pdf.doc = doc;
-            _pdf.textBuilders = [];
             _linkService.setDocument(doc);
-            _findController.setDocument(doc);
+            _viewer.setDocument(doc);
+
+            // Wait for first page to render
+            await new Promise(resolve => {
+                _eventBus.on('pagerendered', resolve, { once: true });
+            });
+
             this.pdfLoading = false;
-            const total = doc.numPages;
-            this.pdfPageInfo = total + ' page' + (total !== 1 ? 's' : '');
-
-            for (let i = 1; i <= total; i++) {
-                if (gen !== _pdf.loadGen) return;
-                await this.renderPdfPage(i);
-            }
-
-            _pdf.scrollHandler = () => this.updatePageIndicator();
-            container.addEventListener('scroll', _pdf.scrollHandler);
+            this.pdfPageInfo = doc.numPages + ' page' + (doc.numPages !== 1 ? 's' : '');
         } catch (err) {
             if (gen !== _pdf.loadGen) return;
             this.pdfLoading = false;
             this.pdfPageInfo = 'PDF not available';
         }
-    },
-
-    async renderPdfPage(pageNum) {
-        const page = await _pdf.doc.getPage(pageNum);
-        const container = document.getElementById('pdf-container');
-        const containerWidth = container.clientWidth - 16;
-        const viewport = page.getViewport({ scale: 1 });
-        const scale = containerWidth / viewport.width;
-        const sv = page.getViewport({ scale });
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'qa-pdf-page';
-        wrapper.dataset.page = pageNum;
-        wrapper.style.aspectRatio = sv.width + '/' + sv.height;
-        // --scale-factor drives text layer sizing via setLayerDimensions()
-        wrapper.style.setProperty('--scale-factor', scale);
-        wrapper.dataset.pageWidth = viewport.width;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = sv.width;
-        canvas.height = sv.height;
-        wrapper.appendChild(canvas);
-
-        // Use official TextLayerBuilder with find-controller highlighting
-        const textBuilder = new TextLayerBuilder({
-            pdfPage: page,
-            highlighter: new _TextHighlighter(pageNum - 1),
-        });
-        wrapper.appendChild(textBuilder.div);
-        _pdf.textBuilders[pageNum - 1] = textBuilder;
-
-        container.appendChild(wrapper);
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport: sv }).promise;
-        await textBuilder.render({ viewport: sv });
-    },
-
-    updatePageIndicator() {
-        const container = document.getElementById('pdf-container');
-        const pages = container.querySelectorAll('.qa-pdf-page');
-        let currentPage = 1;
-        pages.forEach(p => {
-            if (p.offsetTop <= container.scrollTop + 50) currentPage = parseInt(p.dataset.page, 10);
-        });
-        this.pdfPageInfo = 'Page ' + currentPage + ' of ' + (_pdf.doc ? _pdf.doc.numPages : 0);
-    },
-
-    setupPdfResize() {
-        if (typeof ResizeObserver === 'undefined') return;
-        const el = document.getElementById('pdf-container');
-        if (!el) return;
-        new ResizeObserver(() => {
-            el.querySelectorAll('.qa-pdf-page').forEach(wrapper => {
-                const pageWidth = parseFloat(wrapper.dataset.pageWidth);
-                if (pageWidth) {
-                    // Recompute scale from PDF page width to current display width
-                    const containerWidth = wrapper.clientWidth;
-                    wrapper.style.setProperty('--scale-factor', containerWidth / pageWidth);
-                }
-            });
-        }).observe(el);
     },
 
     // ── PDF Search ──
@@ -627,13 +399,6 @@ Alpine.data('qaApp', () => ({
         _eventBus.dispatch('findbarclose', {});
     },
 
-    _scrollToActiveMatch() {
-        requestAnimationFrame(() => {
-            const el = document.querySelector('#pdf-container .highlight.selected')
-                    || document.querySelector('#pdf-container .highlight');
-            if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        });
-    },
 
     get pdfSearchInfo() {
         void this._findTick; // reactive dependency

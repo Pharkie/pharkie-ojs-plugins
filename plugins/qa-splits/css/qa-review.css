@@ -675,6 +675,8 @@ body {
     flex-shrink: 0;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    position: relative;
+    z-index: 10;
 }
 
 /* ── PDF search ── */
@@ -760,28 +762,22 @@ body {
     cursor: default;
 }
 
-.qa-pdf-container {
+/* PDFViewer requires an absolutely-positioned container */
+.qa-pdf-container-wrap {
     flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 12px;
-    gap: 10px;
-}
-
-.qa-pdf-page {
     position: relative;
+    min-height: 0; /* allow flex child to shrink */
+}
+#pdf-container {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+}
+#pdf-viewer .page {
+    margin: 8px auto;
     box-shadow: var(--shadow-page);
     background: #fff;
-    width: 100%;
-    max-width: 100%;
-}
-
-.qa-pdf-page canvas {
-    display: block;
-    width: 100%;
-    height: auto;
+    overflow: hidden;
 }
 
 /*
@@ -877,18 +873,6 @@ body {
     user-select: none;
 }
 .textLayer.selecting .endOfContent { top: 0; }
-
-/*
- * QA override: define --total-scale-factor from --scale-factor (set per-page
- * in JS). This mirrors the official pdf.js viewer's CSS variable chain.
- * setLayerDimensions() (called by TextLayer constructor) sizes the text layer
- * as calc(--total-scale-factor * pageWidth), so it dynamically matches the
- * displayed canvas width. No CSS transform needed — pointer events work natively.
- */
-.qa-pdf-page {
-    --scale-factor: 1;
-    --total-scale-factor: var(--scale-factor);
-}
 
 /* Override pdf.js highlight colors for search — amber instead of purple */
 .textLayer .highlight {
