@@ -7,6 +7,7 @@ PASSED=0
 FAILED=0
 TOTAL=0
 FAILURE_DETAILS=""
+_HEARTBEAT_URLS=()  # populated by register_heartbeat
 
 pass() {
   PASSED=$((PASSED + 1))
@@ -26,23 +27,65 @@ info() {
   echo "  [INFO] $1"
 }
 
+# Register a heartbeat URL so the exit trap can ping it on crash.
+register_heartbeat() {
+  [ -n "$1" ] && _HEARTBEAT_URLS+=("$1")
+}
+
+# Exit trap: ensures heartbeats always get pinged, even on crash/exit 2.
+# Without this, a script crash = missed heartbeat = false alert.
+_ping_heartbeats_on_exit() {
+  local exit_code=$?
+  if [ "$exit_code" -ne 0 ] && [ ${#_HEARTBEAT_URLS[@]} -gt 0 ]; then
+    echo ""
+    echo "  [TRAP] Script exited with code $exit_code — pinging heartbeats as failed"
+    for url in "${_HEARTBEAT_URLS[@]}"; do
+      curl -sf -d "Script crashed with exit code $exit_code" "$url/fail" > /dev/null 2>&1 || true
+    done
+  fi
+}
+trap _ping_heartbeats_on_exit EXIT
+
+# Retry wrapper for SSH commands. Retries up to 3 times with backoff.
+# Handles transient network/SSH failures from GitHub Actions runners.
+ssh_retry() {
+  local max_attempts=3
+  local attempt=1
+  local delay=5
+  local result
+  while [ $attempt -le $max_attempts ]; do
+    if result=$("$@" 2>&1); then
+      echo "$result"
+      return 0
+    fi
+    if [ $attempt -lt $max_attempts ]; then
+      echo "  [RETRY] Attempt $attempt/$max_attempts failed, retrying in ${delay}s..." >&2
+      sleep $delay
+      delay=$((delay * 2))
+    fi
+    attempt=$((attempt + 1))
+  done
+  echo "$result"
+  return 1
+}
+
 remote() {
-  $SSH_CMD "cd $REMOTE_DIR && $*" 2>&1
+  ssh_retry $SSH_CMD "cd $REMOTE_DIR && $*"
 }
 
 wp_cli() {
   remote "$COMPOSE exec -T wp wp --allow-root $*"
 }
 
-# Read a required value from remote .env. Exits the script if empty
-# (if SSH is broken, no checks will work — fail fast).
+# Read a required value from remote .env. Returns 1 on failure instead
+# of exiting — caller should check return code or use || to handle.
 require_env() {
   local var_name="$1"
   local value
-  value=$($SSH_CMD "grep '^${var_name}=' $REMOTE_DIR/.env | cut -d= -f2") || value=""
+  value=$(ssh_retry $SSH_CMD "grep '^${var_name}=' $REMOTE_DIR/.env | cut -d= -f2") || value=""
   if [ -z "$value" ]; then
-    echo "FATAL: Could not read $var_name from remote .env (SSH may be broken)"
-    exit 2
+    fail "Could not read $var_name from remote .env (SSH may be broken)"
+    return 1
   fi
   echo "$value"
 }
@@ -50,7 +93,7 @@ require_env() {
 # Read an optional value from remote .env. Returns empty string on failure.
 read_env() {
   local var_name="$1"
-  $SSH_CMD "grep '^${var_name}=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null || echo ""
+  ssh_retry $SSH_CMD "grep '^${var_name}=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null || echo ""
 }
 
 # Run a remote command and fail the check if output is empty.
@@ -72,7 +115,7 @@ require_remote() {
 require_ssh() {
   local label="$1"; shift
   local result
-  result=$($SSH_CMD "$@") || result=""
+  result=$(ssh_retry $SSH_CMD "$@") || result=""
   result=$(echo "$result" | tr -d '[:space:]')
   if [ -z "$result" ]; then
     fail "$label (SSH command returned empty — connection may be broken)"
@@ -84,7 +127,7 @@ require_ssh() {
 # Auto-detect docker compose command from running containers.
 detect_compose() {
   local compose_files
-  compose_files=$($SSH_CMD "docker inspect --format='{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' \$(docker ps -q --filter 'label=com.docker.compose.project=pharkie-ojs-plugins' | head -1) 2>/dev/null") || compose_files=""
+  compose_files=$(ssh_retry $SSH_CMD "docker inspect --format='{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' \$(docker ps -q --filter 'label=com.docker.compose.project=pharkie-ojs-plugins' | head -1) 2>/dev/null") || compose_files=""
   if [ -n "$compose_files" ]; then
     COMPOSE="docker compose"
     IFS=',' read -ra FILES <<< "$compose_files"

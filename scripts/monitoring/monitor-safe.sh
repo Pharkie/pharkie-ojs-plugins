@@ -24,14 +24,25 @@ resolve_ssh "$SSH_HOST"
 
 source "$SCRIPTS_ROOT/lib/monitor-helpers.sh"
 
+# Register heartbeat so exit trap can ping it on crash
+register_heartbeat "$BETTERSTACK_HB_HOURLY"
+
 # --- Initialise: read env, detect compose ---
 detect_compose
 
-# Required env vars — abort if SSH is broken
-OJS_BASE_URL=$(require_env "OJS_BASE_URL")
-OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH")
+# Required env vars — fail gracefully if SSH is broken
+OJS_BASE_URL=$(require_env "OJS_BASE_URL") || OJS_BASE_URL=""
+OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH") || OJS_JOURNAL_PATH=""
+API_KEY=$(require_env "WPOJS_API_KEY_SECRET") || API_KEY=""
+
+if [ -z "$OJS_BASE_URL" ] || [ -z "$OJS_JOURNAL_PATH" ] || [ -z "$API_KEY" ]; then
+  echo ""
+  echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
+  echo "FATAL: Could not read required env vars — SSH may be broken"
+  ping_heartbeat "$BETTERSTACK_HB_HOURLY" "$FAILED" "$PASSED" "$TOTAL"
+  exit 1
+fi
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
-API_KEY=$(require_env "WPOJS_API_KEY_SECRET")
 
 # Optional env vars
 WP_HOME=$(read_env "WP_HOME")
@@ -358,7 +369,7 @@ echo "--- Server Resources ---"
 LOAD=$(require_ssh "Load average" "cat /proc/loadavg") || LOAD=""
 if [ -n "$LOAD" ]; then
   LOAD_5MIN=$(echo "$LOAD" | awk '{print $2}')
-  NPROC=$($SSH_CMD "nproc") || NPROC="3"
+  NPROC=$(ssh_retry $SSH_CMD "nproc") || NPROC="3"
   LOAD_THRESHOLD=$(( NPROC * 2 ))
   info "Load average: $LOAD (threshold: $LOAD_THRESHOLD)"
   LOAD_5MIN_INT=$(echo "$LOAD_5MIN" | awk '{printf "%d", $1 * 100}')
@@ -406,7 +417,7 @@ if [ -n "$DISK_INFO" ]; then
 fi
 
 # 7e. Server uptime
-UPTIME=$($SSH_CMD "uptime -p") || UPTIME="unknown"
+UPTIME=$(ssh_retry $SSH_CMD "uptime -p") || UPTIME="unknown"
 info "Server uptime: $UPTIME"
 
 # ============================================================
@@ -463,12 +474,12 @@ else
 fi
 
 # 8d. OOM detection (last 24h only — dmesg accumulates since boot)
-UPTIME_SECS=$($SSH_CMD "cat /proc/uptime | cut -d. -f1") || UPTIME_SECS="0"
+UPTIME_SECS=$(ssh_retry $SSH_CMD "cat /proc/uptime | cut -d. -f1") || UPTIME_SECS="0"
 CUTOFF=$((UPTIME_SECS - 86400))
 if [ "$CUTOFF" -lt 0 ]; then CUTOFF=0; fi
-OOM_RECENT=$($SSH_CMD "dmesg -T 2>/dev/null | tail -500 | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_RECENT="0"
+OOM_RECENT=$(ssh_retry $SSH_CMD "dmesg -T 2>/dev/null | tail -500 | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_RECENT="0"
 OOM_RECENT=$(echo "$OOM_RECENT" | tr -d '[:space:]')
-OOM_24H=$($SSH_CMD "journalctl -k --since '24 hours ago' 2>/dev/null | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_24H="$OOM_RECENT"
+OOM_24H=$(ssh_retry $SSH_CMD "journalctl -k --since '24 hours ago' 2>/dev/null | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_24H="$OOM_RECENT"
 OOM_24H=$(echo "$OOM_24H" | tr -d '[:space:]')
 if [ "${OOM_24H:-0}" -gt 0 ] 2>/dev/null; then
   fail "OOM killer detected in last 24h ($OOM_24H occurrences)"
