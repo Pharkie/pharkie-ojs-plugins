@@ -193,6 +193,9 @@ create_monitor() {
 
 # Check frequency: 180 = 3 min (Better Stack free tier minimum)
 FREQ=180
+# Confirmation period: require 5 min of consecutive failures before alerting.
+# Filters out transient self-healing blips (e.g. brief 503s during WP auto-updates).
+CONFIRM=300
 
 echo "Creating monitors..."
 echo ""
@@ -204,6 +207,7 @@ create_monitor "SEA: WP Homepage" "$(cat <<EOF
   "url": "$WP_PUBLIC_URL",
   "pronounceable_name": "SEA: WP Homepage",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "regions": ["eu", "us"]
@@ -218,6 +222,7 @@ create_monitor "SEA: WP REST API" "$(cat <<EOF
   "url": "$WP_PUBLIC_URL/wp-json/",
   "pronounceable_name": "SEA: WP REST API",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "regions": ["eu", "us"]
@@ -232,6 +237,7 @@ create_monitor "SEA: WP Admin" "$(cat <<EOF
   "url": "$WP_PUBLIC_URL/wp-admin/",
   "pronounceable_name": "SEA: WP Admin",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "follow_redirects": true,
@@ -247,6 +253,7 @@ create_monitor "SEA: OJS Homepage" "$(cat <<EOF
   "url": "$OJS_BASE_URL",
   "pronounceable_name": "SEA: OJS Homepage",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "regions": ["eu", "us"]
@@ -261,6 +268,7 @@ create_monitor "SEA: OJS Journal" "$(cat <<EOF
   "url": "$OJS_JOURNAL_URL",
   "pronounceable_name": "SEA: OJS Journal",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "regions": ["eu", "us"]
@@ -277,6 +285,7 @@ create_monitor "SEA: OJS Article Content" "$(cat <<EOF
   "pronounceable_name": "SEA: OJS Article Content",
   "required_keyword": "Existential Analysis",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "regions": ["eu", "us"]
@@ -292,6 +301,7 @@ create_monitor "SEA: OJS Login Page" "$(cat <<EOF
   "pronounceable_name": "SEA: OJS Login Page",
   "required_keyword": "Login",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15,
   "email": true,
   "regions": ["eu", "us"]
@@ -311,6 +321,7 @@ create_monitor "SEA: HTTPS Port" "$(cat <<EOF
   "port": "443",
   "pronounceable_name": "SEA: HTTPS Port",
   "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
   "request_timeout": 15000,
   "email": true,
   "regions": ["eu", "us"]
