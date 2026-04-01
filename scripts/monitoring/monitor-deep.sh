@@ -33,13 +33,24 @@ resolve_ssh "$SSH_HOST"
 
 source "$SCRIPTS_ROOT/lib/monitor-helpers.sh"
 
+# Register heartbeat so exit trap can ping it on crash
+register_heartbeat "$BETTERSTACK_HB_DAILY"
+
 detect_compose
 
 WP_HOME=$(read_env "WP_HOME")
-OJS_BASE_URL=$(require_env "OJS_BASE_URL")
-OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH")
+OJS_BASE_URL=$(require_env "OJS_BASE_URL") || OJS_BASE_URL=""
+OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH") || OJS_JOURNAL_PATH=""
+API_KEY=$(require_env "WPOJS_API_KEY_SECRET") || API_KEY=""
+
+if [ -z "$OJS_BASE_URL" ] || [ -z "$OJS_JOURNAL_PATH" ] || [ -z "$API_KEY" ]; then
+  echo ""
+  echo "=== Deep results: $PASSED/$TOTAL passed, $FAILED failed ==="
+  echo "FATAL: Could not read required env vars — SSH may be broken"
+  ping_heartbeat "$BETTERSTACK_HB_DAILY" "$((FAILED + (SAFE_EXIT > 0 ? 1 : 0)))" "$PASSED" "$TOTAL"
+  exit 1
+fi
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
-API_KEY=$(require_env "WPOJS_API_KEY_SECRET")
 
 echo ""
 echo "================================================================"
@@ -136,24 +147,24 @@ fi
 echo ""
 echo "--- Backup Health ---"
 
-BACKUP_CRON=$($SSH_CMD "sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
+BACKUP_CRON=$(ssh_retry $SSH_CMD "sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
 if [ -n "$BACKUP_CRON" ]; then
   pass "Backup cron installed"
 else
   fail "Backup cron not installed"
 fi
 
-BACKUP_KEY=$($SSH_CMD "test -f /opt/backups/ojs/.backup-key && echo 'exists' || echo 'missing'")
+BACKUP_KEY=$(ssh_retry $SSH_CMD "test -f /opt/backups/ojs/.backup-key && echo 'exists' || echo 'missing'")
 if [ "$BACKUP_KEY" = "exists" ]; then
   pass "Backup encryption key present"
 else
   fail "Backup encryption key missing"
 fi
 
-LATEST_BACKUP=$($SSH_CMD "ls -t /opt/backups/ojs/daily/ojs-*.sql.gz.enc 2>/dev/null | head -1")
+LATEST_BACKUP=$(ssh_retry $SSH_CMD "ls -t /opt/backups/ojs/daily/ojs-*.sql.gz.enc 2>/dev/null | head -1")
 if [ -n "$LATEST_BACKUP" ]; then
-  BACKUP_AGE=$($SSH_CMD "echo \$(( (\$(date +%s) - \$(stat -c %Y '$LATEST_BACKUP')) / 3600 ))h")
-  BACKUP_SIZE=$($SSH_CMD "stat -c%s '$LATEST_BACKUP' | numfmt --to=iec")
+  BACKUP_AGE=$(ssh_retry $SSH_CMD "echo \$(( (\$(date +%s) - \$(stat -c %Y '$LATEST_BACKUP')) / 3600 ))h")
+  BACKUP_SIZE=$(ssh_retry $SSH_CMD "stat -c%s '$LATEST_BACKUP' | numfmt --to=iec")
   BACKUP_AGE_H=$(echo "$BACKUP_AGE" | tr -d 'h')
   if [ "${BACKUP_AGE_H:-0}" -gt 25 ] 2>/dev/null; then
     fail "Latest backup too old: $(basename "$LATEST_BACKUP") ($BACKUP_SIZE, ${BACKUP_AGE} old)"
