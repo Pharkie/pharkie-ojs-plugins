@@ -773,11 +773,10 @@ body {
     inset: 0;
     overflow: auto;
 }
-#pdf-viewer .page {
-    margin: 8px auto;
+/* Override pdf.js page styling for QA pane */
+.pdfViewer .page {
     box-shadow: var(--shadow-page);
-    background: #fff;
-    overflow: hidden;
+    margin: 8px auto;
 }
 
 /* Override pdf.js highlight colors for search — amber instead of purple */
