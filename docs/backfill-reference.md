@@ -18,7 +18,7 @@ backfill/split_pipeline/split_issue.sh path/to/37.1.pdf
 # 2b: Review metadata in toc.json directly or via QA Splits
 
 # Step 3: Generate XML and import into OJS
-python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o backfill/private/output/37.1/import.xml
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1
 
 # Step 4: Verify the import
@@ -255,10 +255,10 @@ python3 backfill/split_pipeline/split3_verify.py backfill/private/output/37.1/to
 python3 backfill/split_pipeline/split4_normalize_authors.py backfill/private/output/*/toc.json
 
 # Generate XML without PDFs (fast, for testing)
-python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o import.xml --no-pdfs
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json --no-pdfs
 
-# Generate XML with embedded PDFs
-python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json -o import.xml
+# Generate XML with embedded PDFs (writes import.xml next to toc.json)
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json
 
 # Verify import against OJS database
 python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/37.1/toc.json --docker
@@ -278,7 +278,7 @@ backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 2. Re-split: `backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf`
 3. Delete the affected galley file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html`
 4. Re-generate HTML: `python3 backfill/html_pipeline/pipe1_haiku_html.py backfill/private/output/<vol>.<iss>/toc.json --yes`
-5. Re-generate XML: `python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/<vol>.<iss>/toc.json -o backfill/private/output/<vol>.<iss>/import.xml`
+5. Re-generate XML: `python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/<vol>.<iss>/toc.json`
 6. Re-import: `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol>.<iss> --force`
 
 ## Fixing an HTML galley on live

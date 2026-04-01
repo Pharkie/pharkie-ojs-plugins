@@ -58,6 +58,11 @@ def jats_to_html(jats_path: Path) -> str | None:
     for child in body:
         _convert_element(child, soup, soup)
 
+    # Reviewed-work metadata (book reviews only — prepended before body)
+    article_meta = root.find('.//{*}article-meta')
+    if article_meta is not None:
+        _render_product(article_meta, soup)
+
     # Render back matter (except references)
     back = root.find('.//{*}back')
     if back is not None:
@@ -144,6 +149,86 @@ def _add_inline_content(et_el, parent, soup):
         _convert_element(child, parent, soup)
         if child.tail:
             parent.append(NavigableString(child.tail))
+
+
+def _render_product(article_meta, soup):
+    """Render JATS <product> as a reviewed-work div, prepended before body."""
+    product = article_meta.find('{*}product')
+    if product is None:
+        product = article_meta.find('product')
+    if product is None:
+        return
+
+    # Book title from <source>
+    source_el = product.find('{*}source')
+    if source_el is None:
+        source_el = product.find('source')
+    title_text = extract_text_from_element(source_el).strip() if source_el is not None else ''
+    if not title_text:
+        return
+
+    # Authors from <person-group>
+    authors = []
+    for pg in product:
+        if local_name(pg.tag) == 'person-group':
+            for name_el in pg:
+                if local_name(name_el.tag) == 'name':
+                    surname_el = name_el.find('{*}surname')
+                    if surname_el is None:
+                        surname_el = name_el.find('surname')
+                    given_el = name_el.find('{*}given-names')
+                    if given_el is None:
+                        given_el = name_el.find('given-names')
+                    parts = []
+                    if given_el is not None and given_el.text:
+                        parts.append(given_el.text.strip())
+                    if surname_el is not None and surname_el.text:
+                        parts.append(surname_el.text.strip())
+                    if parts:
+                        authors.append(' '.join(parts))
+
+    year_el = product.find('{*}year')
+    if year_el is None:
+        year_el = product.find('year')
+    year_text = year_el.text.strip() if year_el is not None and year_el.text else ''
+
+    pub_name_el = product.find('{*}publisher-name')
+    if pub_name_el is None:
+        pub_name_el = product.find('publisher-name')
+    pub_loc_el = product.find('{*}publisher-loc')
+    if pub_loc_el is None:
+        pub_loc_el = product.find('publisher-loc')
+    pub_parts = []
+    if pub_loc_el is not None and pub_loc_el.text:
+        pub_parts.append(pub_loc_el.text.strip())
+    if pub_name_el is not None and pub_name_el.text:
+        pub_parts.append(pub_name_el.text.strip())
+    publisher_text = ': '.join(pub_parts)
+
+    # Build single citation line: Author (Year). Title. Publisher
+    citation_parts = []
+    if authors:
+        citation_parts.append(', '.join(authors))
+    if year_text:
+        citation_parts.append(f'({year_text})')
+    prefix = ' '.join(citation_parts)
+
+    div = soup.new_tag('div', attrs={'class': 'jats-reviewed-work'})
+    p = soup.new_tag('p')
+    if prefix:
+        p.append(NavigableString(prefix + '. '))
+    em = soup.new_tag('em')
+    em.string = title_text if title_text.endswith(('?', '!', '.')) else title_text + '.'
+    p.append(em)
+    if publisher_text:
+        p.append(NavigableString(' ' + publisher_text))
+    div.append(p)
+
+    # Prepend before existing content
+    if soup.contents:
+        soup.contents[0].insert_before(div)
+    else:
+        soup.append(div)
 
 
 def _render_back_matter(back, soup):

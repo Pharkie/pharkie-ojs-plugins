@@ -17,18 +17,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from html_pipeline.pipe5_galley_html import jats_to_html
 
 
-def _make_jats(back_content, body='<p>Body text.</p>'):
+def _make_jats(back_content, body='<p>Body text.</p>', front_content=''):
     """Build a minimal JATS XML string with given back-matter content."""
+    front = f'<front><article-meta>{front_content}</article-meta></front>' if front_content else ''
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <article>
+  {front}
   <body>{body}</body>
   <back>{back_content}</back>
 </article>"""
 
 
-def _html_from_back(back_content):
+def _html_from_jats(back_content='', front_content='', body='<p>Body text.</p>'):
     """Generate HTML from a JATS fragment and return it."""
-    jats_xml = _make_jats(back_content)
+    jats_xml = _make_jats(back_content, body=body, front_content=front_content)
     with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
         f.write(jats_xml)
         f.flush()
@@ -36,6 +38,11 @@ def _html_from_back(back_content):
             return jats_to_html(f.name)
         finally:
             os.unlink(f.name)
+
+
+def _html_from_back(back_content):
+    """Generate HTML from a JATS fragment and return it."""
+    return _html_from_jats(back_content=back_content)
 
 
 # ── Author bios ──
@@ -143,3 +150,86 @@ class TestBackMatterOrder:
         bios_pos = html.index('jats-bios')
         notes_pos = html.index('jats-notes')
         assert prov_pos < bios_pos < notes_pos
+
+
+# ── Reviewed work (product) ──
+
+PRODUCT_FULL = (
+    '<product>'
+    '<person-group person-group-type="author">'
+    '<name><surname>Chopra</surname><given-names>Samir</given-names></name>'
+    '</person-group>'
+    '<year>2024</year>'
+    '<source>Anxiety: A philosophical guide</source>'
+    '<publisher-loc>Princeton</publisher-loc>'
+    '<publisher-name>Princeton University Press</publisher-name>'
+    '</product>'
+)
+
+PRODUCT_EDITORS = (
+    '<product>'
+    '<person-group person-group-type="editor">'
+    '<name><surname>van Deurzen</surname><given-names>Emmy</given-names></name>'
+    '<name><surname>Iacovou</surname><given-names>Susan</given-names></name>'
+    '</person-group>'
+    '<year>2013</year>'
+    '<source>Existential Perspectives on Relationship Therapy</source>'
+    '<publisher-loc>Basingstoke</publisher-loc>'
+    '<publisher-name>Palgrave Macmillan</publisher-name>'
+    '</product>'
+)
+
+
+class TestProductRendering:
+    """<product> renders as <div class="jats-reviewed-work"> before body."""
+
+    def test_full_product_renders(self):
+        html = _html_from_jats(front_content=PRODUCT_FULL)
+        assert '<div class="jats-reviewed-work">' in html
+        assert 'Samir Chopra (2024).' in html
+        assert '<em>Anxiety: A philosophical guide.</em>' in html
+        assert 'Princeton: Princeton University Press' in html
+
+    def test_product_before_body(self):
+        html = _html_from_jats(front_content=PRODUCT_FULL)
+        product_pos = html.index('jats-reviewed-work')
+        body_pos = html.index('Body text.')
+        assert product_pos < body_pos
+
+    def test_multiple_authors(self):
+        html = _html_from_jats(front_content=PRODUCT_EDITORS)
+        assert 'Emmy van Deurzen, Susan Iacovou' in html
+
+    def test_no_product_no_div(self):
+        html = _html_from_jats(front_content='<title-group><article-title>Test</article-title></title-group>')
+        assert 'jats-reviewed-work' not in html
+
+    def test_no_front_no_div(self):
+        html = _html_from_back('<bio><p>Author bio.</p></bio>')
+        assert 'jats-reviewed-work' not in html
+
+    def test_question_mark_title_no_double_period(self):
+        product = (
+            '<product>'
+            '<person-group person-group-type="author">'
+            '<name><surname>Cox</surname><given-names>Gary</given-names></name>'
+            '</person-group>'
+            '<year>2024</year>'
+            '<source>Is hell other people?</source>'
+            '</product>'
+        )
+        html = _html_from_jats(front_content=product)
+        assert 'Is hell other people?</em>' in html
+        assert 'people?.' not in html
+
+    def test_publisher_without_location(self):
+        product = (
+            '<product>'
+            '<year>2020</year>'
+            '<source>Some Book</source>'
+            '<publisher-name>Open Press</publisher-name>'
+            '</product>'
+        )
+        html = _html_from_jats(front_content=product)
+        assert 'Open Press' in html
+        assert ': Open Press' not in html

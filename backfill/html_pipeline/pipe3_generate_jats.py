@@ -393,6 +393,33 @@ def generate_article_jats(article: dict, volume: int, issue: int,
     else:
         lines.append(f'<title-group><article-title>{escape(title)}</article-title></title-group>')
 
+    # Product (reviewed-work metadata for book reviews)
+    if article_type == 'book-review' and article.get('book_title'):
+        lines.append('<product>')
+        book_author_raw = article.get('book_author', '')
+        if book_author_raw:
+            is_editor = bool(re.search(r'\(eds?\.?\)', book_author_raw))
+            clean_author = re.sub(r'\s*\(eds?\.?\)\s*', '', book_author_raw).strip()
+            pg_type = 'editor' if is_editor else 'author'
+            ba_pairs = split_author_name(clean_author)
+            lines.append(f'<person-group person-group-type="{pg_type}">')
+            for given, family in ba_pairs:
+                lines.append(f'<name><surname>{escape(family)}</surname>'
+                             f'<given-names>{escape(given)}</given-names></name>')
+            lines.append('</person-group>')
+        if article.get('book_year'):
+            lines.append(f'<year>{article["book_year"]}</year>')
+        lines.append(f'<source>{escape(article["book_title"])}</source>')
+        pub_raw = article.get('publisher', '')
+        if pub_raw:
+            if ': ' in pub_raw:
+                pub_loc, pub_name = pub_raw.split(': ', 1)
+                lines.append(f'<publisher-loc>{escape(pub_loc)}</publisher-loc>')
+                lines.append(f'<publisher-name>{escape(pub_name)}</publisher-name>')
+            else:
+                lines.append(f'<publisher-name>{escape(pub_raw)}</publisher-name>')
+        lines.append('</product>')
+
     # Authors
     authors_raw = article.get('authors', '')
     if authors_raw:

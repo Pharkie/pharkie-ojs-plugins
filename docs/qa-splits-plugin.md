@@ -206,7 +206,7 @@ python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/23
 python3 backfill/html_pipeline/pipe4_extract_citations.py --extract --volume 23.1
 python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/23.1/toc.json
 # 4. Regenerate import XML
-python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/23.1/toc.json -o backfill/private/output/23.1/import.xml
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/23.1/toc.json
 # 5. Reimport just that issue (~7 sec)
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/23.1 --force
 # 6. Restore IDs for that issue only (~0.6 sec)
@@ -229,7 +229,7 @@ python3 backfill/html_pipeline/pipe4_extract_citations.py --extract
 python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/*/toc.json
 # 6. Generate import XML
 for t in backfill/private/output/*/toc.json; do
-  python3 backfill/html_pipeline/pipe6_ojs_xml.py "$t" -o "$(dirname "$t")/import.xml"
+  python3 backfill/html_pipeline/pipe6_ojs_xml.py "$t"
 done
 # 7. Reimport all (--wipe-articles wipes first; --force reimports existing without wiping)
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles

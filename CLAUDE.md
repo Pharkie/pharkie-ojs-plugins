@@ -55,7 +55,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 3. `python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/<vol.iss>/toc.json`
 4. `python3 backfill/html_pipeline/pipe4_extract_citations.py --extract --volume <vol.iss>`
 5. `python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/<vol.iss>/toc.json`
-6. `python3 backfill/html_pipeline/pipe6_ojs_xml.py <toc.json> -o <import.xml>`
+6. `python3 backfill/html_pipeline/pipe6_ojs_xml.py <toc.json>` (writes import.xml next to toc.json)
 7. `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol.iss> --force` (~7 sec)
 8. `sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)
 9. QA in browser — repeat from step 1 if issues found
