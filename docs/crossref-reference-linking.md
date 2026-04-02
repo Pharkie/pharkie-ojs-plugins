@@ -182,9 +182,40 @@ The Crossref deposit schema (5.4.0) supports both `<doi>` and `<unstructured_cit
 
 SBMV requires Crossref member credentials and references must be deposited first.
 
-## OJS plugin alternative
+## Displaying DOIs in OJS
 
-[pkp/crossrefReferenceLinking](https://github.com/pkp/crossrefReferenceLinking) automates the deposit + poll cycle. Our approach supersedes it for matching (we have more control and visibility), but the OJS Crossref plugin can handle the deposit step. Both can coexist without conflict.
+Matched DOIs are stored in the OJS `citation_settings` table:
+
+```sql
+INSERT INTO citation_settings (citation_id, locale, setting_name, setting_value, setting_type)
+VALUES (123, '', 'crossref::doi', '10.1234/example', 'string');
+```
+
+The [pkp/crossrefReferenceLinking](https://github.com/pkp/crossrefReferenceLinking) plugin (v3.0.0-1 for OJS 3.5) renders these as clickable DOI links on article pages via a `Templates::Article::Details::Reference` template hook.
+
+### Gotcha: display requires Crossref credentials
+
+The unpatched plugin only registers its display hook when Crossref credentials (username/password) are configured in the OJS Crossref export plugin. Without credentials, matched DOIs exist in the database but are invisible on article pages — no error, no warning, just silent failure.
+
+**Our patch** (`docker/ojs/patches/crossref-ref-linking-display.php`) moves the display hook registration before the credentials check. DOIs render regardless of credentials. Credentials are only needed for depositing references and polling `getResolvedRefs`, not for displaying already-matched DOIs.
+
+### End-to-end flow
+
+```
+pipe4b matches DOIs → JATS <pub-id> + doi_matches.json
+         ↓
+Script writes to OJS citation_settings table (crossref::doi key)
+         ↓
+pkp/crossrefReferenceLinking plugin renders DOI links on article pages
+         ↓
+OJS Crossref plugin deposits references to Crossref (includes matched DOIs)
+         ↓
+Crossref SBMV may find additional matches over time
+```
+
+For the **backfill** (existing articles): our script writes DOIs to `citation_settings` by matching JATS refs to OJS citations via `seq` number.
+
+For **future articles**: the pkp/crossrefReferenceLinking plugin handles the full cycle automatically (deposit → poll → store → display).
 
 ## Development history
 
@@ -201,7 +232,13 @@ Built iteratively using TDD on real references (2026-04-02):
 9. **Crossref score floor lowered** — from 30 to 20 for exact title containment (sim=1.0) + author match. Gained Tillich "Courage to Be" and May "Meaning of Anxiety".
 10. **Named constants** — replaced magic numbers with `MIN_SCORE_EXACT_TITLE`, `MIN_SCORE_HIGH_SIM`, `MIN_SCORE_MED_SIM`, `SINGLE_WORD_TITLE_PENALTY`.
 
-**Tested on 476 references across 3 volumes** (35.1, 23.1, 12.1, 20.1), 100% precision: all matched DOIs verified correct, all no_matches investigated and confirmed.
+11. **Spot-check round 1** (30 random matches) — found 9 false positives: `reference-entry` (encyclopedia entries about authors), `dataset` (APA PsycINFO records). Added type rejection for `reference-entry`, `dataset`, `component`.
+12. **Spot-check round 2** (30 random) — found 1 false positive: journal article ref matched to book-chapter by same author. Added journal-signal + book-chapter mismatch detection.
+13. **Spot-check round 3** (30 random) — found 1 false positive: book ref matched to entry in "The Merleau-Ponty Dictionary". Added reference work container check (Dictionary/Companion/Encyclopedia/Handbook).
+14. **Spot-check round 4** (30 random) — **30/30 clean**. No false positives.
+15. **OJS integration** — installed pkp/crossrefReferenceLinking plugin, patched display hook to work without Crossref credentials. Verified DOI links render on article pages.
+
+**Tested on 476+ references across 4 volumes**, 4 rounds of 30-match spot-checks. Final round: 100% precision.
 
 ## Testing
 
