@@ -163,9 +163,24 @@ flowchart TD
     style agree fill:#d4edda,stroke:#198754,stroke-width:2px
 ```
 
-Initial testing shows 100% agreement between our matching and SBMV on two articles (25 references). SBMV requires Crossref member credentials and references must be deposited first.
+### Comparison results
 
-The Crossref deposit schema (5.4.0) supports both `<doi>` and `<unstructured_citation>` in the same `<citation>` element, so we can supply our pre-matched DOI alongside the raw text. Crossref still runs SBMV independently.
+Clean test on vol 20.1 (202 refs, deposited without DOI hints):
+
+| | Count |
+|---|---|
+| Both agree | 27 |
+| **We found, SBMV didn't (yet)** | **41** |
+| SBMV found, we didn't | 2 |
+| Neither | 132 |
+
+Our multi-query approach finds significantly more DOIs than SBMV's immediate matching. SBMV resolves some refs instantly, others go to `stored_query` and may resolve hours or days later — but our matching gives results immediately and catches noisy references that SBMV struggles with.
+
+**Important:** When depositing with pre-matched DOIs, SBMV appears to just confirm them rather than independently matching. A clean comparison (no DOI hints) is needed to see SBMV's actual independent performance.
+
+The Crossref deposit schema (5.4.0) supports both `<doi>` and `<unstructured_citation>` in the same `<citation>` element. We deposit our pre-matched DOI so Cited-by links work immediately, while SBMV may find additional matches over time.
+
+SBMV requires Crossref member credentials and references must be deposited first.
 
 ## OJS plugin alternative
 
@@ -181,11 +196,12 @@ Built iteratively using TDD on real references (2026-04-02):
 4. **Multi-query strategy** — original query alone missed noisy references (translator credits, edition notes). Added cleaned, restructured, and minimal variants. Gained 4 more matches (ref3–ref6 from first article).
 5. **Ampersand normalisation** — `&` → `and` in title comparison. Gained 3 matches on second article (Being & Nothingness, Existentialism & Humanism, Subjectivity & Selfhood).
 6. **Simplified to two tiers** — removed "review" tier since there's no per-reference review mechanism. Everything is either matched or no_match.
-7. **SBMV comparison** — deposited refs to Crossref, polled `getResolvedRefs`. 100% agreement on both test articles (25 references). Confirmed our matching is at least as good as Crossref's own.
+7. **SBMV comparison** — deposited refs to Crossref, polled `getResolvedRefs`. Initial test with DOI hints showed 100% agreement, but this was misleading — SBMV was just confirming our DOIs. Clean test (vol 20.1, no DOI hints) showed our matching finds 41 DOIs that SBMV hadn't found (yet), while SBMV found only 2 we missed.
+8. **Short title penalty refined** — changed from penalising 1-2 word titles to only 1-word titles. 2-word titles like "Cartesian Meditations" and "Why Heidegger?" are distinctive enough. Gained ~5 matches on vol 12.1.
+9. **Crossref score floor lowered** — from 30 to 20 for exact title containment (sim=1.0) + author match. Gained Tillich "Courage to Be" and May "Meaning of Anxiety".
+10. **Named constants** — replaced magic numbers with `MIN_SCORE_EXACT_TITLE`, `MIN_SCORE_HIGH_SIM`, `MIN_SCORE_MED_SIM`, `SINGLE_WORD_TITLE_PENALTY`.
 
-**Query variant analysis** across 18 matched refs: original wins 11, cleaned wins 3, restructured wins 3, minimal-restructured wins 1. All variants contribute except plain minimal (which never wins but costs one extra API call as a safety net).
-
-**Tested on 34 references total, 100% precision**: 22 matched (all correct), 12 no_match (all correct — DOI doesn't exist in Crossref).
+**Tested on 476 references across 3 volumes** (35.1, 23.1, 12.1, 20.1), 100% precision: all matched DOIs verified correct, all no_matches investigated and confirmed.
 
 ## Testing
 
