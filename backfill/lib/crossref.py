@@ -328,12 +328,21 @@ def _ref_has_in_pattern(ref_text):
 
 
 def _is_type_mismatch(ref_text, cr_type):
-    """Detect when a reference cites a standalone book but Crossref returned
-    a journal-article or an unrelated book-chapter.
+    """Detect when Crossref returned a wrong type of work.
 
-    This catches false positives where Crossref returns a review or a chapter
-    from a different book instead of the cited book itself.
+    Catches false positives: reviews, chapters from different books,
+    and encyclopedia/dictionary entries about an author.
     """
+    # These types are almost never the cited work:
+    # - dataset: APA PsycINFO records *about* a book, not the book itself
+    # - component: sub-parts of other works (figures, supplementary data)
+    # - reference-entry: encyclopedia/dictionary entries, usually *about* an
+    #   author rather than the cited work. Could legitimately match if someone
+    #   cites a dictionary entry, but those are rare and would need the ref
+    #   to explicitly mention the dictionary/encyclopedia.
+    if cr_type in ('dataset', 'component', 'reference-entry'):
+        return True
+
     # If the reference itself looks like a journal article, no mismatch
     if _JOURNAL_SIGNAL_RE.search(ref_text):
         return False
