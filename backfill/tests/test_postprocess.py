@@ -36,7 +36,10 @@ from backfill.lib.postprocess import (
     _text_to_regex,
     _title_in_text,
     _find_block_by_text,
+    _fix_bio_contact_spacing_soup,
+    _parse,
 )
+from backfill.lib.citations import is_citation_like
 
 FIXTURES = os.path.join(os.path.dirname(__file__), 'fixtures')
 
@@ -342,3 +345,114 @@ class TestVerifyPostprocessed:
         article = {'title': 'Title', 'section': 'Articles'}
         warnings = verify_postprocessed(raw, final, article)
         assert any('EMPTY_OUTPUT' in w for w in warnings)
+
+
+# ===============================================================
+# _fix_bio_contact_spacing_soup (QA #9796)
+# ===============================================================
+
+class TestFixBioContactSpacing:
+
+    def test_separates_email_and_orcid(self):
+        """Email immediately followed by <br/> then ORCID URL gets '. ' separator."""
+        soup = _parse('<p>Contact: user@example.com<br/>https://orcid.org/0009-0007-1502-7192</p>')
+        _fix_bio_contact_spacing_soup(soup)
+        text = soup.get_text()
+        assert 'user@example.com. https://orcid.org/' in text
+
+    def test_preserves_br_without_email(self):
+        """<br/> not preceded by email is left alone."""
+        html = '<p>Some text<br/>More text</p>'
+        soup = _parse(html)
+        _fix_bio_contact_spacing_soup(soup)
+        assert soup.find('br') is not None
+
+    def test_preserves_br_without_url(self):
+        """<br/> after email but before non-URL text is left alone."""
+        html = '<p>Contact: user@example.com<br/>Some other text</p>'
+        soup = _parse(html)
+        _fix_bio_contact_spacing_soup(soup)
+        assert soup.find('br') is not None
+
+    def test_real_example_from_qa(self):
+        """Exact pattern from QA #9796."""
+        html = ('<p><strong>Sheba Boakye-Duah</strong> is a doctoral candidate. '
+                'Contact: SB2967@live.mdx.ac.uk<br/>https://orcid.org/0009-0007-1502-7192</p>')
+        soup = _parse(html)
+        _fix_bio_contact_spacing_soup(soup)
+        text = soup.get_text()
+        assert 'SB2967@live.mdx.ac.uk. https://orcid.org/' in text
+        assert soup.find('br') is None  # <br> should be replaced
+
+
+# ===============================================================
+# is_citation_like — citation vs note/caption classification
+# ===============================================================
+
+class TestIsCitationLike:
+    """Ensure is_citation_like correctly distinguishes real citations from
+    captions, notes, and other text that happens to contain names + years."""
+
+    # --- True positives: real citations ---
+
+    def test_standard_citation(self):
+        """Standard author-year citation with publisher."""
+        assert is_citation_like(
+            'Beauvoir, S. de (2018). The Ethics of Ambiguity. New York: Open Road Media.'
+        )
+
+    def test_citation_with_journal(self):
+        """Citation with journal name."""
+        assert is_citation_like(
+            'Smith, J. (2015). On being. Journal of Existential Analysis, 26(1), 45-60.'
+        )
+
+    def test_citation_with_doi(self):
+        """Citation with DOI."""
+        assert is_citation_like(
+            'Jones, A. (2020). Title. Publisher. doi:10.1234/test'
+        )
+
+    def test_citation_with_pages(self):
+        """Citation with page range."""
+        assert is_citation_like(
+            'Adams, M.C. (2001). Practising phenomenology. Existential Analysis 12.1, pp.65-84.'
+        )
+
+    def test_citation_parenthesised_year_only(self):
+        """Author + parenthesised year is enough (common short citation)."""
+        assert is_citation_like(
+            'Freud, S. (1914). Remembering, Repeating and Working Through.'
+        )
+
+    # --- True negatives: NOT citations ---
+
+    def test_photo_caption_with_date(self):
+        """Photo caption with names and date — NOT a citation (QA #8833)."""
+        assert not is_citation_like(
+            'Ann-Helen and Martti Siirala at the Inner Circle Seminar, '
+            "Regent's College, London on his 80th birthday, 30 November 2002."
+        )
+
+    def test_event_description(self):
+        """Event description with names and year — NOT a citation."""
+        assert not is_citation_like(
+            'Paper presented by John Smith at the Annual Conference, May 2019.'
+        )
+
+    def test_biographical_note(self):
+        """Biographical note with year — NOT a citation."""
+        assert not is_citation_like(
+            'Dr Sarah Johnson joined the department in 2015 and has since led '
+            'the clinical training programme.'
+        )
+
+    def test_short_note_with_year(self):
+        """Short note referencing a year — NOT a citation."""
+        assert not is_citation_like(
+            'See my introduction to the 2002 edition.'
+        )
+
+    def test_too_short(self):
+        """Very short text isn't classifiable."""
+        assert not is_citation_like('See note 1.')

@@ -487,6 +487,24 @@ def _strip_running_headers_soup(soup):
             p.decompose()
 
 
+def _fix_bio_contact_spacing_soup(soup):
+    """Ensure email addresses and ORCID URLs aren't concatenated across <br/>.
+
+    Haiku sometimes outputs bios like:
+      Contact: user@example.com<br/>https://orcid.org/...
+    where the <br/> provides a visual break but text extraction concatenates
+    them. Replace <br/> between email-like text and a URL with ". ".
+    """
+    for br in list(soup.find_all('br')):
+        prev_text = br.previous_sibling
+        next_text = br.next_sibling
+        if (isinstance(prev_text, NavigableString)
+                and isinstance(next_text, NavigableString)
+                and re.search(r'[\w.+-]+@[\w.-]+\.\w+\s*$', str(prev_text))
+                and re.match(r'\s*https?://', str(next_text))):
+            br.replace_with('. ')
+
+
 def _strip_heading_sups_soup(soup):
     """Strip footnote superscripts from headings."""
     for heading in soup.find_all(list(HEADING_TAGS)):
@@ -1004,6 +1022,9 @@ def postprocess_article(html, article, pdf_path=None):
 
     # Strip running headers and bare page numbers
     _strip_running_headers_soup(soup)
+
+    # Fix contact detail spacing (email<br/>ORCID → email. ORCID)
+    _fix_bio_contact_spacing_soup(soup)
 
     # Splice complete notes from PyMuPDF if Haiku dropped any.
     if pdf_path and os.path.exists(pdf_path):

@@ -73,7 +73,7 @@ def jats_to_html(jats_path: Path) -> str | None:
     return soup.decode_contents()
 
 
-def _convert_element(et_el, parent, soup):
+def _convert_element(et_el, parent, soup, sec_depth=0):
     """Recursively convert an ElementTree element to BS4 tags."""
     tag_name = local_name(et_el.tag)
 
@@ -84,12 +84,13 @@ def _convert_element(et_el, parent, soup):
         if title_el is not None:
             title_text = extract_text_from_element(title_el)
             if title_text:
-                h2 = soup.new_tag('h2')
-                h2.string = title_text
-                parent.append(h2)
+                heading_tag = 'h3' if sec_depth > 0 else 'h2'
+                h = soup.new_tag(heading_tag)
+                h.string = title_text
+                parent.append(h)
         for child in et_el:
             if local_name(child.tag) != 'title':
-                _convert_element(child, parent, soup)
+                _convert_element(child, parent, soup, sec_depth + 1)
 
     elif tag_name == 'p':
         p = soup.new_tag('p')

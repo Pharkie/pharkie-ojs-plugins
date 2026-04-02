@@ -948,6 +948,7 @@ body {
 .qa-html-content h3 { font-size: 1.1em; }
 
 /* Pipeline-extracted back matter rendered in HTML galley (from JATS <back>) */
+.qa-html-content .jats-reviewed-work,
 .qa-html-content .jats-notes,
 .qa-html-content .jats-bios,
 .qa-html-content .jats-provenance {
@@ -956,7 +957,11 @@ body {
     margin: 1.5em 0;
     position: relative;
 }
+.qa-html-content .jats-reviewed-work:first-child {
+    margin-top: 0;
+}
 
+.qa-html-content .jats-reviewed-work::before,
 .qa-html-content .jats-notes::before,
 .qa-html-content .jats-bios::before,
 .qa-html-content .jats-provenance::before {
@@ -975,6 +980,7 @@ body {
     padding-left: 0;
 }
 
+.qa-html-content .jats-reviewed-work::before { content: 'Reviewed work'; }
 .qa-html-content .jats-notes::before       { content: 'Notes'; }
 .qa-html-content .jats-bios::before        { content: 'Author bio'; }
 .qa-html-content .jats-provenance::before  { content: 'Provenance'; }
