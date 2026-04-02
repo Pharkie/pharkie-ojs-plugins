@@ -317,9 +317,11 @@ _BOOK_PUBLISHER_RE = re.compile(
     re.IGNORECASE,
 )
 _JOURNAL_SIGNAL_RE = re.compile(
-    r'\b(?:Journal|Review|Quarterly|Bulletin|Annals)\b.*\d+\s*\(\d+\)',
+    r'\b(?:Journal|Review|Quarterly|Bulletin|Annals|Studies|Analysis)\b.*\d+\s*\(\d+\)',
     re.IGNORECASE,
 )
+# Matches volume(issue) patterns like "15(2)" or "16, 2" at the end of a ref
+_VOL_ISSUE_RE = re.compile(r'\d+\s*[\(,]\s*\d+\s*\)?')
 
 
 def _ref_has_in_pattern(ref_text):
@@ -343,9 +345,15 @@ def _is_type_mismatch(ref_text, cr_type):
     if cr_type in ('dataset', 'component', 'reference-entry'):
         return True
 
-    # If the reference itself looks like a journal article, no mismatch
+    # If the reference looks like a journal article...
     if _JOURNAL_SIGNAL_RE.search(ref_text):
-        return False
+        # ...matched to journal-article is fine (no mismatch)
+        if cr_type == 'journal-article':
+            return False
+        # ...matched to book-chapter = likely a same-author chapter on a
+        # similar topic, not the cited journal article
+        if cr_type == 'book-chapter':
+            return True
 
     # If the reference has book publisher keywords, it's citing a book
     ref_is_book = bool(_BOOK_PUBLISHER_RE.search(ref_text))
