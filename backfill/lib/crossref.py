@@ -24,6 +24,16 @@ TIER_NO_MATCH = 'no_match'
 # Default delay between API requests (seconds)
 DEFAULT_DELAY = 0.1
 
+# Scoring thresholds — calibrated on 274 refs across 3 volumes (2026-04-02).
+# Exact title containment (sim=1.0): strong evidence, low Crossref score OK
+MIN_SCORE_EXACT_TITLE = 20
+# High similarity (sim >= 0.8): moderate Crossref score needed
+MIN_SCORE_HIGH_SIM = 40
+# Lower similarity (sim >= 0.7): high Crossref score needed
+MIN_SCORE_MED_SIM = 60
+# Single-word titles get similarity halved (too generic to trust)
+SINGLE_WORD_TITLE_PENALTY = 0.5
+
 
 def has_existing_doi(ref_text):
     """Check if a reference already contains a DOI (excluding our own prefix).
@@ -264,17 +274,19 @@ def _title_similarity(crossref_title, ref_text):
     if n_cr_words == 0:
         return 0.0
 
-    # Full containment as substring (strong signal for multi-word titles)
-    if n_cr_words >= 3 and cr in ref:
+    # Full containment as substring (strong signal for 2+ word titles)
+    if n_cr_words >= 2 and cr in ref:
         return 1.0
 
     # Word overlap ratio
     overlap = len(set(cr_words) & ref_words)
     raw_sim = overlap / n_cr_words
 
-    # Penalise short titles: a 1-2 word title matching is weak evidence
-    if n_cr_words <= 2:
-        raw_sim *= 0.5
+    # Penalise single-word titles: "Heidegger" or "Introduction" match
+    # too easily. 2-word titles like "Cartesian Meditations" are distinctive
+    # enough (and must still pass author match + type check).
+    if n_cr_words <= 1:
+        raw_sim *= SINGLE_WORD_TITLE_PENALTY
 
     return min(raw_sim, 1.0)
 
@@ -402,11 +414,11 @@ def score_match(result, ref_text):
     # High similarity + author match is the strongest signal.
     # Very high similarity (1.0 = exact title containment) can accept lower
     # Crossref scores — the title match itself is strong evidence.
-    elif similarity >= 1.0 and author_match and crossref_score >= 20:
+    elif similarity >= 1.0 and author_match and crossref_score >= MIN_SCORE_EXACT_TITLE:
         tier = TIER_MATCHED
-    elif similarity >= 0.8 and author_match and crossref_score >= 40:
+    elif similarity >= 0.8 and author_match and crossref_score >= MIN_SCORE_HIGH_SIM:
         tier = TIER_MATCHED
-    elif similarity >= 0.7 and author_match and crossref_score >= 60:
+    elif similarity >= 0.7 and author_match and crossref_score >= MIN_SCORE_MED_SIM:
         tier = TIER_MATCHED
     else:
         tier = TIER_NO_MATCH
