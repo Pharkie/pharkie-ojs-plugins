@@ -1,6 +1,6 @@
 # Pharkie OJS Plugins
 
-A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, and membership sync with WordPress.
+A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, membership sync with WordPress, and backfill QA review.
 
 The plugins were built for a WordPress ↔ OJS integration where WP manages memberships via WooCommerce Subscriptions and OJS hosts a journal behind a paywall. See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together.
 
@@ -37,6 +37,19 @@ REST API for OJS user and subscription management — something OJS doesn't prov
 - IP allowlisting + API key authentication
 
 Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automatic membership sync from WooCommerce Subscriptions.
+
+### [QA Splits](plugins/qa-splits/)
+
+Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: article sidebar (left), source PDF (centre), HTML galley + end-matter classification (right). Used after the backfill pipeline to verify extraction quality before publishing.
+
+- Side-by-side PDF vs HTML comparison for every article
+- End-matter classification review (references, notes, bios, provenance)
+- Approve/reject workflow with comments and change detection
+- Progress tracking across all articles and issues
+- CLI companion (`qa_review.py`) for batch operations
+
+**QA Splits docs:**
+[Plugin guide](docs/qa-splits-plugin.md)
 
 ### [WP-OJS Sync](plugins/wpojs-sync/) (WordPress)
 
