@@ -174,6 +174,6 @@ All config is in `.env` (gitignored). See `.env.example` for the full list. Key 
 - **WP (Bedrock):** `DB_*`, `WP_HOME`, `WP_SITEURL`, `WP_ENV`, auth salts
 - **WP-OJS integration:** `WPOJS_API_KEY`, `WPOJS_BASE_URL`
 - **OJS:** `OJS_DB_*`, `OJS_BASE_URL`, `OJS_TIMEZONE`, `OJS_ADMIN_*`
-- **OJS email:** `OJS_SMTP_*`, `OJS_MAIL_FROM`
+- **OJS email:** `OJS_SMTP_*`, `OJS_MAIL_FROM` — see [email setup](email-setup.md) for SMTP relay options
 - **OJS security:** `WPOJS_API_KEY_SECRET`, `WPOJS_ALLOWED_IPS`
 - **WP-OJS UI messages:** `WPOJS_WP_MEMBER_URL`, `WPOJS_SUPPORT_EMAIL`
