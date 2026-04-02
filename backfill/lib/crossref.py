@@ -237,8 +237,9 @@ def query_crossref(ref_text, email, timeout=30):
 
 
 def _normalise_title(text):
-    """Lowercase, strip punctuation/whitespace for title comparison."""
+    """Lowercase, normalize ampersands, strip punctuation/whitespace."""
     text = text.lower()
+    text = text.replace('&', 'and')
     text = re.sub(r'[^\w\s]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text

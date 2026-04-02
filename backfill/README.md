@@ -96,9 +96,10 @@ flowchart TD
 5. **`html_pipeline/pipe2_postprocess.py`** — deterministic post-processing: `.raw.html` → `.post.html`. Free, rerunnable.
 6. **`html_pipeline/pipe3_generate_jats.py`** — produces one JATS 1.3 XML file per article from toc.json metadata + processed HTML body. JATS is the single source of truth.
 7. **`html_pipeline/pipe4_extract_citations.py`** — finds reference sections in the JATS body, extracts items, writes structured references to `<ref-list>` and notes to `<fn-group>`. See [citation classification rules](../docs/citation-classification.md).
-8. **`html_pipeline/pipe5_galley_html.py`** — regenerates HTML galleys from JATS (body + notes + bios; references excluded since OJS renders those from its citations table).
-9. **`html_pipeline/pipe6_ojs_xml.py`** — produces OJS Native XML with base64-embedded PDFs and HTML galleys, ready for import.
-10. **`html_pipeline/pipe7_import.sh <issue-dir>`** — loads the generated XML into OJS via Docker CLI.
+8. **`html_pipeline/pipe4b_match_dois.py`** — matches extracted references against Crossref DOIs. Writes `<pub-id>` elements to JATS. Optional — skip during QA iteration, run once when refs are finalized. Results cached in `doi_matches.json`. See [Crossref reference linking](../docs/crossref-reference-linking.md).
+9. **`html_pipeline/pipe5_galley_html.py`** — regenerates HTML galleys from JATS (body + notes + bios; references excluded since OJS renders those from its citations table).
+10. **`html_pipeline/pipe6_ojs_xml.py`** — produces OJS Native XML with base64-embedded PDFs and HTML galleys, ready for import.
+11. **`html_pipeline/pipe7_import.sh <issue-dir>`** — loads the generated XML into OJS via Docker CLI.
 
 ## Directory structure
 
