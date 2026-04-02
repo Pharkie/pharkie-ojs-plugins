@@ -237,8 +237,21 @@ Built iteratively using TDD on real references (2026-04-02):
 13. **Spot-check round 3** (30 random) — found 1 false positive: book ref matched to entry in "The Merleau-Ponty Dictionary". Added reference work container check (Dictionary/Companion/Encyclopedia/Handbook).
 14. **Spot-check round 4** (30 random) — **30/30 clean**. No false positives.
 15. **OJS integration** — installed pkp/crossrefReferenceLinking plugin, patched display hook to work without Crossref credentials. Verified DOI links render on article pages.
+16. **Concurrent queries** — multi-query variants now run in parallel (ThreadPoolExecutor). ~3x faster.
+17. **Existing DOIs extracted** — refs with DOIs already in the text now get a `<pub-id>` written to JATS (structured data), not just skipped.
+18. **Full corpus run** (2026-04-02) — all 68 volumes processed.
 
-**Tested on 476+ references across 4 volumes**, 4 rounds of 30-match spot-checks. Final round: 100% precision.
+### Full corpus results
+
+| | Count | % |
+|---|---|---|
+| Total references | 15,911 | |
+| Matched by our algorithm | 6,100 | 38% |
+| Already had DOI in text | 625 | 4% |
+| **Total with DOI** | **6,725** | **42%** |
+| No match | 9,178 | 58% |
+
+4 rounds of 30-match spot-checks during development. Final round: 100% precision. All DOIs written to JATS as structured `<pub-id>` elements.
 
 ## Testing
 
