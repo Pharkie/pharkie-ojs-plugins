@@ -37,9 +37,7 @@ flowchart TD
     matched --> cache["Write to\ndoi_matches.json\n<i>per-issue cache</i>"]
     no_match --> cache
 
-    cache --> write{--write-jats?}
-    write -- yes --> jats_out["Add pub-id\nto JATS XML"]
-    write -- no --> done([done])
+    cache --> jats_out["Add pub-id\nto JATS XML"]
 
     style jats fill:#d1ecf1,stroke:#0dcaf0,stroke-width:2px
     style api fill:#e8daef,stroke:#8e44ad,stroke-width:2px
@@ -55,7 +53,7 @@ A single reference text often confuses Crossref due to translator credits, editi
 1. **Original text** — the full `<mixed-citation>` content
 2. **Cleaned** — strips `[bracketed years]`, `(eds.)`, `Trans. Name, I.` noise
 3. **Restructured** — for editor-led "In Author. Book." references, extracts the main work (only when the reference explicitly leads with `(eds.)` or `(trans.)`)
-4. **Minimal** — just `"Surname Title"` with no publisher/year/translator context
+4. **Minimal** — just `"Surname Title"` — catches cases where all other queries are too noisy
 
 ### Scoring
 
@@ -110,9 +108,9 @@ for dir in backfill/private/output/*/; do
     --volume "$(basename "$dir")" --email user@example.com
 done
 
-# Write matched DOIs to JATS XML
+# Dry run (query only, don't write)
 python3 backfill/html_pipeline/pipe4b_match_dois.py \
-  --volume 35.1 --write-jats --email user@example.com
+  --volume 35.1 --dry-run --verbose --email user@example.com
 ```
 
 **Rate limiting:** 10 req/sec (100ms delay). Full corpus (~15k refs) takes ~25 minutes.
@@ -149,14 +147,14 @@ A DOI to a different edition of the same work is acceptable. The reference text 
 After our matching, we deposit references to Crossref and poll for their independent Search-Based Matching with Validation ([SBMV](https://www.crossref.org/blog/reference-matching-for-real-this-time/)) results:
 
 ```mermaid
-flowchart LR
+flowchart TD
     ours["Our matching\n<i>pipe4b</i>"] --> deposit["Deposit refs\nto Crossref\n<i>unstructured_citation +\npre-matched DOI</i>"]
     deposit --> sbmv["Crossref SBMV\n<i>independent matching</i>"]
     sbmv --> poll["Poll\ngetResolvedRefs"]
     poll --> compare["Compare\nboth results"]
 
     compare --> agree([Both agree\n→ high confidence])
-    compare --> sbmv_extra([SBMV found extra\n→ review & add])
+    compare --> sbmv_extra([SBMV found extra\n→ accept])
     compare --> ours_extra([We found extra\n→ keep ours])
     compare --> neither([Neither matched\n→ no DOI exists])
 
@@ -172,6 +170,22 @@ The Crossref deposit schema (5.4.0) supports both `<doi>` and `<unstructured_cit
 ## OJS plugin alternative
 
 [pkp/crossrefReferenceLinking](https://github.com/pkp/crossrefReferenceLinking) automates the deposit + poll cycle. Our approach supersedes it for matching (we have more control and visibility), but the OJS Crossref plugin can handle the deposit step. Both can coexist without conflict.
+
+## Development history
+
+Built iteratively using TDD on real references (2026-04-02):
+
+1. **Started simple** — single Crossref query, top result only, three tiers (matched/review/no_match). Tested on 9 refs from one article. 4/9 matched, but 2 were false positives (journal reviews of books).
+2. **Added type mismatch detection** — catches `journal-article` results for book references. Eliminated false positives. 100% precision.
+3. **Added author matching** — catches reviews where the reviewer name doesn't match the cited author. Further reduced false positives.
+4. **Multi-query strategy** — original query alone missed noisy references (translator credits, edition notes). Added cleaned, restructured, and minimal variants. Gained 4 more matches (ref3–ref6 from first article).
+5. **Ampersand normalisation** — `&` → `and` in title comparison. Gained 3 matches on second article (Being & Nothingness, Existentialism & Humanism, Subjectivity & Selfhood).
+6. **Simplified to two tiers** — removed "review" tier since there's no per-reference review mechanism. Everything is either matched or no_match.
+7. **SBMV comparison** — deposited refs to Crossref, polled `getResolvedRefs`. 100% agreement on both test articles (25 references). Confirmed our matching is at least as good as Crossref's own.
+
+**Query variant analysis** across 18 matched refs: original wins 11, cleaned wins 3, restructured wins 3, minimal-restructured wins 1. All variants contribute except plain minimal (which never wins but costs one extra API call as a safety net).
+
+**Tested on 34 references total, 100% precision**: 22 matched (all correct), 12 no_match (all correct — DOI doesn't exist in Crossref).
 
 ## Testing
 

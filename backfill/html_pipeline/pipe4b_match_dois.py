@@ -3,21 +3,22 @@
 Match extracted references against Crossref DOIs.
 
 Reads references from JATS XML <ref-list> elements, queries the Crossref
-bibliographic search API, and writes results to doi_matches.json for review.
+bibliographic search API, writes results to doi_matches.json, and adds
+matched DOIs as <pub-id> elements in JATS.
 
 Usage:
-    # Phase 1: proof of concept (one article, limited refs)
+    # Single article
     python3 backfill/html_pipeline/pipe4b_match_dois.py \\
         --volume 35.1 --article 02-who-do-we-think-we-are \\
-        --limit 10 --verbose --email user@example.com
+        --verbose --email user@example.com
 
-    # Phase 2: full issue
+    # Full issue
     python3 backfill/html_pipeline/pipe4b_match_dois.py \\
         --volume 35.1 --verbose --email user@example.com
 
-    # Write confirmed DOIs to JATS
+    # Dry run (query only, don't write)
     python3 backfill/html_pipeline/pipe4b_match_dois.py \\
-        --volume 35.1 --write-jats --email user@example.com
+        --volume 35.1 --dry-run --verbose --email user@example.com
 """
 
 import argparse
@@ -294,9 +295,7 @@ def main():
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Print detailed output for each reference')
     parser.add_argument('--dry-run', action='store_true',
-                        help='Query Crossref but don\'t write doi_matches.json')
-    parser.add_argument('--write-jats', action='store_true',
-                        help='Write auto_accept DOIs to JATS XML files')
+                        help='Query Crossref but don\'t write doi_matches.json or JATS')
 
     args = parser.parse_args()
 
@@ -346,8 +345,8 @@ def main():
     if not args.dry_run:
         write_matches_json(vol_dir, all_results, args.email)
 
-    # Optionally write DOIs to JATS
-    if args.write_jats:
+    # Write matched DOIs to JATS
+    if not args.dry_run:
         print("\nWriting DOIs to JATS files...")
         total_written = 0
         for jats_path in jats_files:
