@@ -208,6 +208,19 @@ def test_score_match_no_type_mismatch_chapter_in_book():
     assert details['type_mismatch'] is False
 
 
+def test_score_match_type_mismatch_journal_ref_vs_book_chapter():
+    """A journal article ref matched to a book-chapter by the same author."""
+    result = _make_result(
+        score=48, title='Sartre, Alienation, and the Other',
+        authors=[{'family': 'Rae', 'given': 'G.'}],
+        type_='book-chapter',
+    )
+    ref_text = 'Rae, G. (2009). Sartre & the Other. Sartre Studies International, 15(2), 54-77.'
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_NO_MATCH
+    assert details['type_mismatch'] is True
+
+
 def test_score_match_no_type_mismatch_for_journal_ref():
     """A journal ref matched to journal-article should NOT be demoted."""
     result = _make_result(
