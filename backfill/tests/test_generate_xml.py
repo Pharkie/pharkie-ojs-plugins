@@ -16,7 +16,49 @@ from backfill.html_pipeline.pipe6_ojs_xml import (
 )
 from backfill.html_pipeline.pipe3_generate_jats import (
     generate_article_jats,
+    HTMLToJATSConverter,
 )
+
+
+class TestH3ToJats:
+    """h3 subheadings must produce nested <sec> in JATS body."""
+
+    def _convert(self, html):
+        converter = HTMLToJATSConverter()
+        converter.feed(html)
+        return converter.get_jats()
+
+    def test_h3_produces_nested_sec(self):
+        html = '<h2>Main</h2><p>Intro.</p><h3>Sub</h3><p>Detail.</p>'
+        jats = self._convert(html)
+        assert '<sec><title>Main</title>' in jats
+        assert '<sec><title>Sub</title>' in jats
+        # Nested sec should close before parent
+        main_pos = jats.index('Main')
+        sub_pos = jats.index('Sub')
+        assert main_pos < sub_pos
+
+    def test_h3_closed_before_next_h2(self):
+        html = '<h2>Section A</h2><h3>Sub A</h3><p>Text.</p><h2>Section B</h2><p>More.</p>'
+        jats = self._convert(html)
+        # Count sec closings — should have sub closed, then parent, then new section
+        assert jats.count('<sec>') == 3  # Section A, Sub A, Section B
+        assert jats.count('</sec>') == 3
+
+    def test_multiple_h3_in_section(self):
+        html = '<h2>Poems</h2><h3>Inspiration</h3><p>A.</p><h3>Audience response</h3><p>B.</p>'
+        jats = self._convert(html)
+        assert 'Inspiration' in jats
+        assert 'Audience response' in jats
+        # Each h3 should be its own sec
+        assert jats.count('<sec><title>Inspiration') == 1
+        assert jats.count('<sec><title>Audience response') == 1
+
+    def test_h3_without_parent_h2(self):
+        """h3 with no preceding h2 still produces a sec."""
+        html = '<h3>Standalone Sub</h3><p>Content.</p>'
+        jats = self._convert(html)
+        assert '<sec><title>Standalone Sub</title>' in jats
 
 
 class TestParseDate:

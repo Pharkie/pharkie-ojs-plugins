@@ -222,6 +222,47 @@ class TestProductRendering:
         assert 'Is hell other people?</em>' in html
         assert 'people?.' not in html
 
+class TestSubheadingRendering:
+    """h3 subheadings must survive the JATS round-trip (pipe3 → pipe5)."""
+
+    def test_h3_preserved_as_nested_sec(self):
+        """h3 inside an h2 section produces a nested <sec> in JATS."""
+        body = (
+            '<sec><title>Main Section</title>'
+            '<sec><title>Subsection</title>'
+            '<p>Content under subsection.</p>'
+            '</sec></sec>'
+        )
+        html = _html_from_jats(body=body)
+        assert '<h2>Main Section</h2>' in html
+        assert '<h3>Subsection</h3>' in html
+        assert 'Content under subsection.' in html
+
+    def test_multiple_h3_in_section(self):
+        """Multiple subsections within one section all render as h3."""
+        body = (
+            '<sec><title>Poems</title>'
+            '<sec><title>Inspiration</title><p>Text A.</p></sec>'
+            '<sec><title>Audience response</title><p>Text B.</p></sec>'
+            '</sec>'
+        )
+        html = _html_from_jats(body=body)
+        assert '<h3>Inspiration</h3>' in html
+        assert '<h3>Audience response</h3>' in html
+        assert '<h2>Poems</h2>' in html
+
+    def test_h3_not_promoted_to_h2(self):
+        """Nested sec must NOT render as h2."""
+        body = (
+            '<sec><title>Top</title>'
+            '<sec><title>Nested</title><p>Inner.</p></sec>'
+            '</sec>'
+        )
+        html = _html_from_jats(body=body)
+        assert html.count('<h2>') == 1  # only "Top"
+        assert '<h3>Nested</h3>' in html
+
+
     def test_publisher_without_location(self):
         product = (
             '<product>'

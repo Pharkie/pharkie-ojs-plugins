@@ -57,6 +57,7 @@ class HTMLToJATSConverter(HTMLParser):
         super().__init__()
         self._output = []
         self._in_sec = False
+        self._in_subsec = False
         self._tag_stack = []
         self._list_stack = []  # track ol/ul nesting
         self._skip_content = False
@@ -73,10 +74,16 @@ class HTMLToJATSConverter(HTMLParser):
         attrs_dict = dict(attrs)
         self._tag_stack.append(tag)
 
-        if tag == 'h2':
-            if self._in_sec:
+        if tag in ('h2', 'h3'):
+            if self._in_subsec:
                 self._emit('</sec>\n')
-            self._in_sec = True
+                self._in_subsec = False
+            if tag == 'h2':
+                if self._in_sec:
+                    self._emit('</sec>\n')
+                self._in_sec = True
+            else:
+                self._in_subsec = True
             self._emit('<sec><title>')
         elif tag == 'p':
             if self._in_blockquote:
@@ -130,7 +137,7 @@ class HTMLToJATSConverter(HTMLParser):
     def handle_endtag(self, tag):
         tag = tag.lower()
 
-        if tag == 'h2':
+        if tag in ('h2', 'h3'):
             self._emit('</title>\n')
         elif tag == 'p':
             if self._in_blockquote:
@@ -187,6 +194,8 @@ class HTMLToJATSConverter(HTMLParser):
 
     def get_jats(self):
         result = ''.join(self._output)
+        if self._in_subsec:
+            result += '</sec>\n'
         if self._in_sec:
             result += '</sec>\n'
         return result

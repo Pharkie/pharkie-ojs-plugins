@@ -17,6 +17,8 @@ class QaSplitsMigration extends Migration
         Schema::create('qa_split_reviews', function (Blueprint $table) {
             $table->bigIncrements('review_id');
             $table->unsignedBigInteger('submission_id');
+            // publication_id is audit-only — goes stale after reimport.
+            // NEVER join on this for lookups; use submissions.current_publication_id instead.
             $table->unsignedBigInteger('publication_id');
             $table->unsignedBigInteger('user_id');
             $table->string('username', 255);

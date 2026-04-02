@@ -482,6 +482,9 @@ def is_citation_like(text: str) -> bool:
         return False
 
     has_year = bool(re.search(r'\b(1[89]\d{2}|20\d{2})\b', text))
+    # Parenthesised year like "(2002)" is a strong citation signal;
+    # a bare year like "30 November 2002" is just a date.
+    has_citation_year = bool(re.search(r'\(\s*(1[89]\d{2}|20\d{2})[\s\[\]0-9a-z/]*\)', text))
     has_author_pattern = bool(re.search(r'[A-Z][a-zà-ü]+,?\s', text))
     has_publisher = bool(re.search(
         r'(' + PUBLISHER_NAMES + r')', text, re.IGNORECASE))
@@ -503,7 +506,15 @@ def is_citation_like(text: str) -> bool:
     if len(text) > CITATION_WEAK_SIGNAL_LENGTH and score < 3:
         return False
 
-    return score >= 2 or (score >= 1 and has_year)
+    # Require strong citation evidence: either 3+ signals, or year+author
+    # with a parenthesised year (not just a bare date like "30 November 2002").
+    if score >= 3:
+        return True
+    if score >= 2 and has_citation_year:
+        return True
+    if score >= 2 and (has_publisher or has_journal or has_pages or has_doi):
+        return True
+    return False
 
 
 # ---------------------------------------------------------------

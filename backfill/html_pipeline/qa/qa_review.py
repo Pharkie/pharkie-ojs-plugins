@@ -193,7 +193,12 @@ def resolve_article(target: str, article_ref: str) -> tuple[int, str]:
 
 
 def get_publication_id(target: str, submission_id: int) -> int:
-    """Get current_publication_id for a submission."""
+    """Get current_publication_id for a submission.
+
+    Note: publication_id in qa_split_reviews is audit-only — it goes stale
+    after reimport. NEVER join on r.publication_id for lookups; always go
+    through submissions.current_publication_id.
+    """
     out = run_sql(target, f"""
         SELECT current_publication_id FROM submissions
         WHERE submission_id = {submission_id};
@@ -286,8 +291,8 @@ def cmd_list(target: str, show_all: bool) -> None:
         SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
         FROM qa_split_reviews r
-        LEFT JOIN publications p ON p.publication_id = r.publication_id
-        LEFT JOIN publication_settings ps ON ps.publication_id = p.publication_id
+        LEFT JOIN submissions s ON s.submission_id = r.submission_id
+        LEFT JOIN publication_settings ps ON ps.publication_id = s.current_publication_id
             AND ps.setting_name = 'title' AND ps.locale = 'en'
         {where}
           AND r.review_id = (
@@ -337,8 +342,8 @@ def cmd_sync(source: str, dest: str) -> None:
         SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
         FROM qa_split_reviews r
-        LEFT JOIN publications p ON p.publication_id = r.publication_id
-        LEFT JOIN publication_settings ps ON ps.publication_id = p.publication_id
+        LEFT JOIN submissions s ON s.submission_id = r.submission_id
+        LEFT JOIN publication_settings ps ON ps.publication_id = s.current_publication_id
             AND ps.setting_name = 'title' AND ps.locale = 'en'
         WHERE r.review_id = (
             SELECT MAX(r2.review_id) FROM qa_split_reviews r2
