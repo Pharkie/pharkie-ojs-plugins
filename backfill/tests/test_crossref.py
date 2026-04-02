@@ -156,6 +156,58 @@ def test_score_match_type_mismatch_book_vs_journal_article():
     assert details['type_mismatch'] is True
 
 
+def test_score_match_type_mismatch_reference_entry():
+    """Encyclopedia entries about an author are not the cited work."""
+    result = _make_result(
+        score=60, title='Thich Nhat Hanh',
+        authors=[],
+        type_='reference-entry',
+    )
+    ref_text = 'Thich Nhat Hanh. (2006). Understanding Our Mind. Berkeley: Parallax Press.'
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_NO_MATCH
+    assert details['type_mismatch'] is True
+
+
+def test_score_match_type_mismatch_dataset():
+    """APA PsycINFO records are metadata about a book, not the book itself."""
+    result = _make_result(
+        score=50, title='Mindfulness-Based Cognitive Therapy for Depression',
+        authors=[{'family': 'Segal', 'given': 'Z.'}],
+        type_='dataset',
+    )
+    ref_text = 'Segal, Z.V. et al. (2002). Mindfulness-Based Cognitive Therapy for Depression. Guilford Press.'
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_NO_MATCH
+    assert details['type_mismatch'] is True
+
+
+def test_score_match_type_mismatch_standalone_book_vs_chapter():
+    """A standalone book matched to a book-chapter from a different book."""
+    result = _make_result(
+        score=90, title='SIMONE DE BEAUVOIR AND JEAN-PAUL SARTRE',
+        authors=[{'family': 'Rowley', 'given': 'H.'}],
+        type_='book-chapter',
+    )
+    # No "In" pattern — this is a standalone book reference
+    ref_text = 'Rowley, H. (2007). Tête-à-Tête: The lives and loves of Simone de Beauvoir and Jean-Paul Sartre. London: Vintage.'
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_NO_MATCH
+    assert details['type_mismatch'] is True
+
+
+def test_score_match_no_type_mismatch_chapter_in_book():
+    """A chapter reference with 'In' pattern matched to book-chapter is fine."""
+    result = _make_result(
+        score=60, title='Letter on Humanism',
+        authors=[{'family': 'Heidegger', 'given': 'M.'}],
+        type_='book-chapter',
+    )
+    ref_text = 'Heidegger, M. (1998). Letter on Humanism. In Heidegger, M. Pathmarks. Cambridge UP.'
+    tier, sim, details = score_match(result, ref_text)
+    assert details['type_mismatch'] is False
+
+
 def test_score_match_no_type_mismatch_for_journal_ref():
     """A journal ref matched to journal-article should NOT be demoted."""
     result = _make_result(
