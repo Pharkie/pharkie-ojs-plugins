@@ -196,6 +196,20 @@ def test_score_match_type_mismatch_standalone_book_vs_chapter():
     assert details['type_mismatch'] is True
 
 
+def test_score_match_reference_work_container_mismatch():
+    """An entry in a dictionary/companion about the cited work is not the work."""
+    result = _make_result(
+        score=50, title='Notebooks for an Ethics',
+        authors=[],
+        container='The Sartre Dictionary',
+        type_='other',
+    )
+    ref_text = 'Sartre, J.P. (1992). Notebooks for an Ethics. Trans. Pellauer, D. London: University of Chicago Press.'
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_NO_MATCH
+    assert details['type_mismatch'] is True
+
+
 def test_score_match_no_type_mismatch_chapter_in_book():
     """A chapter reference with 'In' pattern matched to book-chapter is fine."""
     result = _make_result(
