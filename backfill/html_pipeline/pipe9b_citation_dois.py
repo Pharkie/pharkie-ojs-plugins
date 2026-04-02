@@ -10,6 +10,10 @@ pkp/crossrefReferenceLinking plugin, which renders DOI links on article pages.
 JATS is the single source of truth — this script reads from JATS, not
 from doi_matches.json.
 
+Architecture: two SQL calls total.
+  1. One bulk SELECT to fetch all citations with their article titles
+  2. One bulk INSERT with all matched DOIs
+
 Usage:
     # Preview SQL (dev):
     python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev --dry-run
@@ -26,7 +30,6 @@ Usage:
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -69,10 +72,10 @@ def run_sql(target, sql):
             input=sql,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=120,
         )
     except subprocess.TimeoutExpired:
-        raise SqlError('SQL timed out after 60 seconds')
+        raise SqlError('SQL timed out after 120 seconds')
     stderr = proc.stderr.strip()
     stderr_lines = [l for l in stderr.splitlines()
                     if 'password on the command line' not in l]
@@ -108,185 +111,104 @@ def _escape_sql(s):
     return s.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def load_jats_ref_dois(jats_path):
-    """Load refs with DOIs from a JATS file.
+def load_all_jats_ref_dois(vol_dirs):
+    """Load all refs with DOIs from JATS across all volumes.
 
-    Returns list of dicts: {seq (1-indexed), doi, text (first 30 chars)}.
+    Returns list of dicts: {vol, slug, title, volume, issue, seq, doi, text}.
     """
-    tree = ET.parse(jats_path)
-    results = []
-    for i, ref_el in enumerate(tree.findall('.//ref-list/ref'), start=1):
-        pub_id = ref_el.find("pub-id[@pub-id-type='doi']")
-        if pub_id is None or not pub_id.text:
+    all_refs = []
+    for vol_dir in vol_dirs:
+        toc_path = vol_dir / 'toc.json'
+        if not toc_path.exists():
             continue
-        mc = ref_el.find('mixed-citation')
-        text = mc.text.strip() if mc is not None and mc.text else ''
-        results.append({
-            'seq': i,
-            'doi': pub_id.text.strip(),
-            'text': text,
-        })
-    return results
+        with open(toc_path) as f:
+            toc = json.load(f)
+
+        volume = str(toc.get('volume', ''))
+        issue = str(toc.get('issue', ''))
+
+        for article in toc['articles']:
+            pdf = article.get('split_pdf', '')
+            slug = Path(pdf).stem if pdf else ''
+            if not slug:
+                continue
+
+            jats_path = vol_dir / f'{slug}.jats.xml'
+            if not jats_path.exists():
+                continue
+
+            title = article.get('title', '')
+            if not title:
+                continue
+
+            tree = ET.parse(jats_path)
+            for i, ref_el in enumerate(tree.findall('.//ref-list/ref'),
+                                       start=1):
+                pub_id = ref_el.find("pub-id[@pub-id-type='doi']")
+                if pub_id is None or not pub_id.text:
+                    continue
+                mc = ref_el.find('mixed-citation')
+                text = mc.text.strip() if mc is not None and mc.text else ''
+                all_refs.append({
+                    'vol': vol_dir.name,
+                    'slug': slug,
+                    'title': title,
+                    'volume': volume,
+                    'issue': issue,
+                    'seq': i,
+                    'doi': pub_id.text.strip(),
+                    'text': text,
+                })
+
+    return all_refs
 
 
-def get_publication_id(target, title, volume, issue):
-    """Find OJS publication_id for an article by title + volume + issue."""
-    title_escaped = _escape_sql(title)
-    sql = f"""
-        SELECT p.publication_id
-        FROM publications p
-        JOIN issues i ON p.issue_id = i.issue_id
+def fetch_all_citations(target):
+    """Fetch all citations from OJS in one query.
+
+    Returns dict: (publication_id, seq) → {citation_id, text}.
+    Also returns dict: (normalised_title, volume, issue) → publication_id.
+    """
+    sql = """
+        SELECT c.citation_id, c.publication_id, c.seq,
+               LEFT(c.raw_citation, 30) AS citation_text,
+               ps.setting_value AS title,
+               i.volume, i.number
+        FROM citations c
+        JOIN publications p ON c.publication_id = p.publication_id
         JOIN publication_settings ps ON ps.publication_id = p.publication_id
             AND ps.setting_name = 'title'
-        WHERE ps.setting_value = '{title_escaped}'
-            AND i.volume = '{volume}'
-            AND i.number = '{issue}'
-            AND p.status = 3
-        LIMIT 1;
-    """
-    out = run_sql(target, sql).strip()
-    return int(out) if out else None
-
-
-def get_citations(target, publication_id):
-    """Get citations for a publication, ordered by seq.
-
-    Returns list of dicts: {citation_id, seq, text (first 30 chars)}.
-    """
-    sql = f"""
-        SELECT c.citation_id, c.seq, LEFT(c.raw_citation, 30)
-        FROM citations c
-        WHERE c.publication_id = {publication_id}
-        ORDER BY c.seq;
+        JOIN issues i ON p.issue_id = i.issue_id
+        WHERE p.status = 3
+        ORDER BY c.publication_id, c.seq;
     """
     out = run_sql(target, sql).strip()
     if not out:
-        return []
-    results = []
+        return {}, {}
+
+    citations = {}  # (publication_id, seq) → {citation_id, text}
+    pub_lookup = {}  # (norm_title, volume, issue) → publication_id
+
     for line in out.splitlines():
         parts = line.split('\t')
-        if len(parts) >= 3:
-            results.append({
-                'citation_id': int(parts[0]),
-                'seq': int(parts[1]),
-                'text': parts[2],
-            })
-    return results
-
-
-def build_insert_sql(citation_id, doi):
-    """Build SQL to write a citation DOI."""
-    doi_escaped = _escape_sql(doi)
-    return (
-        f"INSERT INTO citation_settings "
-        f"(citation_id, locale, setting_name, setting_value, setting_type) "
-        f"VALUES ({citation_id}, '', '{SETTING_NAME}', '{doi_escaped}', 'string') "
-        f"ON DUPLICATE KEY UPDATE setting_value = '{doi_escaped}';"
-    )
-
-
-def process_volume(target, vol_dir, dry_run=False, verbose=False):
-    """Process all articles in a volume directory.
-
-    Returns (written, skipped, errors) counts.
-    """
-    toc_path = vol_dir / 'toc.json'
-    if not toc_path.exists():
-        return 0, 0, 0
-
-    with open(toc_path) as f:
-        toc = json.load(f)
-
-    volume = str(toc.get('volume', ''))
-    issue = str(toc.get('issue', ''))
-    vol_label = f'{volume}.{issue}' if issue else volume
-
-    written = 0
-    skipped = 0
-    errors = 0
-
-    for article in toc['articles']:
-        pdf = article.get('split_pdf', '')
-        slug = Path(pdf).stem if pdf else ''
-        if not slug:
+        if len(parts) < 7:
             continue
+        citation_id = int(parts[0])
+        publication_id = int(parts[1])
+        seq = int(parts[2])
+        cit_text = parts[3]
+        title = parts[4]
+        volume = parts[5]
+        issue_num = parts[6]
 
-        jats_path = vol_dir / f'{slug}.jats.xml'
-        if not jats_path.exists():
-            continue
+        citations[(publication_id, seq)] = {
+            'citation_id': citation_id,
+            'text': cit_text,
+        }
+        norm_title = _normalize(title)
+        pub_lookup[(norm_title, volume, issue_num)] = publication_id
 
-        # Load refs with DOIs from JATS
-        ref_dois = load_jats_ref_dois(jats_path)
-        if not ref_dois:
-            continue
-
-        title = article.get('title', '')
-        if not title:
-            continue
-
-        # Find publication in OJS
-        pub_id = get_publication_id(target, title, volume, issue)
-        if pub_id is None:
-            if verbose:
-                print(f'  WARNING: article not found in OJS: '
-                      f'{vol_label}/{slug} "{title[:40]}"')
-            errors += len(ref_dois)
-            continue
-
-        # Get OJS citations for this publication
-        ojs_citations = get_citations(target, pub_id)
-        if not ojs_citations:
-            if verbose:
-                print(f'  WARNING: no citations in OJS for '
-                      f'{vol_label}/{slug} (pub_id={pub_id})')
-            errors += len(ref_dois)
-            continue
-
-        # Build a map: seq → citation_id + text
-        cit_by_seq = {c['seq']: c for c in ojs_citations}
-
-        for ref in ref_dois:
-            seq = ref['seq']
-            doi = ref['doi']
-            jats_text = _normalize(ref['text'])[:30]
-
-            cit = cit_by_seq.get(seq)
-            if cit is None:
-                if verbose:
-                    print(f'  WARNING: no citation at seq={seq} for '
-                          f'{vol_label}/{slug}')
-                errors += 1
-                continue
-
-            # Sanity check: do the texts roughly match?
-            ojs_text = _normalize(cit['text'])
-            if jats_text and ojs_text and jats_text[:20] != ojs_text[:20]:
-                if verbose:
-                    print(f'  WARNING: text mismatch at seq={seq} for '
-                          f'{vol_label}/{slug}')
-                    print(f'    JATS: {jats_text[:30]}')
-                    print(f'    OJS:  {ojs_text[:30]}')
-                errors += 1
-                continue
-
-            sql = build_insert_sql(cit['citation_id'], doi)
-
-            if dry_run:
-                if verbose:
-                    print(f'  DRY-RUN: {vol_label}/{slug} ref{seq} → {doi}')
-                written += 1
-            else:
-                try:
-                    run_sql(target, sql)
-                    written += 1
-                    if verbose:
-                        print(f'  OK: {vol_label}/{slug} ref{seq} → {doi}')
-                except SqlError as e:
-                    print(f'  ERROR writing {vol_label}/{slug} ref{seq}: {e}',
-                          file=sys.stderr)
-                    errors += 1
-
-    return written, skipped, errors
+    return citations, pub_lookup
 
 
 def main():
@@ -310,10 +232,9 @@ def main():
         sys.exit(1)
 
     # Check connectivity
-    if not args.dry_run:
-        if not check_connectivity(args.target):
-            sys.exit(1)
-        print(f'Connected to {args.target} database')
+    if not check_connectivity(args.target):
+        sys.exit(1)
+    print(f'Connected to {args.target} database')
 
     # Find volume directories
     if args.issue:
@@ -329,24 +250,97 @@ def main():
             key=lambda p: p.name,
         )
 
-    total_written = 0
-    total_errors = 0
+    # Step 1: Load all JATS ref DOIs (local, fast)
+    print('Loading JATS ref DOIs...')
+    jats_refs = load_all_jats_ref_dois(vol_dirs)
+    print(f'  {len(jats_refs)} refs with DOIs in JATS')
 
-    for vol_dir in vol_dirs:
-        vol = vol_dir.name
-        w, s, e = process_volume(
-            args.target, vol_dir,
-            dry_run=args.dry_run, verbose=args.verbose,
+    if not jats_refs:
+        print('Nothing to do.')
+        return
+
+    # Step 2: Fetch all OJS citations in one query
+    print('Fetching OJS citations...')
+    citations, pub_lookup = fetch_all_citations(args.target)
+    print(f'  {len(citations)} citations, {len(pub_lookup)} articles')
+
+    # Step 3: Match JATS refs to OJS citations and build INSERT statements
+    inserts = []
+    errors = 0
+    matched_vols = {}
+
+    for ref in jats_refs:
+        norm_title = _normalize(ref['title'])
+        pub_id = pub_lookup.get((norm_title, ref['volume'], ref['issue']))
+
+        if pub_id is None:
+            if args.verbose:
+                print(f'  WARNING: article not found: '
+                      f'{ref["vol"]}/{ref["slug"]} "{ref["title"][:40]}"')
+            errors += 1
+            continue
+
+        cit = citations.get((pub_id, ref['seq']))
+        if cit is None:
+            if args.verbose:
+                print(f'  WARNING: no citation at seq={ref["seq"]} '
+                      f'for {ref["vol"]}/{ref["slug"]}')
+            errors += 1
+            continue
+
+        # Sanity check
+        jats_text = _normalize(ref['text'])[:20]
+        ojs_text = _normalize(cit['text'])[:20]
+        if jats_text and ojs_text and jats_text != ojs_text:
+            if args.verbose:
+                print(f'  WARNING: text mismatch at seq={ref["seq"]} '
+                      f'for {ref["vol"]}/{ref["slug"]}')
+                print(f'    JATS: {jats_text}')
+                print(f'    OJS:  {ojs_text}')
+            errors += 1
+            continue
+
+        doi_escaped = _escape_sql(ref['doi'])
+        inserts.append(
+            f"({cit['citation_id']}, '', '{SETTING_NAME}', "
+            f"'{doi_escaped}', 'string')"
         )
-        if w > 0 or e > 0:
-            prefix = 'DRY-RUN: ' if args.dry_run else ''
-            print(f'{prefix}{vol}: {w} DOIs written, {e} errors')
-        total_written += w
-        total_errors += e
 
-    prefix = 'DRY-RUN: ' if args.dry_run else ''
-    print(f'\n{prefix}Total: {total_written} DOIs written, '
-          f'{total_errors} errors')
+        vol = ref['vol']
+        matched_vols[vol] = matched_vols.get(vol, 0) + 1
+
+    print(f'\n{len(inserts)} DOIs to write, {errors} errors')
+
+    if not inserts:
+        print('Nothing to write.')
+        return
+
+    # Show per-volume breakdown
+    for vol in sorted(matched_vols, key=lambda v: v):
+        print(f'  {vol}: {matched_vols[vol]}')
+
+    # Step 4: Execute one bulk INSERT
+    bulk_sql = (
+        "INSERT INTO citation_settings "
+        "(citation_id, locale, setting_name, setting_value, setting_type) "
+        "VALUES\n"
+        + ",\n".join(inserts)
+        + "\nON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value);"
+    )
+
+    if args.dry_run:
+        print(f'\nDRY-RUN: would execute {len(inserts)} inserts '
+              f'({len(bulk_sql)} chars SQL)')
+        if args.verbose:
+            print(bulk_sql[:500] + '...')
+    else:
+        print(f'\nExecuting bulk insert ({len(inserts)} rows)...')
+        try:
+            run_sql(args.target, bulk_sql)
+            print(f'Done. {len(inserts)} DOIs written to citation_settings.')
+        except SqlError as e:
+            print(f'ERROR: {e}', file=sys.stderr)
+            sys.exit(1)
 
 
 if __name__ == '__main__':
