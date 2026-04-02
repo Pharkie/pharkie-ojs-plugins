@@ -158,10 +158,10 @@ def _build_queries(ref_text):
     if restructured != base:
         queries.append(restructured)
 
-    # Minimal variant: just "Surname Title" — sometimes Crossref finds
-    # books better with less context
+    # Minimal variant: just "Surname Title" — catches cases where all other
+    # queries are too noisy for Crossref (e.g. translator credits, lecture dates)
     minimal = _minimal_query(base)
-    if minimal and minimal != base:
+    if minimal and minimal not in queries:
         queries.append(minimal)
 
     # Also try minimal from the restructured query (for editor-led refs,
@@ -402,7 +402,7 @@ def score_match(result, ref_text):
     # High similarity + author match is the strongest signal.
     # Very high similarity (1.0 = exact title containment) can accept lower
     # Crossref scores — the title match itself is strong evidence.
-    elif similarity >= 1.0 and author_match and crossref_score >= 30:
+    elif similarity >= 1.0 and author_match and crossref_score >= 20:
         tier = TIER_MATCHED
     elif similarity >= 0.8 and author_match and crossref_score >= 40:
         tier = TIER_MATCHED
