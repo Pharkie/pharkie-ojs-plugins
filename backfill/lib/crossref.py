@@ -372,6 +372,13 @@ def _is_type_mismatch(ref_text, cr_type):
     return False
 
 
+# Container titles that indicate a reference work entry, not the cited work
+_REFERENCE_WORK_RE = re.compile(
+    r'\b(?:Dictionary|Companion|Encyclopedia|Encyclopaedia|Handbook)\b',
+    re.IGNORECASE,
+)
+
+
 def score_match(result, ref_text):
     """Score a single Crossref result against the original reference text.
 
@@ -418,6 +425,14 @@ def score_match(result, ref_text):
         'title_similarity': round(similarity, 3),
         'author_match': author_match,
     }
+
+    # Check if the Crossref result is from a reference work (dictionary,
+    # companion, encyclopedia) that the reference doesn't cite. These are
+    # entries *about* the cited work/author, not the cited work itself.
+    if container and _REFERENCE_WORK_RE.search(container):
+        if not _REFERENCE_WORK_RE.search(ref_text):
+            details['type_mismatch'] = True
+            return TIER_NO_MATCH, similarity, details
 
     # Detect type mismatch: reference looks like a book but Crossref returned
     # a journal-article (likely a review of the book, not the book itself)
