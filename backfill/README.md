@@ -95,7 +95,7 @@ flowchart TD
 4. **`html_pipeline/pipe1_haiku_html.py`** — sends each split PDF to the Claude Haiku API and generates an HTML body (`.raw.html`). Resumable (skips existing files).
 5. **`html_pipeline/pipe2_postprocess.py`** — deterministic post-processing: `.raw.html` → `.post.html`. Free, rerunnable.
 6. **`html_pipeline/pipe3_generate_jats.py`** — produces one JATS 1.3 XML file per article from toc.json metadata + processed HTML body. JATS is the single source of truth.
-7. **`html_pipeline/pipe4_extract_citations.py`** — finds reference sections in the JATS body, extracts items, writes structured references to `<ref-list>` and notes to `<fn-group>`.
+7. **`html_pipeline/pipe4_extract_citations.py`** — finds reference sections in the JATS body, extracts items, writes structured references to `<ref-list>` and notes to `<fn-group>`. See [citation classification rules](../docs/citation-classification.md).
 8. **`html_pipeline/pipe5_galley_html.py`** — regenerates HTML galleys from JATS (body + notes + bios; references excluded since OJS renders those from its citations table).
 9. **`html_pipeline/pipe6_ojs_xml.py`** — produces OJS Native XML with base64-embedded PDFs and HTML galleys, ready for import.
 10. **`html_pipeline/pipe7_import.sh <issue-dir>`** — loads the generated XML into OJS via Docker CLI.
@@ -116,6 +116,8 @@ flowchart TD
 - [Backfill Pipeline](../docs/backfill-pipeline.md) — process guide for reviewers (no terminal needed)
 - [Backfill Reference](../docs/backfill-reference.md) — technical reference for all commands and workflows
 - [TOC Guide](../docs/backfill-toc-guide.md) — toc.json schema and creation instructions
+- [Citation Classification](../docs/citation-classification.md) — how extracted items are classified (references, notes, bios, provenance)
+- [blast-queue.sh](../docs/blast-queue.md) — draining the OJS job queue after import (DOI deposits, notifications)
 
 ## Data directory
 

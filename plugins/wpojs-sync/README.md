@@ -34,7 +34,7 @@ Set the API key as a constant in `wp-config.php`:
 define('WPOJS_API_KEY', 'your-shared-secret-here');
 ```
 
-The key must match `api_key_secret` in the OJS `config.inc.php` `[wpojs]` section.
+The key must match the `WPOJS_API_KEY_SECRET` environment variable on the OJS server. See the [OJS plugin README](../wpojs-subscription-api/README.md) for server-side configuration.
 
 ## Documentation
 
