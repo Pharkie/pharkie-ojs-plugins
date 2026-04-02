@@ -251,7 +251,7 @@ Built iteratively using TDD on real references (2026-04-02):
 | **Total with DOI** | **6,725** | **42%** |
 | No match | 9,178 | 58% |
 
-4 rounds of 30-match spot-checks during development. Final round: 100% precision. All DOIs written to JATS as structured `<pub-id>` elements.
+7 rounds of 30-match spot-checks (4 during development, 3 at scale). All rounds: 100% precision. All DOIs written to JATS as structured `<pub-id>` elements, then bulk-inserted into OJS `citation_settings` via `pipe9b` (2 SQL calls total).
 
 ## Testing
 
