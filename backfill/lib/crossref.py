@@ -218,9 +218,8 @@ def _execute_query(query, email, timeout=30):
 def query_crossref(ref_text, email, timeout=30):
     """Query Crossref with multiple query variants and return all candidates.
 
-    Tries the original reference text first, then progressively cleaned
-    variants. Each variant's results are added only if they bring new DOIs.
-    Returns the combined, deduplicated results.
+    Sends all query variants concurrently (within Crossref's 10 req/sec
+    rate limit), then deduplicates results by DOI.
 
     Args:
         ref_text: Full reference text (e.g. "Author (Year). Title. Publisher.")
@@ -233,10 +232,17 @@ def query_crossref(ref_text, email, timeout=30):
     """
     queries = _build_queries(ref_text)
 
+    # Send all query variants concurrently for speed (~0.4s latency per
+    # call, rate limit is 10/s, so 2-5 concurrent requests are fine)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        futures = [pool.submit(_execute_query, q, email, timeout)
+                   for q in queries]
+        all_query_results = [f.result() for f in futures]
+
     seen_dois = set()
     all_results = []
-    for query in queries:
-        results = _execute_query(query, email, timeout)
+    for results in all_query_results:
         for r in results:
             doi = r.get('DOI', '')
             if doi not in seen_dois:

@@ -125,11 +125,12 @@ def process_article(jats_path, email, article_slug, limit=None,
             })
             continue
 
-        # Skip if DOI already in reference text (not our prefix)
+        # DOI already in reference text — extract it and write to JATS
+        # as structured data (pub-id), skip Crossref query
         existing_doi = has_existing_doi(text)
         if existing_doi:
             if verbose:
-                print(f"  [{ref_id}] SKIP (DOI in text: {existing_doi})")
+                print(f"  [{ref_id}] EXTRACTED from text: {existing_doi}")
             results.append({
                 'ref_id': ref_id,
                 'text': text,
@@ -251,7 +252,7 @@ def write_dois_to_jats(jats_path, refs):
     written = 0
 
     for ref_data in refs:
-        if ref_data['tier'] != TIER_MATCHED:
+        if ref_data['tier'] not in (TIER_MATCHED, 'already_has_doi'):
             continue
         doi = ref_data.get('matched_doi')
         if not doi:
