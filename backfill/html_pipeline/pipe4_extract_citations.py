@@ -405,6 +405,8 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
     existing_notes = []
     existing_bios = []
     existing_prov = []
+    # Preserve DOIs from prior pipe4b runs — map ref text → DOI
+    existing_dois = {}
     for child in list(back):
         ltag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
         if ltag == 'ref-list':
@@ -412,6 +414,10 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
                 mc = ref.find('{*}mixed-citation') if '}' in ref.tag else ref.find('mixed-citation')
                 if mc is not None and mc.text:
                     existing_refs.append(mc.text.strip())
+                    # Preserve any existing <pub-id> DOI
+                    pub_id = ref.find("{*}pub-id[@pub-id-type='doi']") if '}' in ref.tag else ref.find("pub-id[@pub-id-type='doi']")
+                    if pub_id is not None and pub_id.text:
+                        existing_dois[mc.text.strip()] = pub_id.text.strip()
         elif ltag == 'fn-group':
             for fn in child:
                 p = fn.find('{*}p') if '}' in fn.tag else fn.find('p')
@@ -438,6 +444,12 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
             ref = ET.SubElement(ref_list, 'ref', id=f'ref{i}')
             mc = ET.SubElement(ref, 'mixed-citation')
             mc.text = ref_text
+            # Re-attach DOI from prior pipe4b run if available
+            doi = existing_dois.get(ref_text)
+            if doi:
+                pub_id = ET.SubElement(ref, 'pub-id')
+                pub_id.set('pub-id-type', 'doi')
+                pub_id.text = doi
 
     # Write notes (sorted by leading number)
     notes = extracted['notes'] if extracted['notes'] else existing_notes
