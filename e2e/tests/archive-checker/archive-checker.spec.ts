@@ -446,6 +446,87 @@ test.describe('Archive Checker plugin', () => {
     }
   });
 
+  // ── Filter consistency ──
+
+  test('pill counts match sidebar article count', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    // Total sidebar items
+    const sidebarCount = await page.locator('.ac-drawer-item').count();
+
+    // Sum of status pill counts should equal sidebar count
+    const statusPills = page.locator('.ac-drawer-pill-status');
+    let pillSum = 0;
+    for (let i = 0; i < await statusPills.count(); i++) {
+      const text = await statusPills.nth(i).textContent();
+      const match = text?.match(/\((\d+)\)/);
+      if (match) pillSum += parseInt(match[1], 10);
+    }
+    expect(pillSum).toBe(sidebarCount);
+  });
+
+  test('reviewer pill count matches sidebar after click', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
+    if (await reviewerPills.count() > 0) {
+      // Get count from pill text
+      const pillText = await reviewerPills.first().textContent();
+      const match = pillText?.match(/\((\d+)\)/);
+      const expectedCount = match ? parseInt(match[1], 10) : 0;
+
+      // Click the pill
+      await reviewerPills.first().click();
+      await page.waitForTimeout(300);
+
+      // Sidebar items should match the pill count
+      const sidebarCount = await page.locator('.ac-drawer-item').count();
+      expect(sidebarCount).toBe(expectedCount);
+    }
+  });
+
+  test('reported pill filters to reported articles', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    const reportedPill = page.locator('.ac-drawer-pill-status', { hasText: 'Reported' });
+    if (await reportedPill.count() > 0) {
+      const pillText = await reportedPill.textContent();
+      const match = pillText?.match(/\((\d+)\)/);
+      const expectedCount = match ? parseInt(match[1], 10) : 0;
+
+      await reportedPill.click();
+      await page.waitForTimeout(300);
+
+      const sidebarCount = await page.locator('.ac-drawer-item').count();
+      expect(sidebarCount).toBe(expectedCount);
+      expect(sidebarCount).toBeGreaterThan(0);
+    }
+  });
+
+  test('content filtered toggle shows filtered articles', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    const countBefore = await page.locator('.ac-drawer-item').count();
+
+    // Click content filtered pill to show them
+    const cfPill = page.locator('.ac-drawer-pill-filtered');
+    if (await cfPill.count() > 0) {
+      await cfPill.click();
+      await page.waitForTimeout(300);
+
+      const countAfter = await page.locator('.ac-drawer-item').count();
+      expect(countAfter).toBeGreaterThan(countBefore);
+    }
+  });
+
   // ── Navigation ──
 
   test('navigation by clicking sidebar items', async ({ page }) => {
