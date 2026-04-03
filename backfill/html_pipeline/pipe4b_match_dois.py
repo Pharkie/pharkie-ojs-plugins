@@ -92,7 +92,8 @@ def _get_cached_ref(existing, article_slug, ref_id):
 
 
 def process_article(jats_path, email, article_slug, limit=None,
-                    verbose=False, delay=DEFAULT_DELAY, existing_matches=None):
+                    verbose=False, delay=DEFAULT_DELAY, existing_matches=None,
+                    revalidate=False):
     """Process all references in one article's JATS file.
 
     Returns list of result dicts for each reference.
@@ -111,11 +112,8 @@ def process_article(jats_path, email, article_slug, limit=None,
         ref_id = ref['ref_id']
         text = ref['text']
 
-        # Skip if already has <pub-id> DOI in JATS
-        if ref['has_pub_id']:
-            if verbose:
-                print(f"  [{ref_id}] SKIP (already has pub-id DOI: "
-                      f"{ref['existing_doi']})")
+        # Skip if already has <pub-id> DOI in JATS (unless --revalidate)
+        if ref['has_pub_id'] and not revalidate:
             results.append({
                 'ref_id': ref_id,
                 'text': text,
@@ -246,36 +244,51 @@ def write_matches_json(vol_dir, all_results, email):
 
 
 def write_dois_to_jats(jats_path, refs):
-    """Write matched DOIs to JATS XML as <pub-id> siblings of <mixed-citation>."""
+    """Write matched DOIs to JATS XML as <pub-id> siblings of <mixed-citation>.
+
+    Also removes stale <pub-id> elements for refs that are now no_match
+    (from --revalidate runs).
+    """
     tree = ET.parse(jats_path)
     root = tree.getroot()
     written = 0
+    removed = 0
 
+    # Build set of ref_ids that should have DOIs
+    matched_refs = {}
+    no_match_refs = set()
     for ref_data in refs:
-        if ref_data['tier'] not in (TIER_MATCHED, 'already_has_doi'):
-            continue
-        doi = ref_data.get('matched_doi')
-        if not doi:
-            continue
+        if ref_data['tier'] in (TIER_MATCHED, 'already_has_doi'):
+            matched_refs[ref_data['ref_id']] = ref_data.get('matched_doi')
+        elif ref_data['tier'] == TIER_NO_MATCH:
+            no_match_refs.add(ref_data['ref_id'])
 
-        ref_id = ref_data['ref_id']
-        ref_el = root.find(f".//ref[@id='{ref_id}']")
-        if ref_el is None:
-            continue
-
-        # Check if <pub-id> already exists
+    for ref_el in root.findall('.//ref-list/ref'):
+        ref_id = ref_el.get('id', '')
         existing = ref_el.find("pub-id[@pub-id-type='doi']")
-        if existing is not None:
+
+        # Remove stale pub-id for refs that are now no_match
+        if ref_id in no_match_refs and existing is not None:
+            ref_el.remove(existing)
+            removed += 1
             continue
 
-        pub_id = ET.SubElement(ref_el, 'pub-id')
-        pub_id.set('pub-id-type', 'doi')
-        pub_id.text = doi
-        written += 1
+        # Add pub-id for matched refs that don't have one yet
+        doi = matched_refs.get(ref_id)
+        if doi and existing is None:
+            pub_id = ET.SubElement(ref_el, 'pub-id')
+            pub_id.set('pub-id-type', 'doi')
+            pub_id.text = doi
+            written += 1
 
-    if written > 0:
+    if written > 0 or removed > 0:
         tree.write(jats_path, encoding='unicode', xml_declaration=True)
-        print(f"  Wrote {written} DOIs to {jats_path.name}")
+        parts = []
+        if written:
+            parts.append(f'{written} written')
+        if removed:
+            parts.append(f'{removed} removed')
+        print(f"  {jats_path.name}: {', '.join(parts)}")
 
     return written
 
@@ -297,6 +310,9 @@ def main():
                         help='Print detailed output for each reference')
     parser.add_argument('--dry-run', action='store_true',
                         help='Query Crossref but don\'t write doi_matches.json or JATS')
+    parser.add_argument('--revalidate', action='store_true',
+                        help='Re-check existing <pub-id> DOIs against current scoring. '
+                             'Removes stale false positives from earlier runs.')
 
     args = parser.parse_args()
 
@@ -333,6 +349,7 @@ def main():
             verbose=args.verbose,
             delay=args.delay,
             existing_matches=existing_matches,
+            revalidate=args.revalidate,
         )
 
         if refs:
