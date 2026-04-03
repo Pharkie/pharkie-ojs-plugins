@@ -653,4 +653,32 @@ test.describe('QA Splits plugin', () => {
     const doiLinks = await page.locator('.qa-endmatter-doi').count();
     expect(totalRefs).toBeGreaterThan(doiLinks);
   });
+
+  // ── Article page review CTA ──
+
+  test('review CTA hidden for unauthenticated users', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await page.goto(`${OJS_BASE}/index.php/ea/article/view/${articleId}`);
+    await expect(page.locator('.qa-review-cta')).not.toBeVisible();
+  });
+
+  test('review CTA visible for logged-in users on article pages', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${OJS_BASE}/index.php/ea/article/view/${articleId}`);
+
+    const cta = page.locator('.qa-review-cta');
+    await expect(cta).toBeVisible({ timeout: 10_000 });
+
+    // Should show progress text
+    const text = await cta.textContent();
+    expect(text).toMatch(/approved \d+ of \d+/i);
+
+    // Should have a link to QA Splits
+    const link = cta.locator('a[href*="qa-splits"]');
+    await expect(link).toBeVisible();
+    expect(await link.textContent()).toMatch(/start reviewing/i);
+  });
 });

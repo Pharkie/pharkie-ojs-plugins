@@ -30,6 +30,15 @@ OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
 
+# Basic auth credentials for WP staging (Caddy)
+WP_AUTH_USER=$($SSH_CMD "grep '^CADDY_WP_AUTH_USER=' $REMOTE_DIR/.env | cut -d= -f2")
+WP_AUTH_PASS=$($SSH_CMD "grep '^CADDY_WP_AUTH_PASS=' $REMOTE_DIR/.env | cut -d= -f2")
+if [ -n "$WP_AUTH_USER" ] && [ -n "$WP_AUTH_PASS" ]; then
+  WP_CURL_AUTH="-u $WP_AUTH_USER:$WP_AUTH_PASS"
+else
+  WP_CURL_AUTH=""
+fi
+
 PASSED=0
 FAILED=0
 TOTAL=0
@@ -62,7 +71,7 @@ echo ""
 
 # --- 1. WP HTTP ---
 echo "1. WordPress HTTP"
-WP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME" 2>/dev/null) || WP_STATUS="000"
+WP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' $WP_CURL_AUTH "$WP_HOME" 2>/dev/null) || WP_STATUS="000"
 if [ "$WP_STATUS" = "200" ] || [ "$WP_STATUS" = "301" ] || [ "$WP_STATUS" = "302" ]; then
   pass "WP responds (HTTP $WP_STATUS)"
 else
@@ -71,8 +80,8 @@ fi
 
 # --- 1b. WP Admin page (catches .env permission issues that WP-CLI misses) ---
 echo "1b. WordPress Admin"
-WP_ADMIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME/wp/wp-admin/" 2>/dev/null) || WP_ADMIN_STATUS="000"
-WP_ADMIN_BODY=$(curl -s "$WP_HOME/wp/wp-admin/" 2>/dev/null | head -20)
+WP_ADMIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' $WP_CURL_AUTH "$WP_HOME/wp/wp-admin/" 2>/dev/null) || WP_ADMIN_STATUS="000"
+WP_ADMIN_BODY=$(curl -s $WP_CURL_AUTH "$WP_HOME/wp/wp-admin/" 2>/dev/null | head -20)
 if echo "$WP_ADMIN_BODY" | grep -qi "Fatal error\|Exception\|unable to read"; then
   fail "WP Admin has PHP fatal error"
 elif [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "301" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
@@ -113,7 +122,7 @@ fi
 
 # --- 3. WP REST API ---
 echo "3. WordPress REST API"
-WP_API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$WP_HOME/wp-json/" 2>/dev/null) || WP_API_STATUS="000"
+WP_API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' $WP_CURL_AUTH "$WP_HOME/wp-json/" 2>/dev/null) || WP_API_STATUS="000"
 if [ "$WP_API_STATUS" = "200" ]; then
   pass "WP REST API responds"
 else

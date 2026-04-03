@@ -37,6 +37,7 @@ class QaSplitsPlugin extends GenericPlugin
 
         Hook::add('LoadHandler', $this->handlePageRequest(...));
         Hook::add('TemplateManager::display', $this->addDashboardLink(...));
+        Hook::add('Templates::Article::Details', $this->addReviewCta(...));
 
         return $success;
     }
@@ -118,6 +119,61 @@ class QaSplitsPlugin extends GenericPlugin
                 QA Splits
             </a>
         ');
+
+        return Hook::CONTINUE;
+    }
+
+    /**
+     * Show "Help review the archive" CTA on article pages for logged-in users.
+     */
+    public function addReviewCta(string $hookName, array $params): bool
+    {
+        $request = Application::get()->getRequest();
+        $user = $request->getUser();
+        if (!$user) {
+            return Hook::CONTINUE;
+        }
+
+        $context = $request->getContext();
+        $contextId = $context ? $context->getId() : 0;
+
+        $total = DB::table('submissions')
+            ->where('context_id', $contextId)
+            ->where('status', 3) // STATUS_PUBLISHED
+            ->count();
+
+        if ($total === 0) {
+            return Hook::CONTINUE;
+        }
+
+        $reviewed = DB::table('qa_split_reviews as r1')
+            ->join('submissions as s', 's.submission_id', '=', 'r1.submission_id')
+            ->where('s.context_id', $contextId)
+            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = r1.submission_id)')
+            ->where('r1.decision', 'approved')
+            ->count();
+
+        $remaining = $total - $reviewed;
+        if ($remaining <= 0) {
+            return Hook::CONTINUE;
+        }
+
+        $qaUrl = $request->getBaseUrl() . '/index.php/'
+            . ($context ? $context->getPath() : '') . '/qa-splits';
+
+        $output = &$params[2];
+        $output .= '<section class="item qa-review-cta">'
+            . '<h2 class="label">Help Review the Archive</h2>'
+            . '<div class="value">'
+            . '<p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#555;">'
+            . "We've approved <strong>{$reviewed}</strong> of <strong>{$total}</strong> digitised articles so far. "
+            . "Would you help by reviewing a few articles from the archive and flagging anything that needs fixing?"
+            . '</p>'
+            . '<a href="' . htmlspecialchars($qaUrl) . '" '
+            . 'style="display:inline-block;padding:8px 14px;background:#1a1a1e;color:#fff;'
+            . 'border-radius:4px;text-decoration:none;font-size:13px;font-weight:600;">'
+            . 'Start reviewing</a>'
+            . '</div></section>';
 
         return Hook::CONTINUE;
     }
