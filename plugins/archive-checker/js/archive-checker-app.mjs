@@ -61,6 +61,8 @@ Alpine.data('acApp', () => ({
     showRejectForm: false,
     rejectComment: '',
     submitting: false,
+    approveLabel: 'Approve',
+    reportLabel: 'Report Problem',
 
     // Sidebar
     showChecklist: false,
@@ -572,14 +574,18 @@ Alpine.data('acApp', () => ({
             this.recalculateCounts();
 
             if (decision === 'approved') {
-                // Auto-advance on approve
+                // Flash confirmation then auto-advance
+                this.approveLabel = 'Approved ✓';
+                setTimeout(() => { this.approveLabel = 'Approve'; }, 2000);
                 this.showRejectForm = false;
                 this.rejectComment = '';
                 if (this.setIndex < this.workingSet.length - 1) {
-                    this.goToSetIndex(this.setIndex + 1);
+                    setTimeout(() => this.goToSetIndex(this.setIndex + 1), 600);
                 }
             } else {
-                // Stay on article for report — keep form open for further edits
+                // Flash confirmation, stay on article
+                this.reportLabel = 'Saved ✓';
+                setTimeout(() => { this.reportLabel = 'Report Problem'; }, 2000);
                 this.rejectComment = '';
                 this.showRejectForm = false;
             }

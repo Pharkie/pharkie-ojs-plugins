@@ -212,8 +212,20 @@ body {
     font-size: 20px;
     font-weight: 600;
     letter-spacing: -0.01em;
-    flex-shrink: 1;
+    flex: 1;
     min-width: 0;
+}
+
+.ac-close-btn {
+    font-size: 24px;
+    line-height: 1;
+    color: var(--sidebar-text-muted);
+    text-decoration: none;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+.ac-close-btn:hover {
+    color: var(--sidebar-text);
 }
 
 .ac-authors {
