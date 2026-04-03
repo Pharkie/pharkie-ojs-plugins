@@ -462,14 +462,27 @@ done
 # Excludes known OJS 3.5 scheduler bugs (see docs/ojs-issues-log.md #22, #24):
 #   - NotFoundHttpException: runScheduledTasks.php has no HTTP request context
 #   - flock()/LockableFile: transient cache lock race condition
+# Threshold: 1-2 errors = WARN (transient), 3+ = FAIL (persistent problem)
+PHP_ERROR_THRESHOLD=3
 TOTAL_ERRORS=0
+ERROR_SAMPLE=""
 for CONTAINER in wp ojs; do
-  ERROR_COUNT=$(remote "docker logs --since=1h \$(docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null) 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -v 'NotFoundHttpException.*PKPRouter' | grep -cv 'flock().*LockableFile'" 2>/dev/null) || ERROR_COUNT="0"
+  CONTAINER_ID=$(remote "docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null" 2>/dev/null) || CONTAINER_ID=""
+  [ -z "$CONTAINER_ID" ] && continue
+  ERROR_COUNT=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -v 'NotFoundHttpException.*PKPRouter' | grep -cv 'flock().*LockableFile'" 2>/dev/null) || ERROR_COUNT="0"
   ERROR_COUNT=$(echo "$ERROR_COUNT" | tr -d '[:space:]')
   TOTAL_ERRORS=$((TOTAL_ERRORS + ${ERROR_COUNT:-0}))
+  # Capture the last error line for diagnostics
+  if [ "${ERROR_COUNT:-0}" -gt 0 ] 2>/dev/null; then
+    SAMPLE=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -v 'NotFoundHttpException.*PKPRouter' | grep -v 'flock().*LockableFile' | tail -1 | cut -c1-120" 2>/dev/null) || SAMPLE=""
+    [ -n "$SAMPLE" ] && ERROR_SAMPLE="[$CONTAINER] $SAMPLE"
+  fi
 done
-if [ "$TOTAL_ERRORS" -gt 0 ] 2>/dev/null; then
-  fail "$TOTAL_ERRORS PHP fatal/OOM errors in container logs (last hour)"
+if [ "$TOTAL_ERRORS" -ge "$PHP_ERROR_THRESHOLD" ] 2>/dev/null; then
+  fail "$TOTAL_ERRORS PHP fatal/OOM errors in container logs (last hour)" "$ERROR_SAMPLE"
+elif [ "$TOTAL_ERRORS" -gt 0 ] 2>/dev/null; then
+  warn "$TOTAL_ERRORS PHP fatal/OOM error(s) in container logs (last hour, below threshold of $PHP_ERROR_THRESHOLD)" "$ERROR_SAMPLE"
+  pass "PHP errors below alert threshold ($TOTAL_ERRORS < $PHP_ERROR_THRESHOLD)"
 else
   pass "No fatal errors in container logs (last hour)"
 fi

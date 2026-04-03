@@ -23,6 +23,11 @@ fail() {
   FAILURE_DETAILS="${FAILURE_DETAILS}${1}\n"
 }
 
+warn() {
+  echo "  [WARN] $1"
+  [ -n "$2" ] && echo "         $2"
+}
+
 info() {
   echo "  [INFO] $1"
 }
