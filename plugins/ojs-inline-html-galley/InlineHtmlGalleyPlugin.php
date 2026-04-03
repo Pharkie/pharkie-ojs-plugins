@@ -266,7 +266,8 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
         if (str_contains($htmlContent, '<!-- AUTO-EXTRACTED:') || str_contains($htmlContent, 'data-content-filtered')) {
             $contentFilteredNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#fff3cd;'
                 . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#664d03;line-height:1.5;">'
-                . 'This article could not be fully extracted from the original PDF and has limited formatting. '
+                . 'This article was flagged by our extraction tool and could only be partially converted. '
+                . 'Formatting, headings, and paragraph structure may be missing or incorrect. '
                 . 'Please use the PDF version for the best reading experience.</div>';
         }
 
