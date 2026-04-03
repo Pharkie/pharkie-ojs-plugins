@@ -497,7 +497,7 @@ Alpine.data('acApp', () => ({
             }
             if (gen !== _pdf.loadGen) return;
             this.htmlContent = html.replace(/<script[\s\S]*?<\/script>/gi, '');
-            this.isContentFiltered = html.includes('AUTO-EXTRACTED:');
+            this.isContentFiltered = html.includes('AUTO-EXTRACTED:') || html.includes('data-content-filtered');
             this.htmlLoading = false;
         } catch (err) {
             if (gen !== _pdf.loadGen) return;
