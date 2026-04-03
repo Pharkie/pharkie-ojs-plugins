@@ -125,7 +125,7 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 - **Content-filtered filter**: Articles that couldn't be fully extracted are flagged in JATS (`<custom-meta name="content-filtered">`), stored in OJS `publication_settings`, and excluded from the sidebar by default. Toggle the "Content filtered" pill to show them. Flagged articles show an amber warning banner.
 - **Pane labels**: "ORIGINAL PDF" and "HTML VERSION" labels help orient first-time users.
 - **Citation DOIs**: Reference list shows matched DOIs as clickable links, with DOI count in the pill label.
-- **Article page CTA**: Logged-in users see a "Help Check the Archive" box on article pages with progress stats and a link to Archive Checker in random mode.
+- **Article page CTA**: Logged-in users see a "Help Check the Archive" box on article pages with progress stats and a link to Archive Checker in random mode. The CTA text is in `ArchiveCheckerPlugin.php` around line 170 (the `callbackArticleSidebar` method).
 
 ### Keyboard shortcuts
 
