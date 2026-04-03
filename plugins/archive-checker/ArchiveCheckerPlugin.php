@@ -263,18 +263,8 @@ HTMLSTART;
         <div class="ac-drawer">
             <div class="ac-drawer-brand">
                 <div class="ac-drawer-logo">Archive Checker</div>
-                <div class="ac-drawer-strapline">Check PDF splits, HTML accuracy, start/end bleed, end-matter classification
-                    <a href="#" class="ac-drawer-more" @click.prevent="showChecklist = !showChecklist">What to check &rsaquo;</a>
-                </div>
-                <div class="ac-drawer-checklist" x-show="showChecklist" x-cloak>
-                    <ul>
-                        <li>PDF split at the right page</li>
-                        <li>HTML text matches PDF content</li>
-                        <li>No start bleed from previous article</li>
-                        <li>No end bleed into next article</li>
-                        <li>References, notes, bios correctly classified</li>
-                        <li>Excluded content (ads, mastheads) not present</li>
-                    </ul>
+                <div class="ac-drawer-strapline">Help check 35 years of journal articles
+                    <a href="#" class="ac-drawer-more" @click.prevent="showGuide = true">What to check? &rsaquo;</a>
                 </div>
             </div>
 
@@ -282,6 +272,10 @@ HTMLSTART;
                 <input type="text" class="ac-drawer-search" placeholder="Search title, author, keyword..."
                     x-model="searchQuery" @input="refilter()">
                 <button class="ac-search-clear" x-show="searchQuery" @click="searchQuery=''; refilter()">&times;</button>
+            </div>
+
+            <div class="ac-drawer-random-row">
+                <button class="ac-btn ac-btn-random" :class="{ 'ac-dice-rolling': diceRolling }" @click="goToRandom()" title="Load random unchecked articles"><span class="ac-dice">&#127922;</span> Surprise me</button>
             </div>
 
             <div class="ac-drawer-filter-row">
@@ -323,18 +317,16 @@ HTMLSTART;
                         <span class="ac-drawer-item-title" x-text="item.title"></span>
                     </div>
                 </template>
-                <div x-show="workingSet.length === 0" style="padding:20px;text-align:center;color:rgba(255,255,255,0.35)">No articles match</div>
+                <div x-show="workingSet.length === 0" style="padding:20px;text-align:center;color:var(--sidebar-text-muted)">No articles match</div>
             </div>
 
             <div class="ac-drawer-nav">
-                <button class="ac-btn ac-btn-nav" :disabled="!canGoPrev" @click="navigate(-1)">&lsaquo; Previous</button>
-                <button class="ac-btn ac-btn-nav" :disabled="!canGoNext" @click="navigate(1)">Next &rsaquo;</button>
-                <button class="ac-btn ac-btn-nav ac-btn-random" @click="goToRandom()">&#127922; Random</button>
+                <span x-text="positionDisplay" class="ac-drawer-position"></span>
+                <span class="ac-drawer-random-label" x-show="setFilter && setFilter.type === 'random'">Random batch</span>
             </div>
 
             <div class="ac-drawer-footer">
-                <span x-text="positionDisplay"></span>
-                <span class="ac-drawer-random-label" x-show="setFilter && setFilter.type === 'random'">Random batch</span>
+                <a href="#" class="ac-drawer-shortcuts-link" @click.prevent="showShortcuts = true">Keyboard shortcuts</a>
             </div>
         </div>
 
@@ -347,12 +339,18 @@ HTMLSTART;
             <div class="ac-row-2">
                 <span :class="statusClass" @click="showFixReason()" :title="article?.comment || ''"
                     x-text="statusLabel" :style="article?.status === 'needs_fix' ? 'cursor:pointer' : ''"></span>
-                <div class="ac-progress" x-text="progressDisplay" @click="openDashboard()"></div>
+                <div class="ac-progress-wrap" @click="openDashboard()">
+                    <div class="ac-progress" x-text="progressDisplay"></div>
+                    <div class="ac-progress-bar" x-show="counts">
+                        <div class="ac-progress-bar-approved" :style="'width:' + progressApprovedPct + '%'"></div>
+                        <div class="ac-progress-bar-reported" :style="'width:' + progressReportedPct + '%'"></div>
+                    </div>
+                </div>
                 <span class="ac-row-spacer"></span>
                 <template x-if="!showRejectForm">
                     <div style="display:flex;gap:8px;">
                         <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
-                            title="Request Fix (R)">Request Fix</button>
+                            title="Report Problem (R)">Report Problem</button>
                         <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting"
                             title="Approve (A)">Approve</button>
                     </div>
@@ -360,10 +358,10 @@ HTMLSTART;
             </div>
             <div class="ac-row-reject" x-show="showRejectForm" x-cloak>
                 <textarea class="ac-textarea" x-model="rejectComment" x-ref="rejectTextarea"
-                    placeholder="What needs fixing? Describe the issue..." rows="3"
+                    placeholder="What did you notice? Describe the problem..." rows="3"
                     @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()" @keydown.escape="cancelFix()"></textarea>
                 <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
-                    title="Ctrl+Enter to submit">Request Fix</button>
+                    title="Ctrl+Enter to submit">Report Problem</button>
                 <button class="ac-btn ac-btn-nav" @click="cancelFix()">Cancel</button>
             </div>
         </div>
@@ -371,7 +369,9 @@ HTMLSTART;
         <!-- PDF viewer -->
         <div class="ac-left">
             <div class="ac-pdf-toolbar">
+                <span class="ac-pane-label">Original PDF</span>
                 <span id="pdf-page-info" x-text="pdfPageInfo">Loading...</span>
+                <span class="ac-pdf-dark-hint" x-show="isDarkMode" x-cloak>Colours inverted for dark mode</span>
                 <div class="ac-pdf-search" :class="{ open: pdfSearchOpen }">
                     <button class="ac-pdf-search-toggle" @click="togglePdfSearch()" title="Search PDF (Ctrl+F)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -393,6 +393,7 @@ HTMLSTART;
 
         <!-- HTML galley + end-matter -->
         <div class="ac-right">
+            <div class="ac-pane-label ac-pane-label-right">HTML version</div>
             <div class="ac-article-meta" x-show="article">
                 <div class="ac-meta-issue" x-text="(article?.issue_title || '') + ' ' + (article?.volume || '') + '.' + (article?.number || '') + ': ' + (article?.year || '')"></div>
                 <div class="ac-meta-id" x-text="'Article #' + (article?.submission_id || '')"></div>
@@ -445,18 +446,42 @@ HTMLSTART;
             </div>
         </div>
 
-        <!-- Help overlay -->
-        <div class="ac-help-overlay" x-show="showHelp" x-cloak @click="showHelp = false"
-            role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+        <!-- Guide overlay (first visit + "What to check?") -->
+        <div class="ac-help-overlay" x-show="showGuide" x-cloak @click="dismissGuide()"
+            role="dialog" aria-modal="true" aria-label="Guide">
             <div class="ac-help-box" @click.stop>
-                <h3>Keyboard Shortcuts</h3>
+                <h3>Help check the archive</h3>
+                <p>We have recently converted all articles in the archive from PDF to structured data and HTML to aid discoverability and readability. This tool makes it easy to compare the original PDF with the HTML version side by side and flag anything that doesn't look right.</p>
+                <p>The <strong>original PDF</strong> is on the left. The <strong>HTML version</strong> is on the right. Scroll through both, then:</p>
+                <ul class="ac-help-actions">
+                    <li><strong>Approve</strong> — everything looks correct</li>
+                    <li><strong>Report Problem</strong> — something needs fixing (describe what you see)</li>
+                </ul>
+                <h3>What to check</h3>
+                <ol class="ac-help-checklist">
+                    <li>Title, author(s), page numbers, keywords, and abstract are correct</li>
+                    <li>Article text matches the PDF — nothing missing, garbled, or out of order</li>
+                    <li>No content from neighbouring articles or non-article content mixed in</li>
+                    <li>Notes and author bios are in the right place</li>
+                    <li>References are complete and any DOI links point to the right work</li>
+                </ol>
+                <h3>Known limitations</h3>
+                <p>Images, photographs, tables, and charts have not yet been converted. A small number of articles could not be fully extracted and show limited formatting.</p>
+                <p>Press any key to close</p>
+            </div>
+        </div>
+
+        <!-- Keyboard shortcuts overlay -->
+        <div class="ac-help-overlay" x-show="showShortcuts" x-cloak @click="showShortcuts = false"
+            role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+            <div class="ac-help-box ac-help-box-compact" @click.stop>
+                <h3>Keyboard shortcuts</h3>
                 <table>
-                    <tr><td><kbd>&larr;</kbd> / <kbd>&rarr;</kbd></td><td>Previous / Next article</td></tr>
-                    <tr><td><kbd>A</kbd></td><td>Approve article</td></tr>
-                    <tr><td><kbd>R</kbd></td><td>Request Fix (opens form)</td></tr>
-                    <tr><td><kbd>Ctrl+Enter</kbd></td><td>Submit fix request</td></tr>
-                    <tr><td><kbd>Esc</kbd></td><td>Cancel / close</td></tr>
-                    <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+                    <tr><td><kbd>A</kbd></td><td>Approve</td></tr>
+                    <tr><td><kbd>R</kbd></td><td>Report a problem</td></tr>
+                    <tr><td><kbd>Ctrl+Enter</kbd></td><td>Submit report</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Cancel</td></tr>
+                    <tr><td><kbd>?</kbd></td><td>Show keyboard shortcuts</td></tr>
                 </table>
                 <p>Press any key to close</p>
             </div>
