@@ -302,6 +302,11 @@ HTMLSTART;
                         @click="toggleReviewer(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
             </div>
+            <div class="ac-drawer-pills" x-show="contentFilteredCount > 0">
+                <button class="ac-drawer-pill ac-drawer-pill-filtered" :class="{ active: !hideContentFiltered }"
+                    @click="hideContentFiltered = !hideContentFiltered; refilter()"
+                    x-text="'Content filtered (' + contentFilteredCount + ')'"></button>
+            </div>
             <div class="ac-drawer-clear-row" x-show="hasFilters">
                 <button class="ac-drawer-clear" @click="clearFilters()">Clear all filters</button>
             </div>

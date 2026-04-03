@@ -54,6 +54,7 @@ Alpine.data('acApp', () => ({
     activeStatuses: new Set(),
     activeSections: new Set(),
     activeReviewers: new Set(),
+    hideContentFiltered: true, // exclude content-filtered by default
 
     // Dark mode
     isDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -151,7 +152,8 @@ Alpine.data('acApp', () => ({
 
             if (this.articles.length === 0) return;
 
-            this.workingSet = this.articles.map((_, i) => i);
+            // Apply default content-filtered exclusion
+            this.refilter();
 
             // Parse URL params — restore all filters
             const params = new URL(window.location).searchParams;
@@ -329,7 +331,8 @@ Alpine.data('acApp', () => ({
 
             const indices = ids
                 .map(id => this.articles.findIndex(a => a.submission_id === id))
-                .filter(i => i >= 0);
+                .filter(i => i >= 0)
+                .filter(i => !this.hideContentFiltered || !this.articles[i].content_filtered);
             if (indices.length === 0) return;
 
             this.searchQuery = '';
@@ -691,6 +694,10 @@ Alpine.data('acApp', () => ({
         });
     },
 
+    get contentFilteredCount() {
+        return this.articles.filter(a => a.content_filtered).length;
+    },
+
     get statusPills() {
         const base = this._baseFiltered;
         const counts = { approved: 0, needs_fix: 0, unreviewed: 0 };
@@ -768,6 +775,7 @@ Alpine.data('acApp', () => ({
 
         this.workingSet = [];
         this.articles.forEach((a, i) => {
+            if (this.hideContentFiltered && a.content_filtered) return;
             if (issue && (a.volume + '.' + a.number) !== issue) return;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
