@@ -60,7 +60,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 8. `sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)
 9. QA in browser — repeat from step 1 if issues found
 
-**Per-issue iteration takes ~8 seconds.** Full reimport (`--wipe-articles`, ~20 min) only for systemic changes.
+**Per-issue iteration takes ~8 seconds.** Reprocess only affected volumes, not all 1400 articles — approved articles should not be regressed. Full reimport (`--wipe-articles`, ~20 min) only when all volumes need updating.
 
 ### Reference DOI linking (post-QA, one-off)
 
