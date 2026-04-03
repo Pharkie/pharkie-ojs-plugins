@@ -15,7 +15,7 @@ backfill/split_pipeline/split_issue.sh path/to/37.1.pdf
 # Step 2: Human review (see Backfill Pipeline for what to check)
 # 2a: Check split PDFs -- open backfill/private/output/37.1/*.pdf
 #     Verify page alignment, article boundaries, book review splits
-# 2b: Review metadata in toc.json directly or via QA Splits
+# 2b: Review metadata in toc.json directly or via Archive Checker
 
 # Step 3: Generate XML and import into OJS
 python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/37.1/toc.json

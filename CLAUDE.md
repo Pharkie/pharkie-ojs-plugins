@@ -18,7 +18,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`private/docs/monitoring.md`](private/docs/monitoring.md) — Better Stack monitors, heartbeats, GitHub Actions workflows, troubleshooting
 - [`docs/vps-deployment.md`](docs/vps-deployment.md) — VPS deployment
 - [`docs/support-runbook.md`](docs/support-runbook.md) — support staff quick reference
-- [`docs/qa-splits-plugin.md`](docs/qa-splits-plugin.md) — QA Splits plugin: visual review interface for backfill article splits
+- [`docs/archive-checker-plugin.md`](docs/archive-checker-plugin.md) — Archive Checker plugin: visual review interface for backfill article splits
 - `private/TODO.md` — roadmap (in private repo)
 
 ## Good to know
@@ -34,7 +34,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 ## Backfill pipeline
 
-Imports journal back-issues (whole-issue PDFs) into OJS. See [`backfill/README.md`](backfill/README.md) for the pipeline overview, [`docs/backfill-reference.md`](docs/backfill-reference.md) for command reference, and [`docs/qa-splits-plugin.md`](docs/qa-splits-plugin.md) for the QA workflow.
+Imports journal back-issues (whole-issue PDFs) into OJS. See [`backfill/README.md`](backfill/README.md) for the pipeline overview, [`docs/backfill-reference.md`](docs/backfill-reference.md) for command reference, and [`docs/archive-checker-plugin.md`](docs/archive-checker-plugin.md) for the QA workflow.
 
 Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfill/html_pipeline/` (HTML/JATS/import, pipe1–pipe10), `backfill/lib/` (shared code), `backfill/validate_toc.py`.
 

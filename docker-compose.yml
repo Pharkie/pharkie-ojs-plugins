@@ -157,8 +157,8 @@ services:
       - ./plugins/wpojs-subscription-api/api/v1/wpojs:/var/www/html/api/v1/wpojs:ro
       - ./plugins/ojs-inline-html-galley:/var/www/html/plugins/generic/inlineHtmlGalley
       - ./plugins/stripe-payment:/var/www/html/plugins/paymethod/stripe
-      - ./plugins/qa-splits:/var/www/html/plugins/generic/qaSplits
-      - ./plugins/qa-splits/api/v1/qa-splits:/var/www/html/api/v1/qa-splits:ro
+      - ./plugins/archive-checker:/var/www/html/plugins/generic/archiveChecker
+      - ./plugins/archive-checker/api/v1/archive-checker:/var/www/html/api/v1/archive-checker:ro
       - ./docker/ojs/entrypoint.sh:/etc/ojs/entrypoint.sh:ro
       - ./docker/ojs/config.inc.php.tmpl:/etc/ojs/config.inc.php.tmpl:ro
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro

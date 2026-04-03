@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-QA Splits CLI — approve, reject, or check article review status.
+Archive Checker CLI — approve, reject, or check article review status.
 
-CLI equivalent of the QA Splits web interface. Manages review records
-in the OJS qa_split_reviews table.
+CLI equivalent of the Archive Checker web interface. Manages review records
+in the OJS archive_checker_reviews table.
 
 Articles can be specified by:
   - Backfill path:   29.2/03-on-the-phenomenon
@@ -195,7 +195,7 @@ def resolve_article(target: str, article_ref: str) -> tuple[int, str]:
 def get_publication_id(target: str, submission_id: int) -> int:
     """Get current_publication_id for a submission.
 
-    Note: publication_id in qa_split_reviews is audit-only — it goes stale
+    Note: publication_id in archive_checker_reviews is audit-only — it goes stale
     after reimport. NEVER join on r.publication_id for lookups; always go
     through submissions.current_publication_id.
     """
@@ -219,7 +219,7 @@ def cmd_approve(target: str, article_ref: str) -> None:
     publication_id = get_publication_id(target, pub_id)
 
     run_sql(target, f"""
-        INSERT INTO qa_split_reviews
+        INSERT INTO archive_checker_reviews
             (submission_id, publication_id, user_id, username, decision, comment, created_at)
         VALUES
             ({pub_id}, {publication_id}, 1, 'claude', 'approved', NULL, NOW());
@@ -237,7 +237,7 @@ def cmd_reject(target: str, article_ref: str, comment: str) -> None:
     safe_comment = comment.replace("'", "''")
 
     run_sql(target, f"""
-        INSERT INTO qa_split_reviews
+        INSERT INTO archive_checker_reviews
             (submission_id, publication_id, user_id, username, decision, comment, created_at)
         VALUES
             ({pub_id}, {publication_id}, 1, 'claude', 'needs_fix',
@@ -255,7 +255,7 @@ def cmd_status(target: str, article_ref: str) -> None:
 
     out = run_sql(target, f"""
         SELECT r.decision, r.username, r.comment, r.created_at
-        FROM qa_split_reviews r
+        FROM archive_checker_reviews r
         WHERE r.submission_id = {pub_id}
         ORDER BY r.created_at DESC;
     """)
@@ -290,13 +290,13 @@ def cmd_list(target: str, show_all: bool) -> None:
     out = run_sql(target, f"""
         SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
-        FROM qa_split_reviews r
+        FROM archive_checker_reviews r
         LEFT JOIN submissions s ON s.submission_id = r.submission_id
         LEFT JOIN publication_settings ps ON ps.publication_id = s.current_publication_id
             AND ps.setting_name = 'title' AND ps.locale = 'en'
         {where}
           AND r.review_id = (
-              SELECT MAX(r2.review_id) FROM qa_split_reviews r2
+              SELECT MAX(r2.review_id) FROM archive_checker_reviews r2
               WHERE r2.submission_id = r.submission_id
           )
         ORDER BY r.created_at DESC;
@@ -324,7 +324,7 @@ def cmd_clear(target: str, article_ref: str) -> None:
     pub_id, title = resolve_article(target, article_ref)
 
     run_sql(target, f"""
-        DELETE FROM qa_split_reviews WHERE submission_id = {pub_id};
+        DELETE FROM archive_checker_reviews WHERE submission_id = {pub_id};
     """)
 
     print(f'Cleared all reviews for: {title} (submission_id={pub_id})')
@@ -341,12 +341,12 @@ def cmd_sync(source: str, dest: str) -> None:
     out = run_sql(source, """
         SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
-        FROM qa_split_reviews r
+        FROM archive_checker_reviews r
         LEFT JOIN submissions s ON s.submission_id = r.submission_id
         LEFT JOIN publication_settings ps ON ps.publication_id = s.current_publication_id
             AND ps.setting_name = 'title' AND ps.locale = 'en'
         WHERE r.review_id = (
-            SELECT MAX(r2.review_id) FROM qa_split_reviews r2
+            SELECT MAX(r2.review_id) FROM archive_checker_reviews r2
             WHERE r2.submission_id = r.submission_id
         )
         ORDER BY r.created_at DESC;
@@ -391,7 +391,7 @@ def cmd_sync(source: str, dest: str) -> None:
 
         # Check if destination already has a newer review
         dest_latest = run_sql(dest, f"""
-            SELECT created_at FROM qa_split_reviews
+            SELECT created_at FROM archive_checker_reviews
             WHERE submission_id = {dest_sub_id}
             ORDER BY review_id DESC LIMIT 1;
         """).strip()
@@ -406,7 +406,7 @@ def cmd_sync(source: str, dest: str) -> None:
         safe_username = (username or 'unknown').replace("'", "''")
 
         run_sql(dest, f"""
-            INSERT INTO qa_split_reviews
+            INSERT INTO archive_checker_reviews
                 (submission_id, publication_id, user_id, username, decision, comment, created_at)
             VALUES
                 ({dest_sub_id}, {dest_pub_id}, 1, '{safe_username}',
@@ -420,7 +420,7 @@ def cmd_sync(source: str, dest: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='QA Splits CLI — approve, reject, or check article review status.',
+        description='Archive Checker CLI — approve, reject, or check article review status.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument('--target', choices=['dev', 'live'], default='dev',

@@ -2,10 +2,10 @@
 <!DOCTYPE version SYSTEM "../../../lib/pkp/dtd/pluginVersion.dtd">
 
 <version>
-    <application>qaSplits</application>
+    <application>archiveChecker</application>
     <type>plugins.generic</type>
     <release>1.0.0.0</release>
     <date>2026-03-28</date>
     <lazy-load>1</lazy-load>
-    <class>QaSplitsPlugin</class>
+    <class>ArchiveCheckerPlugin</class>
 </version>
