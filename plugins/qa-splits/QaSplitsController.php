@@ -496,12 +496,20 @@ class QaSplitsController extends PKPBaseController
 
         $pubId = $publication->publication_id;
 
-        // References from citations table
-        $references = DB::table('citations')
-            ->where('publication_id', $pubId)
-            ->orderBy('seq')
-            ->pluck('raw_citation')
-            ->map(fn ($text) => ['text' => trim($text)])
+        // References from citations table, with matched DOIs
+        $references = DB::table('citations as c')
+            ->leftJoin('citation_settings as cs', function ($join) {
+                $join->on('c.citation_id', '=', 'cs.citation_id')
+                     ->where('cs.setting_name', '=', 'crossref::doi');
+            })
+            ->where('c.publication_id', $pubId)
+            ->orderBy('c.seq')
+            ->select(['c.raw_citation', 'cs.setting_value as doi'])
+            ->get()
+            ->map(fn ($row) => [
+                'text' => trim($row->raw_citation),
+                'doi'  => $row->doi ?: null,
+            ])
             ->toArray();
 
         // Count individual items inside jats-* divs in the HTML galley

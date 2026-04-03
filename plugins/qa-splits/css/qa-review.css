@@ -1091,6 +1091,25 @@ body {
     word-break: break-word;
 }
 
+.qa-endmatter-text-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.qa-endmatter-doi {
+    display: block;
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    color: var(--accent-blue, #4a9eff);
+    margin-top: 2px;
+    word-break: break-all;
+    text-decoration: none;
+}
+
+.qa-endmatter-doi:hover {
+    text-decoration: underline;
+}
+
 .qa-endmatter-empty {
     color: var(--text-muted);
     font-style: italic;

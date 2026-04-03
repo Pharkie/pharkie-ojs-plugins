@@ -490,7 +490,9 @@ Alpine.data('qaApp', () => ({
         // References — full list (not in HTML galley, from citations table)
         const refs = c.references || [];
         if (refs.length > 0) {
-            groups.push({ label: 'References', cls: 'qa-pill-reference', count: refs.length, items: refs.map(r => r.text) });
+            const doiCount = refs.filter(r => r.doi).length;
+            const label = doiCount > 0 ? `References (${refs.length}, ${doiCount} DOIs)` : `References (${refs.length})`;
+            groups.push({ label, cls: 'qa-pill-reference', count: refs.length, items: refs });
         }
 
         return groups;

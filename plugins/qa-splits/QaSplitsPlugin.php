@@ -365,12 +365,17 @@ HTMLSTART;
                 <template x-for="group in classificationGroups" :key="group.label">
                     <div class="qa-endmatter-group">
                         <div class="qa-endmatter-group-header">
-                            <span class="qa-pill" :class="group.cls" x-text="group.label + ' (' + group.count + ')'"></span>
+                            <span class="qa-pill" :class="group.cls" x-text="group.label"></span>
                         </div>
-                        <template x-for="(text, i) in group.items" :key="i">
+                        <template x-for="(item, i) in group.items" :key="i">
                             <div class="qa-endmatter-item">
                                 <span class="qa-endmatter-num" x-text="(i + 1) + '.'"></span>
-                                <span class="qa-endmatter-text" x-text="text"></span>
+                                <div class="qa-endmatter-text-wrap">
+                                    <span class="qa-endmatter-text" x-text="item.text"></span>
+                                    <template x-if="item.doi">
+                                        <a class="qa-endmatter-doi" :href="'https://doi.org/' + item.doi" target="_blank" x-text="'doi:' + item.doi"></a>
+                                    </template>
+                                </div>
                             </div>
                         </template>
                     </div>
