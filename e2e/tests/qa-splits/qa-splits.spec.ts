@@ -42,6 +42,26 @@ function findArticleWithGalleys(): number | null {
   return isNaN(id) ? null : id;
 }
 
+function findArticleWithCitationDois(): number | null {
+  const out = ojsQuery(`
+    SELECT s.submission_id
+    FROM citations c
+    JOIN citation_settings cs ON c.citation_id = cs.citation_id
+      AND cs.setting_name = 'crossref::doi'
+    JOIN publications p ON c.publication_id = p.publication_id
+    JOIN submissions s ON s.current_publication_id = p.publication_id
+    JOIN publication_galleys g1 ON g1.publication_id = p.publication_id
+    JOIN submission_files sf1 ON g1.submission_file_id = sf1.submission_file_id
+    JOIN files f1 ON sf1.file_id = f1.file_id AND f1.mimetype = 'text/html'
+    WHERE s.context_id = (SELECT journal_id FROM journals WHERE path = 'ea' LIMIT 1)
+    GROUP BY s.submission_id
+    HAVING COUNT(cs.citation_id) >= 2
+    LIMIT 1
+  `);
+  const id = parseInt(out.trim(), 10);
+  return isNaN(id) ? null : id;
+}
+
 function cleanupTestReviews(): void {
   if (qaTableExists()) {
     ojsQuery(`DELETE FROM qa_split_reviews WHERE comment LIKE 'e2e-test-%'`);
@@ -537,5 +557,100 @@ test.describe('QA Splits plugin', () => {
     expect(article).toHaveProperty('abstract');
     expect(article).toHaveProperty('keywords');
     expect(article).toHaveProperty('issue_title');
+  });
+
+  // ── Citation DOIs ──
+
+  test('classification API includes doi field in references', async ({ page }) => {
+    const doiArticleId = findArticleWithCitationDois();
+    test.skip(!doiArticleId, 'No article with citation DOIs found');
+
+    await loginAsAdmin(page);
+
+    const response = await page.request.get(
+      `${API_BASE}/articles/${doiArticleId}/classification`,
+    );
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data.references.length).toBeGreaterThan(0);
+
+    // Each reference should have text and doi fields
+    for (const ref of data.references) {
+      expect(ref).toHaveProperty('text');
+      expect(ref).toHaveProperty('doi');
+    }
+
+    // At least some should have a non-null DOI
+    const withDoi = data.references.filter((r: any) => r.doi);
+    expect(withDoi.length).toBeGreaterThan(0);
+
+    // DOIs should look like DOIs
+    for (const ref of withDoi) {
+      expect(ref.doi).toMatch(/^10\./);
+    }
+  });
+
+  test('reference DOI links render in endmatter', async ({ page }) => {
+    const doiArticleId = findArticleWithCitationDois();
+    test.skip(!doiArticleId, 'No article with citation DOIs found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${QA_URL}?id=${doiArticleId}`);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    // Wait for classification to load
+    const endmatter = page.locator('.qa-endmatter');
+    await expect(endmatter).toBeVisible({ timeout: 10_000 });
+
+    // DOI links should render
+    const doiLinks = page.locator('.qa-endmatter-doi');
+    await expect(doiLinks.first()).toBeVisible({ timeout: 5_000 });
+
+    const linkCount = await doiLinks.count();
+    expect(linkCount).toBeGreaterThan(0);
+
+    // Each DOI link should have correct href and text
+    for (let i = 0; i < linkCount; i++) {
+      const link = doiLinks.nth(i);
+      const href = await link.getAttribute('href');
+      const text = await link.textContent();
+      expect(href).toMatch(/^https:\/\/doi\.org\/10\./);
+      expect(text).toMatch(/^doi:10\./);
+      expect(await link.getAttribute('target')).toBe('_blank');
+    }
+  });
+
+  test('references pill shows DOI count', async ({ page }) => {
+    const doiArticleId = findArticleWithCitationDois();
+    test.skip(!doiArticleId, 'No article with citation DOIs found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${QA_URL}?id=${doiArticleId}`);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+
+    // Wait for classification
+    await expect(page.locator('.qa-endmatter')).toBeVisible({ timeout: 10_000 });
+
+    // Pill should show DOI count like "References (12, 5 DOIs)"
+    const pill = page.locator('.qa-pill.qa-pill-reference');
+    await expect(pill).toBeVisible();
+    const pillText = await pill.textContent();
+    expect(pillText).toMatch(/References \(\d+, \d+ DOIs\)/);
+  });
+
+  test('references without DOI show no doi link', async ({ page }) => {
+    const doiArticleId = findArticleWithCitationDois();
+    test.skip(!doiArticleId, 'No article with citation DOIs found');
+
+    await loginAsAdmin(page);
+    await page.goto(`${QA_URL}?id=${doiArticleId}`);
+    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.qa-endmatter')).toBeVisible({ timeout: 10_000 });
+
+    // Total references should exceed DOI links (not all refs have DOIs)
+    const totalRefs = await page.locator('.qa-endmatter-item').count();
+    const doiLinks = await page.locator('.qa-endmatter-doi').count();
+    expect(totalRefs).toBeGreaterThan(doiLinks);
   });
 });
