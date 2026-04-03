@@ -480,6 +480,18 @@ def generate_article_jats(article: dict, volume: int, issue: int,
             lines.append(f'<subject>{escape(subj)}</subject>')
         lines.append('</subj-group>')
 
+    # Content-filtered flag (PyMuPDF fallback or manual flag)
+    is_content_filtered = article.get('_content_filtered', False)
+    if not is_content_filtered and html_path and html_path.exists():
+        with open(html_path, 'r', encoding='utf-8') as f:
+            if '<!-- AUTO-EXTRACTED:' in f.read(200):
+                is_content_filtered = True
+    if is_content_filtered:
+        lines.append('<custom-meta-group>')
+        lines.append('<custom-meta><meta-name>content-filtered</meta-name>'
+                     '<meta-value>true</meta-value></custom-meta>')
+        lines.append('</custom-meta-group>')
+
     lines.append('</article-meta>')
     lines.append('</front>')
 

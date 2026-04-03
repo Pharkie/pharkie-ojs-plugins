@@ -261,9 +261,13 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             }
         }
 
-        // Content-filtered warning for articles that couldn't be fully extracted
+        // Content-filtered warning — from publication_settings (written by pipe9c)
         $contentFilteredNotice = '';
-        if (str_contains($htmlContent, '<!-- AUTO-EXTRACTED:') || str_contains($htmlContent, 'data-content-filtered')) {
+        $isContentFiltered = DB::table('publication_settings')
+            ->where('publication_id', $publication->getId())
+            ->where('setting_name', 'contentFiltered')
+            ->exists();
+        if ($isContentFiltered) {
             $contentFilteredNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#fff3cd;'
                 . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#664d03;line-height:1.5;">'
                 . 'This article was flagged by our extraction tool and could only be partially converted. '

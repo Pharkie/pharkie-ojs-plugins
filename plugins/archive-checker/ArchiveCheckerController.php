@@ -260,25 +260,15 @@ class ArchiveCheckerController extends PKPBaseController
             }
         }
 
-        // Content-filtered flag — check HTML galleys for data-content-filtered marker
+        // Content-filtered flag — from publication_settings (written by pipe9c)
         $contentFiltered = [];
         if ($pubIds) {
-            $htmlGalleys = DB::table('publication_galleys as pg')
-                ->join('submission_files as sf', 'pg.submission_file_id', '=', 'sf.submission_file_id')
-                ->join('files as f', 'sf.file_id', '=', 'f.file_id')
-                ->whereIn('pg.publication_id', $pubIds)
-                ->where('f.mimetype', 'text/html')
-                ->select(['pg.publication_id', 'f.path'])
-                ->get();
-            $filesDir = rtrim(Config::getVar('files', 'files_dir'), '/');
-            foreach ($htmlGalleys as $row) {
-                $filePath = $filesDir . '/' . $row->path;
-                if (file_exists($filePath)) {
-                    $head = file_get_contents($filePath, false, null, 0, 200);
-                    if (str_contains($head, 'data-content-filtered')) {
-                        $contentFiltered[$row->publication_id] = true;
-                    }
-                }
+            $cfRows = DB::table('publication_settings')
+                ->whereIn('publication_id', $pubIds)
+                ->where('setting_name', 'contentFiltered')
+                ->pluck('publication_id');
+            foreach ($cfRows as $pubId) {
+                $contentFiltered[$pubId] = true;
             }
         }
 

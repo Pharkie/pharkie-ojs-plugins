@@ -346,13 +346,14 @@ def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:
                 print(f'  SKIP {vol_dir.name}/{slug}: no body in JATS')
             continue
 
-        # Propagate content-filtered flag from post.html or toc.json to galley
-        is_filtered = article.get('_content_filtered', False)
-        if not is_filtered:
-            post_path = vol_dir / f'{slug}.post.html'
-            if post_path.exists():
-                with open(post_path, encoding='utf-8') as pf:
-                    is_filtered = '<!-- AUTO-EXTRACTED:' in pf.read(200)
+        # Content-filtered flag — read from JATS custom-meta (source of truth)
+        tree = ET.parse(jats_path)
+        is_filtered = False
+        for cm in list(tree.findall('.//{*}custom-meta')) + list(tree.findall('.//custom-meta')):
+            mn = cm.find('{*}meta-name') or cm.find('meta-name')
+            if mn is not None and mn.text == 'content-filtered':
+                is_filtered = True
+                break
         if is_filtered:
             html_content = ('<div class="ac-content-filtered" '
                             'data-content-filtered="true"></div>\n'
