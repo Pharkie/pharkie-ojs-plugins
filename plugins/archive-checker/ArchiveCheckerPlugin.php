@@ -420,7 +420,7 @@ HTMLSTART;
             <div class="ac-html-content">
                 <div x-show="htmlLoading" class="ac-loading">Loading HTML...</div>
                 <div class="ac-content-filtered-banner" x-show="isContentFiltered" x-cloak>
-                    This article could not be fully extracted and has limited formatting. <a href="#" @click.prevent="showGuide = true">Known limitation</a>
+                    This article was flagged by our extraction tool and could only be partially converted. Formatting, headings, and paragraph structure may be missing or incorrect. We plan to re-extract these articles &mdash; in the meantime, please Report Problem with anything specific you notice.
                 </div>
                 <div x-show="!htmlLoading" x-html="htmlContent"></div>
             </div>
