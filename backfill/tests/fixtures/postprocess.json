@@ -339,6 +339,13 @@
       "html": "<p>62 Existential Analysis: Journal of The Society for Existential Analysis</p>\n<p>Real content here.</p>",
       "should_not_contain": "Journal of The Society",
       "should_contain": "Real content"
+    },
+    "preserves_mid_paragraph_header_in_content_filtered": {
+      "html": "<p>some body text here 62 Existential Analysis: Journal of The Society for Existential Analysis more text continues</p>",
+      "should_contain": [
+        "some body text",
+        "more text continues"
+      ]
     }
   }
 }
