@@ -425,7 +425,7 @@ HTMLSTART;
             <div class="ac-html-content">
                 <div x-show="htmlLoading" class="ac-loading">Loading HTML...</div>
                 <div class="ac-content-filtered-banner" x-show="isContentFiltered" x-cloak>
-                    This article was flagged by our extraction tool and could only be partially converted. Formatting, headings, and paragraph structure may be missing or incorrect. We plan to re-extract these articles &mdash; in the meantime, please Report Problem with anything specific you notice.
+                    This article's formatting could not be fully recovered from the original PDF. Headings, paragraph structure, and layout may be missing or incorrect. We plan to improve this. You are welcome to mention specific issues via Report Problem.
                 </div>
                 <div x-show="!htmlLoading" x-html="htmlContent"></div>
             </div>
