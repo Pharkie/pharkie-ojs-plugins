@@ -62,11 +62,19 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 
 **Per-issue iteration takes ~8 seconds.** Full reimport (`--wipe-articles`, ~20 min) only for systemic changes.
 
+### Reference DOI linking (post-QA, one-off)
+
+Run after QA is complete and articles are finalized:
+
+1. `python3 backfill/html_pipeline/pipe4b_match_dois.py --volume <vol.iss> --email EMAIL` — matches refs to Crossref DOIs, writes `<pub-id>` to JATS + `doi_matches.json`. See [`docs/crossref-reference-linking.md`](docs/crossref-reference-linking.md).
+2. `sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev` — writes matched DOIs from JATS to OJS `citation_settings` table (2 SQL calls, seconds). Requires pkp/crossrefReferenceLinking plugin for display.
+
 ### Deploying to live
 
 1. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes articles, reimports all
 2. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — runs locally, sends SQL via SSH
-3. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
+3. `sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs to live OJS
+4. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
 
 ### Data and tests
 
