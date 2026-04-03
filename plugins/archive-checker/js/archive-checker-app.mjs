@@ -639,6 +639,7 @@ Alpine.data('acApp', () => ({
     get _baseFilteredForIssues() {
         const q = this.searchQuery.toLowerCase();
         return this.articles.filter(a => {
+            if (this.hideContentFiltered && a.content_filtered) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
             if (q && !a.title.toLowerCase().includes(q)
@@ -670,6 +671,7 @@ Alpine.data('acApp', () => ({
         const q = this.searchQuery.toLowerCase();
         const issue = this.issueFilter;
         return this.articles.filter((a, i) => {
+            if (this.hideContentFiltered && a.content_filtered) return false;
             if (issue && (a.volume + '.' + a.number) !== issue) return false;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
             if (q && !a.title.toLowerCase().includes(q)
@@ -685,6 +687,7 @@ Alpine.data('acApp', () => ({
         const q = this.searchQuery.toLowerCase();
         const issue = this.issueFilter;
         return this.articles.filter((a, i) => {
+            if (this.hideContentFiltered && a.content_filtered) return false;
             if (issue && (a.volume + '.' + a.number) !== issue) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
             if (q && !a.title.toLowerCase().includes(q)
@@ -723,6 +726,7 @@ Alpine.data('acApp', () => ({
         const q = this.searchQuery.toLowerCase();
         const issue = this.issueFilter;
         return this.articles.filter(a => {
+            if (this.hideContentFiltered && a.content_filtered) return false;
             if (issue && (a.volume + '.' + a.number) !== issue) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
