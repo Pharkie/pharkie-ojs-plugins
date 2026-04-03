@@ -205,6 +205,17 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             $request = Application::get()->getRequest();
             $user = $request->getUser();
 
+            // Check content-filtered status from DB
+            $isContentFiltered = DB::table('publication_settings')
+                ->where('publication_id', $publication->getId())
+                ->where('setting_name', 'contentFiltered')
+                ->exists();
+
+            // Content-filtered articles get a stronger message
+            $noticeText = $isContentFiltered
+                ? 'This article\'s formatting could not be fully recovered from the original PDF. Please use the PDF version for the best reading experience, or '
+                : 'This article has been digitally restored from an archive. If you spot errors or formatting issues, try the PDF version instead. Please, ';
+
             if ($user) {
                 // Logged-in: show "report a content issue" link → expandable form
                 $submissionId = (int) $article->getId();
@@ -212,9 +223,12 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
                 $apiUrl = $request->getBaseUrl() . '/index.php/' . $contextPath . '/api/v1/archive-checker/reviews';
                 $csrfToken = $request->getSession()->token();
 
-                $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
-                    . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
-                    . 'This article has been digitally restored from an archive. If you spot errors or formatting issues, try the PDF version instead. Please, '
+                $noticeBg = $isContentFiltered ? '#fff3cd' : '#f8f5f0';
+                $noticeColor = $isContentFiltered ? '#664d03' : '#555';
+
+                $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:' . $noticeBg . ';'
+                    . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:' . $noticeColor . ';line-height:1.5;">'
+                    . $noticeText
                     . '<a href="#" class="ihg-report-link" onclick="document.getElementById(\'ihg-report-form\').style.display=\'block\';this.removeAttribute(\'href\');this.style.color=\'inherit\';this.style.textDecoration=\'none\';this.style.cursor=\'default\';this.onclick=null;return false;">request a fix</a>.'
                     . '<div id="ihg-report-form" style="display:none;margin-top:10px;">'
                     . '<textarea id="ihg-report-text" placeholder="Describe the issue you found..."'
@@ -254,32 +268,19 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
                 $context = $request->getContext();
                 $email = htmlspecialchars($context ? $context->getData('contactEmail') : '');
                 $emailLink = $email ? '<a href="mailto:' . $email . '">' . $email . '</a>' : 'the journal';
-                $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'
-                    . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#555;line-height:1.5;">'
-                    . 'This article has been digitally restored from an archive. If you spot errors or formatting issues, '
-                    . 'try the PDF version instead. Please, email ' . $emailLink . ' to request a fix.</div>';
+                $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:' . ($isContentFiltered ? '#fff3cd' : '#f8f5f0') . ';'
+                    . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:' . ($isContentFiltered ? '#664d03' : '#555') . ';line-height:1.5;">'
+                    . ($isContentFiltered
+                        ? 'This article\'s formatting could not be fully recovered from the original PDF. Please use the PDF version for the best reading experience, or email ' . $emailLink . ' to report issues.'
+                        : 'This article has been digitally restored from an archive. If you spot errors or formatting issues, try the PDF version instead. Please, email ' . $emailLink . ' to request a fix.')
+                    . '</div>';
             }
-        }
-
-        // Content-filtered warning — from publication_settings (written by pipe9c)
-        $contentFilteredNotice = '';
-        $isContentFiltered = DB::table('publication_settings')
-            ->where('publication_id', $publication->getId())
-            ->where('setting_name', 'contentFiltered')
-            ->exists();
-        if ($isContentFiltered) {
-            $contentFilteredNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#fff3cd;'
-                . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#664d03;line-height:1.5;">'
-                . 'This article was flagged by our extraction tool and could only be partially converted. '
-                . 'Formatting, headings, and paragraph structure may be missing or incorrect. '
-                . 'Please use the PDF version for the best reading experience.</div>';
         }
 
         $output .= '<section class="item inline-html-galley">'
             . '<h2 class="label">Full Text</h2>'
             . $subscriberNotice
             . $archiveNotice
-            . $contentFilteredNotice
             . '<div class="value">' . $bodyContent . '</div>'
             . '</section>';
 
