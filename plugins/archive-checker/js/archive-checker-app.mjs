@@ -152,48 +152,49 @@ Alpine.data('acApp', () => ({
 
             if (this.articles.length === 0) return;
 
-            // Apply default content-filtered exclusion
-            this.refilter();
-
-            // Parse URL params — restore all filters
+            // Parse URL params BEFORE building working set — avoids
+            // refilter() triggering a premature article load that races
+            // with the ?id= navigation.
             const params = new URL(window.location).searchParams;
             const urlId = parseInt(params.get('id'), 10);
-            let hasFilters = false;
 
-            if (params.get('issue')) { this.issueFilter = params.get('issue'); hasFilters = true; }
-            if (params.get('status')) { params.get('status').split(',').forEach(s => this.activeStatuses.add(s)); hasFilters = true; }
-            if (params.get('section')) { params.get('section').split(',').forEach(s => this.activeSections.add(s)); hasFilters = true; }
-            if (params.get('reviewer')) { params.get('reviewer').split(',').forEach(s => this.activeReviewers.add(s)); hasFilters = true; }
-            if (params.get('q')) { this.searchQuery = params.get('q'); hasFilters = true; }
-            if (hasFilters) this.refilter();
+            if (params.get('issue')) { this.issueFilter = params.get('issue'); }
+            if (params.get('status')) { params.get('status').split(',').forEach(s => this.activeStatuses.add(s)); }
+            if (params.get('section')) { params.get('section').split(',').forEach(s => this.activeSections.add(s)); }
+            if (params.get('reviewer')) { params.get('reviewer').split(',').forEach(s => this.activeReviewers.add(s)); }
+            if (params.get('q')) { this.searchQuery = params.get('q'); }
+
+            // Build working set (applies content-filtered exclusion + URL filters).
+            // Don't use refilter() — it calls goToSetIndex(0) which would load
+            // the wrong article before we handle ?id=.
+            this._buildWorkingSet();
 
             if (params.get('mode') === 'random') {
-                // Auto-trigger random unreviewed set on load
                 await this.goToRandom();
-            } else if (hasFilters) {
-                // Navigate to the URL article within the filtered set, or first match
-                let si = 0;
-                if (urlId) {
-                    const artIdx = this.articles.findIndex(a => a.submission_id === urlId);
-                    const found = this.workingSet.indexOf(artIdx);
-                    if (found >= 0) si = found;
-                }
-                this.setIndex = si;
-                await this.loadArticle(this.workingSet[si]);
             } else {
                 let start = 0;
                 if (urlId) {
-                    const idx = this.articles.findIndex(a => a.submission_id === urlId);
-                    if (idx >= 0) start = idx;
+                    const artIdx = this.articles.findIndex(a => a.submission_id === urlId);
+                    const wsIdx = this.workingSet.indexOf(artIdx);
+                    if (wsIdx >= 0) {
+                        start = wsIdx;
+                    } else if (artIdx >= 0) {
+                        // Article exists but not in working set — load directly
+                        this.setIndex = 0;
+                        await this.loadArticle(artIdx);
+                        this.prefetchRandomTarget();
+                        return;
+                    }
                 } else {
                     const lastSeen = parseInt(localStorage.getItem('ac-last-seen'), 10);
                     if (lastSeen) {
-                        const idx = this.articles.findIndex(a => a.submission_id === lastSeen);
-                        if (idx >= 0) start = idx;
+                        const artIdx = this.articles.findIndex(a => a.submission_id === lastSeen);
+                        const wsIdx = this.workingSet.indexOf(artIdx);
+                        if (wsIdx >= 0) start = wsIdx;
                     }
                 }
                 this.setIndex = start;
-                await this.loadArticle(start);
+                await this.loadArticle(this.workingSet[start]);
             }
 
             this.prefetchRandomTarget();
@@ -768,6 +769,40 @@ Alpine.data('acApp', () => ({
         this.refilter();
     },
     isReviewerActive(key) { return this.activeReviewers.has(key); },
+
+    _buildWorkingSet() {
+        // Build working set from current filters without triggering navigation.
+        // Used during init to avoid premature article loads.
+        const q = this.searchQuery.toLowerCase();
+        const issue = this.issueFilter;
+        this.workingSet = [];
+        this.articles.forEach((a, i) => {
+            if (this.hideContentFiltered && a.content_filtered) return;
+            if (issue && (a.volume + '.' + a.number) !== issue) return;
+            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
+            if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
+            if (this.activeReviewers.size > 0) {
+                const isMine = a.reviewer === 'you' || a.reviewer === this.currentUsername;
+                const byMe = this.activeReviewers.has('me');
+                const byOthers = this.activeReviewers.has('others');
+                if (byMe && !byOthers && !isMine) return;
+                if (byOthers && !byMe && (isMine || !a.reviewer)) return;
+                if (byMe && byOthers && !a.reviewer) return;
+            }
+            if (q) {
+                const isNumeric = /^\d+$/.test(q);
+                if (isNumeric) {
+                    if (String(a.submission_id) !== q) return;
+                } else {
+                    if (!a.title.toLowerCase().includes(q)
+                        && !a.authors.some(auth => auth.toLowerCase().includes(q))
+                        && !(a.section || '').toLowerCase().includes(q)
+                        && String(a.submission_id) !== q) return;
+                }
+            }
+            this.workingSet.push(i);
+        });
+    },
 
     refilter() {
         const q = this.searchQuery.toLowerCase();
