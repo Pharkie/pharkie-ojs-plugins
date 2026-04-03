@@ -1,4 +1,4 @@
-# QA Splits Plugin
+# Archive Checker Plugin
 
 Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: sidebar (left), PDF (centre), HTML galley + end-matter classification (right).
 
@@ -25,17 +25,17 @@ After the backfill pipeline produces HTML galleys and imports them into OJS, a h
 Already configured in `docker-compose.yml`:
 
 ```yaml
-- ./plugins/qa-splits:/var/www/html/plugins/generic/qaSplits
-- ./plugins/qa-splits/api/v1/qa-splits:/var/www/html/api/v1/qa-splits:ro
+- ./plugins/archive-checker:/var/www/html/plugins/generic/archiveChecker
+- ./plugins/archive-checker/api/v1/archive-checker:/var/www/html/api/v1/archive-checker:ro
 ```
 
-The plugin is auto-enabled by `scripts/ojs/setup-ojs.sh` when `QA_SPLITS_ENABLED=1` (default).
+The plugin is auto-enabled by `scripts/ojs/setup-ojs.sh` when `ARCHIVE_CHECKER_ENABLED=1` (default).
 
 ### Manual (non-Docker / live)
 
-1. Copy `plugins/qa-splits/` to `plugins/generic/qaSplits/` in your OJS installation
-2. Copy `plugins/qa-splits/api/v1/qa-splits/` to `api/v1/qa-splits/` in your OJS installation
-3. Enable in OJS admin: Website > Plugins > Generic > QA Splits
+1. Copy `plugins/archive-checker/` to `plugins/generic/archiveChecker/` in your OJS installation
+2. Copy `plugins/archive-checker/api/v1/archive-checker/` to `api/v1/archive-checker/` in your OJS installation
+3. Enable in OJS admin: Website > Plugins > Generic > Archive Checker
 
 No configuration needed — the plugin reads all data from the OJS database and file storage.
 
@@ -50,15 +50,15 @@ All data comes from OJS — no filesystem access to backfill output is required:
 | HTML galley | OJS file storage (includes `jats-*` wrapper divs) |
 | References | `citations` table (structured citations from import) |
 | Notes/Bios/Provenance counts | Counted from `jats-notes`/`jats-bios`/`jats-provenance` divs in HTML galley |
-| Review history | `qa_split_reviews` table (plugin's own table) |
+| Review history | `archive_checker_reviews` table (plugin's own table) |
 
 ## Usage
 
 ### Accessing the QA interface
 
-Navigate to `/<journal-path>/qa-splits` (e.g., `/index.php/ea/qa-splits`). Requires any authenticated OJS login. There's also a floating "QA Splits" button on the OJS dashboard.
+Navigate to `/<journal-path>/archive-checker` (e.g., `/index.php/ea/archive-checker`). Requires any authenticated OJS login. There's also a floating "Archive Checker" button on the OJS dashboard.
 
-Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/qa-splits?id=9207`. The URL always reflects all active filters, so you can copy and share it to show someone exactly what you're looking at.
+Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/archive-checker?id=9207`. The URL always reflects all active filters, so you can copy and share it to show someone exactly what you're looking at.
 
 ### Interface layout
 
@@ -143,7 +143,7 @@ When a review is submitted, a SHA256 hash of the HTML galley is stored. If the g
 
 ## API Endpoints
 
-All endpoints require authenticated session. Base: `/api/v1/qa-splits/`.
+All endpoints require authenticated session. Base: `/api/v1/archive-checker/`.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -163,7 +163,7 @@ POST requires `X-Csrf-Token` header matching the OJS session token.
 
 ## Database
 
-The plugin creates a `qa_split_reviews` table:
+The plugin creates a `archive_checker_reviews` table:
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -202,7 +202,7 @@ python3 backfill/html_pipeline/qa/qa_review.py --target live list
 
 ## QA iteration workflow
 
-QA Splits reads from OJS — pipeline changes require reimport to be visible. Always use per-issue reimport when possible.
+Archive Checker reads from OJS — pipeline changes require reimport to be visible. Always use per-issue reimport when possible.
 
 **Per-issue iteration** (~8 sec, preferred):
 ```bash
@@ -219,7 +219,7 @@ python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/23.1/toc
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/23.1 --force
 # 6. Restore IDs for that issue only (~0.6 sec)
 sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 23.1
-# 7. Check in QA Splits
+# 7. Check in Archive Checker
 ```
 
 **Full reimport** (~20 min, only for systemic changes affecting all issues):
@@ -247,4 +247,4 @@ sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev
 
 ## Reporting content issues
 
-The Inline HTML Galley plugin shows a "request a fix" link on article pages. Logged-in users can expand a form and submit — this writes to the same `qa_split_reviews` table, visible in QA Splits.
+The Inline HTML Galley plugin shows a "request a fix" link on article pages. Logged-in users can expand a form and submit — this writes to the same `archive_checker_reviews` table, visible in Archive Checker.

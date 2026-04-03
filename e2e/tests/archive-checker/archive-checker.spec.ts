@@ -2,8 +2,8 @@ import { test, expect, Page } from '@playwright/test';
 import { ojsQuery, ojsPhp } from '../../helpers/ojs';
 
 const OJS_BASE = 'http://localhost:8081';
-const QA_URL = `${OJS_BASE}/index.php/ea/qa-splits`;
-const API_BASE = `${OJS_BASE}/index.php/ea/api/v1/qa-splits`;
+const QA_URL = `${OJS_BASE}/index.php/ea/archive-checker`;
+const API_BASE = `${OJS_BASE}/index.php/ea/api/v1/archive-checker`;
 
 const ADMIN_USER = process.env.OJS_ADMIN_USER ?? 'admin';
 const ADMIN_PASS = process.env.OJS_ADMIN_PASSWORD ?? '';
@@ -19,7 +19,7 @@ async function loginAsAdmin(page: Page): Promise<void> {
 function qaTableExists(): boolean {
   const out = ojsQuery(
     `SELECT COUNT(*) FROM information_schema.tables
-     WHERE table_schema = DATABASE() AND table_name = 'qa_split_reviews'`,
+     WHERE table_schema = DATABASE() AND table_name = 'archive_checker_reviews'`,
   );
   return parseInt(out.trim(), 10) > 0;
 }
@@ -64,7 +64,7 @@ function findArticleWithCitationDois(): number | null {
 
 function cleanupTestReviews(): void {
   if (qaTableExists()) {
-    ojsQuery(`DELETE FROM qa_split_reviews WHERE comment LIKE 'e2e-test-%'`);
+    ojsQuery(`DELETE FROM archive_checker_reviews WHERE comment LIKE 'e2e-test-%'`);
   }
 }
 
@@ -72,7 +72,7 @@ function cleanupTestReviews(): void {
 // Tests
 // ─────────────────────────────────────────────────────────────────
 
-test.describe('QA Splits plugin', () => {
+test.describe('Archive Checker plugin', () => {
   let articleId: number | null;
 
   test.beforeAll(() => {
@@ -98,10 +98,10 @@ test.describe('QA Splits plugin', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Alpine.js layout with sidebar
-    await expect(page.locator('.qa-layout')).toBeVisible();
-    await expect(page.locator('.qa-drawer')).toBeVisible();
-    await expect(page.locator('.qa-left')).toBeVisible();
-    await expect(page.locator('.qa-right')).toBeVisible();
+    await expect(page.locator('.ac-layout')).toBeVisible();
+    await expect(page.locator('.ac-drawer')).toBeVisible();
+    await expect(page.locator('.ac-left')).toBeVisible();
+    await expect(page.locator('.ac-right')).toBeVisible();
 
     // No OJS navigation chrome
     await expect(page.locator('.pkp_navigation')).not.toBeVisible();
@@ -113,8 +113,8 @@ test.describe('QA Splits plugin', () => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
 
-    // Wait for Alpine to populate (qa-title uses x-text)
-    const title = page.locator('.qa-title');
+    // Wait for Alpine to populate (ac-title uses x-text)
+    const title = page.locator('.ac-title');
     await expect(title).not.toHaveText('Loading...', { timeout: 15_000 });
     await expect(title).not.toHaveText('No articles found');
 
@@ -124,7 +124,7 @@ test.describe('QA Splits plugin', () => {
     expect(titleText).toMatch(/\d+\.\d+ #\d+ \(\d{4}\)/);
 
     // Status badge visible
-    await expect(page.locator('.qa-badge')).toBeVisible();
+    await expect(page.locator('.ac-badge')).toBeVisible();
   });
 
   // ── PDF viewer ──
@@ -170,7 +170,7 @@ test.describe('QA Splits plugin', () => {
     await expect(page.locator('#pdf-container .textLayer span').first()).toBeAttached({ timeout: 60_000 });
 
     // Open search via the toggle button
-    await page.click('.qa-pdf-search-toggle');
+    await page.click('.ac-pdf-search-toggle');
     const searchInput = page.locator('#pdf-search-input');
     await expect(searchInput).toBeVisible();
 
@@ -185,7 +185,7 @@ test.describe('QA Splits plugin', () => {
     expect(highlightCount).toBeGreaterThan(0);
 
     // Search info should show match count
-    const info = await page.locator('.qa-pdf-search-info').textContent();
+    const info = await page.locator('.ac-pdf-search-info').textContent();
     expect(info).toMatch(/\d+ \/ \d+/);
 
     // Escape should close search and clear highlights
@@ -201,13 +201,13 @@ test.describe('QA Splits plugin', () => {
     await page.goto(`${QA_URL}?id=${articleId}`);
     await expect(page.locator('#pdf-container .textLayer span').first()).toBeAttached({ timeout: 60_000 });
 
-    await page.click('.qa-pdf-search-toggle');
+    await page.click('.ac-pdf-search-toggle');
     const searchInput = page.locator('#pdf-search-input');
     await searchInput.fill('the');
     await page.waitForTimeout(1500);
 
     // Should show "1 / N" initially
-    const info1 = await page.locator('.qa-pdf-search-info').textContent();
+    const info1 = await page.locator('.ac-pdf-search-info').textContent();
     expect(info1).toMatch(/^1 \/ \d+$/);
 
     // Should have one selected highlight
@@ -216,13 +216,13 @@ test.describe('QA Splits plugin', () => {
     // Enter advances to next match
     await searchInput.press('Enter');
     await page.waitForTimeout(500);
-    const info2 = await page.locator('.qa-pdf-search-info').textContent();
+    const info2 = await page.locator('.ac-pdf-search-info').textContent();
     expect(info2).toMatch(/^2 \/ \d+$/);
 
     // Shift+Enter goes back
     await searchInput.press('Shift+Enter');
     await page.waitForTimeout(500);
-    const info3 = await page.locator('.qa-pdf-search-info').textContent();
+    const info3 = await page.locator('.ac-pdf-search-info').textContent();
     expect(info3).toMatch(/^1 \/ \d+$/);
   });
 
@@ -234,16 +234,16 @@ test.describe('QA Splits plugin', () => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
 
-    const htmlPane = page.locator('.qa-right');
+    const htmlPane = page.locator('.ac-right');
     await expect(htmlPane).toBeVisible();
 
     // Wait for HTML loading to complete
-    await expect(page.locator('.qa-html-content .qa-loading')).not.toBeVisible({
+    await expect(page.locator('.ac-html-content .ac-loading')).not.toBeVisible({
       timeout: 15_000,
     });
 
     // HTML content should have paragraphs
-    const pCount = await page.locator('.qa-html-content p').count();
+    const pCount = await page.locator('.ac-html-content p').count();
     expect(pCount).toBeGreaterThan(0);
   });
 
@@ -254,15 +254,15 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Metadata header should be visible
-    await expect(page.locator('.qa-article-meta')).toBeVisible();
-    await expect(page.locator('.qa-meta-title')).toBeVisible();
-    await expect(page.locator('.qa-meta-issue')).toBeVisible();
+    await expect(page.locator('.ac-article-meta')).toBeVisible();
+    await expect(page.locator('.ac-meta-title')).toBeVisible();
+    await expect(page.locator('.ac-meta-issue')).toBeVisible();
 
     // Article ID should be visible
-    const metaId = page.locator('.qa-meta-id');
+    const metaId = page.locator('.ac-meta-id');
     await expect(metaId).toBeVisible();
     await expect(metaId).toContainText('Article #');
   });
@@ -274,21 +274,21 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Wait for classification to load
     await page.waitForTimeout(3000);
 
     // Classification panel may or may not be visible depending on article
-    const endmatter = page.locator('.qa-endmatter');
+    const endmatter = page.locator('.ac-endmatter');
     if (await endmatter.isVisible()) {
       // Should have classification heading
-      await expect(page.locator('.qa-endmatter-heading')).toHaveText(
+      await expect(page.locator('.ac-endmatter-heading')).toHaveText(
         'End-Matter Classification',
       );
 
       // Pills should show counts
-      const pills = page.locator('.qa-pill');
+      const pills = page.locator('.ac-pill');
       const pillCount = await pills.count();
       if (pillCount > 0) {
         const pillText = await pills.first().textContent();
@@ -303,61 +303,61 @@ test.describe('QA Splits plugin', () => {
   test('sidebar shows article list with filters', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Sidebar article list should be populated
-    const items = page.locator('.qa-drawer-item');
+    const items = page.locator('.ac-drawer-item');
     await expect(items.first()).toBeVisible({ timeout: 10_000 });
     const itemCount = await items.count();
     expect(itemCount).toBeGreaterThan(0);
 
     // Search input should be present
-    await expect(page.locator('.qa-drawer-search')).toBeVisible();
+    await expect(page.locator('.ac-drawer-search')).toBeVisible();
 
     // Filter pills should be present
-    const pills = page.locator('.qa-drawer-pill');
+    const pills = page.locator('.ac-drawer-pill');
     expect(await pills.count()).toBeGreaterThan(0);
   });
 
   test('sidebar search filters articles', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    const initialCount = await page.locator('.qa-drawer-item').count();
+    const initialCount = await page.locator('.ac-drawer-item').count();
 
     // Type a search query
-    await page.fill('.qa-drawer-search', 'editorial');
+    await page.fill('.ac-drawer-search', 'editorial');
     await page.waitForTimeout(500);
 
-    const filteredCount = await page.locator('.qa-drawer-item').count();
+    const filteredCount = await page.locator('.ac-drawer-item').count();
     expect(filteredCount).toBeLessThan(initialCount);
     expect(filteredCount).toBeGreaterThan(0);
 
     // Clear search
-    await page.click('.qa-search-clear');
+    await page.click('.ac-search-clear');
     await page.waitForTimeout(500);
-    const resetCount = await page.locator('.qa-drawer-item').count();
+    const resetCount = await page.locator('.ac-drawer-item').count();
     expect(resetCount).toBe(initialCount);
   });
 
   test('sidebar search by article ID finds the article', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Search by submission ID — numeric queries must match exact ID only
-    await page.fill('.qa-drawer-search', '8994');
+    await page.fill('.ac-drawer-search', '8994');
     await page.waitForTimeout(500);
 
-    const items = page.locator('.qa-drawer-item');
+    const items = page.locator('.ac-drawer-item');
     await expect(items).toHaveCount(1);
     await expect(items.first()).toContainText('[id: 8994]');
 
     // Verify numeric search doesn't match text content in other articles
-    await page.fill('.qa-drawer-search', '99999');
+    await page.fill('.ac-drawer-search', '99999');
     await page.waitForTimeout(500);
-    await expect(page.locator('.qa-drawer-item')).toHaveCount(0);
+    await expect(page.locator('.ac-drawer-item')).toHaveCount(0);
   });
 
   // ── Reviewer pills ──
@@ -365,12 +365,12 @@ test.describe('QA Splits plugin', () => {
   test('reviewer pills appear and filter the sidebar', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    const totalCount = await page.locator('.qa-drawer-item').count();
+    const totalCount = await page.locator('.ac-drawer-item').count();
 
     // Reviewer pills should exist (at least one of "By me" / "By others")
-    const reviewerPills = page.locator('.qa-drawer-pill-reviewer');
+    const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
     const pillCount = await reviewerPills.count();
     expect(pillCount).toBeGreaterThan(0);
 
@@ -383,7 +383,7 @@ test.describe('QA Splits plugin', () => {
     // Click the first reviewer pill — should filter the sidebar
     await reviewerPills.first().click();
     await page.waitForTimeout(300);
-    const filteredCount = await page.locator('.qa-drawer-item').count();
+    const filteredCount = await page.locator('.ac-drawer-item').count();
     expect(filteredCount).toBeLessThan(totalCount);
     expect(filteredCount).toBeGreaterThan(0);
 
@@ -394,21 +394,21 @@ test.describe('QA Splits plugin', () => {
   test('reviewer pills combine with status pills', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Click "Approved" status pill
-    const approvedPill = page.locator('.qa-drawer-pill-status', { hasText: 'Approved' });
+    const approvedPill = page.locator('.ac-drawer-pill-status', { hasText: 'Approved' });
     if (await approvedPill.count() > 0) {
       await approvedPill.click();
       await page.waitForTimeout(300);
-      const afterStatusFilter = await page.locator('.qa-drawer-item').count();
+      const afterStatusFilter = await page.locator('.ac-drawer-item').count();
 
       // Now also click a reviewer pill — should further narrow results
-      const reviewerPills = page.locator('.qa-drawer-pill-reviewer');
+      const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
       if (await reviewerPills.count() > 0) {
         await reviewerPills.first().click();
         await page.waitForTimeout(300);
-        const afterBothFilters = await page.locator('.qa-drawer-item').count();
+        const afterBothFilters = await page.locator('.ac-drawer-item').count();
         expect(afterBothFilters).toBeLessThanOrEqual(afterStatusFilter);
       }
     }
@@ -417,21 +417,21 @@ test.describe('QA Splits plugin', () => {
   test('clear filters resets reviewer pills', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    const totalCount = await page.locator('.qa-drawer-item').count();
+    const totalCount = await page.locator('.ac-drawer-item').count();
 
     // Click a reviewer pill to filter
-    const reviewerPills = page.locator('.qa-drawer-pill-reviewer');
+    const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
     if (await reviewerPills.count() > 0) {
       await reviewerPills.first().click();
       await page.waitForTimeout(300);
 
       // Click "Clear all filters"
-      await page.click('.qa-drawer-clear');
+      await page.click('.ac-drawer-clear');
       await page.waitForTimeout(300);
 
-      const resetCount = await page.locator('.qa-drawer-item').count();
+      const resetCount = await page.locator('.ac-drawer-item').count();
       expect(resetCount).toBe(totalCount);
 
       // Pill should no longer be active
@@ -446,15 +446,15 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    const firstTitle = await page.locator('.qa-title').textContent();
+    const firstTitle = await page.locator('.ac-title').textContent();
 
     // Click next button in sidebar
-    const nextBtn = page.locator('.qa-btn-nav').nth(1); // Second nav button = Next
+    const nextBtn = page.locator('.ac-btn-nav').nth(1); // Second nav button = Next
     if (await nextBtn.isEnabled()) {
       await nextBtn.click();
-      await expect(page.locator('.qa-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
+      await expect(page.locator('.ac-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
     }
   });
 
@@ -463,15 +463,15 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    const firstTitle = await page.locator('.qa-title').textContent();
+    const firstTitle = await page.locator('.ac-title').textContent();
 
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.qa-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
 
     await page.keyboard.press('ArrowLeft');
-    await expect(page.locator('.qa-title')).toHaveText(firstTitle!, { timeout: 10_000 });
+    await expect(page.locator('.ac-title')).toHaveText(firstTitle!, { timeout: 10_000 });
   });
 
   // ── Reviews ──
@@ -481,10 +481,10 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${articleId}`);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Click approve
-    await page.click('.qa-btn-approve');
+    await page.click('.ac-btn-approve');
 
     // Should auto-advance (title changes) or badge updates
     await page.waitForTimeout(2000);
@@ -495,13 +495,13 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${articleId}`);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Click Request Fix
-    await page.click('.qa-btn-reject');
+    await page.click('.ac-btn-reject');
 
     // Textarea should appear
-    const textarea = page.locator('.qa-textarea');
+    const textarea = page.locator('.ac-textarea');
     await expect(textarea).toBeVisible();
 
     // Type a comment and submit with Ctrl+Enter
@@ -597,14 +597,14 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${doiArticleId}`);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Wait for classification to load
-    const endmatter = page.locator('.qa-endmatter');
+    const endmatter = page.locator('.ac-endmatter');
     await expect(endmatter).toBeVisible({ timeout: 10_000 });
 
     // DOI links should render
-    const doiLinks = page.locator('.qa-endmatter-doi');
+    const doiLinks = page.locator('.ac-endmatter-doi');
     await expect(doiLinks.first()).toBeVisible({ timeout: 5_000 });
 
     const linkCount = await doiLinks.count();
@@ -627,13 +627,13 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${doiArticleId}`);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
     // Wait for classification
-    await expect(page.locator('.qa-endmatter')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.ac-endmatter')).toBeVisible({ timeout: 10_000 });
 
     // Pill should show DOI count like "References (12, 5 DOIs)"
-    const pill = page.locator('.qa-pill.qa-pill-reference');
+    const pill = page.locator('.ac-pill.ac-pill-reference');
     await expect(pill).toBeVisible();
     const pillText = await pill.textContent();
     expect(pillText).toMatch(/References \(\d+, \d+ DOIs\)/);
@@ -645,12 +645,12 @@ test.describe('QA Splits plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${doiArticleId}`);
-    await expect(page.locator('.qa-title')).not.toHaveText('Loading...', { timeout: 15_000 });
-    await expect(page.locator('.qa-endmatter')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-endmatter')).toBeVisible({ timeout: 10_000 });
 
     // Total references should exceed DOI links (not all refs have DOIs)
-    const totalRefs = await page.locator('.qa-endmatter-item').count();
-    const doiLinks = await page.locator('.qa-endmatter-doi').count();
+    const totalRefs = await page.locator('.ac-endmatter-item').count();
+    const doiLinks = await page.locator('.ac-endmatter-doi').count();
     expect(totalRefs).toBeGreaterThan(doiLinks);
   });
 
@@ -660,7 +660,7 @@ test.describe('QA Splits plugin', () => {
     test.skip(!articleId, 'No article with galleys found');
 
     await page.goto(`${OJS_BASE}/index.php/ea/article/view/${articleId}`);
-    await expect(page.locator('.qa-review-cta')).not.toBeVisible();
+    await expect(page.locator('.ac-review-cta')).not.toBeVisible();
   });
 
   test('review CTA visible for logged-in users on article pages', async ({ page }) => {
@@ -669,16 +669,17 @@ test.describe('QA Splits plugin', () => {
     await loginAsAdmin(page);
     await page.goto(`${OJS_BASE}/index.php/ea/article/view/${articleId}`);
 
-    const cta = page.locator('.qa-review-cta');
+    const cta = page.locator('.ac-review-cta');
     await expect(cta).toBeVisible({ timeout: 10_000 });
 
     // Should show progress text
     const text = await cta.textContent();
-    expect(text).toMatch(/approved \d+ of \d+/i);
+    expect(text).toMatch(/\d+ down, \d+ to go/i);
 
-    // Should have a link to QA Splits
-    const link = cta.locator('a[href*="qa-splits"]');
+    // Should have a link to Archive Checker with random mode
+    const link = cta.locator('a[href*="archive-checker"]');
     await expect(link).toBeVisible();
-    expect(await link.textContent()).toMatch(/start reviewing/i);
+    expect(await link.getAttribute('href')).toContain('mode=random');
+    expect(await link.textContent()).toMatch(/review articles/i);
   });
 });

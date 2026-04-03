@@ -1,8 +1,8 @@
-# QA Splits Plugin
+# Archive Checker Plugin
 # Copyright (C) 2026 Adam Knowles
 msgid ""
 msgstr ""
-"Project-Id-Version: qaSplits 1.0\n"
+"Project-Id-Version: archiveChecker 1.0\n"
 "Report-Msgid-Bugs-To: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -11,8 +11,8 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-msgid "plugins.generic.qaSplits.displayName"
-msgstr "QA Splits"
+msgid "plugins.generic.archiveChecker.displayName"
+msgstr "Archive Checker"
 
-msgid "plugins.generic.qaSplits.description"
+msgid "plugins.generic.archiveChecker.description"
 msgstr "Full-screen visual QA tool for reviewing backfill article splits — compare PDF vs HTML, verify end-matter classification, and record approve/reject decisions."

@@ -1,20 +1,20 @@
 <?php
 
-namespace APP\plugins\generic\qaSplits;
+namespace APP\plugins\generic\archiveChecker;
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class QaSplitsMigration extends Migration
+class ArchiveCheckerMigration extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('qa_split_reviews')) {
+        if (Schema::hasTable('archive_checker_reviews')) {
             return;
         }
 
-        Schema::create('qa_split_reviews', function (Blueprint $table) {
+        Schema::create('archive_checker_reviews', function (Blueprint $table) {
             $table->bigIncrements('review_id');
             $table->unsignedBigInteger('submission_id');
             // publication_id is audit-only — goes stale after reimport.
@@ -26,13 +26,13 @@ class QaSplitsMigration extends Migration
             $table->text('comment')->nullable();
             $table->string('content_hash', 64)->nullable();
             $table->dateTime('created_at');
-            $table->index('submission_id', 'qa_sr_submission');
-            $table->index('decision', 'qa_sr_decision');
+            $table->index('submission_id', 'ac_submission');
+            $table->index('decision', 'ac_decision');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('qa_split_reviews');
+        Schema::dropIfExists('archive_checker_reviews');
     }
 }

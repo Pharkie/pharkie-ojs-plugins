@@ -1,5 +1,5 @@
 /**
- * QA Splits — Alpine.js application (ES module)
+ * Archive Checker — Alpine.js application (ES module)
  *
  * Replaces vanilla JS with reactive state management.
  * PDF.js rendering stays imperative (it's a canvas library).
@@ -22,12 +22,12 @@ let _viewer = null;
 // Non-reactive state
 const _pdf = { doc: null, loadGen: 0 };
 
-Alpine.data('qaApp', () => ({
+Alpine.data('acApp', () => ({
     // Config
-    api: window.QA_CONFIG.apiBase,
-    pluginUrl: window.QA_CONFIG.pluginUrl,
-    csrfToken: window.QA_CONFIG.csrfToken,
-    currentUsername: window.QA_CONFIG.username,
+    api: window.AC_CONFIG.apiBase,
+    pluginUrl: window.AC_CONFIG.pluginUrl,
+    csrfToken: window.AC_CONFIG.csrfToken,
+    currentUsername: window.AC_CONFIG.username,
 
     // Article data
     articles: [],
@@ -134,7 +134,10 @@ Alpine.data('qaApp', () => ({
             if (params.get('q')) { this.searchQuery = params.get('q'); hasFilters = true; }
             if (hasFilters) this.refilter();
 
-            if (hasFilters) {
+            if (params.get('mode') === 'random') {
+                // Auto-trigger random unreviewed set on load
+                await this.goToRandom();
+            } else if (hasFilters) {
                 // Navigate to the URL article within the filtered set, or first match
                 let si = 0;
                 if (urlId) {
@@ -150,7 +153,7 @@ Alpine.data('qaApp', () => ({
                     const idx = this.articles.findIndex(a => a.submission_id === urlId);
                     if (idx >= 0) start = idx;
                 } else {
-                    const lastSeen = parseInt(localStorage.getItem('qa-last-seen'), 10);
+                    const lastSeen = parseInt(localStorage.getItem('ac-last-seen'), 10);
                     if (lastSeen) {
                         const idx = this.articles.findIndex(a => a.submission_id === lastSeen);
                         if (idx >= 0) start = idx;
@@ -200,7 +203,7 @@ Alpine.data('qaApp', () => ({
     },
 
     get statusClass() {
-        return this.article ? 'qa-badge qa-badge-' + this.article.status : 'qa-badge';
+        return this.article ? 'ac-badge ac-badge-' + this.article.status : 'ac-badge';
     },
 
     get positionDisplay() {
@@ -242,7 +245,7 @@ Alpine.data('qaApp', () => ({
             this._prefetchController = null;
         }
 
-        localStorage.setItem('qa-last-seen', a.submission_id);
+        localStorage.setItem('ac-last-seen', a.submission_id);
         const si = this.workingSet.indexOf(index);
         if (si >= 0) this.setIndex = si;
         this.updateUrl();
@@ -256,7 +259,7 @@ Alpine.data('qaApp', () => ({
         ]);
 
         // Scroll right pane and PDF container to top
-        document.querySelector('.qa-right')?.scrollTo(0, 0);
+        document.querySelector('.ac-right')?.scrollTo(0, 0);
         document.getElementById('pdf-container')?.scrollTo(0, 0);
         this.prefetchNearby(this.setIndex);
     },
@@ -492,7 +495,7 @@ Alpine.data('qaApp', () => ({
         if (refs.length > 0) {
             const doiCount = refs.filter(r => r.doi).length;
             const label = doiCount > 0 ? `References (${refs.length}, ${doiCount} DOIs)` : `References (${refs.length})`;
-            groups.push({ label, cls: 'qa-pill-reference', count: refs.length, items: refs });
+            groups.push({ label, cls: 'ac-pill-reference', count: refs.length, items: refs });
         }
 
         return groups;
@@ -765,7 +768,7 @@ Alpine.data('qaApp', () => ({
                 artIdx,
                 num: si + 1,
                 icon: a.status === 'approved' ? '\u2713' : a.status === 'needs_fix' ? '\u26A0' : '\u00B7',
-                statusCls: 'qa-drawer-item-status qa-drawer-item-status-' + a.status,
+                statusCls: 'ac-drawer-item-status ac-drawer-item-status-' + a.status,
                 title: a.volume + '.' + a.number + ' (' + a.year + ') ' + a.title + ' [id: ' + a.submission_id + ']',
                 active: si === this.setIndex,
             };

@@ -209,7 +209,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
                 // Logged-in: show "report a content issue" link → expandable form
                 $submissionId = (int) $article->getId();
                 $contextPath = $request->getContext() ? $request->getContext()->getPath() : '';
-                $apiUrl = $request->getBaseUrl() . '/index.php/' . $contextPath . '/api/v1/qa-splits/reviews';
+                $apiUrl = $request->getBaseUrl() . '/index.php/' . $contextPath . '/api/v1/archive-checker/reviews';
                 $csrfToken = $request->getSession()->token();
 
                 $archiveNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#f8f5f0;'

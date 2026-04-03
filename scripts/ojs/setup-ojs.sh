@@ -737,15 +737,15 @@ SQL
   echo "[OJS] Inline HTML galley configured (org: $INLINE_ORG)."
 fi
 
-# --- Enable QA Splits plugin (dev/staging only) ---
-if [ "${QA_SPLITS_ENABLED:-1}" = "1" ]; then
-  echo "[OJS] Enabling qa-splits plugin for journal $JOURNAL_ID..."
+# --- Enable Archive Checker plugin (dev/staging only) ---
+if [ "${ARCHIVE_CHECKER_ENABLED:-1}" = "1" ]; then
+  echo "[OJS] Enabling archive-checker plugin for journal $JOURNAL_ID..."
   $MARIADB <<SQL
     INSERT IGNORE INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('qasplitsplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
+    VALUES ('archivecheckerplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
     INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
-    VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'qaSplits', 'QaSplitsPlugin', 1, 0);
-    CREATE TABLE IF NOT EXISTS qa_split_reviews (
+    VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'archiveChecker', 'ArchiveCheckerPlugin', 1, 0);
+    CREATE TABLE IF NOT EXISTS archive_checker_reviews (
       review_id BIGINT AUTO_INCREMENT PRIMARY KEY,
       submission_id BIGINT UNSIGNED NOT NULL,
       publication_id BIGINT UNSIGNED NOT NULL,
@@ -755,12 +755,12 @@ if [ "${QA_SPLITS_ENABLED:-1}" = "1" ]; then
       comment TEXT NULL,
       content_hash VARCHAR(64) NULL,
       created_at DATETIME NOT NULL,
-      INDEX qa_sr_submission (submission_id),
-      INDEX qa_sr_decision (decision)
+      INDEX ac_submission (submission_id),
+      INDEX ac_decision (decision)
     );
 SQL
 else
-  echo "[OJS] QA Splits plugin disabled (QA_SPLITS_ENABLED=${QA_SPLITS_ENABLED:-0})."
+  echo "[OJS] Archive Checker plugin disabled (ARCHIVE_CHECKER_ENABLED=${ARCHIVE_CHECKER_ENABLED:-0})."
 fi
 
 # --- UI messages (stored in plugin_settings, not config.inc.php) ---

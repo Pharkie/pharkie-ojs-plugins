@@ -38,7 +38,7 @@ REST API for OJS user and subscription management — something OJS doesn't prov
 
 Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automatic membership sync from WooCommerce Subscriptions.
 
-### [QA Splits](plugins/qa-splits/)
+### [Archive Checker](plugins/archive-checker/)
 
 Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: article sidebar (left), source PDF (centre), HTML galley + end-matter classification (right). Used after the backfill pipeline to verify extraction quality before publishing.
 
@@ -48,8 +48,8 @@ Visual QA tool for reviewing backfill article splits inside OJS. Three-pane inte
 - Progress tracking across all articles and issues
 - CLI companion (`qa_review.py`) for batch operations
 
-**QA Splits docs:**
-[Plugin guide](docs/qa-splits-plugin.md)
+**Archive Checker docs:**
+[Plugin guide](docs/archive-checker-plugin.md)
 
 ### [WP-OJS Sync](plugins/wpojs-sync/) (WordPress)
 

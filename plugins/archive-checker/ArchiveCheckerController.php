@@ -1,6 +1,6 @@
 <?php
 
-namespace APP\plugins\generic\qaSplits;
+namespace APP\plugins\generic\archiveChecker;
 
 use APP\core\Application;
 use Illuminate\Http\JsonResponse;
@@ -14,12 +14,12 @@ use PKP\core\PKPBaseController;
 use PKP\core\PKPRequest;
 use PKP\security\Role;
 
-class QaSplitsController extends PKPBaseController
+class ArchiveCheckerController extends PKPBaseController
 {
 
     public function getHandlerPath(): string
     {
-        return 'qa-splits';
+        return 'archive-checker';
     }
 
     public function getRouteGroupMiddleware(): array
@@ -40,15 +40,15 @@ class QaSplitsController extends PKPBaseController
 
     public function getGroupRoutes(): void
     {
-        Route::get('articles', $this->listArticles(...))->name('qa.articles.list');
-        Route::get('articles/{submissionId}', $this->getArticle(...))->name('qa.articles.get');
-        Route::get('articles/{submissionId}/pdf', $this->getArticlePdf(...))->name('qa.articles.pdf');
-        Route::get('articles/{submissionId}/html', $this->getArticleHtml(...))->name('qa.articles.html');
-        Route::get('articles/{submissionId}/classification', $this->getClassification(...))->name('qa.articles.classification');
-        Route::post('reviews', $this->submitReview(...))->name('qa.reviews.submit');
-        Route::get('nav/random-unreviewed', $this->randomUnreviewed(...))->name('qa.nav.random');
-        Route::get('nav/problem-case', $this->problemCase(...))->name('qa.nav.problem');
-        Route::get('stats', $this->getStats(...))->name('qa.stats');
+        Route::get('articles', $this->listArticles(...))->name('ac.articles.list');
+        Route::get('articles/{submissionId}', $this->getArticle(...))->name('ac.articles.get');
+        Route::get('articles/{submissionId}/pdf', $this->getArticlePdf(...))->name('ac.articles.pdf');
+        Route::get('articles/{submissionId}/html', $this->getArticleHtml(...))->name('ac.articles.html');
+        Route::get('articles/{submissionId}/classification', $this->getClassification(...))->name('ac.articles.classification');
+        Route::post('reviews', $this->submitReview(...))->name('ac.reviews.submit');
+        Route::get('nav/random-unreviewed', $this->randomUnreviewed(...))->name('ac.nav.random');
+        Route::get('nav/problem-case', $this->problemCase(...))->name('ac.nav.problem');
+        Route::get('stats', $this->getStats(...))->name('ac.stats');
     }
 
     // ---------------------------------------------------------------
@@ -164,8 +164,8 @@ class QaSplitsController extends PKPBaseController
             ->get();
 
         // Latest review per submission
-        $reviews = DB::table('qa_split_reviews as r1')
-            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = r1.submission_id)')
+        $reviews = DB::table('archive_checker_reviews as r1')
+            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id)')
             ->get()
             ->keyBy('submission_id');
 
@@ -341,7 +341,7 @@ class QaSplitsController extends PKPBaseController
             return new JsonResponse(['error' => 'Submission not found'], 404);
         }
 
-        $reviews = DB::table('qa_split_reviews')
+        $reviews = DB::table('archive_checker_reviews')
             ->where('submission_id', $submissionId)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -581,7 +581,7 @@ class QaSplitsController extends PKPBaseController
 
         $contentHash = $this->computeContentHash($publication->publication_id);
 
-        DB::table('qa_split_reviews')->insert([
+        DB::table('archive_checker_reviews')->insert([
             'submission_id'  => $submissionId,
             'publication_id' => $publication->publication_id,
             'user_id'        => $user->getId(),
@@ -614,7 +614,7 @@ class QaSplitsController extends PKPBaseController
                 $join->on('p.submission_id', '=', 's.submission_id')
                      ->whereColumn('p.publication_id', '=', 's.current_publication_id');
             })
-            ->leftJoin('qa_split_reviews as r', 's.submission_id', '=', 'r.submission_id')
+            ->leftJoin('archive_checker_reviews as r', 's.submission_id', '=', 'r.submission_id')
             ->where('s.context_id', $contextId)
             ->whereNull('r.review_id')
             ->select('s.submission_id')
@@ -643,10 +643,10 @@ class QaSplitsController extends PKPBaseController
         $contextId = $this->getContextId();
 
         // 1. Rejected articles
-        $rejected = DB::table('qa_split_reviews as r1')
+        $rejected = DB::table('archive_checker_reviews as r1')
             ->join('submissions as s', 'r1.submission_id', '=', 's.submission_id')
             ->where('s.context_id', $contextId)
-            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = r1.submission_id)')
+            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id)')
             ->where('r1.decision', 'needs_fix')
             ->select('r1.submission_id')
             ->inRandomOrder()
@@ -662,7 +662,7 @@ class QaSplitsController extends PKPBaseController
                 $join->on('p.submission_id', '=', 's.submission_id')
                      ->whereColumn('p.publication_id', '=', 's.current_publication_id');
             })
-            ->leftJoin('qa_split_reviews as r', 's.submission_id', '=', 'r.submission_id')
+            ->leftJoin('archive_checker_reviews as r', 's.submission_id', '=', 'r.submission_id')
             ->where('s.context_id', $contextId)
             ->whereNull('r.review_id')
             ->select('s.submission_id')
@@ -706,10 +706,10 @@ class QaSplitsController extends PKPBaseController
             ->get();
 
         // Latest review per submission + count of distinct reviewers
-        $reviewData = DB::table('qa_split_reviews')
+        $reviewData = DB::table('archive_checker_reviews')
             ->select([
                 'submission_id',
-                DB::raw('MAX(CASE WHEN review_id = (SELECT MAX(r2.review_id) FROM qa_split_reviews r2 WHERE r2.submission_id = qa_split_reviews.submission_id) THEN decision END) as latest_decision'),
+                DB::raw('MAX(CASE WHEN review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = archive_checker_reviews.submission_id) THEN decision END) as latest_decision'),
                 DB::raw('COUNT(DISTINCT user_id) as reviewer_count'),
             ])
             ->groupBy('submission_id')
