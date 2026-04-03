@@ -312,9 +312,13 @@ def extract_from_jats(jats_path: Path) -> dict:
         bios.append(' '.join(current_bio_parts))
         trailing_bio_elements.extend(current_bio_elements)
 
-    # Merge contact-only bios into the preceding bio entry.
-    # This handles cases where the bio was extracted by the section scan
-    # and the contact <p> was picked up separately by the trailing scan.
+    # Deduplicate: remove any note_items that were also identified as bios
+    # by the trailing scan (prevents the same text appearing as both bio
+    # and note in JATS).
+    if bios:
+        bio_texts = set(bios)
+        note_items = [n for n in note_items if n not in bio_texts]
+
     return {
         'citations': citations,
         'bios': bios,

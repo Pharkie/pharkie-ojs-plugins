@@ -463,8 +463,14 @@ def is_non_reference(text: str) -> bool:
             and len(stripped.split()) <= 5):
         return True
 
-    if is_author_bio(text) and not is_reference(text):
-        return True
+    if is_author_bio(text):
+        # Trust bio classification if the text has a clear bio verb near
+        # the start ("Name is a ...", "Name was ...") — even if
+        # is_reference() also matches (academic bios contain enough
+        # institution names and titles to look reference-like).
+        has_bio_verb_early = bool(re.search(r'\b(is|was|has been)\s', text[:100]))
+        if has_bio_verb_early or not is_reference(text):
+            return True
 
     if is_provenance(text):
         return True
