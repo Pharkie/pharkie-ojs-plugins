@@ -891,7 +891,8 @@ def is_provenance(text: str) -> bool:
         # "Based on a presentation/keynote/talk/version..."
         r'^Based\s+on\s+(?:a\s+)?(?:presentation|version|talk|paper|keynote)',
         # "Paper/Talk/Keynote given/delivered/presented at..."
-        r'^(?:Paper|Talk|Keynote)\s+(?:given|delivered|presented)',
+        # Also handles "Invited Paper, given on..."
+        r'^(?:Invited\s+)?(?:Paper|Talk|Keynote)[,\s]+(?:given|delivered|presented)',
         # "Adapted/Revised/Expanded from..."
         r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
         # "* Parts III and IV will be published in..." — forthcoming-parts note
