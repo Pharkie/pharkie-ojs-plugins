@@ -262,7 +262,21 @@ done
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles
 # 8. Restore IDs
 sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev
+# 9. Write citation DOIs + content-filtered flags
+sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev
+sudo python3 backfill/html_pipeline/pipe9c_content_filtered.py --target dev
 ```
+
+## Post-deployment verification
+
+After deploying to live, run both check scripts:
+
+```bash
+scripts/monitoring/smoke-test.sh --host=sea-live      # 28 infrastructure checks
+scripts/monitoring/content-check.sh --host=sea-live    # 14 content checks
+```
+
+Content checks verify key pages serve the right content (journal title, article metadata, DOIs, Full Text, archive issues). No login required.
 
 ## Reporting content issues
 
