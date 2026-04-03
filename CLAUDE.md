@@ -84,11 +84,16 @@ To manually flag an article: set `_content_filtered: true` in toc.json, rerun pi
 
 ### Deploying to live
 
-1. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes articles, reimports all
-2. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — runs locally, sends SQL via SSH
-3. `sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs to live OJS
-4. `sudo python3 backfill/html_pipeline/pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags to live OJS
-5. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
+1. Better Stack: pause monitors
+2. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes articles, reimports all
+3. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — restores submission/issue IDs
+4. `python3 backfill/html_pipeline/pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs
+5. `python3 backfill/html_pipeline/pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags
+6. Sync Archive Checker reviews from dev → live (export/import `archive_checker_reviews` table)
+7. Better Stack: unpause monitors
+8. `scripts/monitoring/smoke-test.sh --host=sea-live` — infrastructure checks (28 checks)
+9. `scripts/monitoring/content-check.sh --host=sea-live` — content checks (14 checks)
+10. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
 
 ### Data and tests
 
