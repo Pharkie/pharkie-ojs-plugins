@@ -166,14 +166,11 @@ class ArchiveCheckerPlugin extends GenericPlugin
         $output = &$params[2];
         $output .= '<section class="item ac-review-cta">'
             . '<div style="padding:14px 16px;background:#f8f5f0;border:1px solid #e0d8cc;border-radius:6px;">'
-            . '<div style="margin-bottom:8px;">'
-            . '<span style="display:inline-block;padding:3px 10px;background:#b8860b;color:#fff;'
-            . 'border-radius:12px;font-size:12px;font-weight:600;letter-spacing:0.3px;">Help Check the Archive</span>'
-            . '</div>'
+            . '<div style="margin-bottom:6px;font-size:14px;font-weight:700;color:#333;">Help Check the Archive</div>'
             . '<p style="margin:0 0 10px;font-size:14px;line-height:1.5;color:#555;">'
-            . "<strong>{$reviewed}</strong> down, <strong>{$remaining}</strong> to go &mdash; help check the journal archive. "
-            . "Take a moment to review a few articles and flag anything that needs fixing? "
-            . "And uncover hidden gems from over the decades as you go."
+            . "<strong>{$reviewed}</strong> down, <strong>{$remaining}</strong> to go. "
+            . "Help check the journal archive? Take a moment to review a few articles and flag anything that needs fixing. "
+            . "Discover hidden gems as you go."
             . '</p>'
             . '<a href="' . htmlspecialchars($qaUrl) . '" '
             . 'style="display:inline-block;padding:7px 14px;background:#b8860b;color:#fff;'
@@ -334,7 +331,7 @@ HTMLSTART;
         <div class="ac-top">
             <div class="ac-row-1">
                 <span class="ac-title" x-text="titleDisplay"></span>
-                <span class="ac-authors" x-text="authorsDisplay"></span>
+                <a class="ac-close-btn" :href="pluginUrl.replace(/\/plugins\/.*/, '')" title="Back to journal">&times;</a>
             </div>
             <div class="ac-row-2">
                 <span :class="statusClass" @click="showFixReason()" :title="article?.comment || ''"
@@ -352,7 +349,7 @@ HTMLSTART;
                         <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
                             title="Report Problem (R)">Report Problem</button>
                         <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting"
-                            title="Approve (A)">Approve</button>
+                            title="Approve (A)" x-text="approveLabel">Approve</button>
                     </div>
                 </template>
             </div>
@@ -361,7 +358,7 @@ HTMLSTART;
                     placeholder="What did you notice? Describe the problem..." rows="3"
                     @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()" @keydown.escape="cancelFix()"></textarea>
                 <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
-                    title="Ctrl+Enter to submit">Report Problem</button>
+                    title="Ctrl+Enter to submit" x-text="reportLabel">Report Problem</button>
                 <button class="ac-btn ac-btn-nav" @click="cancelFix()">Cancel</button>
             </div>
         </div>
