@@ -165,19 +165,27 @@ def _top_level_blocks(soup):
 # Text matching (pure text, no HTML)
 # ---------------------------------------------------------------
 
-def _text_to_regex(text):
+def _text_to_regex(text, flexible=False):
     """Build a regex from text: words in order, flexible non-alpha gaps between.
 
     Strips toc.json prefixes (Book Review:, Obituary:, etc.) and trailing
     parentheticals before building. Returns compiled regex or None.
+
+    If flexible=True, allows extra words between each keyword (for fuzzy
+    title matching in end-bleed detection where heading text may differ
+    from toc.json title).
     """
     text = _strip_toc_prefixes(text)
     words = _clean(text).split()
     if not words:
         return None
-    # Words must appear in order; gaps allow any non-alphanumeric chars
-    # (whitespace, punctuation, line breaks, HTML residue)
-    gap = r'[^a-z0-9]*'
+    if flexible:
+        # Allow up to 5 extra words between each keyword
+        gap = r'(?:\s+\S+){0,5}\s+'
+    else:
+        # Words must appear in order; gaps allow any non-alphanumeric chars
+        # (whitespace, punctuation, line breaks, HTML residue)
+        gap = r'[^a-z0-9]*'
     pattern = gap.join(re.escape(w) for w in words)
     return re.compile(pattern, re.IGNORECASE)
 
@@ -458,8 +466,10 @@ def _strip_end_bleed_soup(soup, next_title):
         if REFERENCE_HEADING_RE.match(_el_text(heading).strip()):
             last_backmatter = heading
 
-    # Search for next title from last back-matter heading onwards
-    rx = _text_to_regex(next_title)
+    # Search for next title from last back-matter heading onwards.
+    # Use flexible matching — heading text in the HTML often differs
+    # from toc.json title (extra words, journal name inserted, etc.)
+    rx = _text_to_regex(next_title, flexible=True)
     if rx is None:
         return
 
@@ -479,7 +489,13 @@ def _strip_end_bleed_soup(soup, next_title):
 
     for el in search_els:
         if rx.search(_el_clean_text(el)):
-            _remove_from(el)
+            # Walk up to find the top-level container (e.g. a <div> wrapping
+            # the next article's content) so we remove the whole block, not
+            # just the heading inside it.
+            target = el
+            while target.parent and target.parent != soup:
+                target = target.parent
+            _remove_from(target)
             return
 
 
@@ -1007,7 +1023,6 @@ def postprocess_article(html, article, pdf_path=None):
         _strip_start_bleed_soup(soup, article.get('title', ''))
         _strip_title_soup(soup, article.get('title', ''))
         _strip_authors_soup(soup, article.get('authors', ''))
-        _strip_end_bleed_soup(soup, article.get('_next_title', ''))
     elif section not in ('Book Reviews', 'Book Review'):
         # Standard article
         _strip_start_bleed_soup(soup, article.get('title', ''))
@@ -1021,7 +1036,9 @@ def postprocess_article(html, article, pdf_path=None):
         # Second pass: Haiku sometimes renders the title twice (h1 + h2).
         _strip_title_soup(soup, article.get('title', ''))
         _strip_subtitle_soup(soup, article.get('subtitle', ''))
-        _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+
+    # End-bleed stripping applies to ALL section types
+    _strip_end_bleed_soup(soup, article.get('_next_title', ''))
 
     # Strip footnote superscripts from headings
     _strip_heading_sups_soup(soup)
