@@ -260,6 +260,28 @@ class ArchiveCheckerController extends PKPBaseController
             }
         }
 
+        // Content-filtered flag — check HTML galleys for data-content-filtered marker
+        $contentFiltered = [];
+        if ($pubIds) {
+            $htmlGalleys = DB::table('publication_galleys as pg')
+                ->join('submission_files as sf', 'pg.submission_file_id', '=', 'sf.submission_file_id')
+                ->join('files as f', 'sf.file_id', '=', 'f.file_id')
+                ->whereIn('pg.publication_id', $pubIds)
+                ->where('f.mimetype', 'text/html')
+                ->select(['pg.publication_id', 'f.path'])
+                ->get();
+            $filesDir = rtrim(Config::getVar('files', 'files_dir'), '/');
+            foreach ($htmlGalleys as $row) {
+                $filePath = $filesDir . '/' . $row->path;
+                if (file_exists($filePath)) {
+                    $head = file_get_contents($filePath, false, null, 0, 200);
+                    if (str_contains($head, 'data-content-filtered')) {
+                        $contentFiltered[$row->publication_id] = true;
+                    }
+                }
+            }
+        }
+
         // Pages
         $pages = [];
         if ($pubIds) {
@@ -313,6 +335,7 @@ class ArchiveCheckerController extends PKPBaseController
                 'pages'          => $pages[$pubId] ?? null,
                 'source'         => $sources[$pubId] ?? null,
                 'status'         => $status,
+                'content_filtered' => isset($contentFiltered[$pubId]),
                 'reviewer'       => $review ? $review->username : null,
                 'reviewed_at'    => $review ? $review->created_at : null,
                 'comment'        => $review ? $review->comment : null,
