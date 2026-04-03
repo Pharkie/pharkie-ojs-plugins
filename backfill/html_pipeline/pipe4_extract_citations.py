@@ -203,6 +203,15 @@ def extract_from_jats(jats_path: Path) -> dict:
             first_words = ' '.join(words[:5]).lower()
             if surname in first_words and len(surname) > 2:
                 return True
+        # Fallback: match by first name only when it's distinctive (>4 chars)
+        # and appears at the start followed by a bio verb. Handles transliteration
+        # variants where surname differs (e.g. Yesselson vs Eselson).
+        for name in author_full:
+            first_name = name.split()[0] if name else ''
+            if len(first_name) > 4 and text_lower.startswith(first_name):
+                # Require a bio verb nearby to avoid false positives
+                if re.search(r'\b(is|was|has been)\s', text[:100]):
+                    return True
         return False
 
     all_ps = list(body.iter())
