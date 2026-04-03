@@ -31,6 +31,7 @@ Issues marked **[reported]** were filed upstream. Others were found by other use
 | 21 | `--stop-when-empty` flag silently ignored | Confirmed bug (parsing) | **Submit PR** (pkp/pkp-lib) |
 | 22 | `runScheduledTasks.php` Fatal in CLI | Plausible, needs repro | Report issue |
 | 23 | Native XML import — no idempotent update | By-design | None |
+| 24 | Scheduler `flock()` crash on cache lock | OJS bug | Excluded from monitoring |
 
 ## Install bugs
 
@@ -340,6 +341,23 @@ An earlier variant ([pkp/pkp-lib#6671](https://github.com/pkp/pkp-lib/issues/667
 - **Not reported upstream** — likely introduced by the Slim→Laravel router migration.
 - **Impact:** Log noise. One PHP Fatal per hour in the OJS container. No functional impact on scheduled tasks.
 - **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `NotFoundHttpException.*PKPRouter` to avoid false alerts.
+
+### 24. Scheduler `flock()` crash on cache lock file [ojs-bug]
+
+OJS's web-based scheduler (`PKPScheduler::runWebBasedScheduleTaskRunner()`) crashes with a PHP Fatal when the file-based cache lock can't be acquired:
+
+```
+PHP Fatal error: Uncaught TypeError: flock(): Argument #1 ($stream) must be of type resource, false given
+  in /var/www/html/lib/pkp/lib/vendor/laravel/framework/src/Illuminate/Filesystem/LockableFile.php:153
+```
+
+Call chain: `ScheduleServiceProvider` → `PKPScheduler::runWebBasedScheduleTaskRunner()` → `ScheduleTaskRunner::run()` → `CacheEventMutex::exists()` → `FileLock::acquire()` → `flock(false, ...)`. The underlying `fopen()` for the lock file returns `false` (likely a race condition or `/tmp` permissions issue), and `flock()` throws a TypeError on the non-resource.
+
+Transient — fires occasionally (observed once per ~12 hours), self-resolves on next scheduler run. Same scheduler subsystem as issue #22 (both are web-based scheduler bugs from the Slim→Laravel migration).
+
+- **Not reported upstream** — related to the same scheduler architecture as #22.
+- **Impact:** Log noise. One PHP Fatal per occurrence. No functional impact on scheduled tasks.
+- **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `flock().*LockableFile` to avoid false alerts.
 
 ## Payments
 
