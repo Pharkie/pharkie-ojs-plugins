@@ -84,16 +84,59 @@ To manually flag an article: set `_content_filtered: true` in toc.json, rerun pi
 
 ### Deploying to live
 
-1. Better Stack: pause monitors
-2. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes articles, reimports all
-3. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — restores submission/issue IDs
-4. `python3 backfill/html_pipeline/pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs
-5. `python3 backfill/html_pipeline/pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags
-6. Sync Archive Checker reviews from dev → live (export/import `archive_checker_reviews` table)
-7. Better Stack: unpause monitors
-8. `scripts/monitoring/smoke-test.sh --host=sea-live` — infrastructure checks (28 checks)
-9. `scripts/monitoring/content-check.sh --host=sea-live` — content checks (14 checks)
-10. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
+Three scenarios, from lightest to heaviest.
+
+#### Code-only changes (plugin code, CSS, JS, templates)
+
+No article data changes — just updated plugin behaviour or UI.
+
+1. `ssh sea-live 'cd /opt/pharkie-ojs-plugins && git pull'`
+2. If docker-compose.yml changed (volume mounts, env vars): `docker compose up -d --force-recreate ojs`
+3. `scripts/monitoring/content-check.sh --host=sea-live` — verify site still works
+
+#### Specific issues changed (pipeline fix affecting some volumes)
+
+Article data changed for specific volumes only. No need to reimport everything.
+
+1. Reprocess affected volumes on dev: pipe2→pipe6 for each volume
+2. Re-attach DOIs: run the DOI re-attachment script (reads `doi_matches.json`, writes to JATS)
+3. Import to dev: `pipe7 --force` + `pipe8` for affected volumes, verify in Archive Checker
+4. Better Stack: pause monitors
+5. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only` — sync import XMLs
+6. `ssh sea-live` → `pipe7_import.sh <affected volumes> --force` — reimport just those issues
+7. `pipe8_restore_ids.py --target live --confirm`
+8. `pipe9b_citation_dois.py --target live --confirm`
+9. `pipe9c_content_filtered.py --target live --confirm`
+10. Better Stack: unpause monitors
+11. `scripts/monitoring/content-check.sh --host=sea-live`
+
+#### Full reimport (all 68 volumes)
+
+Nuclear option — wipes all articles and reimports from scratch. Use when systemic pipeline changes affect all volumes, or for a clean deployment.
+
+1. Full pipeline rerun on dev: pipe2→pipe6 for all volumes + DOI re-attachment
+2. Import to dev: `pipe7 --force` + `pipe8` + `pipe9b` + `pipe9c`, verify
+3. Better Stack: pause monitors
+4. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs + wipes + reimports all
+5. `pipe8_restore_ids.py --target live --confirm` — restores submission/issue IDs
+6. `pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs
+7. `pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags
+8. Sync Archive Checker reviews: export from dev `archive_checker_reviews`, import to live
+9. Better Stack: unpause monitors
+10. `scripts/monitoring/smoke-test.sh --host=sea-live` — infrastructure (28 checks)
+11. `scripts/monitoring/content-check.sh --host=sea-live` — content (14 checks)
+
+#### DOI re-attachment after pipeline reruns
+
+pipe3 wipes JATS (including DOIs from pipe4b). After any pipe3+pipe4 rerun, DOIs must be re-attached from `doi_matches.json` before pipe5+pipe6. This is a Python script (not a pipeline step) that reads cached matches and writes `<pub-id>` elements back to JATS. Without this, DOIs are silently lost.
+
+#### Notes
+
+- `--force` reimports existing issues without wiping. `--wipe-articles` wipes first (preserves users/subscriptions/payments).
+- `pipe8` is always needed after `--wipe-articles` or `--force` to restore original submission IDs (preserves URLs, DOI links, payment records).
+- `pipe9b` and `pipe9c` are always needed after import — they write to DB tables that the import doesn't populate.
+- Archive Checker reviews survive `--wipe-articles` (custom table, not touched by import). But `publication_id` becomes stale — the `submission_id` column is what matters.
+- Better Stack monitors must be paused before any operation that causes downtime. See memory file `feedback_maintenance_window.md`.
 
 ### Data and tests
 
