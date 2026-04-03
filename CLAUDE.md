@@ -62,19 +62,33 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 
 **Per-issue iteration takes ~8 seconds.** Reprocess only affected volumes, not all 1400 articles — approved articles should not be regressed. Full reimport (`--wipe-articles`, ~20 min) only when all volumes need updating.
 
-### Reference DOI linking (post-QA, one-off)
+### Post-import scripts (post-QA, one-off)
 
 Run after QA is complete and articles are finalized:
 
 1. `python3 backfill/html_pipeline/pipe4b_match_dois.py --volume <vol.iss> --email EMAIL` — matches refs to Crossref DOIs, writes `<pub-id>` to JATS + `doi_matches.json`. See [`docs/crossref-reference-linking.md`](docs/crossref-reference-linking.md).
 2. `sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev` — writes matched DOIs from JATS to OJS `citation_settings` table (2 SQL calls, seconds). Requires pkp/crossrefReferenceLinking plugin for display.
+3. `sudo python3 backfill/html_pipeline/pipe9c_content_filtered.py --target dev` — writes content-filtered flags from JATS `<custom-meta>` to OJS `publication_settings` table. Used by Archive Checker filter pill and article page warning.
+
+### Content-filtered articles
+
+Articles that couldn't be fully extracted (Haiku content-filtered, PyMuPDF fallback) are flagged through the full chain:
+
+1. **JATS** (source of truth): `<custom-meta><meta-name>content-filtered</meta-name><meta-value>true</meta-value></custom-meta>` in `<article-meta>`. Written by pipe3 from `.post.html` `AUTO-EXTRACTED` comment or toc.json `_content_filtered` flag.
+2. **Galley HTML**: `<div data-content-filtered="true">` prepended by pipe5 (reads from JATS).
+3. **OJS DB**: `publication_settings` row (`setting_name='contentFiltered'`). Written by pipe9c (reads from JATS).
+4. **Archive Checker**: filter pill excludes by default, warning banner on article. Queries DB.
+5. **Article page**: warning notice. Queries DB.
+
+To manually flag an article: set `_content_filtered: true` in toc.json, rerun pipe3→pipe9c.
 
 ### Deploying to live
 
 1. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs import XMLs to live, wipes articles, reimports all
 2. `python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm` — runs locally, sends SQL via SSH
 3. `sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs to live OJS
-4. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
+4. `sudo python3 backfill/html_pipeline/pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags to live OJS
+5. Crossref "Deposit All" (OJS admin: Website > Plugins > Crossref) — re-confirms DOIs
 
 ### Data and tests
 

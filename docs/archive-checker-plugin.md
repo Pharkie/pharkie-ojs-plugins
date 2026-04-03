@@ -50,6 +50,8 @@ All data comes from OJS — no filesystem access to backfill output is required:
 | PDF galley | OJS file storage (`publication_galleys` → `files`) |
 | HTML galley | OJS file storage (includes `jats-*` wrapper divs) |
 | References | `citations` table (structured citations from import) |
+| Citation DOIs | `citation_settings` table (`crossref::doi`, written by pipe9b) |
+| Content-filtered flag | `publication_settings` table (`contentFiltered`, written by pipe9c) |
 | Notes/Bios/Provenance counts | Counted from `jats-notes`/`jats-bios`/`jats-provenance` divs in HTML galley |
 | Review history | `archive_checker_reviews` table (plugin's own table) |
 
@@ -120,7 +122,7 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 - **"Surprise me"**: Loads a random batch of unchecked articles. Dice emoji shakes on click. Also triggered by `?mode=random` URL param (used by the article page CTA).
 - **Progress thermometer**: Green (approved) / amber (reported) / grey (remaining) bar under the progress stats.
 - **Button confirmation**: "Approved ✓" / "Saved ✓" flash for 2 seconds after submission. Approve auto-advances after 600ms; Report Problem stays on the article for further edits.
-- **Content-filtered warning**: 39 articles that couldn't be fully extracted show an amber banner: "This article could not be fully extracted and has limited formatting."
+- **Content-filtered filter**: Articles that couldn't be fully extracted are flagged in JATS (`<custom-meta name="content-filtered">`), stored in OJS `publication_settings`, and excluded from the sidebar by default. Toggle the "Content filtered" pill to show them. Flagged articles show an amber warning banner.
 - **Pane labels**: "ORIGINAL PDF" and "HTML VERSION" labels help orient first-time users.
 - **Citation DOIs**: Reference list shows matched DOIs as clickable links, with DOI count in the pill label.
 - **Article page CTA**: Logged-in users see a "Help Check the Archive" box on article pages with progress stats and a link to Archive Checker in random mode.
