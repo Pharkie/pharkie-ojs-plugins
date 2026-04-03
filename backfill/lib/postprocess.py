@@ -65,16 +65,25 @@ TITLE_FUZZY_MATCH_THRESHOLD = 0.8
 _clean = normalise_for_overlap
 
 # Running header text pattern (plain text, not HTML)
+# Matches variations:
+#   "Journal of The Society for Existential Analysis"
+#   "Existential Analysis: Journal of The Society for Existential Analysis"
+#   "Existential Analysis 37.1: January 2026"
+#   "62 Existential Analysis: Journal of The Society for Existential Analysis"
 _RUNNING_HEADER_TEXT_RE = re.compile(
-    r'^\s*(?:Existential\s+Analysis\s*:\s*)?'
-    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis\s*$',
+    r'^\s*\d{0,4}\s*'
+    r'(?:Existential\s+Analysis\s*(?:\d+\.\d+\s*)?:\s*)?'
+    r'(?:(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s*$|'
+    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis\s*$)',
     re.IGNORECASE
 )
 # Keep the HTML-level regexes for backward compatibility (used by test imports)
 RUNNING_HEADER_RE = re.compile(
-    r'^\s*<p[^>]*>\s*(?:<em>|<i>)?\s*(?:Existential\s+Analysis\s*:\s*)?'
-    r'Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis'
-    r'\s*(?:</em>|</i>)?\s*</p>\s*$',
+    r'^\s*<p[^>]*>\s*(?:<(?:em|i|strong|b)>)?\s*\d{0,4}\s*'
+    r'(?:Existential\s+Analysis\s*(?:\d+\.\d+\s*)?:\s*)?'
+    r'(?:(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}'
+    r'|Journal\s+of\s+(?:The\s+|the\s+)?Society\s+for\s+Existential\s+Analysis)'
+    r'\s*(?:</(?:em|i|strong|b)>)?\s*</p>\s*$',
     re.IGNORECASE | re.MULTILINE
 )
 PAGE_NUMBER_RE = re.compile(
