@@ -499,17 +499,37 @@ def _strip_end_bleed_soup(soup, next_title):
             return
 
 
+_RUNNING_HEADER_INLINE_RE = re.compile(
+    r'^\s*\d{0,4}\s*'
+    r'Existential\s+Analysis\s+\d+\.\d+\s*:\s*'
+    r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s*',
+    re.IGNORECASE
+)
+
+
 def _strip_running_headers_soup(soup):
     """Remove running headers and bare page numbers from print layout."""
-    for p in list(soup.find_all('p')):
-        text = _el_text(p).strip()
-        # Running header: "Journal of The Society for Existential Analysis"
+    for el in list(soup.find_all(['p', 'h1', 'h2', 'h3', 'h4'])):
+        text = _el_text(el).strip()
+        # Standalone running header: remove entire element
         if _RUNNING_HEADER_TEXT_RE.match(text):
-            p.decompose()
+            el.decompose()
             continue
-        # Bare page number: standalone 1-4 digit number
-        if re.match(r'^\d{1,4}$', text):
-            p.decompose()
+        # Inline running header prefix: "Existential Analysis 13.1: January 2002 Article Title..."
+        # Also handles page-number prefix: "82 Existential Analysis 28.1: ..."
+        # Strip the header prefix from the element's leading text, keep the rest
+        if _RUNNING_HEADER_INLINE_RE.match(text):
+            # Find the first text node and strip the prefix from it
+            if el.string:
+                el.string = _RUNNING_HEADER_INLINE_RE.sub('', el.string).lstrip()
+            elif el.contents:
+                from bs4 import NavigableString
+                first = el.contents[0]
+                if isinstance(first, NavigableString) and _RUNNING_HEADER_INLINE_RE.match(str(first)):
+                    first.replace_with(_RUNNING_HEADER_INLINE_RE.sub('', str(first)).lstrip())
+        # Bare page number: standalone 1-4 digit number (only in <p>)
+        if el.name == 'p' and re.match(r'^\d{1,4}$', _el_text(el).strip()):
+            el.decompose()
 
 
 def _fix_bio_contact_spacing_soup(soup):
