@@ -261,10 +261,20 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
             }
         }
 
+        // Content-filtered warning for articles that couldn't be fully extracted
+        $contentFilteredNotice = '';
+        if (str_contains($htmlContent, '<!-- AUTO-EXTRACTED:')) {
+            $contentFilteredNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#fff3cd;'
+                . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#664d03;line-height:1.5;">'
+                . 'This article could not be fully extracted from the original PDF and has limited formatting. '
+                . 'Please use the PDF version for the best reading experience.</div>';
+        }
+
         $output .= '<section class="item inline-html-galley">'
             . '<h2 class="label">Full Text</h2>'
             . $subscriberNotice
             . $archiveNotice
+            . $contentFilteredNotice
             . '<div class="value">' . $bodyContent . '</div>'
             . '</section>';
 
