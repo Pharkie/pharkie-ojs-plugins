@@ -346,6 +346,15 @@ def process_toc(toc_path: Path, dry_run: bool, verbose: bool) -> Counter:
                 print(f'  SKIP {vol_dir.name}/{slug}: no body in JATS')
             continue
 
+        # Propagate content-filtered flag from post.html to galley
+        post_path = vol_dir / f'{slug}.post.html'
+        if post_path.exists():
+            with open(post_path, encoding='utf-8') as pf:
+                if '<!-- AUTO-EXTRACTED:' in pf.read(200):
+                    html_content = ('<div class="ac-content-filtered" '
+                                    'data-content-filtered="true"></div>\n'
+                                    + html_content)
+
         stats['generated'] += 1
 
         if not dry_run:

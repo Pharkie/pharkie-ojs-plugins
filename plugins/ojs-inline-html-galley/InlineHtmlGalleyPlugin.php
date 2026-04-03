@@ -263,7 +263,7 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 
         // Content-filtered warning for articles that couldn't be fully extracted
         $contentFilteredNotice = '';
-        if (str_contains($htmlContent, '<!-- AUTO-EXTRACTED:')) {
+        if (str_contains($htmlContent, '<!-- AUTO-EXTRACTED:') || str_contains($htmlContent, 'data-content-filtered')) {
             $contentFilteredNotice = '<div style="margin-bottom:16px;padding:10px 14px;background:#fff3cd;'
                 . 'border:1px solid #e0d8cc;border-radius:4px;font-size:14px;color:#664d03;line-height:1.5;">'
                 . 'This article could not be fully extracted from the original PDF and has limited formatting. '

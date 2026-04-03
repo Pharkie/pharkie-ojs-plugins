@@ -34,6 +34,7 @@ REFERENCE_HEADING_RE = re.compile(
     r'|References and Bibliography'
     r'|References and further reading'
     r'|Selected Bibliography'
+    r'|Selected Further Reading'
     r'|References:'
     r'|Author [Ss]tatement'
     r')(?:\s*[&;]\s*\w+)*'  # optional "& Filmography"
