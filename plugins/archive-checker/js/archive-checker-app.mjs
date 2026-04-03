@@ -54,6 +54,9 @@ Alpine.data('acApp', () => ({
     activeSections: new Set(),
     activeReviewers: new Set(),
 
+    // Dark mode
+    isDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
+
     // Review UI
     showRejectForm: false,
     rejectComment: '',
@@ -78,7 +81,8 @@ Alpine.data('acApp', () => ({
         this.bindKeys();
 
         // Create the PDFViewer — it manages all page rendering, text layers, find
-        _viewer = new PDFViewer({
+        const darkMode = window.matchMedia('(prefers-color-scheme: dark)');
+        const viewerOpts = {
             container: document.getElementById('pdf-container'),
             viewer: document.getElementById('pdf-viewer'),
             eventBus: _eventBus,
@@ -86,8 +90,27 @@ Alpine.data('acApp', () => ({
             findController: _findController,
             annotationMode: 0, // DISABLE
             removePageBorders: true,
-        });
+        };
+        if (darkMode.matches) {
+            viewerOpts.pageColors = { background: '#1a1a1e', foreground: '#e8e4de' };
+        }
+        _viewer = new PDFViewer(viewerOpts);
         _linkService.setViewer(_viewer);
+
+        // Re-render PDF when OS colour scheme changes
+        darkMode.addEventListener('change', (e) => {
+            this.isDarkMode = e.matches;
+            if (_pdf.doc) {
+                _viewer.pageColors = e.matches
+                    ? { background: '#1a1a1e', foreground: '#e8e4de' }
+                    : null;
+                // Force re-render by resetting the document
+                _viewer.setDocument(_pdf.doc);
+                _eventBus.on('pagesloaded', () => {
+                    _viewer.currentScaleValue = 'page-width';
+                }, { once: true });
+            }
+        });
 
         // Trigger Alpine reactivity when find controller updates
         _eventBus.on('updatefindmatchescount', () => { this._findTick++; });
@@ -106,6 +129,11 @@ Alpine.data('acApp', () => ({
         }).observe(document.getElementById('pdf-container'));
 
         await this.loadArticles();
+
+        // Auto-show guide on first visit
+        if (!localStorage.getItem('ac-help-seen')) {
+            this.showGuide = true;
+        }
     },
 
     // ── Data loading ──
@@ -189,7 +217,7 @@ Alpine.data('acApp', () => ({
     },
 
     get statusLabel() {
-        const labels = { approved: 'Approved', needs_fix: 'Fix Requested', invalidated: 'Invalidated', unreviewed: 'Unreviewed' };
+        const labels = { approved: 'Approved', needs_fix: 'Problem Reported', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
         const a = this.article;
         if (!a) return '';
         let label = labels[a.status] || a.status;
@@ -216,11 +244,21 @@ Alpine.data('acApp', () => ({
         const c = this.counts;
         const parts = [];
         if (c.approved) parts.push(c.approved + ' approved');
-        if (c.needs_fix) parts.push(c.needs_fix + ' needs fix');
-        parts.push(c.total + ' total');
+        if (c.needs_fix) parts.push(c.needs_fix + ' reported');
         const remaining = (c.unreviewed || 0) + (c.invalidated || 0);
-        if (remaining > 0) parts.push(remaining + ' remaining');
-        return parts.join(' / ');
+        if (remaining > 0) parts.push(remaining + ' remaining of ' + c.total);
+        else parts.push(c.total + ' total');
+        return parts.join(' \u00b7 ');
+    },
+
+    get progressApprovedPct() {
+        if (!this.counts || !this.counts.total) return 0;
+        return ((this.counts.approved || 0) / this.counts.total * 100).toFixed(1);
+    },
+
+    get progressReportedPct() {
+        if (!this.counts || !this.counts.total) return 0;
+        return ((this.counts.needs_fix || 0) / this.counts.total * 100).toFixed(1);
     },
 
     showFixReason() {
@@ -275,7 +313,11 @@ Alpine.data('acApp', () => ({
         this.goToSetIndex(this.setIndex + delta);
     },
 
+    diceRolling: false,
+
     async goToRandom() {
+        this.diceRolling = true;
+        setTimeout(() => { this.diceRolling = false; }, 1500);
         try {
             const res = await fetch(this.api + '/nav/random-unreviewed', { credentials: 'same-origin' });
             const data = await res.json();
@@ -527,13 +569,19 @@ Alpine.data('acApp', () => ({
             a.reviewer = 'you';
             a.reviewed_at = new Date().toISOString();
             a.comment = comment || null;
-            this.showRejectForm = false;
-            this.rejectComment = '';
             this.recalculateCounts();
 
-            // Auto-advance
-            if (this.setIndex < this.workingSet.length - 1) {
-                this.goToSetIndex(this.setIndex + 1);
+            if (decision === 'approved') {
+                // Auto-advance on approve
+                this.showRejectForm = false;
+                this.rejectComment = '';
+                if (this.setIndex < this.workingSet.length - 1) {
+                    this.goToSetIndex(this.setIndex + 1);
+                }
+            } else {
+                // Stay on article for report — keep form open for further edits
+                this.rejectComment = '';
+                this.showRejectForm = false;
             }
         } catch (err) {
             console.error('Review submission error:', err);
@@ -641,8 +689,8 @@ Alpine.data('acApp', () => ({
         base.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
         return [
             { key: 'approved', label: 'Approved', count: counts.approved },
-            { key: 'needs_fix', label: 'Needs Fix', count: counts.needs_fix },
-            { key: 'unreviewed', label: 'Unreviewed', count: counts.unreviewed },
+            { key: 'needs_fix', label: 'Reported', count: counts.needs_fix },
+            { key: 'unreviewed', label: 'Unchecked', count: counts.unreviewed },
         ].filter(p => p.count > 0);
     },
 
@@ -831,17 +879,34 @@ Alpine.data('acApp', () => ({
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.submitFix(); }
                 return;
             }
+
+            // Any key dismisses overlays when visible
+            if (this.showGuide) {
+                this.dismissGuide();
+                return;
+            }
+            if (this.showShortcuts) {
+                this.showShortcuts = false;
+                return;
+            }
+
             switch (e.key) {
                 case 'ArrowLeft': e.preventDefault(); this.navigate(-1); break;
                 case 'ArrowRight': e.preventDefault(); this.navigate(1); break;
                 case 'a': case 'A': e.preventDefault(); this.approve(); break;
                 case 'r': case 'R': e.preventDefault(); this.requestFix(); break;
-                case '?': e.preventDefault(); this.showHelp = !this.showHelp; break;
+                case '?': e.preventDefault(); this.showShortcuts = true; break;
             }
         });
     },
 
-    showHelp: false,
+    showGuide: false,
+    showShortcuts: false,
+
+    dismissGuide() {
+        this.showGuide = false;
+        localStorage.setItem('ac-help-seen', '1');
+    },
 
     // ── Prefetch ──
 

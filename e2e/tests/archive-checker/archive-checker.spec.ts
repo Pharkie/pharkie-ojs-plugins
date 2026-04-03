@@ -79,6 +79,13 @@ test.describe('Archive Checker plugin', () => {
     articleId = findArticleWithGalleys();
   });
 
+  // Suppress first-visit help overlay in tests
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('ac-help-seen', '1');
+    });
+  });
+
   test.afterAll(() => {
     cleanupTestReviews();
   });
@@ -441,7 +448,7 @@ test.describe('Archive Checker plugin', () => {
 
   // ── Navigation ──
 
-  test('navigation with sidebar buttons', async ({ page }) => {
+  test('navigation by clicking sidebar items', async ({ page }) => {
     test.skip(!articleId, 'No article with galleys found');
 
     await loginAsAdmin(page);
@@ -450,10 +457,10 @@ test.describe('Archive Checker plugin', () => {
 
     const firstTitle = await page.locator('.ac-title').textContent();
 
-    // Click next button in sidebar
-    const nextBtn = page.locator('.ac-btn-nav').nth(1); // Second nav button = Next
-    if (await nextBtn.isEnabled()) {
-      await nextBtn.click();
+    // Click second article in sidebar
+    const secondItem = page.locator('.ac-drawer-item').nth(1);
+    if (await secondItem.count() > 0) {
+      await secondItem.click();
       await expect(page.locator('.ac-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
     }
   });
@@ -490,14 +497,14 @@ test.describe('Archive Checker plugin', () => {
     await page.waitForTimeout(2000);
   });
 
-  test('request fix opens form and submits', async ({ page }) => {
+  test('report problem opens form and submits', async ({ page }) => {
     test.skip(!articleId, 'No article with galleys found');
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${articleId}`);
     await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
 
-    // Click Request Fix
+    // Click Report Problem
     await page.click('.ac-btn-reject');
 
     // Textarea should appear
