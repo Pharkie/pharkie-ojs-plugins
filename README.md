@@ -40,12 +40,16 @@ Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automati
 
 ### [Archive Checker](plugins/archive-checker/)
 
-Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: article sidebar (left), source PDF (centre), HTML galley + end-matter classification (right). Used after the backfill pipeline to verify extraction quality before publishing.
+Visual review tool for checking archive journal articles inside OJS. Three-pane interface: article sidebar (left), original PDF (centre), HTML version + end-matter (right). Linked from article pages so members can help check the archive.
 
-- Side-by-side PDF vs HTML comparison for every article
-- End-matter classification review (references, notes, bios, provenance)
-- Approve/reject workflow with comments and change detection
-- Progress tracking across all articles and issues
+- Side-by-side PDF vs HTML comparison with pane labels
+- Dark/light mode following OS preference (PDF colours inverted in dark mode)
+- First-visit guide overlay with checklist and known limitations
+- Approve / Report Problem workflow with confirmation flash
+- "Surprise me" random article selection with dice animation
+- Progress thermometer and per-article status tracking
+- Citation DOIs displayed with clickable links
+- Content-filtered article warnings
 - CLI companion (`qa_review.py`) for batch operations
 
 **Archive Checker docs:**

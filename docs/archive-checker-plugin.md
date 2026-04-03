@@ -1,16 +1,17 @@
 # Archive Checker Plugin
 
-Visual QA tool for reviewing backfill article splits inside OJS. Three-pane interface: sidebar (left), PDF (centre), HTML galley + end-matter classification (right).
+Visual review tool for checking archive journal articles inside OJS. Three-pane interface: sidebar (left), original PDF (centre), HTML version + end-matter (right).
 
 ## Purpose
 
-After the backfill pipeline produces HTML galleys and imports them into OJS, a human reviewer needs to verify the results visually. This plugin provides a rapid review workflow:
+After the backfill pipeline converts PDF articles to HTML and imports them into OJS, reviewers compare the originals against the HTML versions. This plugin provides a rapid review workflow:
 
-1. Compare PDF source against HTML output side-by-side
-2. Verify end-matter classification (references, notes, bios, provenance) is correct
-3. Record approve/reject decisions with comments
-4. Track review progress across all articles
-5. Detect when content changes invalidate prior approvals
+1. Compare original PDF against HTML version side-by-side
+2. Verify metadata (title, authors, pages, keywords, abstract)
+3. Check end-matter classification (references, notes, bios, provenance)
+4. Approve articles or report problems with comments
+5. Track review progress across all articles
+6. Detect when content changes invalidate prior approvals
 
 ## Requirements
 
@@ -79,11 +80,13 @@ Deep links: append `?id=<submission_id>` to link directly to an article, e.g. `/
 +------------+---------------------------+---------------------------+
 ```
 
-**Sidebar**: Search, issue/status/section filter pills, scrollable article list with status icons (✓ approved, ⚠ needs fix, · unreviewed), position counter, navigation.
+**Sidebar**: Search, "Surprise me" random button, issue/status/section filter pills, scrollable article list with status icons (✓ approved, ⚠ reported, · unchecked), position counter, keyboard shortcuts link.
 
-**Top bar**: Article title/authors (wrapping), status badge, progress counter, Request Fix / Approve buttons.
+**Top bar**: Article title with close button (×), status badge with progress thermometer (green/amber/grey), Report Problem / Approve buttons.
 
-**Right pane**: Article metadata header (issue + article ID, title, subtitle, authors, DOI, pages, keywords, abstract), then HTML galley body, then end-matter classification panel.
+**Left pane**: Original PDF with "ORIGINAL PDF" label, page counter, search, and dark mode colour inversion hint.
+
+**Right pane**: "HTML VERSION" label, article metadata header (issue + article ID, title, subtitle, authors, DOI, pages, keywords, abstract), then HTML galley body (with content-filtered warning if applicable), then end-matter classification panel with DOI links.
 
 ### End-matter classification
 
@@ -100,7 +103,7 @@ Pipeline-extracted content in the HTML galley is marked with a left border and l
 
 - **Search**: filters by title, author, or keyword (client-side, instant)
 - **Issue dropdown**: filter to a single issue
-- **Status pills**: Approved / Needs Fix / Unreviewed (counts reflect current filter context)
+- **Status pills**: Approved / Reported / Unchecked (counts reflect current filter context)
 - **Section pills**: Articles / Editorials / Book Reviews etc.
 - **Reviewer pills**: By me / By others — filter by who reviewed
 
@@ -110,32 +113,46 @@ All pill counts are contextual — they show how many articles match if you clic
 
 All filters are serialised into URL params: `issue`, `status`, `section`, `reviewer`, `q` (search), and `id` (current article). Copy the URL to share your exact view — the recipient gets the same filters and article position.
 
+### Features
+
+- **Dark/light mode**: Follows OS preference (`prefers-color-scheme`). Dark mode inverts PDF page colours via pdf.js `pageColors` for comfortable reading. A "Colours inverted for dark mode" hint shows in the PDF toolbar.
+- **First-visit guide**: Auto-shows a "Help check the archive" overlay on first visit explaining the interface, what to check, and known limitations. Dismissed with any key, re-openable via "What to check?" in the sidebar.
+- **"Surprise me"**: Loads a random batch of unchecked articles. Dice emoji shakes on click. Also triggered by `?mode=random` URL param (used by the article page CTA).
+- **Progress thermometer**: Green (approved) / amber (reported) / grey (remaining) bar under the progress stats.
+- **Button confirmation**: "Approved ✓" / "Saved ✓" flash for 2 seconds after submission. Approve auto-advances after 600ms; Report Problem stays on the article for further edits.
+- **Content-filtered warning**: 39 articles that couldn't be fully extracted show an amber banner: "This article could not be fully extracted and has limited formatting."
+- **Pane labels**: "ORIGINAL PDF" and "HTML VERSION" labels help orient first-time users.
+- **Citation DOIs**: Reference list shows matched DOIs as clickable links, with DOI count in the pill label.
+- **Article page CTA**: Logged-in users see a "Help Check the Archive" box on article pages with progress stats and a link to Archive Checker in random mode.
+
 ### Keyboard shortcuts
 
 | Key | Action |
 |-----|--------|
 | `←` / `→` | Previous / Next article |
-| `A` | Approve and advance |
-| `R` | Open Request Fix form |
-| `Ctrl+Enter` | Submit fix request |
+| `A` | Approve (auto-advances) |
+| `R` | Report Problem (opens form) |
+| `Ctrl+Enter` | Submit report |
 | `Ctrl+F` / `Cmd+F` | Search within PDF |
 | `Enter` / `Shift+Enter` | Next / previous search match |
 | `Escape` | Cancel / close |
-| `?` | Toggle keyboard shortcuts help |
+| `?` | Show keyboard shortcuts |
 
 ### PDF viewer
 
 - **Text selection**: Select and copy text directly from the PDF
 - **Search**: Click the magnifying glass icon or press `Ctrl+F` to search within the current PDF. Matches are highlighted with next/previous navigation.
+- **Dark mode**: PDF pages render with dark background and light text via pdf.js `pageColors` — not a CSS filter, so text remains crisp
 - Uses the official pdf.js v5 `PDFViewer` with `PDFFindController` — full-featured rendering, text layer, and search
 
 ### Review workflow
 
-1. **Compare**: PDF (left) vs HTML (right) side-by-side
-2. **Check metadata**: Title, authors, DOI, abstract correct?
-3. **Check end-matter**: References count reasonable? Bios extracted? Notes present?
-4. **Check HTML markers**: Pipeline-extracted content has border labels. Unmarked content = not extracted.
-5. **Decide**: `A` to approve, `R` to request fix with comment
+1. **Compare**: Original PDF (left) vs HTML version (right) side-by-side
+2. **Check metadata**: Title, authors, page numbers, keywords, abstract correct?
+3. **Check content**: Article text matches PDF? Nothing missing, garbled, or out of order?
+4. **Check boundaries**: No content from neighbouring articles mixed in?
+5. **Check end-matter**: References complete? DOI links correct? Notes and bios in the right place?
+6. **Decide**: Approve if everything looks correct, or Report Problem with description
 
 ### Content invalidation
 
