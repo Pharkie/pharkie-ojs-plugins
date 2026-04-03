@@ -599,7 +599,10 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     # Pages — from JATS (single source of truth for article content)
     page_start, page_end = _load_jats_pages(pdf_path)
     if page_start and page_end:
-        lines.append(f'{i3}<pages>{page_start}-{page_end}</pages>')
+        if page_start == page_end:
+            lines.append(f'{i3}<pages>{page_start}</pages>')
+        else:
+            lines.append(f'{i3}<pages>{page_start}-{page_end}</pages>')
     elif page_start:
         lines.append(f'{i3}<pages>{page_start}</pages>')
 
