@@ -419,6 +419,9 @@ HTMLSTART;
             </div>
             <div class="ac-html-content">
                 <div x-show="htmlLoading" class="ac-loading">Loading HTML...</div>
+                <div class="ac-content-filtered-banner" x-show="isContentFiltered" x-cloak>
+                    This article could not be fully extracted and has limited formatting. <a href="#" @click.prevent="showGuide = true">Known limitation</a>
+                </div>
                 <div x-show="!htmlLoading" x-html="htmlContent"></div>
             </div>
             <div class="ac-endmatter" x-show="hasClassification">

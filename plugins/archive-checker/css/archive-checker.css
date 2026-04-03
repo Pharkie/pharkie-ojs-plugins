@@ -788,6 +788,30 @@ body {
     padding: 6px 16px 0;
 }
 
+.ac-content-filtered-banner {
+    padding: 10px 16px;
+    background: #fff3cd;
+    color: #664d03;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    border-bottom: 1px solid #e0d8cc;
+}
+
+.ac-content-filtered-banner a {
+    color: #664d03;
+    text-decoration: underline;
+}
+
+@media (prefers-color-scheme: dark) {
+    .ac-content-filtered-banner {
+        background: #4a3a10;
+        color: #e8d080;
+        border-color: #5a4a20;
+    }
+    .ac-content-filtered-banner a { color: #e8d080; }
+}
+
 .ac-pdf-toolbar {
     padding: 7px 14px;
     background: var(--sidebar-brand-bg);
