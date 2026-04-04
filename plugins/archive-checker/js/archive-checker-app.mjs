@@ -60,7 +60,6 @@ Alpine.data('acApp', () => ({
     isDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
 
     // Review UI
-    showRejectForm: false,
     rejectComment: '',
     submitting: false,
     approveLabel: 'Approve',
@@ -300,14 +299,8 @@ Alpine.data('acApp', () => ({
         const si = this.workingSet.indexOf(index);
         if (si >= 0) this.setIndex = si;
         this.updateUrl();
-        // Auto-open review bar for articles with existing reports
-        if (a.status === 'needs_fix' || a.status === 'recheck' || a.status === 'deferred') {
-            this.showRejectForm = true;
-            this.rejectComment = a.comment || '';
-        } else {
-            this.showRejectForm = false;
-            this.rejectComment = '';
-        }
+        // Populate comment from existing review (if any)
+        this.rejectComment = a.comment || '';
         this.approveLabel = 'Approve';
 
         // Load current article, then prefetch nearby once done.
@@ -596,7 +589,6 @@ Alpine.data('acApp', () => ({
 
             if (decision === 'approved') {
                 this.approveLabel = 'Approved ✓';
-                this.showRejectForm = false;
                 this.rejectComment = '';
 
                 // Confetti burst from the Approve button
@@ -621,7 +613,6 @@ Alpine.data('acApp', () => ({
                 this.reportSaved = true;
                 setTimeout(() => { this.reportSaved = false; }, 2000);
                 this.rejectComment = '';
-                this.showRejectForm = false;
             }
         } catch (err) {
             console.error('Review submission error:', err);
@@ -632,28 +623,12 @@ Alpine.data('acApp', () => ({
 
     approve() { this.submitReview('approved'); },
 
-    requestFix() {
-        if (!this.showRejectForm) {
-            this.showRejectForm = true;
-            // Prepopulate with existing comment
-            if (this.article && this.article.comment) {
-                this.rejectComment = this.article.comment;
-            }
-            this.$nextTick(() => this.$refs.rejectTextarea?.focus());
-        }
-    },
-
     submitFix() {
         if (this.rejectComment.trim()) this.submitReview('needs_fix');
     },
 
     submitDefer() {
         if (this.rejectComment.trim()) this.submitReview('deferred');
-    },
-
-    cancelFix() {
-        this.showRejectForm = false;
-        this.rejectComment = '';
     },
 
     recalculateCounts() {
@@ -965,7 +940,7 @@ Alpine.data('acApp', () => ({
             }
 
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                if (e.key === 'Escape') this.cancelFix();
+                if (e.key === 'Escape') e.target.blur();
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.submitFix(); }
                 return;
             }
@@ -984,7 +959,6 @@ Alpine.data('acApp', () => ({
                 case 'ArrowLeft': e.preventDefault(); this.navigate(-1); break;
                 case 'ArrowRight': e.preventDefault(); this.navigate(1); break;
                 case 'a': case 'A': e.preventDefault(); this.approve(); break;
-                case 'r': case 'R': e.preventDefault(); this.requestFix(); break;
                 case '?': e.preventDefault(); this.showShortcuts = true; break;
             }
         });

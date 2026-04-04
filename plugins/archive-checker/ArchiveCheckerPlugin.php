@@ -417,20 +417,19 @@ HTMLSTART;
             </div>
         </div>
 
-        <!-- Bottom bar: review actions -->
+        <!-- Bottom bar: review actions (always open) -->
         <div class="ac-bottom">
-            <div class="ac-row-reject" x-show="showRejectForm" x-cloak>
+            <div class="ac-row-reject">
                 <textarea class="ac-textarea" x-model="rejectComment" x-ref="rejectTextarea"
-                    placeholder="What did you notice? Describe the problem..." rows="5"
-                    @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()" @keydown.escape="cancelFix()"></textarea>
+                    placeholder="What did you notice? Describe the problem..." rows="3"
+                    @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()"></textarea>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
-                        title="Ctrl+Enter to submit" x-text="reportLabel">Report Problem</button>
+                        title="Report Problem (Ctrl+Enter)"><span class="ac-btn-icon">&#x26A0;</span> <span x-text="reportLabel">Report Problem</span></button>
                     <button class="ac-btn ac-btn-defer" @click="submitDefer()" :disabled="submitting || !rejectComment.trim()"
-                        title="Defer (needs separate project)">Defer</button>
-                    <button class="ac-btn ac-btn-approve" @click="cancelFix(); $nextTick(() => approve())" :disabled="submitting || approveLabel !== 'Approve'"
-                        title="Approve (A)">Approve</button>
-                    <button class="ac-btn ac-btn-nav" @click="cancelFix()">Close</button>
+                        title="Defer (needs separate project)"><span class="ac-btn-icon">&#x23F8;</span> Defer</button>
+                    <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting || approveLabel !== 'Approve'"
+                        title="Approve (A)"><span class="ac-btn-icon">&#x2713;</span> <span x-text="approveLabel">Approve</span></button>
                 </div>
             </div>
             <div class="ac-bottom-row">
@@ -440,14 +439,6 @@ HTMLSTART;
                 <a href="#" class="ac-bottom-guide-link" @click.prevent="showGuide = true">What to check? &rsaquo;</a>
                 <span class="ac-row-spacer"></span>
                 <span :class="statusClass" x-text="statusLabel"></span>
-                <template x-if="!showRejectForm">
-                    <div style="display:flex;gap:8px;">
-                        <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
-                            :title="reportLabel + ' (R)'" x-text="reportLabel">Report Problem</button>
-                        <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting || approveLabel !== 'Approve'"
-                            title="Approve (A)" x-text="approveLabel">Approve</button>
-                    </div>
-                </template>
             </div>
         </div>
 
@@ -482,10 +473,9 @@ HTMLSTART;
             <div class="ac-help-box ac-help-box-compact" @click.stop>
                 <h3>Keyboard shortcuts</h3>
                 <table>
-                    <tr><td><kbd>A</kbd></td><td>Approve</td></tr>
-                    <tr><td><kbd>R</kbd></td><td>Report a problem</td></tr>
-                    <tr><td><kbd>Ctrl+Enter</kbd></td><td>Submit report</td></tr>
-                    <tr><td><kbd>Esc</kbd></td><td>Close</td></tr>
+                    <tr><td><kbd>A</kbd></td><td>&#x2713; Approve</td></tr>
+                    <tr><td><kbd>Ctrl+Enter</kbd></td><td>&#x26A0; Submit problem report</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Blur text field</td></tr>
                     <tr><td><kbd>?</kbd></td><td>Show keyboard shortcuts</td></tr>
                 </table>
                 <p>Press any key to close</p>
