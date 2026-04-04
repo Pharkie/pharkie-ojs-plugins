@@ -89,6 +89,12 @@
       "authors": "Edgar Agrela Correia",
       "should_not_contain": "Edgar Correia",
       "should_contain": "Body text here"
+    },
+    "removes_author_with_middle_initial_in_html": {
+      "html": "<p><strong>John M. Heaton</strong></p>\n<p>What does existential mean?</p>",
+      "authors": "John Heaton",
+      "should_not_contain": "John M. Heaton",
+      "should_contain": "What does existential mean"
     }
   },
   "strip_abstract": {

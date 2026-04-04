@@ -64,7 +64,13 @@ Alpine.data('acApp', () => ({
     rejectComment: '',
     submitting: false,
     approveLabel: 'Approve',
-    reportLabel: 'Report Problem',
+    reportSaved: false,
+    get reportLabel() {
+        if (this.reportSaved) return 'Saved \u2713';
+        const a = this.article;
+        if (a && (a.status === 'needs_fix' || a.status === 'recheck')) return 'Update Problem';
+        return 'Report Problem';
+    },
 
     // Sidebar
     showChecklist: false,
@@ -223,7 +229,7 @@ Alpine.data('acApp', () => ({
     },
 
     get statusLabel() {
-        const labels = { approved: 'Last approved', needs_fix: 'Last reported', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
+        const labels = { approved: 'Last approved', needs_fix: 'Last reported', recheck: 'Recheck', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
         const a = this.article;
         if (!a) return '';
         let label = labels[a.status] || a.status;
@@ -232,7 +238,6 @@ Alpine.data('acApp', () => ({
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             label += ' ' + String(d.getDate()).padStart(2,'0') + months[d.getMonth()] + String(d.getFullYear()).slice(2);
         }
-        if (a.comment && a.status === 'needs_fix') label += ' \u24d8';
         return label;
     },
 
@@ -251,6 +256,7 @@ Alpine.data('acApp', () => ({
         const parts = [];
         if (c.approved) parts.push(c.approved + ' approved');
         if (c.needs_fix) parts.push(c.needs_fix + ' reported');
+        if (c.recheck) parts.push(c.recheck + ' recheck');
         const remaining = (c.unreviewed || 0) + (c.invalidated || 0);
         if (remaining > 0) parts.push(remaining + ' unchecked of ' + c.total);
         else parts.push(c.total + ' total');
@@ -293,7 +299,14 @@ Alpine.data('acApp', () => ({
         const si = this.workingSet.indexOf(index);
         if (si >= 0) this.setIndex = si;
         this.updateUrl();
-        this.showRejectForm = false;
+        // Auto-open review bar for articles with existing reports
+        if (a.status === 'needs_fix' || a.status === 'recheck') {
+            this.showRejectForm = true;
+            this.rejectComment = a.comment || '';
+        } else {
+            this.showRejectForm = false;
+            this.rejectComment = '';
+        }
 
         // Load current article, then prefetch nearby once done.
         await Promise.all([
@@ -608,8 +621,8 @@ Alpine.data('acApp', () => ({
                 }
             } else {
                 // Flash confirmation, stay on article
-                this.reportLabel = 'Saved ✓';
-                setTimeout(() => { this.reportLabel = 'Report Problem'; }, 2000);
+                this.reportSaved = true;
+                setTimeout(() => { this.reportSaved = false; }, 2000);
                 this.rejectComment = '';
                 this.showRejectForm = false;
             }
@@ -742,11 +755,12 @@ Alpine.data('acApp', () => ({
 
     get statusPills() {
         const base = this._baseFiltered;
-        const counts = { approved: 0, needs_fix: 0, unreviewed: 0 };
+        const counts = { approved: 0, needs_fix: 0, recheck: 0, unreviewed: 0 };
         base.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
         return [
             { key: 'approved', label: 'Approved', count: counts.approved },
             { key: 'needs_fix', label: 'Problem', count: counts.needs_fix },
+            { key: 'recheck', label: 'Recheck', count: counts.recheck },
             { key: 'unreviewed', label: 'Unchecked', count: counts.unreviewed },
         ];
     },
@@ -889,7 +903,7 @@ Alpine.data('acApp', () => ({
                 si,
                 artIdx,
                 num: si + 1,
-                icon: a.status === 'approved' ? '\u2713' : a.status === 'needs_fix' ? '\u26A0' : '\u00B7',
+                icon: a.status === 'approved' ? '\u2713' : a.status === 'needs_fix' ? '\u26A0' : a.status === 'recheck' ? '\u21BB' : '\u00B7',
                 statusCls: 'ac-drawer-item-status ac-drawer-item-status-' + a.status,
                 title: a.volume + '.' + a.number + ' (' + a.year + ') ' + a.title + ' [id: ' + a.submission_id + ']',
                 active: si === this.setIndex,

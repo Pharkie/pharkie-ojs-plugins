@@ -395,6 +395,27 @@ def _strip_authors_soup(soup, authors):
                 el.extract()
                 return
 
+    # Flexible pass: allow optional middle names/initials in HTML that
+    # aren't in toc.json (e.g. toc has "John Heaton", HTML has "John M. Heaton")
+    parts = re.split(r',\s*|\s+and\s+', authors)
+    flex_parts = []
+    for part in parts:
+        words = _clean(part).split()
+        if len(words) == 2:
+            # first + last → allow optional middle names/initials between them
+            flex_parts.append(words[0] + r'(?:\s+\S+)*\s+' + words[-1])
+    if flex_parts:
+        sep = r'[^a-z0-9]+' if len(flex_parts) > 1 else ''
+        flex_rx = re.compile(sep.join(flex_parts), re.IGNORECASE)
+        for el in soup.find_all(list(BLOCK_TAGS)):
+            if boundary and el == boundary:
+                break
+            if boundary and _el_comes_after(el, boundary):
+                break
+            if flex_rx.search(_el_clean_text(el)):
+                el.extract()
+                return
+
 
 def _el_comes_after(el, boundary):
     """Check if el appears after boundary in document order."""

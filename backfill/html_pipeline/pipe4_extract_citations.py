@@ -394,6 +394,24 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
                 except (ValueError, TypeError):
                     pass
 
+    # Remove empty sections left behind after extraction (e.g. orphaned
+    # "Author Biography" or "Contact" heading sections whose content was
+    # extracted by the trailing bio scan).
+    if body is not None:
+        for sec in list(body):
+            tag = sec.tag.split('}')[-1] if '}' in sec.tag else sec.tag
+            if tag != 'sec':
+                continue
+            # Check if section has any non-title children
+            has_content = False
+            for child in sec:
+                child_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                if child_tag != 'title':
+                    has_content = True
+                    break
+            if not has_content:
+                body.remove(sec)
+
     # Find or create <back>
     back = root.find('.//{*}back')
     if back is None:

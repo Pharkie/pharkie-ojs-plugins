@@ -35,11 +35,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.crossref import (
     DEFAULT_DELAY,
+    OWN_DOI_PREFIX,
     TIER_MATCHED,
     TIER_NO_MATCH,
     has_existing_doi,
     query_crossref,
     score_match,
+    strip_doi_from_text,
 )
 
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / 'private' / 'output'
@@ -127,20 +129,28 @@ def process_article(jats_path, email, article_slug, limit=None,
         # as structured data (pub-id), skip Crossref query
         existing_doi = has_existing_doi(text)
         if existing_doi:
-            if verbose:
-                print(f"  [{ref_id}] EXTRACTED from text: {existing_doi}")
-            results.append({
-                'ref_id': ref_id,
-                'text': text,
-                'tier': 'already_has_doi',
-                'matched_doi': existing_doi,
-                'written_to_jats': False,
-            })
-            continue
+            # When revalidating, re-query external DOIs (may be wrong from
+            # OCR or previous runs). Own-prefix DOIs are authoritative.
+            if revalidate and not existing_doi.startswith(OWN_DOI_PREFIX):
+                if verbose:
+                    print(f"  [{ref_id}] REVALIDATING text DOI: "
+                          f"{existing_doi}")
+            else:
+                if verbose:
+                    print(f"  [{ref_id}] EXTRACTED from text: {existing_doi}")
+                results.append({
+                    'ref_id': ref_id,
+                    'text': text,
+                    'tier': 'already_has_doi',
+                    'matched_doi': existing_doi,
+                    'written_to_jats': False,
+                })
+                continue
 
-        # Check cache
+        # Check cache (bypass when revalidating — need fresh Crossref queries).
+        # All tiers are cached including no_match — only --revalidate re-queries.
         cached = _get_cached_ref(existing_matches, article_slug, ref_id)
-        if cached and cached.get('tier') != TIER_NO_MATCH:
+        if cached and not revalidate:
             if verbose:
                 print(f"  [{ref_id}] CACHED ({cached['tier']}: "
                       f"{cached.get('matched_doi', 'N/A')})")
@@ -169,16 +179,18 @@ def process_article(jats_path, email, article_slug, limit=None,
             continue
 
         # Score all candidates, pick best match.
-        # Ranking: matched tier first, then by similarity, then Crossref score.
+        # Ranking: matched tier first, then self-citation preference,
+        # then by similarity, then Crossref score.
         _TIER_RANK = {TIER_MATCHED: 1, TIER_NO_MATCH: 0}
-        best_rank = (-1, -1, -1)
+        best_rank = (-1, -1, -1, -1)
         best_tier = TIER_NO_MATCH
         best_sim = 0
         best_details = {}
         for candidate in cr_results:
             t, sim, det = score_match(candidate, text)
             cr_score = det.get('crossref_score', 0)
-            rank = (_TIER_RANK.get(t, 0), sim, cr_score)
+            self_cite = 1 if det.get('self_citation_boost') else 0
+            rank = (_TIER_RANK.get(t, 0), self_cite, sim, cr_score)
             if rank > best_rank:
                 best_rank = rank
                 best_tier = t
@@ -280,6 +292,10 @@ def write_dois_to_jats(jats_path, refs):
             pub_id.set('pub-id-type', 'doi')
             pub_id.text = doi
             written += 1
+            # Strip DOI from citation text to avoid double display
+            mc = ref_el.find('mixed-citation')
+            if mc is not None and mc.text and doi in mc.text:
+                mc.text = strip_doi_from_text(mc.text, doi)
 
     if written > 0 or removed > 0:
         tree.write(jats_path, encoding='unicode', xml_declaration=True)

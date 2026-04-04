@@ -339,3 +339,76 @@ class TestBioGrouping:
         for note in result['notes']:
             assert 'Diana Mitchell' not in note, \
                 f"Author sign-off classified as note: {note}"
+
+
+class TestBioHeadingRemoval:
+    """Bio label headings ('Author Biography', 'Author Bio', 'Contact') should
+    be removed from the JATS body after bio extraction."""
+
+    def _extract_and_check_body(self, jats):
+        """Run extraction and return the body XML string."""
+        from backfill.html_pipeline.pipe4_extract_citations import write_back_matter_to_jats
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+            write_back_matter_to_jats(Path(f.name), result)
+            # Re-read the written file
+            import xml.etree.ElementTree as ET
+            tree = ET.parse(f.name)
+        os.unlink(f.name)
+        body = tree.getroot().find('.//{*}body')
+        if body is None:
+            body = tree.getroot().find('.//body')
+        return ET.tostring(body, encoding='unicode') if body is not None else '', result
+
+    def test_author_biography_heading_removed(self):
+        """<sec><title>Author Biography</title></sec> should not remain in body."""
+        jats = _make_jats("""
+        <sec><title>Introduction</title>
+        <p>Body text about therapy.</p>
+        </sec>
+        <sec><title>Author Biography</title></sec>
+        <p>Carla Willig is Professor of Psychology at City, University of London.</p>
+        <sec><title>Contact</title></sec>
+        <p>c.willig@city.ac.uk</p>
+        """, authors=[('Carla', 'Willig')])
+        body_xml, result = self._extract_and_check_body(jats)
+        assert 'Author Biography' not in body_xml, \
+            f"'Author Biography' heading left in body: {body_xml}"
+        assert 'Contact' not in body_xml, \
+            f"'Contact' heading left in body: {body_xml}"
+        # Bio should be extracted
+        assert len(result['bios']) >= 1
+        assert any('Carla Willig' in b for b in result['bios'])
+
+    def test_author_bio_heading_removed(self):
+        """<sec><title>Author Bio</title></sec> should not remain in body."""
+        jats = _make_jats("""
+        <sec><title>Discussion</title>
+        <p>Some discussion text.</p>
+        </sec>
+        <sec><title>Author Bio</title></sec>
+        <p>Manu Bazzano is an author, psychotherapist and supervisor.</p>
+        <p>For more information contact: www.manubazzano.com</p>
+        """, authors=[('Manu', 'Bazzano')])
+        body_xml, result = self._extract_and_check_body(jats)
+        assert 'Author Bio' not in body_xml, \
+            f"'Author Bio' heading left in body: {body_xml}"
+        assert len(result['bios']) >= 1
+
+    def test_author_biography_with_content_inside_sec(self):
+        """Bio content inside the Author Biography section should be extracted and section removed."""
+        jats = _make_jats("""
+        <sec><title>Introduction</title>
+        <p>Body text here.</p>
+        </sec>
+        <sec><title>Author Biography</title>
+        <p>John Smith is a psychotherapist in private practice in London.</p>
+        </sec>
+        """)
+        body_xml, result = self._extract_and_check_body(jats)
+        assert 'Author Biography' not in body_xml, \
+            f"'Author Biography' heading left in body: {body_xml}"
+        assert len(result['bios']) >= 1
+        assert any('John Smith' in b for b in result['bios'])

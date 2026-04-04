@@ -9,7 +9,7 @@ import sys
 
 import requests
 
-# Journal's own DOI prefix — skip these when checking for existing DOIs
+# Journal's own DOI prefix — used to identify self-citations
 OWN_DOI_PREFIX = '10.65828/'
 
 # Regex to detect DOIs already present in reference text
@@ -35,8 +35,33 @@ MIN_SCORE_MED_SIM = 60
 SINGLE_WORD_TITLE_PENALTY = 0.5
 
 
+def strip_doi_from_text(text, doi):
+    """Remove a DOI from reference text when it will be stored as <pub-id>.
+
+    Strips the DOI along with surrounding prefixes (doi:, DOI:, https://doi.org/)
+    and trailing cruft ([Accessed...], trailing punctuation).
+    """
+    if doi not in text:
+        return text
+    # Pattern: optional "doi:" or "DOI: https://doi.org/" prefix,
+    # the DOI itself, optional trailing ". [Accessed...]" or punctuation
+    pattern = (
+        r'\s*'
+        r'(?:(?:doi|DOI)\s*:\s*)?'          # optional doi: prefix
+        r'(?:https?://doi\.org/)?'           # optional https://doi.org/
+        + re.escape(doi)
+        + r'\.?'                             # optional trailing dot
+        + r'(?:\s*\[Accessed[^\]]*\]\.?)?'   # optional [Accessed...] suffix
+    )
+    result = re.sub(pattern, '', text).strip()
+    # Clean trailing punctuation artifacts
+    result = re.sub(r'\.\s*$', '.', result)
+    result = result.rstrip('. ') + '.'
+    return result
+
+
 def has_existing_doi(ref_text):
-    """Check if a reference already contains a DOI (excluding our own prefix).
+    """Check if a reference already contains a DOI.
 
     Returns the DOI string if found, or None.
     """
@@ -44,8 +69,7 @@ def has_existing_doi(ref_text):
         doi = match.group()
         # Strip trailing punctuation that's not part of the DOI
         doi = doi.rstrip('.,;:)')
-        if not doi.startswith(OWN_DOI_PREFIX):
-            return doi
+        return doi
     return None
 
 
@@ -184,8 +208,12 @@ def _build_queries(ref_text):
     return queries
 
 
+MAX_RETRIES = 5
+INITIAL_BACKOFF = 1.0  # seconds
+
+
 def _execute_query(query, email, timeout=30):
-    """Execute a single Crossref API query."""
+    """Execute a single Crossref API query with adaptive backoff on 429."""
     if not query or len(query) < 10:
         return []
 
@@ -200,19 +228,34 @@ def _execute_query(query, email, timeout=30):
         'User-Agent': f'ExistentialAnalysisBackfill/1.0 (mailto:{email})',
     }
 
-    try:
-        resp = requests.get(
-            CROSSREF_API_URL,
-            params=params,
-            headers=headers,
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get('message', {}).get('items', [])
-    except (requests.RequestException, ValueError) as e:
-        print(f"  WARNING: Crossref query failed: {e}", file=sys.stderr)
-        return []
+    backoff = INITIAL_BACKOFF
+    for attempt in range(MAX_RETRIES):
+        try:
+            resp = requests.get(
+                CROSSREF_API_URL,
+                params=params,
+                headers=headers,
+                timeout=timeout,
+            )
+            if resp.status_code == 429:
+                import time
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get('message', {}).get('items', [])
+        except (requests.RequestException, ValueError) as e:
+            if attempt < MAX_RETRIES - 1 and '429' in str(e):
+                import time
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            print(f"  WARNING: Crossref query failed: {e}", file=sys.stderr)
+            return []
+    print(f"  WARNING: Crossref query exhausted retries for: {query[:60]}",
+          file=sys.stderr)
+    return []
 
 
 def query_crossref(ref_text, email, timeout=30):
@@ -385,6 +428,10 @@ _REFERENCE_WORK_RE = re.compile(
 )
 
 
+# Detects references citing our own journal
+OWN_JOURNAL_RE = re.compile(r'\bExistential\s+Analysis\b', re.IGNORECASE)
+
+
 def score_match(result, ref_text):
     """Score a single Crossref result against the original reference text.
 
@@ -460,5 +507,19 @@ def score_match(result, ref_text):
         tier = TIER_MATCHED
     else:
         tier = TIER_NO_MATCH
+
+    # Self-citation preference: when the reference cites our journal
+    # and the Crossref result is from our journal, flag it.
+    # Used as tiebreaker in candidate ranking (prefer our journal's DOI)
+    # and to boost NO_MATCH → MATCHED when thresholds are borderline.
+    ref_cites_own_journal = bool(OWN_JOURNAL_RE.search(ref_text))
+    result_is_own_journal = bool(
+        container and OWN_JOURNAL_RE.search(container)
+    )
+    if ref_cites_own_journal and result_is_own_journal and not type_mismatch:
+        if similarity >= 0.7 and author_match:
+            details['self_citation_boost'] = True
+            if tier == TIER_NO_MATCH:
+                tier = TIER_MATCHED
 
     return tier, similarity, details

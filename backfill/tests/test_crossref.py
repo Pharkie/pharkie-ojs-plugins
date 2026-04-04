@@ -31,11 +31,11 @@ FIXTURES_DIR = Path(__file__).parent / 'fixtures'
     # No DOI
     ('Smith (2020). Title. London: Publisher.', None),
     ('Kierkegaard, S. (1849). The Sickness Unto Death.', None),
-    # Our own DOI prefix should be excluded
-    ('Article. 10.65828/abc123', None),
-    ('Article. doi:10.65828/xyz789', None),
-    # Mixed: our prefix + external DOI
-    ('Article 10.65828/own. See also 10.1234/external.', '10.1234/external'),
+    # Our own DOI prefix is now returned (articles deposited to Crossref)
+    ('Article. 10.65828/abc123', '10.65828/abc123'),
+    ('Article. doi:10.65828/xyz789', '10.65828/xyz789'),
+    # Mixed: returns first DOI found (our prefix appears first)
+    ('Article 10.65828/own. See also 10.1234/external.', '10.65828/own'),
 ])
 def test_has_existing_doi(text, expected):
     assert has_existing_doi(text) == expected
@@ -248,6 +248,55 @@ def test_score_match_no_type_mismatch_for_journal_ref():
     assert details['type_mismatch'] is False
 
 
+def test_score_match_self_citation_boost():
+    """Self-citation to our journal should be boosted when ref names our journal."""
+    result = _make_result(
+        doi='10.65828/ea.15.2.03',
+        score=10,  # Below all normal thresholds (MIN_SCORE_EXACT_TITLE=20)
+        title='Anxiety and Authenticity',
+        authors=[{'family': 'Adams', 'given': 'M.'}],
+        container='Existential Analysis',
+        type_='journal-article',
+    )
+    ref_text = ('Adams, M. (2004). Anxiety and Authenticity. '
+                'Existential Analysis, 15(2), 30-45.')
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_MATCHED
+    assert details.get('self_citation_boost') is True
+
+
+def test_score_match_no_false_self_citation_boost():
+    """External journal result should NOT get boost even if ref cites our journal."""
+    result = _make_result(
+        doi='10.1080/external',
+        score=45,
+        title='Anxiety and Authenticity',
+        authors=[{'family': 'Adams', 'given': 'M.'}],
+        container='British Journal of Psychotherapy',
+        type_='journal-article',
+    )
+    ref_text = ('Adams, M. (2004). Anxiety and Authenticity. '
+                'Existential Analysis, 15(2), 30-45.')
+    tier, sim, details = score_match(result, ref_text)
+    assert details.get('self_citation_boost') is not True
+
+
+def test_score_match_self_citation_still_needs_author():
+    """Self-citation boost should not override author mismatch."""
+    result = _make_result(
+        doi='10.65828/ea.15.2.03',
+        score=25,
+        title='Anxiety and Authenticity',
+        authors=[{'family': 'WrongAuthor', 'given': 'X.'}],
+        container='Existential Analysis',
+        type_='journal-article',
+    )
+    ref_text = ('Adams, M. (2004). Anxiety and Authenticity. '
+                'Existential Analysis, 15(2), 30-45.')
+    tier, sim, details = score_match(result, ref_text)
+    assert tier == TIER_NO_MATCH
+
+
 def test_score_match_no_title():
     result = _make_result(score=80, title='')
     ref_text = 'Some reference text.'
@@ -255,6 +304,39 @@ def test_score_match_no_title():
     # No title means similarity=0, so shouldn't auto-accept
     assert tier != TIER_MATCHED
     assert details['title_similarity'] == 0.0
+
+
+# ---------- strip_doi_from_text ----------
+
+@pytest.mark.parametrize('text, doi, expected', [
+    # doi: prefix
+    ('Smith (2020). Title. Journal, 49: 9-21. doi: 10.1037/pro0000152.',
+     '10.1037/pro0000152',
+     'Smith (2020). Title. Journal, 49: 9-21.'),
+    # doi: prefix no space
+    ('Smith (2020). Title. 18(4), 189-194. doi:10.1111/j.1467-8721',
+     '10.1111/j.1467-8721',
+     'Smith (2020). Title. 18(4), 189-194.'),
+    # DOI: https://doi.org/ prefix
+    ('Smith (2020). Title. 49: 9-21. DOI: https://doi.org/10.1037/pro0000152',
+     '10.1037/pro0000152',
+     'Smith (2020). Title. 49: 9-21.'),
+    # With [Accessed...] after DOI
+    ('Smith (2020). Title. 49: 9-21. 10.1037/pro0000152. [Accessed on 30th November 2025.]',
+     '10.1037/pro0000152',
+     'Smith (2020). Title. 49: 9-21.'),
+    # DOI not in text — no change
+    ('Smith (2020). Title. London: Publisher.',
+     '10.1234/test',
+     'Smith (2020). Title. London: Publisher.'),
+    # Bare DOI at end
+    ('Smith (2020). Title. Journal, 1(4), 251-264. 10.1002/bs.123',
+     '10.1002/bs.123',
+     'Smith (2020). Title. Journal, 1(4), 251-264.'),
+])
+def test_strip_doi_from_text(text, doi, expected):
+    from backfill.lib.crossref import strip_doi_from_text
+    assert strip_doi_from_text(text, doi) == expected
 
 
 # ---------- Fixture-based test ----------

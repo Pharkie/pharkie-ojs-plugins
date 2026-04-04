@@ -1,7 +1,6 @@
 {
   "_doc": "Author contact detection test data.",
   "_instructions": "If a test fails, fix the CODE not this file.",
-
   "true": [
     "Email: author@example.com",
     "Contact: Dr Smith, 123 Therapy Lane",
@@ -9,9 +8,11 @@
     "Dr. Darren Langdridge, Psychology Discipline, Faculty of Social Sciences, The Open University, Walton Hall, Milton Keynes, MK7 6AA. Email: d.Langdridge@open.ac.uk",
     "Address: 45 Harley Street, London W1G 8QR",
     "author@university.ac.uk",
-    "Correspondence: Department of Psychology"
+    "Correspondence: Department of Psychology",
+    "https://orcid.org/0009-0005-4723-0588",
+    "https://orcid.org/0009-0001-6237-0731",
+    "For more information contact: www.manubazzano.com"
   ],
-
   "false": [
     "Emmy van Deurzen is a psychotherapist.",
     "See Smith (2005) for details.",

@@ -99,6 +99,7 @@ class TestNotesRendering:
     """Notes should render in a single <div class="jats-notes"> with <ol>."""
 
     def test_notes_as_ordered_list(self):
+        """Notes render as <ol> without heading (OJS renders its own)."""
         html = _html_from_back(
             '<fn-group>'
             '<fn><p>First note.</p></fn>'
@@ -106,7 +107,7 @@ class TestNotesRendering:
             '</fn-group>'
         )
         assert '<div class="jats-notes">' in html
-        assert '<h2>Notes</h2>' in html
+        assert '<h2>' not in html  # No heading — OJS renders its own
         assert '<ol>' in html
         assert html.count('<li>') == 2
 

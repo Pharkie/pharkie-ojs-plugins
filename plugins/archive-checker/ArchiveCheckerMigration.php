@@ -22,7 +22,7 @@ class ArchiveCheckerMigration extends Migration
             $table->unsignedBigInteger('publication_id');
             $table->unsignedBigInteger('user_id');
             $table->string('username', 255);
-            $table->enum('decision', ['approved', 'needs_fix']);
+            $table->enum('decision', ['approved', 'needs_fix', 'recheck']);
             $table->text('comment')->nullable();
             $table->string('content_hash', 64)->nullable();
             $table->dateTime('created_at');

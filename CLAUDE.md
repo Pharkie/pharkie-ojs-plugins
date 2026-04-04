@@ -45,7 +45,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 - **`_manual_html` in toc.json** = hand-corrected HTML galleys. `pipe1_haiku_html.py` skips these automatically.
 - **Haiku extraction can drop repeated/multilingual content.** Always verify HTML galleys against source PDFs for articles with non-English references.
 - **Docker in devcontainer requires `sudo`** for `pipe7_import.sh` and `pipe8_restore_ids.py` (they call `docker` directly). Other pipeline steps (pipe1–pipe6) don't need Docker.
-- **`pipe3_generate_jats.py` wipes citations** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`.
+- **`pipe3_generate_jats.py` wipes citations AND DOIs** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`. After pipe3+pipe4, run pipe4b to re-attach DOIs from `doi_matches.json` cache (~2 min, no API calls). Only use `--revalidate` when you need to re-score against Crossref (~45 min).
 - **Three HTML stages per article:** `.raw.html` (Haiku extraction), `.post.html` (post-processed), `.galley.html` (from JATS). No file collisions.
 
 ### QA iteration loop
@@ -54,6 +54,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 2. `python3 backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/<vol.iss>/toc.json`
 3. `python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/<vol.iss>/toc.json`
 4. `python3 backfill/html_pipeline/pipe4_extract_citations.py --extract --volume <vol.iss>`
+4b. `python3 backfill/html_pipeline/pipe4b_match_dois.py --volume <vol.iss> --email EMAIL` (re-attaches DOIs from cache, ~2 sec/vol — **do NOT use --revalidate** unless you need fresh Crossref scoring)
 5. `python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/<vol.iss>/toc.json`
 6. `python3 backfill/html_pipeline/pipe6_ojs_xml.py <toc.json>` (writes import.xml next to toc.json)
 7. `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol.iss> --force` (~7 sec)
