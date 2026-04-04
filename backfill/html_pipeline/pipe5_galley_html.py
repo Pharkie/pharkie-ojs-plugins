@@ -63,9 +63,10 @@ def jats_to_html(jats_path: Path) -> str | None:
     if article_meta is not None:
         _render_product(article_meta, soup)
 
-    # Render back matter (except references)
+    # Render provenance (metadata, top) and back matter (bios/notes, bottom)
     back = root.find('.//{*}back')
     if back is not None:
+        _render_provenance(back, soup)
         _render_back_matter(back, soup)
 
     # decode_contents() not prettify() — prettify() inserts newlines inside
@@ -232,13 +233,12 @@ def _render_product(article_meta, soup):
         soup.append(div)
 
 
-def _render_back_matter(back, soup):
-    """Render JATS <back> elements as BS4 tags (except ref-list).
+def _render_provenance(back, soup):
+    """Render provenance notes (conference/presentation origin) at the top.
 
-    Order matches typical journal PDF layout:
-      body → provenance → bios → notes → references (refs excluded)
+    Provenance is article metadata, not back-matter. PDFs typically show
+    it near the top, under the title/authors. Prepended before body content.
     """
-    # Provenance notes (conference/presentation context — before bios)
     prov_items = []
     for child in back:
         if local_name(child.tag) == 'notes':
@@ -256,8 +256,18 @@ def _render_back_matter(back, soup):
             em.string = prov
             p.append(em)
             div.append(p)
-        soup.append(div)
+        if soup.contents:
+            soup.contents[0].insert_before(div)
+        else:
+            soup.append(div)
 
+
+def _render_back_matter(back, soup):
+    """Render JATS <back> elements as BS4 tags (except ref-list and provenance).
+
+    Back-matter: bios → notes → references (refs excluded from here).
+    Provenance is handled separately by _render_provenance().
+    """
     # Author bios
     for child in back:
         if local_name(child.tag) == 'bio':
