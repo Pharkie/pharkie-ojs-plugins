@@ -8,6 +8,14 @@
 
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Ensure compose services are running (DinD-aware).
+# After a devcontainer rebuild, containers may exist but not be started.
+source "$SCRIPT_DIR/../lib/dc.sh"
+init_dc
+$DC up -d 2>/dev/null || echo "[WARN] docker compose up failed — services may need manual start"
+
 # Network name matches docker-compose.yml "sea-net" network with project prefix.
 NETWORK="${COMPOSE_PROJECT_NAME:-pharkie-ojs-plugins}_sea-net"
 CONTAINER_ID=$(cat /etc/hostname)

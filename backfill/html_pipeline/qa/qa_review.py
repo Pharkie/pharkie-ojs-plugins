@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Archive Checker CLI — approve, reject, or check article review status.
+Archive Checker CLI — approve, reject, recheck, or check article review status.
 
 CLI equivalent of the Archive Checker web interface. Manages review records
 in the OJS archive_checker_reviews table.
@@ -17,10 +17,13 @@ Usage:
     # Reject with reason:
     python backfill/qa_review.py reject 9494 "references mixed with notes"
 
+    # Mark as recheck (fixed, needs re-review):
+    python backfill/qa_review.py recheck 9494 "Fixed: body was being truncated"
+
     # Check status of one article:
     python backfill/qa_review.py status 29.2/03-on-the-phenomenon
 
-    # List all reviews (default: problems only):
+    # List flagged articles (default: needs_fix + recheck):
     python backfill/qa_review.py list
     python backfill/qa_review.py list --all
 
@@ -249,6 +252,26 @@ def cmd_reject(target: str, article_ref: str, comment: str) -> None:
     print(f'  comment: {comment}')
 
 
+def cmd_recheck(target: str, article_ref: str, comment: str) -> None:
+    """Mark an article as recheck (fixed, needs re-review)."""
+    pub_id, title = resolve_article(target, article_ref)
+    publication_id = get_publication_id(target, pub_id)
+
+    safe_comment = comment.replace("'", "''")
+
+    run_sql(target, f"""
+        INSERT INTO archive_checker_reviews
+            (submission_id, publication_id, user_id, username, decision, comment, created_at)
+        VALUES
+            ({pub_id}, {publication_id}, 1, 'claude', 'recheck',
+             '{safe_comment}', NOW());
+    """)
+
+    print(f'Recheck: {title}')
+    print(f'  submission_id={pub_id}, target={target}')
+    print(f'  comment: {comment}')
+
+
 def cmd_status(target: str, article_ref: str) -> None:
     """Show review history for an article."""
     pub_id, title = resolve_article(target, article_ref)
@@ -285,8 +308,8 @@ def cmd_status(target: str, article_ref: str) -> None:
 
 
 def cmd_list(target: str, show_all: bool) -> None:
-    """List reviews. Default: rejected/problem cases only. --all: everything."""
-    where = '' if show_all else "WHERE r.decision = 'needs_fix'"
+    """List reviews. Default: needs_fix + recheck. --all: everything."""
+    where = '' if show_all else "WHERE r.decision IN ('needs_fix', 'recheck')"
     out = run_sql(target, f"""
         SELECT r.submission_id, r.decision, r.username, r.comment,
                r.created_at, ps.setting_value AS title
@@ -307,7 +330,7 @@ def cmd_list(target: str, show_all: bool) -> None:
         print(f'No {label}.')
         return
 
-    header = 'All reviews' if show_all else 'Flagged articles (rejected)'
+    header = 'All reviews' if show_all else 'Flagged articles (needs_fix + recheck)'
     print(f'{header}:\n')
     print(f'{"ID":<6} {"Status":<10} {"By":<10} {"Date":<20} {"Title":<35} Comment')
     print('-' * 105)
@@ -437,6 +460,11 @@ def main():
     p_reject.add_argument('article', help='Article: path, submission_id, or title search')
     p_reject.add_argument('comment', help='Rejection reason')
 
+    # recheck
+    p_recheck = sub.add_parser('recheck', help='Mark as recheck (fixed, needs re-review)')
+    p_recheck.add_argument('article', help='Article: path, submission_id, or title search')
+    p_recheck.add_argument('comment', help='Description of the fix')
+
     # status
     p_status = sub.add_parser('status', help='Show review status and history')
     p_status.add_argument('article', help='Article: path, submission_id, or title search')
@@ -462,6 +490,8 @@ def main():
         cmd_approve(args.target, args.article)
     elif args.command == 'reject':
         cmd_reject(args.target, args.article, args.comment)
+    elif args.command == 'recheck':
+        cmd_recheck(args.target, args.article, args.comment)
     elif args.command == 'status':
         cmd_status(args.target, args.article)
     elif args.command == 'list':

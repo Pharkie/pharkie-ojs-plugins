@@ -61,6 +61,13 @@ NOTES_HEADING_RE = re.compile(
 )
 
 
+# Bio/contact section headings — items under these are bios, not references
+# or notes. Used by _is_bio_section() and pipe4 section routing.
+BIO_LABEL_HEADINGS = {'author biography', 'author bio', 'author biographies',
+                      'about the author', 'about the authors', 'contact',
+                      'author information'}
+
+
 # Common academic/book publishers. Used across classification functions
 # to detect bibliographic references. Single source of truth — add new
 # publishers here rather than in individual regexes.
@@ -220,9 +227,6 @@ def _is_bio_section(el: ET.Element, ns: str, author_names: list[str] = None) -> 
     if not heading:
         return False
 
-    # Explicit bio/contact label headings — always bio sections
-    BIO_LABEL_HEADINGS = {'author biography', 'author bio', 'author biographies',
-                          'about the author', 'about the authors', 'contact'}
     if heading.lower().strip() in BIO_LABEL_HEADINGS:
         return True
 
@@ -776,7 +780,9 @@ def is_author_contact(text: str) -> bool:
     )) or bool(re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$', text.strip())
     ) or bool(re.search(r'\bE-?mail\s*:\s*[A-Za-z0-9._%+-]+@', text, re.IGNORECASE)
     ) or bool(re.match(r'^https?://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$', text.strip())
-    ) or bool(re.search(r'\bcontact\s*:\s*(?:www\.|http)', text, re.IGNORECASE))
+    ) or bool(re.search(r'\bcontact\s*:\s*(?:www\.|http)', text, re.IGNORECASE)
+    ) or bool(re.match(r'^Contact\s+[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+                        text.strip(), re.IGNORECASE))
 
 
 def is_author_bio(text: str) -> bool:

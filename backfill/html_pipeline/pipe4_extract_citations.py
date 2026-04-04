@@ -33,7 +33,7 @@ from lib.citations import (
     find_jats_reference_sections, is_non_reference, is_citation_like, is_author_bio,
     is_author_contact, is_provenance, is_reference, is_note, classify, extract_text_from_element,
     sort_notes_by_number, strip_note_number,
-    NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE,
+    NOTES_HEADING_RE, PURE_REFERENCE_HEADING_RE, BIO_LABEL_HEADINGS,
 )
 
 OUTPUT_DIR = Path(__file__).parent.parent / "private" / "output"
@@ -107,10 +107,10 @@ def extract_from_jats(jats_path: Path) -> dict:
     author_surnames = [n.split()[-1].lower() for n in author_names if n]
     author_full = [n.lower() for n in author_names if n]
 
-    # When both a Notes section and a separate References section exist,
-    # trust the author's separation: ALL items under Notes stay as notes.
-    # The is_citation_like filter only applies when there is no separate
-    # References section (notes and references may be mixed under one heading).
+    # When both Notes and References sections exist, trust the headings:
+    # items under Notes → notes, items under References → citations.
+    # When only Notes exists (no References), use is_citation_like to
+    # separate mixed content (some authors put refs under Notes).
     has_separate_references = any(
         PURE_REFERENCE_HEADING_RE.match(sec['heading'])
         for sec in sections
@@ -120,24 +120,37 @@ def extract_from_jats(jats_path: Path) -> dict:
         heading = sec['heading']
         headings.append(heading)
         is_notes_section = bool(NOTES_HEADING_RE.match(heading))
+        is_bio_section = heading.lower().strip() in BIO_LABEL_HEADINGS
 
         for item in sec['items']:
-            if is_non_reference(item):
-                # Classify filtered items — provenance, note, or drop.
-                # Bio detection is handled by the trailing scan (with
-                # author matching) so we don't check is_author_bio here.
-                if is_provenance(item):
-                    provenance_items.append(item)
-                elif is_note(item) == 'name-only' and item.strip().rstrip('.').lower() in author_full:
-                    pass  # Author sign-off — drop, not a note
-                else:
-                    note_items.append(item)
+            # Priority 1: provenance (conference/presentation origin)
+            if is_provenance(item):
+                provenance_items.append(item)
                 continue
 
+            # Priority 2: bio sections — all items are bio
+            if is_bio_section:
+                bios.append(item)
+                continue
+
+            # Priority 3: author bio/contact in any section — bio trumps heading
+            # (e.g. bio paragraph accidentally under References heading)
+            if is_author_bio(item) and any(
+                    surname in item.lower() for surname in author_surnames):
+                bios.append(item)
+                continue
+
+            # Priority 4: author sign-off (bare name) — drop
+            if is_note(item) == 'name-only' and item.strip().rstrip('.').lower() in author_full:
+                continue
+
+            # Priority 5: heading-driven routing
             if is_notes_section:
                 if has_separate_references or not is_citation_like(item):
                     note_items.append(item)
-                    continue
+                else:
+                    citations.append(item)
+                continue
 
             citations.append(item)
 
@@ -321,12 +334,24 @@ def extract_from_jats(jats_path: Path) -> dict:
         bios.append(' '.join(current_bio_parts))
         trailing_bio_elements.extend(current_bio_elements)
 
-    # Deduplicate: remove any note_items that were also identified as bios
-    # by the trailing scan (prevents the same text appearing as both bio
-    # and note in JATS).
-    if bios:
-        bio_texts = set(bios)
-        note_items = [n for n in note_items if n not in bio_texts]
+    # Safety check: warn if any text appears in multiple categories.
+    # The core routing should produce exactly 1 classification per item;
+    # duplicates indicate a bug in the routing logic.
+    def _texts_overlap(a: str, b: str) -> bool:
+        a, b = a.strip(), b.strip()
+        return a == b or a in b or b in a
+
+    all_categories = {'citations': citations, 'notes': note_items,
+                      'bios': bios, 'provenance': provenance_items}
+    for cat_a in all_categories:
+        for cat_b in all_categories:
+            if cat_a >= cat_b:
+                continue
+            for item_a in all_categories[cat_a]:
+                for item_b in all_categories[cat_b]:
+                    if _texts_overlap(item_a, item_b):
+                        print(f'  WARNING: duplicate {cat_a}/{cat_b}: '
+                              f'{item_a[:60]}...')
 
     return {
         'citations': citations,

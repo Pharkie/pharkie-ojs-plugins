@@ -183,3 +183,145 @@ class TestNotesWithoutSeparateReferences:
                 )
         finally:
             os.unlink(jats_path)
+
+
+class TestBioSectionRouting:
+    """Items under bio/contact headings must become bios, never
+    citations or notes."""
+
+    def test_about_the_author_not_in_citations(self):
+        """Bug 1: 'About the Author' section items must not appear
+        in citations — they are bios."""
+        bio_text = ('Dr. Ernesto Spinelli is a chartered psychologist '
+                    'with academic interests in phenomenological psychology.')
+        jats_path = _make_jats(f"""
+        <sec><title>References</title>
+          <p>Spinelli, E. (1989) The Interpreted World. London: Sage.</p>
+        </sec>
+        <sec><title>About the Author</title>
+          <p>{bio_text}</p>
+        </sec>
+        """)
+        try:
+            result = extract_from_jats(jats_path)
+            assert bio_text not in result['citations'], \
+                'Bio under "About the Author" must not be in citations'
+            assert bio_text not in result['notes'], \
+                'Bio under "About the Author" must not be in notes'
+            assert any(bio_text in b for b in result['bios']), \
+                'Bio text must appear in bios'
+        finally:
+            os.unlink(jats_path)
+
+    def test_author_bio_section_not_in_notes(self):
+        """Bug 4: Items under 'Author Bio' heading must not appear
+        in notes — they are bios."""
+        bio_text = ('Manu Bazzano is an author, psychotherapist and '
+                    'supervisor.')
+        contact_text = 'For more information contact: www.manubazzano.com'
+        jats_path = _make_jats(f"""
+        <sec><title>Author Bio</title>
+          <p>{bio_text}</p>
+          <p>{contact_text}</p>
+        </sec>
+        <sec><title>References</title>
+          <p>Adorno, T. (1999). Aesthetic Theory. London: Athlone Press.</p>
+        </sec>
+        """)
+        try:
+            result = extract_from_jats(jats_path)
+            assert bio_text not in result['notes'], \
+                'Bio under "Author Bio" must not be in notes'
+            assert contact_text not in result['notes'], \
+                'Contact under "Author Bio" must not be in notes'
+            assert contact_text not in result['citations'], \
+                'Contact under "Author Bio" must not be in citations'
+            assert any(bio_text in b for b in result['bios']), \
+                'Bio text must appear in bios'
+        finally:
+            os.unlink(jats_path)
+
+    def test_contact_section_not_in_citations(self):
+        """Bug 5: Items under 'Contact' heading must not appear
+        in citations — contact info is part of bio."""
+        contact_text = 'c.willig@city.ac.uk'
+        jats_path = _make_jats(f"""
+        <sec><title>Author Biography</title>
+          <p>Carla Willig is Professor of Psychology at City, University of London.</p>
+        </sec>
+        <sec><title>Contact</title>
+          <p>{contact_text}</p>
+        </sec>
+        <sec><title>References</title>
+          <p>Baier, A.L. (2020). Therapeutic alliance. Clinical Psychology Review.</p>
+        </sec>
+        """)
+        try:
+            result = extract_from_jats(jats_path)
+            assert contact_text not in result['citations'], \
+                'Contact email must not be in citations'
+            assert contact_text not in result['notes'], \
+                'Contact email must not be in notes'
+        finally:
+            os.unlink(jats_path)
+
+    def test_author_information_becomes_bio(self):
+        """Bug 2: 'Author Information' heading must be recognised
+        as a bio section."""
+        bio_text = 'Dr. Del Loewenthal, School of Educational Studies, University of Surrey'
+        jats_path = _make_jats(f"""
+        <sec><title>References</title>
+          <p>Bion, W. (1984) Second Thoughts. London: Karnac.</p>
+        </sec>
+        <sec><title>Author Information</title>
+          <p>{bio_text}</p>
+        </sec>
+        """)
+        try:
+            result = extract_from_jats(jats_path)
+            assert bio_text not in result['citations'], \
+                '"Author Information" section must not produce citations'
+            assert bio_text not in result['notes'], \
+                '"Author Information" section must not produce notes'
+        finally:
+            os.unlink(jats_path)
+
+
+class TestExactlyOneCategory:
+    """Each item must appear in exactly one category — never 0, never 2."""
+
+    def test_no_duplicates_across_categories(self):
+        """Bio text must not appear in both bios and notes/citations."""
+        bio_text = ('Jane Smith is a psychotherapist in private practice '
+                    'in London.')
+        jats_path = _make_jats(f"""
+        <sec><title>Author Biography</title>
+          <p>{bio_text}</p>
+        </sec>
+        <sec><title>References</title>
+          <p>Smith, J. (2020). Therapy Today. London: Sage.</p>
+        </sec>
+        """)
+        try:
+            result = extract_from_jats(jats_path)
+            all_categories = {
+                'citations': result['citations'],
+                'notes': result['notes'],
+                'bios': result['bios'],
+                'provenance': result['provenance'],
+            }
+            # Check no text appears in multiple categories
+            for cat_a, items_a in all_categories.items():
+                for cat_b, items_b in all_categories.items():
+                    if cat_a >= cat_b:
+                        continue
+                    for item in items_a:
+                        for other in items_b:
+                            overlap = (item.strip() in other.strip()
+                                       or other.strip() in item.strip())
+                            assert not overlap, (
+                                f'Duplicate across {cat_a}/{cat_b}: '
+                                f'{item[:60]!r}'
+                            )
+        finally:
+            os.unlink(jats_path)

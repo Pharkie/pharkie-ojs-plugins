@@ -495,13 +495,30 @@ def _strip_end_bleed_soup(soup, next_title):
         return
 
     if last_backmatter:
-        # Search all block elements at or after the last backmatter heading
+        # Search headings at or after the last backmatter heading, plus
+        # non-heading blocks that follow a LATER heading (i.e. after the
+        # references/notes section ends).  Don't match <p> tags that are
+        # part of the reference list itself — a citation like "Sigal
+        # (1976). Zone of the Interior. Pomona." would falsely trigger
+        # end-bleed removal for a same-titled next article.
         search_els = []
         start_searching = False
+        past_backmatter = False
         for el in soup.find_all(list(BLOCK_TAGS)):
             if el == last_backmatter:
                 start_searching = True
-            if start_searching:
+                continue
+            if not start_searching:
+                continue
+            if el.name in HEADING_TAGS:
+                # A heading after the backmatter section signals we're
+                # past the references — could be author byline or bleed
+                if not REFERENCE_HEADING_RE.match(_el_text(el).strip()):
+                    past_backmatter = True
+                search_els.append(el)
+            elif past_backmatter:
+                # Only include non-heading elements after we've left
+                # the reference section
                 search_els.append(el)
     else:
         # No backmatter heading: only match in headings to avoid false
@@ -875,12 +892,18 @@ def strip_end_bleed(html, next_title):
 # Book review post-processing
 # ---------------------------------------------------------------
 
-def _find_book_publication_details(html, book_title, search_start=0):
+def _find_book_publication_details(html, book_title, search_start=0,
+                                   require_heading=False):
     """Find where a book review's publication details start.
 
     Looks for the book title in a block that also contains publication
     markers (publisher, year, page count, price). This distinguishes
     the actual review from an editorial intro that merely mentions the title.
+
+    If require_heading is True, only matches where the title appears in a
+    heading element (or a heading's next sibling has pub markers).  This
+    prevents matching inline citations in reference lists that happen to
+    contain the same title with a year/publisher.
 
     Returns (start_pos, end_pos) or (None, None).
     """
@@ -901,11 +924,22 @@ def _find_book_publication_details(html, book_title, search_start=0):
         has_title = any(rx.search(block_text) for rx in rx_parts)
         if not has_title:
             continue
+        is_heading = el.name in HEADING_TAGS
+        # When require_heading is set, only match headings (or paragraphs
+        # whose preceding heading contains the title).  This prevents
+        # reference citations like "Sigal (2005). Zone of the Interior.
+        # Pomona." from being mistaken for the next review's header.
+        if require_heading and not is_heading:
+            # Check if the preceding heading contains the title
+            prev_heading = el.find_previous_sibling(list(HEADING_TAGS))
+            if not prev_heading or not any(
+                    rx.search(_el_clean_text(prev_heading)) for rx in rx_parts):
+                continue
         has_pub = bool(_PUB_MARKERS_RE.search(raw_block))
         is_short_heading = len(block_text.split()) <= 10
         # For headings, also check the next sibling for pub markers
         # (book title in <h1>, pub details in the following <p>)
-        if not has_pub and el.name in HEADING_TAGS:
+        if not has_pub and is_heading:
             next_sib = el.find_next_sibling(list(BLOCK_TAGS))
             if next_sib:
                 has_pub = bool(_PUB_MARKERS_RE.search(_el_text(next_sib)))
@@ -916,15 +950,40 @@ def _find_book_publication_details(html, book_title, search_start=0):
                 return (search_start + pos, search_start + pos + len(el_str))
 
     # Fallback: find earliest block matching any part without pub markers
-    for el in soup.find_all(list(BLOCK_TAGS - {'blockquote'})):
-        block_text = _el_clean_text(el)
-        if any(rx.search(block_text) for rx in rx_parts):
-            el_str = str(el)
-            pos = region.find(el_str)
-            if pos >= 0:
-                return (search_start + pos, search_start + pos + len(el_str))
+    if not require_heading:
+        for el in soup.find_all(list(BLOCK_TAGS - {'blockquote'})):
+            block_text = _el_clean_text(el)
+            if any(rx.search(block_text) for rx in rx_parts):
+                el_str = str(el)
+                pos = region.find(el_str)
+                if pos >= 0:
+                    return (search_start + pos, search_start + pos + len(el_str))
 
     return None, None
+
+
+def _end_of_pub_details(html, start, pub_end):
+    """Find the end of a book review's publication details block.
+
+    Starting from the heading at *start*, walks past consecutive sibling
+    paragraphs that contain publication markers (year, pp., publisher, price).
+    Returns a position safely past all of them so that a subsequent search
+    for the next review title won't hit inline body mentions.
+    """
+    if pub_end is None:
+        return start + 1
+    soup = _parse(html[start:])
+    heading = soup.find(list(HEADING_TAGS))
+    skip = pub_end
+    if heading:
+        sib = heading.find_next_sibling(list(BLOCK_TAGS))
+        while sib and _PUB_MARKERS_RE.search(_el_text(sib)):
+            sib_str = str(sib)
+            pos = html.find(sib_str, start)
+            if pos >= 0:
+                skip = max(skip, pos + len(sib_str))
+            sib = sib.find_next_sibling(list(BLOCK_TAGS))
+    return skip
 
 
 def extract_book_review(html, book_title, next_book_title=None,
@@ -943,13 +1002,19 @@ def extract_book_review(html, book_title, next_book_title=None,
     if not book_title:
         return html
 
-    start, _ = _find_book_publication_details(html, book_title)
+    start, pub_end = _find_book_publication_details(html, book_title)
     if start is None:
         return html
 
     review_end = len(html)
     if next_book_title and not is_combined_review:
-        next_start, _ = _find_book_publication_details(html, next_book_title, search_start=start + 1)
+        # Skip past the current review's publication details block so that
+        # inline mentions of the same title in body text don't match as
+        # the "next review" start (e.g. multiple reviews of the same book).
+        next_search = _end_of_pub_details(html, start, pub_end)
+        next_start, _ = _find_book_publication_details(
+            html, next_book_title, search_start=next_search,
+            require_heading=True)
         if next_start is not None:
             review_end = next_start
 
