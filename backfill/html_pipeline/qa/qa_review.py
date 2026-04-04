@@ -272,6 +272,26 @@ def cmd_recheck(target: str, article_ref: str, comment: str) -> None:
     print(f'  comment: {comment}')
 
 
+def cmd_defer(target: str, article_ref: str, comment: str) -> None:
+    """Mark an article as deferred (needs separate project to fix)."""
+    pub_id, title = resolve_article(target, article_ref)
+    publication_id = get_publication_id(target, pub_id)
+
+    safe_comment = comment.replace("'", "''")
+
+    run_sql(target, f"""
+        INSERT INTO archive_checker_reviews
+            (submission_id, publication_id, user_id, username, decision, comment, created_at)
+        VALUES
+            ({pub_id}, {publication_id}, 1, 'claude', 'deferred',
+             '{safe_comment}', NOW());
+    """)
+
+    print(f'Deferred: {title}')
+    print(f'  submission_id={pub_id}, target={target}')
+    print(f'  comment: {comment}')
+
+
 def cmd_status(target: str, article_ref: str) -> None:
     """Show review history for an article."""
     pub_id, title = resolve_article(target, article_ref)
@@ -465,6 +485,11 @@ def main():
     p_recheck.add_argument('article', help='Article: path, submission_id, or title search')
     p_recheck.add_argument('comment', help='Description of the fix')
 
+    # defer
+    p_defer = sub.add_parser('defer', help='Mark as deferred (needs separate project)')
+    p_defer.add_argument('article', help='Article: path, submission_id, or title search')
+    p_defer.add_argument('comment', help='Reason for deferral')
+
     # status
     p_status = sub.add_parser('status', help='Show review status and history')
     p_status.add_argument('article', help='Article: path, submission_id, or title search')
@@ -492,6 +517,8 @@ def main():
         cmd_reject(args.target, args.article, args.comment)
     elif args.command == 'recheck':
         cmd_recheck(args.target, args.article, args.comment)
+    elif args.command == 'defer':
+        cmd_defer(args.target, args.article, args.comment)
     elif args.command == 'status':
         cmd_status(args.target, args.article)
     elif args.command == 'list':

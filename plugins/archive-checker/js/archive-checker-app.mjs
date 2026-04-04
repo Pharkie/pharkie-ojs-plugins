@@ -68,7 +68,7 @@ Alpine.data('acApp', () => ({
     get reportLabel() {
         if (this.reportSaved) return 'Saved \u2713';
         const a = this.article;
-        if (a && (a.status === 'needs_fix' || a.status === 'recheck')) return 'Update Problem';
+        if (a && (a.status === 'needs_fix' || a.status === 'recheck' || a.status === 'deferred')) return 'Update Problem';
         return 'Report Problem';
     },
 
@@ -229,7 +229,7 @@ Alpine.data('acApp', () => ({
     },
 
     get statusLabel() {
-        const labels = { approved: 'Last approved', needs_fix: 'Last reported', recheck: 'Recheck', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
+        const labels = { approved: 'Last approved', needs_fix: 'Last reported', recheck: 'Recheck', deferred: 'Deferred', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
         const a = this.article;
         if (!a) return '';
         let label = labels[a.status] || a.status;
@@ -257,6 +257,7 @@ Alpine.data('acApp', () => ({
         if (c.approved) parts.push(c.approved + ' approved');
         if (c.needs_fix) parts.push(c.needs_fix + ' reported');
         if (c.recheck) parts.push(c.recheck + ' recheck');
+        if (c.deferred) parts.push(c.deferred + ' deferred');
         const remaining = (c.unreviewed || 0) + (c.invalidated || 0);
         if (remaining > 0) parts.push(remaining + ' unchecked of ' + c.total);
         else parts.push(c.total + ' total');
@@ -300,7 +301,7 @@ Alpine.data('acApp', () => ({
         if (si >= 0) this.setIndex = si;
         this.updateUrl();
         // Auto-open review bar for articles with existing reports
-        if (a.status === 'needs_fix' || a.status === 'recheck') {
+        if (a.status === 'needs_fix' || a.status === 'recheck' || a.status === 'deferred') {
             this.showRejectForm = true;
             this.rejectComment = a.comment || '';
         } else {
@@ -646,13 +647,17 @@ Alpine.data('acApp', () => ({
         if (this.rejectComment.trim()) this.submitReview('needs_fix');
     },
 
+    submitDefer() {
+        if (this.rejectComment.trim()) this.submitReview('deferred');
+    },
+
     cancelFix() {
         this.showRejectForm = false;
         this.rejectComment = '';
     },
 
     recalculateCounts() {
-        const c = { total: this.articles.length, approved: 0, needs_fix: 0, unreviewed: 0, invalidated: 0 };
+        const c = { total: this.articles.length, approved: 0, needs_fix: 0, recheck: 0, deferred: 0, unreviewed: 0, invalidated: 0 };
         this.articles.forEach(a => {
             if (c[a.status] !== undefined) c[a.status]++;
             else c.unreviewed++;
@@ -751,12 +756,13 @@ Alpine.data('acApp', () => ({
 
     get statusPills() {
         const base = this._baseFiltered;
-        const counts = { approved: 0, needs_fix: 0, recheck: 0, unreviewed: 0 };
+        const counts = { approved: 0, needs_fix: 0, recheck: 0, deferred: 0, unreviewed: 0 };
         base.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
         return [
             { key: 'approved', label: 'Approved', count: counts.approved },
             { key: 'needs_fix', label: 'Problem', count: counts.needs_fix },
             { key: 'recheck', label: 'Recheck', count: counts.recheck },
+            { key: 'deferred', label: 'Deferred', count: counts.deferred },
             { key: 'unreviewed', label: 'Unchecked', count: counts.unreviewed },
         ];
     },
@@ -899,7 +905,7 @@ Alpine.data('acApp', () => ({
                 si,
                 artIdx,
                 num: si + 1,
-                icon: a.status === 'approved' ? '\u2713' : a.status === 'needs_fix' ? '\u26A0' : a.status === 'recheck' ? '\u21BB' : '\u00B7',
+                icon: a.status === 'approved' ? '\u2713' : a.status === 'needs_fix' ? '\u26A0' : a.status === 'recheck' ? '\u21BB' : a.status === 'deferred' ? '\u23F8' : '\u00B7',
                 statusCls: 'ac-drawer-item-status ac-drawer-item-status-' + a.status,
                 title: a.volume + '.' + a.number + ' (' + a.year + ') ' + a.title + ' [id: ' + a.submission_id + ']',
                 active: si === this.setIndex,

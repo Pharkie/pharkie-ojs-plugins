@@ -426,6 +426,8 @@ HTMLSTART;
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
                         title="Ctrl+Enter to submit" x-text="reportLabel">Report Problem</button>
+                    <button class="ac-btn ac-btn-defer" @click="submitDefer()" :disabled="submitting || !rejectComment.trim()"
+                        title="Defer (needs separate project)">Defer</button>
                     <button class="ac-btn ac-btn-approve" @click="cancelFix(); $nextTick(() => approve())" :disabled="submitting || approveLabel !== 'Approve'"
                         title="Approve (A)">Approve</button>
                     <button class="ac-btn ac-btn-nav" @click="cancelFix()">Close</button>
