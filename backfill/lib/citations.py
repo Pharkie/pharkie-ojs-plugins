@@ -911,6 +911,8 @@ def is_provenance(text: str) -> bool:
         r'^(?:Invited\s+)?(?:Paper|Talk|Keynote(?:\s+address)?)[,\s]+(?:given|delivered|presented)',
         # "Adapted/Revised/Expanded from..."
         r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
+        # "The initial ideas for this paper were presented..."
+        r'^The\s+(?:initial\s+)?ideas?\s+(?:for|behind)\s+this\s+(?:paper|article)',
         # "* Parts III and IV will be published in..." — forthcoming-parts note
         r'^\*?\s*Parts?\s+[IVX\d]+.*(?:will\s+be\s+published|forthcoming)',
     ]
