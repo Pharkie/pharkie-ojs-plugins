@@ -421,6 +421,47 @@ def _is_type_mismatch(ref_text, cr_type):
     return False
 
 
+def _is_container_mismatch(cr_container, ref_text, crossref_score):
+    """Detect when the Crossref container doesn't match the reference.
+
+    Returns True (= reject) when all of:
+    - Crossref has a container name (journal/book series)
+    - The container has significant words (not just "Vol" etc.)
+    - None of those words appear in the reference text
+    - The Crossref score is low (< 50) — high-score matches are more
+      likely correct even if container doesn't appear verbatim
+
+    This catches false positives like "Letter to the editor. The Guardian"
+    matching to "Biologicals", or "The Mirror and the Hammer" matching to
+    something in "The Political Psyche".
+    """
+    if not cr_container or crossref_score >= 50:
+        return False
+
+    # Never reject matches from our own journal (JSEA abbreviation
+    # doesn't match "Existential Analysis" container name)
+    if 'existential analysis' in cr_container.lower():
+        return False
+
+    # Extract significant words from the Crossref container
+    stop_words = {'the', 'and', 'for', 'vol', 'new', 'int', 'its'}
+    container_words = [
+        w.lower() for w in re.findall(r'[A-Za-z]{4,}', cr_container)
+        if w.lower() not in stop_words
+    ]
+    if not container_words:
+        return False
+
+    # Check if any container word appears in the reference text
+    ref_lower = ref_text.lower()
+    # Also check common abbreviations of our journal
+    if any(abbr in ref_lower for abbr in ('jsea', 'j.s.e.a', 'existential analysis')):
+        if 'existential' in cr_container.lower():
+            return False
+
+    return not any(w in ref_lower for w in container_words)
+
+
 # Container titles that indicate a reference work entry, not the cited work
 _REFERENCE_WORK_RE = re.compile(
     r'\b(?:Dictionary|Companion|Encyclopedia|Encyclopaedia|Handbook)\b',
@@ -492,9 +533,17 @@ def score_match(result, ref_text):
     type_mismatch = _is_type_mismatch(ref_text, cr_type)
     details['type_mismatch'] = type_mismatch
 
+    # Detect container mismatch: if the reference mentions a specific
+    # journal/publisher and the Crossref result is from a completely
+    # different one, this is likely a false positive (e.g. "Letter to the
+    # editor. The Guardian" matching a biology journal letter).
+    container_mismatch = _is_container_mismatch(
+        container, ref_text, crossref_score)
+    details['container_mismatch'] = container_mismatch
+
     # Tier assignment: matched or no_match.
-    # Type mismatch = wrong work type (e.g. journal review of a book).
-    if type_mismatch:
+    # Type or container mismatch = wrong work.
+    if type_mismatch or container_mismatch:
         tier = TIER_NO_MATCH
     # High similarity + author match is the strongest signal.
     # Very high similarity (1.0 = exact title containment) can accept lower
