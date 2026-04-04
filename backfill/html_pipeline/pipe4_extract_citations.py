@@ -141,6 +141,10 @@ def extract_from_jats(jats_path: Path) -> dict:
                 if not clean:
                     continue
                 if is_author_contact(clean):
+                    # If heading was "Contact" and got prepended without
+                    # a colon, normalise to "Contact: email"
+                    if clean.lower().startswith('contact ') and ':' not in clean[:10]:
+                        clean = 'Contact: ' + clean[len('Contact '):].strip()
                     bio_section_parts.append(clean)
                 else:
                     if bio_section_parts:
@@ -259,7 +263,7 @@ def extract_from_jats(jats_path: Path) -> dict:
         text = extract_text_from_element(p_el).strip()
         if not text:
             continue
-        if text in already_extracted:
+        if text in already_extracted or any(text in ae for ae in already_extracted):
             continue
         # Reject reference-format text: "Surname, I. (Year)..." or "Surname, I. Title..."
         _looks_like_ref = bool(re.match(
