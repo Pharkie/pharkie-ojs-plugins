@@ -180,6 +180,48 @@ def build_submission_remap_sql(old_id: int, new_id: int) -> list[str]:
     ]
 
 
+def clean_orphaned_citations(target: str, dry_run: bool = False):
+    """Delete citations referencing publications that no longer exist.
+
+    After --force reimport, old publication_ids get replaced but their
+    citations remain, bloating the citations table across multiple runs.
+    """
+    count_sql = (
+        "SELECT COUNT(*) FROM citations c "
+        "LEFT JOIN publications p ON c.publication_id = p.publication_id "
+        "WHERE p.publication_id IS NULL;"
+    )
+    try:
+        out = run_sql(target, count_sql)
+        count = int(''.join(c for c in out if c.isdigit()) or '0')
+    except (SqlError, ValueError):
+        count = 0
+
+    if count == 0:
+        print('No orphaned citations found.')
+        return
+
+    if dry_run:
+        print(f'{count} orphaned citations would be deleted.')
+        return
+
+    # Delete settings first (FK), then citations
+    cleanup_sql = (
+        "DELETE cs FROM citation_settings cs "
+        "LEFT JOIN citations c ON cs.citation_id = c.citation_id "
+        "LEFT JOIN publications p ON c.publication_id = p.publication_id "
+        "WHERE p.publication_id IS NULL; "
+        "DELETE c FROM citations c "
+        "LEFT JOIN publications p ON c.publication_id = p.publication_id "
+        "WHERE p.publication_id IS NULL;"
+    )
+    try:
+        run_sql(target, cleanup_sql)
+        print(f'Cleaned up {count} orphaned citations.')
+    except SqlError as e:
+        print(f'WARNING: Failed to clean orphaned citations: {e}', file=sys.stderr)
+
+
 def clean_orphaned_metrics(target: str, dry_run: bool = False):
     """Delete metrics rows referencing submissions that no longer exist.
 
@@ -487,6 +529,9 @@ def main():
 
     if total_remaps == 0:
         print('\nNothing to remap. All IDs already match.')
+        print('\nCleaning up orphaned citations...')
+        clean_orphaned_citations(args.target, args.dry_run)
+
         print('\nCleaning up orphaned metrics...')
         clean_orphaned_metrics(args.target, args.dry_run)
         print('\nRestoring DOI status...')
@@ -580,6 +625,9 @@ def main():
         sys.exit(1)
     else:
         print(f'Verified {verify_ok} remapped submissions.')
+
+    print('\nCleaning up orphaned citations...')
+    clean_orphaned_citations(args.target, args.dry_run)
 
     print('\nCleaning up orphaned metrics...')
     clean_orphaned_metrics(args.target, args.dry_run)
