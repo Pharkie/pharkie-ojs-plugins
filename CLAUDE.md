@@ -48,6 +48,8 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 - **`pipe3_generate_jats.py` wipes citations AND DOIs** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`. After pipe3+pipe4, run pipe4b to re-attach DOIs from `doi_matches.json` cache (~2 min, no API calls). Only use `--revalidate` when you need to re-score against Crossref (~45 min).
 - **Three HTML stages per article:** `.raw.html` (Haiku extraction), `.post.html` (post-processed), `.galley.html` (from JATS). No file collisions.
 - **Citation classification is heading-driven.** Items under "References" → citations. Items under "Notes" → notes. The heading is the authority — no per-item promotion between categories. Bio/contact headings ("About the Author", "Author Bio", "Contact", "Author Information") → bios. Each item gets exactly 1 classification, never 0 or 2. Contact info is always part of bio.
+- **DOI cache (`doi_matches.json`) keys on reference TEXT, not ref_id.** `ref_id` is a positional index that changes when citations are re-extracted. Text-based lookup is resilient to reordering. pipe4b also validates existing `<pub-id>` DOIs against ref text — won't trust stale JATS.
+- **pipe9b DELETEs old `crossref::doi` rows** before INSERT — prevents accumulation across runs. pipe8 cleans orphaned citations from old imports.
 
 ### QA iteration loop
 
