@@ -1047,8 +1047,8 @@ fi
 # Mark only these as STALE (status=5 = "Needs Sync"). All other DOIs stay
 # UNREGISTERED (status=1) until explicitly deposited. We identify pre-existing
 # DOIs by matching against issues that had Crossref DOIs before migration.
-# TODO: Once all DOIs are deposited to Crossref, change this to mark ALL DOIs
-# as STALE on repave (they'll all need re-syncing after reimport).
+# Note: pipe8_restore.py handles DOI status restoration after reimports.
+# This block only handles the initial container setup for pre-existing DOIs.
 STALE_COUNT=$($MARIADB -N -e "
   SELECT COUNT(*) FROM dois d
   JOIN publications p ON p.doi_id = d.doi_id

@@ -239,7 +239,7 @@ python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/23.1/toc
 # 5. Reimport just that issue (~7 sec)
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/23.1 --force
 # 6. Restore IDs for that issue only (~0.6 sec)
-sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 23.1
+sudo python3 backfill/html_pipeline/pipe8_restore.py --target dev --issue 23.1
 # 7. Check in Archive Checker
 ```
 
@@ -263,7 +263,7 @@ done
 # 7. Reimport all (--wipe-articles wipes first; --force reimports existing without wiping)
 sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles
 # 8. Restore IDs
-sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev
+sudo python3 backfill/html_pipeline/pipe8_restore.py --target dev
 # 9. Write citation DOIs + content-filtered flags
 sudo python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev
 sudo python3 backfill/html_pipeline/pipe9c_content_filtered.py --target dev
