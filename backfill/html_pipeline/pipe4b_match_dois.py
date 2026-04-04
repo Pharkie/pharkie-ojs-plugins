@@ -79,8 +79,13 @@ def load_existing_matches(vol_dir):
     return None
 
 
-def _get_cached_ref(existing, article_slug, ref_id):
-    """Look up a previously matched ref in cached results."""
+def _get_cached_ref(existing, article_slug, ref_text):
+    """Look up a previously matched ref in cached results by text.
+
+    Matches on reference TEXT, not ref_id. ref_id is a positional index
+    that changes when pipe3+pipe4 re-extract citations (reordering,
+    adding/removing refs). Text matching is resilient to this.
+    """
     if existing is None:
         return None
     articles = existing.get('articles', {})
@@ -88,7 +93,7 @@ def _get_cached_ref(existing, article_slug, ref_id):
     if article_data is None:
         return None
     for ref in article_data.get('refs', []):
-        if ref.get('ref_id') == ref_id:
+        if ref.get('text') == ref_text:
             return ref
     return None
 
@@ -114,16 +119,27 @@ def process_article(jats_path, email, article_slug, limit=None,
         ref_id = ref['ref_id']
         text = ref['text']
 
-        # Skip if already has <pub-id> DOI in JATS (unless --revalidate)
+        # Skip if already has <pub-id> DOI in JATS (unless --revalidate).
+        # Validate: the DOI must appear in the ref text or be an own-prefix
+        # DOI. A <pub-id> with a DOI not found in the text is a leftover
+        # from a previous buggy run — don't trust it.
         if ref['has_pub_id'] and not revalidate:
-            results.append({
-                'ref_id': ref_id,
-                'text': text,
-                'tier': 'already_has_doi',
-                'matched_doi': ref['existing_doi'],
-                'written_to_jats': True,
-            })
-            continue
+            existing_doi = ref['existing_doi']
+            doi_in_text = existing_doi and (
+                existing_doi in text
+                or f'doi.org/{existing_doi}' in text
+                or text.startswith(OWN_DOI_PREFIX if hasattr(existing_doi, 'startswith') else '')
+            )
+            if doi_in_text:
+                results.append({
+                    'ref_id': ref_id,
+                    'text': text,
+                    'tier': 'already_has_doi',
+                    'matched_doi': existing_doi,
+                    'written_to_jats': True,
+                })
+                continue
+            # DOI in JATS doesn't match ref text — ignore it, re-match below
 
         # DOI already in reference text — extract it and write to JATS
         # as structured data (pub-id), skip Crossref query
@@ -149,7 +165,7 @@ def process_article(jats_path, email, article_slug, limit=None,
 
         # Check cache (bypass when revalidating — need fresh Crossref queries).
         # All tiers are cached including no_match — only --revalidate re-queries.
-        cached = _get_cached_ref(existing_matches, article_slug, ref_id)
+        cached = _get_cached_ref(existing_matches, article_slug, text)
         if cached and not revalidate:
             if verbose:
                 print(f"  [{ref_id}] CACHED ({cached['tier']}: "
