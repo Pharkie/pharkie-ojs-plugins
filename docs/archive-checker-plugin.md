@@ -118,14 +118,16 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 ### Features
 
 - **Dark/light mode**: Follows OS preference (`prefers-color-scheme`). Dark mode inverts PDF page colours via pdf.js `pageColors` for comfortable reading. A "Colours inverted for dark mode" hint shows in the PDF toolbar.
-- **First-visit guide**: Auto-shows a "Help check the archive" overlay on first visit explaining the interface, what to check, and known limitations. Dismissed with any key, re-openable via "What to check?" in the sidebar.
-- **"Surprise me"**: Loads a random batch of unchecked articles. Dice emoji shakes on click. Also triggered by `?mode=random` URL param (used by the article page CTA).
-- **Progress thermometer**: Green (approved) / amber (reported) / grey (remaining) bar under the progress stats.
+- **First-visit guide**: Auto-shows a "Help check the archive" overlay on first visit explaining the interface, what to check, and known limitations. Dismissed with any key, re-openable via "What to check?" in the bottom bar.
+- **"Surprise me"**: Loads a random batch of unchecked articles (always excludes content-filtered). Dice emoji shakes on click. Also triggered by `?mode=random` URL param (used by the article page CTA).
+- **Progress thermometer**: Green (approved) / amber (reported) / grey (unchecked) bar under the sidebar header, with stats like "55 approved · 5 reported · 1340 unchecked of 1400".
 - **Button confirmation**: "Approved ✓" / "Saved ✓" flash for 2 seconds after submission. Approve auto-advances after 600ms; Report Problem stays on the article for further edits.
-- **Content-filtered filter**: Articles that couldn't be fully extracted are flagged in JATS (`<custom-meta name="content-filtered">`), stored in OJS `publication_settings`, and excluded from the sidebar by default. Toggle the "Content filtered" pill to show them. Flagged articles show an amber warning banner.
+- **Filter pills**: Status, section, reviewer, and content-filtered pills flow in a single row. Pill counts update to reflect the current filtered set (not faceted cross-counts). Zero-count pills stay visible but are dimmed.
+- **Content-filtered filter**: Articles that couldn't be fully extracted are flagged in JATS (`<custom-meta name="content-filtered">`), stored in OJS `publication_settings`. All articles shown by default. Click "Content filtered" pill to show ONLY the filtered articles. Flagged articles show an amber warning banner.
 - **Pane labels**: "ORIGINAL PDF" and "HTML VERSION" labels help orient first-time users.
 - **Citation DOIs**: Reference list shows matched DOIs as clickable links, with DOI count in the pill label.
 - **Article page CTA**: Logged-in users see a "Help Check the Archive" box on article pages with progress stats and a link to Archive Checker in random mode. The CTA text is in `ArchiveCheckerPlugin.php` around line 170 (the `callbackArticleSidebar` method).
+- **View article link**: Bottom bar includes "View this article on main site →" linking to the article's public page.
 
 ### Keyboard shortcuts
 

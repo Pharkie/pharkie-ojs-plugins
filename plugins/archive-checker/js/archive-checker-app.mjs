@@ -54,7 +54,7 @@ Alpine.data('acApp', () => ({
     activeStatuses: new Set(),
     activeSections: new Set(),
     activeReviewers: new Set(),
-    hideContentFiltered: true, // exclude content-filtered by default
+    showOnlyContentFiltered: false, // when true, show ONLY content-filtered articles
 
     // Dark mode
     isDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -223,7 +223,7 @@ Alpine.data('acApp', () => ({
     },
 
     get statusLabel() {
-        const labels = { approved: 'Approved', needs_fix: 'Problem Reported', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
+        const labels = { approved: 'Last approved', needs_fix: 'Last reported', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
         const a = this.article;
         if (!a) return '';
         let label = labels[a.status] || a.status;
@@ -252,7 +252,7 @@ Alpine.data('acApp', () => ({
         if (c.approved) parts.push(c.approved + ' approved');
         if (c.needs_fix) parts.push(c.needs_fix + ' reported');
         const remaining = (c.unreviewed || 0) + (c.invalidated || 0);
-        if (remaining > 0) parts.push(remaining + ' remaining of ' + c.total);
+        if (remaining > 0) parts.push(remaining + ' unchecked of ' + c.total);
         else parts.push(c.total + ' total');
         return parts.join(' \u00b7 ');
     },
@@ -333,7 +333,7 @@ Alpine.data('acApp', () => ({
             const indices = ids
                 .map(id => this.articles.findIndex(a => a.submission_id === id))
                 .filter(i => i >= 0)
-                .filter(i => !this.hideContentFiltered || !this.articles[i].content_filtered);
+                .filter(i => !this.articles[i].content_filtered); // always exclude content-filtered from random
             if (indices.length === 0) return;
 
             this.searchQuery = '';
@@ -585,6 +585,24 @@ Alpine.data('acApp', () => ({
                 setTimeout(() => { this.approveLabel = 'Approve'; }, 2000);
                 this.showRejectForm = false;
                 this.rejectComment = '';
+
+                // Confetti burst from the Approve button
+                if (typeof confetti !== 'undefined') {
+                    const btn = document.querySelector('.ac-btn-approve');
+                    if (btn) {
+                        const rect = btn.getBoundingClientRect();
+                        const x = (rect.left + rect.width / 2) / window.innerWidth;
+                        const y = (rect.top + rect.height / 2) / window.innerHeight;
+                        const opts = {
+                            origin: { x, y },
+                            scalar: 1.4,
+                            ticks: 300,
+                        };
+                        confetti({ ...opts, count: 150, spread: 160, startVelocity: 55, decay: 0.91 });
+                        confetti({ ...opts, count: 80, spread: 120, startVelocity: 70, decay: 0.88, drift: -1 });
+                        confetti({ ...opts, count: 80, spread: 120, startVelocity: 70, decay: 0.88, drift: 1 });
+                    }
+                }
                 if (this.setIndex < this.workingSet.length - 1) {
                     setTimeout(() => this.goToSetIndex(this.setIndex + 1), 600);
                 }
@@ -636,16 +654,41 @@ Alpine.data('acApp', () => ({
     // ── Filtering ──
 
     // Articles matching all filters EXCEPT issue (so issue dropdown shows counts within current status/section/search context)
-    get _baseFilteredForIssues() {
+    _matchesContentFilter(a) {
+        if (this.showOnlyContentFiltered && !a.content_filtered) return false;
+        return true;
+    },
+
+    _matchesReviewerFilter(a) {
+        if (this.activeReviewers.size === 0) return true;
+        const isMine = a.reviewer === 'you' || a.reviewer === this.currentUsername;
+        const byMe = this.activeReviewers.has('me');
+        const byOthers = this.activeReviewers.has('others');
+        if (byMe && !byOthers && !isMine) return false;
+        if (byOthers && !byMe && (isMine || !a.reviewer)) return false;
+        if (byMe && byOthers && !a.reviewer) return false;
+        return true;
+    },
+
+    _matchesSearch(a) {
         const q = this.searchQuery.toLowerCase();
+        if (!q) return true;
+        const isNumeric = /^\d+$/.test(q);
+        if (isNumeric) return String(a.submission_id) === q;
+        return a.title.toLowerCase().includes(q)
+            || a.authors.some(auth => auth.toLowerCase().includes(q))
+            || (a.section || '').toLowerCase().includes(q)
+            || String(a.submission_id) === q;
+    },
+
+    // All filters EXCEPT issueFilter (for issue dropdown counts)
+    get _baseFilteredForIssues() {
         return this.articles.filter(a => {
-            if (this.hideContentFiltered && a.content_filtered) return false;
+            if (!this._matchesContentFilter(a)) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
-            if (q && !a.title.toLowerCase().includes(q)
-                && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                && !(a.section || '').toLowerCase().includes(q)
-                && !String(a.submission_id).includes(q)) return false;
+            if (!this._matchesReviewerFilter(a)) return false;
+            if (!this._matchesSearch(a)) return false;
             return true;
         });
     },
@@ -666,34 +709,29 @@ Alpine.data('acApp', () => ({
             .map(([k, c]) => ({ key: k, count: c }));
     },
 
-    // Articles matching all filters EXCEPT status (so status pills show counts within the current issue/search/section context)
+    // All filters INCLUDING activeStatuses (status pills show counts matching the sidebar)
     get _baseFiltered() {
-        const q = this.searchQuery.toLowerCase();
         const issue = this.issueFilter;
-        return this.articles.filter((a, i) => {
-            if (this.hideContentFiltered && a.content_filtered) return false;
+        return this.articles.filter(a => {
+            if (!this._matchesContentFilter(a)) return false;
             if (issue && (a.volume + '.' + a.number) !== issue) return false;
+            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
-            if (q && !a.title.toLowerCase().includes(q)
-                && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                && !(a.section || '').toLowerCase().includes(q)
-                && !String(a.submission_id).includes(q)) return false;
+            if (!this._matchesReviewerFilter(a)) return false;
+            if (!this._matchesSearch(a)) return false;
             return true;
         });
     },
 
-    // Articles matching all filters EXCEPT section (so section pills show counts within the current issue/search/status context)
+    // All filters EXCEPT activeSections (for section pill counts)
     get _baseFilteredForSections() {
-        const q = this.searchQuery.toLowerCase();
         const issue = this.issueFilter;
-        return this.articles.filter((a, i) => {
-            if (this.hideContentFiltered && a.content_filtered) return false;
+        return this.articles.filter(a => {
+            if (!this._matchesContentFilter(a)) return false;
             if (issue && (a.volume + '.' + a.number) !== issue) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
-            if (q && !a.title.toLowerCase().includes(q)
-                && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                && !(a.section || '').toLowerCase().includes(q)
-                && !String(a.submission_id).includes(q)) return false;
+            if (!this._matchesReviewerFilter(a)) return false;
+            if (!this._matchesSearch(a)) return false;
             return true;
         });
     },
@@ -710,7 +748,7 @@ Alpine.data('acApp', () => ({
             { key: 'approved', label: 'Approved', count: counts.approved },
             { key: 'needs_fix', label: 'Reported', count: counts.needs_fix },
             { key: 'unreviewed', label: 'Unchecked', count: counts.unreviewed },
-        ].filter(p => p.count > 0);
+        ];
     },
 
     get sectionPills() {
@@ -722,18 +760,15 @@ Alpine.data('acApp', () => ({
             .map(([k, c]) => ({ key: k, label: k, count: c }));
     },
 
+    // All filters EXCEPT activeReviewers (for reviewer pill counts)
     get _baseFilteredForReviewers() {
-        const q = this.searchQuery.toLowerCase();
         const issue = this.issueFilter;
         return this.articles.filter(a => {
-            if (this.hideContentFiltered && a.content_filtered) return false;
+            if (!this._matchesContentFilter(a)) return false;
             if (issue && (a.volume + '.' + a.number) !== issue) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
-            if (q && !a.title.toLowerCase().includes(q)
-                && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                && !(a.section || '').toLowerCase().includes(q)
-                && !String(a.submission_id).includes(q)) return false;
+            if (!this._matchesSearch(a)) return false;
             return true;
         });
     },
@@ -781,29 +816,12 @@ Alpine.data('acApp', () => ({
         const issue = this.issueFilter;
         this.workingSet = [];
         this.articles.forEach((a, i) => {
-            if (this.hideContentFiltered && a.content_filtered) return;
+            if (!this._matchesContentFilter(a)) return;
             if (issue && (a.volume + '.' + a.number) !== issue) return;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
-            if (this.activeReviewers.size > 0) {
-                const isMine = a.reviewer === 'you' || a.reviewer === this.currentUsername;
-                const byMe = this.activeReviewers.has('me');
-                const byOthers = this.activeReviewers.has('others');
-                if (byMe && !byOthers && !isMine) return;
-                if (byOthers && !byMe && (isMine || !a.reviewer)) return;
-                if (byMe && byOthers && !a.reviewer) return;
-            }
-            if (q) {
-                const isNumeric = /^\d+$/.test(q);
-                if (isNumeric) {
-                    if (String(a.submission_id) !== q) return;
-                } else {
-                    if (!a.title.toLowerCase().includes(q)
-                        && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                        && !(a.section || '').toLowerCase().includes(q)
-                        && String(a.submission_id) !== q) return;
-                }
-            }
+            if (!this._matchesReviewerFilter(a)) return;
+            if (!this._matchesSearch(a)) return;
             this.workingSet.push(i);
         });
     },
@@ -814,7 +832,7 @@ Alpine.data('acApp', () => ({
 
         this.workingSet = [];
         this.articles.forEach((a, i) => {
-            if (this.hideContentFiltered && a.content_filtered) return;
+            if (!this._matchesContentFilter(a)) return;
             if (issue && (a.volume + '.' + a.number) !== issue) return;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
             if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
@@ -854,11 +872,12 @@ Alpine.data('acApp', () => ({
         this.activeStatuses.clear();
         this.activeSections.clear();
         this.activeReviewers.clear();
+        this.showOnlyContentFiltered = false;
         this.refilter();
     },
 
     get hasFilters() {
-        return this.searchQuery || this.issueFilter || this.activeStatuses.size > 0 || this.activeSections.size > 0 || this.activeReviewers.size > 0 || (this.setFilter && this.setFilter.type === 'random');
+        return this.searchQuery || this.issueFilter || this.activeStatuses.size > 0 || this.activeSections.size > 0 || this.activeReviewers.size > 0 || this.showOnlyContentFiltered || (this.setFilter && this.setFilter.type === 'random');
     },
 
     // ── Working set article list ──
