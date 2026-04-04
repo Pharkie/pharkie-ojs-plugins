@@ -128,9 +128,11 @@ def extract_from_jats(jats_path: Path) -> dict:
                 provenance_items.append(item)
                 continue
 
-            # Priority 2: bio sections — all items are bio
+            # Priority 2: bio sections — bio items added, contact-only items
+            # left for the trailing scan which merges them into the bio
             if is_bio_section:
-                bios.append(item)
+                if not is_author_contact(item):
+                    bios.append(item)
                 continue
 
             # Priority 3: author bio/contact in any section — bio trumps heading
