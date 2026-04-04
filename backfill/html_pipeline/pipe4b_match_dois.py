@@ -42,6 +42,7 @@ from lib.crossref import (
     query_crossref,
     score_match,
     strip_doi_from_text,
+    _is_container_mismatch,
 )
 
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / 'private' / 'output'
@@ -167,6 +168,14 @@ def process_article(jats_path, email, article_slug, limit=None,
         # All tiers are cached including no_match — only --revalidate re-queries.
         cached = _get_cached_ref(existing_matches, article_slug, text)
         if cached and not revalidate:
+            # Re-validate cached matches against container mismatch check
+            # (scoring rules may have tightened since the match was cached)
+            if cached.get('tier') == TIER_MATCHED:
+                cr_container = cached.get('crossref_container', '')
+                cr_score = cached.get('crossref_score', 0)
+                if _is_container_mismatch(cr_container, text, cr_score):
+                    cached = dict(cached, tier=TIER_NO_MATCH,
+                                  container_mismatch=True)
             if verbose:
                 print(f"  [{ref_id}] CACHED ({cached['tier']}: "
                       f"{cached.get('matched_doi', 'N/A')})")
