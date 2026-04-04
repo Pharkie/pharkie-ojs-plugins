@@ -324,7 +324,7 @@ def main():
     delete_sql = "DELETE FROM citation_settings WHERE setting_name = 'crossref::doi';"
     if not args.dry_run:
         print(f'Clearing old crossref::doi rows...')
-        run_sql(target, delete_sql)
+        run_sql(args.target, delete_sql)
 
     bulk_sql = (
         "INSERT INTO citation_settings "
