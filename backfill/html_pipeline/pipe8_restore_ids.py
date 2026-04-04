@@ -179,6 +179,47 @@ def build_submission_remap_sql(old_id: int, new_id: int) -> list[str]:
     ]
 
 
+def clean_orphaned_metrics(target: str, dry_run: bool = False):
+    """Delete metrics rows referencing submissions that no longer exist.
+
+    After --wipe-articles or --force reimport, metrics_counter_submission_daily
+    can have rows pointing to deleted submission_ids. These cause
+    CompileMonthlyMetrics to fail with FK constraint violations.
+    """
+    count_sql = (
+        "SELECT COUNT(*) FROM metrics_counter_submission_daily csd "
+        "LEFT JOIN submissions s ON csd.submission_id = s.submission_id "
+        "WHERE s.submission_id IS NULL;"
+    )
+    try:
+        out = run_sql(target, count_sql)
+        count = int(''.join(c for c in out if c.isdigit()) or '0')
+    except (SqlError, ValueError):
+        count = 0
+
+    if count == 0:
+        print('No orphaned metrics rows found.')
+        return
+
+    if dry_run:
+        print(f'{count} orphaned metrics rows would be deleted.')
+        return
+
+    cleanup_sql = (
+        "DELETE csd FROM metrics_counter_submission_daily csd "
+        "LEFT JOIN submissions s ON csd.submission_id = s.submission_id "
+        "WHERE s.submission_id IS NULL; "
+        "DELETE csm FROM metrics_counter_submission_monthly csm "
+        "LEFT JOIN submissions s ON csm.submission_id = s.submission_id "
+        "WHERE s.submission_id IS NULL;"
+    )
+    try:
+        run_sql(target, cleanup_sql)
+        print(f'Cleaned up {count} orphaned metrics rows.')
+    except SqlError as e:
+        print(f'WARNING: Failed to clean orphaned metrics: {e}', file=sys.stderr)
+
+
 def build_issue_remap_sql(old_id: int, new_id: int) -> list[str]:
     """Build SQL to remap an issue_id from new_id to old_id."""
     if old_id == new_id:
@@ -379,6 +420,8 @@ def main():
 
     if total_remaps == 0:
         print('\nNothing to remap. All IDs already match.')
+        print('\nCleaning up orphaned metrics...')
+        clean_orphaned_metrics(args.target, args.dry_run)
         return
 
     # Abort if too many unmatched
@@ -466,6 +509,9 @@ def main():
         sys.exit(1)
     else:
         print(f'Verified {verify_ok} remapped submissions.')
+
+    print('\nCleaning up orphaned metrics...')
+    clean_orphaned_metrics(args.target, args.dry_run)
 
 
 if __name__ == '__main__':

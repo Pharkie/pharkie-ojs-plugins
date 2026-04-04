@@ -149,7 +149,18 @@ echo "--- Backup Health ---"
 
 BACKUP_CRON=$(ssh_retry $SSH_CMD "sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
 if [ -n "$BACKUP_CRON" ]; then
-  pass "Backup cron installed"
+  # Verify the script path in the crontab actually exists on the server
+  BACKUP_SCRIPT_PATH=$(echo "$BACKUP_CRON" | grep -oP '/\S+backup-ojs-db\.sh')
+  if [ -n "$BACKUP_SCRIPT_PATH" ]; then
+    SCRIPT_EXISTS=$(ssh_retry $SSH_CMD "test -f '$BACKUP_SCRIPT_PATH' && echo 'yes' || echo 'no'")
+    if [ "$SCRIPT_EXISTS" = "yes" ]; then
+      pass "Backup cron installed ($(basename "$BACKUP_SCRIPT_PATH"))"
+    else
+      fail "Backup cron points to missing script: $BACKUP_SCRIPT_PATH"
+    fi
+  else
+    pass "Backup cron installed"
+  fi
 else
   fail "Backup cron not installed"
 fi
@@ -258,13 +269,21 @@ else
   fail "OJS scheduler cron not found in container"
 fi
 
-# Check scheduler last ran recently (jobs table updated = scheduler ran)
+# Check scheduler last ran recently (jobs table updated = scheduler ran).
+# Cross-check with pending count: if nothing is pending, an old last-processed
+# time is expected and not a problem.
 LAST_JOB_AGE=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT TIMESTAMPDIFF(HOUR, MAX(reserved_at), NOW()) FROM jobs WHERE reserved_at IS NOT NULL\"'" 2>/dev/null) || LAST_JOB_AGE=""
 LAST_JOB_AGE=$(echo "$LAST_JOB_AGE" | tr -d '[:space:]')
+PENDING_SCHED=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM jobs WHERE reserved_at IS NULL\"'" 2>/dev/null) || PENDING_SCHED="0"
+PENDING_SCHED=$(echo "$PENDING_SCHED" | tr -d '[:space:]')
 if [ "$LAST_JOB_AGE" = "NULL" ] || [ -z "$LAST_JOB_AGE" ]; then
   info "No recently processed jobs (queue may be empty — OK if no pending tasks)"
 elif [ "${LAST_JOB_AGE:-0}" -gt 3 ] 2>/dev/null; then
-  fail "Last job processed ${LAST_JOB_AGE}h ago (scheduler may be stuck)"
+  if [ "${PENDING_SCHED:-0}" -gt 0 ] 2>/dev/null; then
+    fail "Last job processed ${LAST_JOB_AGE}h ago with $PENDING_SCHED pending (scheduler may be stuck)"
+  else
+    pass "Scheduler idle (last job ${LAST_JOB_AGE}h ago, queue empty)"
+  fi
 else
   pass "Scheduler active (last job processed ${LAST_JOB_AGE}h ago)"
 fi
