@@ -746,7 +746,7 @@ Alpine.data('acApp', () => ({
         base.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
         return [
             { key: 'approved', label: 'Approved', count: counts.approved },
-            { key: 'needs_fix', label: 'Reported', count: counts.needs_fix },
+            { key: 'needs_fix', label: 'Problem', count: counts.needs_fix },
             { key: 'unreviewed', label: 'Unchecked', count: counts.unreviewed },
         ];
     },
