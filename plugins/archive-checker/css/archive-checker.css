@@ -32,6 +32,8 @@
     --color-fix-hover: #a93226;
     --color-recheck: #b8860b;
     --color-recheck-hover: #9a7009;
+    --color-deferred: #7f8c8d;
+    --color-deferred-hover: #6c7a7b;
     --color-approve: #2d7a4f;
     --color-approve-hover: #236840;
 
@@ -56,6 +58,8 @@
     --badge-needs_fix-text: #721c24;
     --badge-recheck-bg: #fef3cd;
     --badge-recheck-text: #6a5010;
+    --badge-deferred-bg: #e2e3e5;
+    --badge-deferred-text: #495057;
     --badge-invalidated-bg: #fef3cd;
     --badge-invalidated-text: #6a5010;
     --badge-unreviewed-bg: #d5d0c8;
@@ -109,6 +113,8 @@
         --badge-needs_fix-text: #e8a0a0;
         --badge-recheck-bg: #4a3a10;
         --badge-recheck-text: #e8d080;
+        --badge-deferred-bg: #3a3a3e;
+        --badge-deferred-text: #a0a0a4;
         --badge-invalidated-bg: #4a3a10;
         --badge-invalidated-text: #e8d080;
         --badge-unreviewed-bg: #303030;
@@ -236,6 +242,7 @@ body {
 .ac-badge-approved    { background: var(--badge-approved-bg);    color: var(--badge-approved-text); }
 .ac-badge-needs_fix   { background: var(--badge-needs_fix-bg);   color: var(--badge-needs_fix-text); }
 .ac-badge-recheck     { background: var(--badge-recheck-bg);     color: var(--badge-recheck-text); }
+.ac-badge-deferred    { background: var(--badge-deferred-bg);    color: var(--badge-deferred-text); }
 .ac-badge-invalidated { background: var(--badge-invalidated-bg); color: var(--badge-invalidated-text); }
 .ac-badge-unreviewed  { background: var(--badge-unreviewed-bg);  color: var(--badge-unreviewed-text); }
 
@@ -376,6 +383,13 @@ body {
 }
 .ac-btn-reject-submit:hover:not(:disabled) {
     background: var(--color-fix-hover);
+}
+.ac-btn-defer {
+    background: var(--color-deferred);
+    color: #fff;
+}
+.ac-btn-defer:hover:not(:disabled) {
+    background: var(--color-deferred-hover);
 }
 
 .ac-btn-nav {
@@ -656,6 +670,7 @@ body {
 .ac-drawer-item-status-approved { color: var(--color-approve); font-weight: 700; }
 .ac-drawer-item-status-needs_fix { color: var(--color-fix); font-weight: 700; }
 .ac-drawer-item-status-recheck { color: var(--color-recheck); font-weight: 700; }
+.ac-drawer-item-status-deferred { color: var(--color-deferred); font-weight: 700; }
 
 .ac-drawer-item-title {
     flex: 1;

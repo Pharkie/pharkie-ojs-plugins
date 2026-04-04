@@ -286,7 +286,7 @@ class ArchiveCheckerController extends PKPBaseController
         }
 
         $result = [];
-        $counts = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'unreviewed' => 0, 'invalidated' => 0];
+        $counts = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'deferred' => 0, 'unreviewed' => 0, 'invalidated' => 0];
 
         foreach ($articles as $article) {
             $review = $reviews[$article->submission_id] ?? null;
@@ -575,7 +575,7 @@ class ArchiveCheckerController extends PKPBaseController
         $decision = $request->input('decision');
         $comment = $request->input('comment', '');
 
-        if (!in_array($decision, ['approved', 'needs_fix', 'recheck'])) {
+        if (!in_array($decision, ['approved', 'needs_fix', 'recheck', 'deferred'])) {
             return new JsonResponse(['error' => 'Invalid decision.'], 400);
         }
 
@@ -732,13 +732,13 @@ class ArchiveCheckerController extends PKPBaseController
 
         // Build section breakdown
         $sections = [];
-        $overall = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'unreviewed' => 0];
+        $overall = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'deferred' => 0, 'unreviewed' => 0];
         $byReviewerCount = [0 => 0, 1 => 0, 2 => 0]; // 0 reviewers, 1 reviewer, 2+ reviewers
 
         foreach ($articles as $article) {
             $section = $article->section;
             if (!isset($sections[$section])) {
-                $sections[$section] = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'unreviewed' => 0];
+                $sections[$section] = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'deferred' => 0, 'unreviewed' => 0];
             }
 
             $review = $reviewData[$article->submission_id] ?? null;
