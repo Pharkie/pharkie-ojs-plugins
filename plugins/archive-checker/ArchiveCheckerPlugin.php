@@ -426,7 +426,9 @@ HTMLSTART;
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
                         title="Ctrl+Enter to submit" x-text="reportLabel">Report Problem</button>
-                    <button class="ac-btn ac-btn-nav" @click="cancelFix()">Cancel</button>
+                    <button class="ac-btn ac-btn-approve" @click="cancelFix(); $nextTick(() => approve())" :disabled="submitting || approveLabel !== 'Approve'"
+                        title="Approve (A)">Approve</button>
+                    <button class="ac-btn ac-btn-nav" @click="cancelFix()">Close</button>
                 </div>
             </div>
             <div class="ac-bottom-row">
@@ -440,7 +442,7 @@ HTMLSTART;
                     <div style="display:flex;gap:8px;">
                         <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
                             :title="reportLabel + ' (R)'" x-text="reportLabel">Report Problem</button>
-                        <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting"
+                        <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting || approveLabel !== 'Approve'"
                             title="Approve (A)" x-text="approveLabel">Approve</button>
                     </div>
                 </template>
@@ -481,7 +483,7 @@ HTMLSTART;
                     <tr><td><kbd>A</kbd></td><td>Approve</td></tr>
                     <tr><td><kbd>R</kbd></td><td>Report a problem</td></tr>
                     <tr><td><kbd>Ctrl+Enter</kbd></td><td>Submit report</td></tr>
-                    <tr><td><kbd>Esc</kbd></td><td>Cancel</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Close</td></tr>
                     <tr><td><kbd>?</kbd></td><td>Show keyboard shortcuts</td></tr>
                 </table>
                 <p>Press any key to close</p>

@@ -121,7 +121,7 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 - **First-visit guide**: Auto-shows a "Help check the archive" overlay on first visit explaining the interface, what to check, and known limitations. Dismissed with any key, re-openable via "What to check?" in the bottom bar.
 - **"Surprise me"**: Loads a random batch of unchecked articles (always excludes content-filtered). Dice emoji shakes on click. Also triggered by `?mode=random` URL param (used by the article page CTA).
 - **Progress thermometer**: Green (approved) / amber (reported) / grey (unchecked) bar under the sidebar header, with stats like "55 approved · 5 reported · 1340 unchecked of 1400".
-- **Button confirmation**: "Approved ✓" / "Saved ✓" flash for 2 seconds after submission. Approve auto-advances after 600ms; Report Problem stays on the article for further edits.
+- **Button confirmation**: "Approved ✓" / "Saved ✓" confirmation after submission. Approve stays on the article with confetti animation and disables the button; navigate manually when ready. Report Problem stays on the article for further edits.
 - **Filter pills**: Status, section, reviewer, and content-filtered pills flow in a single row. Pill counts update to reflect the current filtered set (not faceted cross-counts). Zero-count pills stay visible but are dimmed.
 - **Content-filtered filter**: Articles that couldn't be fully extracted are flagged in JATS (`<custom-meta name="content-filtered">`), stored in OJS `publication_settings`. All articles shown by default. Click "Content filtered" pill to show ONLY the filtered articles. Flagged articles show an amber warning banner.
 - **Pane labels**: "ORIGINAL PDF" and "HTML VERSION" labels help orient first-time users.
@@ -134,7 +134,7 @@ All filters are serialised into URL params: `issue`, `status`, `section`, `revie
 | Key | Action |
 |-----|--------|
 | `←` / `→` | Previous / Next article |
-| `A` | Approve (auto-advances) |
+| `A` | Approve |
 | `R` | Report Problem (opens form) |
 | `Ctrl+Enter` | Submit report |
 | `Ctrl+F` / `Cmd+F` | Search within PDF |
