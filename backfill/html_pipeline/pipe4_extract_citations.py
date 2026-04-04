@@ -116,6 +116,8 @@ def extract_from_jats(jats_path: Path) -> dict:
         for sec in sections
     )
 
+    bio_section_parts = []  # accumulates bio + contact lines within a bio section
+
     for sec in sections:
         heading = sec['heading']
         headings.append(heading)
@@ -128,11 +130,22 @@ def extract_from_jats(jats_path: Path) -> dict:
                 provenance_items.append(item)
                 continue
 
-            # Priority 2: bio sections — bio items added, contact-only items
-            # left for the trailing scan which merges them into the bio
+            # Priority 2: bio sections — group bio + contact into single bio.
+            # Strip heading prefix that find_jats_reference_sections bakes in.
+            # Contact-only items are appended to the preceding bio text.
             if is_bio_section:
-                if not is_author_contact(item):
-                    bios.append(item)
+                clean = re.sub(
+                    r'^(?:About the Authors?\s*|Author Bio(?:graph(?:y|ies))?\s*'
+                    r'|Author Information\s*|Contact\s*)',
+                    '', item, count=1, flags=re.IGNORECASE).strip()
+                if not clean:
+                    continue
+                if is_author_contact(clean):
+                    bio_section_parts.append(clean)
+                else:
+                    if bio_section_parts:
+                        bios.append(' '.join(bio_section_parts))
+                    bio_section_parts = [clean]
                 continue
 
             # Priority 3: author bio/contact in any section — bio trumps heading
@@ -155,6 +168,10 @@ def extract_from_jats(jats_path: Path) -> dict:
                 continue
 
             citations.append(item)
+
+    # Flush final bio section group
+    if bio_section_parts:
+        bios.append(' '.join(bio_section_parts))
 
     # Scan for inline notes: bare <p> elements with "Notes:" label (in <bold>
     # or plain text) followed by numbered items like (1), (2), etc.
@@ -192,10 +209,10 @@ def extract_from_jats(jats_path: Path) -> dict:
     # Only accept a bio if it starts with one of the author names from
     # JATS front matter. This eliminates false positives from body text
     # discussing other people (e.g. "Emmy van Deurzen is a philosopher").
-    # Skip paragraphs already classified as citations by the section scan.
+    # Skip paragraphs already classified as citations or bios by the section scan.
     # Don't skip junk items — they may be author bios that the trailing
     # scan (with author matching) should pick up.
-    already_extracted = set(citations)
+    already_extracted = set(citations) | set(bios)
 
     def _starts_with_author(text):
         """Check if text starts with one of the article's own authors."""
