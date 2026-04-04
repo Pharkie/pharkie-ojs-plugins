@@ -375,6 +375,7 @@ body {
     background: var(--color-fix-hover);
     box-shadow: 0 2px 8px rgba(184,134,11,0.4);
 }
+.ac-btn-icon { margin-right: 4px; }
 
 .ac-btn-reject-submit {
     background: var(--color-fix);
