@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-Restore OJS submission/issue IDs after a rebuild.
+Restore OJS submission/issue IDs and DOI registration status after a rebuild.
 
-After a fresh import (which assigns new auto-increment IDs), this script
-remaps submission_id and issue_id back to the original values stored in
-JATS (publisher-id) and toc.json (issue_id). This preserves URLs, DOIs,
-and payment records.
+After a fresh import (which assigns new auto-increment IDs and creates DOIs
+with status=UNREGISTERED), this script:
+  1. Remaps submission_id and issue_id back to original values from JATS/toc.json
+  2. Marks DOIs as REGISTERED (status=3) for all DOIs found in JATS
 
-Normally generate_xml.py includes IDs with advice="update" so OJS
-preserves them on import. This script is a safety net for when that
-doesn't work or when IDs need correcting after the fact.
+This preserves URLs, DOI destinations, payment records, and prevents OJS
+from attempting to re-register already-deposited DOIs at Crossref.
 
 Uses a two-pass remap to avoid primary key collisions:
   Pass 1: remap all IDs to temporary high values (original + offset)
@@ -17,16 +16,16 @@ Uses a two-pass remap to avoid primary key collisions:
 
 Usage:
     # Preview SQL without executing:
-    python backfill/html_pipeline/pipe8_restore_ids.py --dry-run --target dev
+    python backfill/html_pipeline/pipe8_restore.py --dry-run --target dev
 
     # Execute against dev:
-    python backfill/html_pipeline/pipe8_restore_ids.py --target dev
+    python backfill/html_pipeline/pipe8_restore.py --target dev
 
     # Execute against live (requires --confirm):
-    python backfill/html_pipeline/pipe8_restore_ids.py --target live --confirm
+    python backfill/html_pipeline/pipe8_restore.py --target live --confirm
 
     # Single issue:
-    python backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue 35.2
+    python backfill/html_pipeline/pipe8_restore.py --target dev --issue 35.2
 """
 
 import argparse
@@ -106,9 +105,9 @@ def get_current_articles(target: str, volume: str, number: str) -> dict[str, lis
     Returns {title: [list of articles]} to handle duplicate titles within
     an issue. Each article includes first_author for disambiguation.
     """
-    # Validate volume/number are numeric (defense against malformed toc.json)
-    int(volume)
-    int(number)
+    # Validate and convert volume/number to int (defense against malformed toc.json)
+    vol_int = int(volume)
+    num_int = int(number)
     sql = f"""
         SELECT sub.submission_id, p.publication_id,
                ps_title.setting_value AS title,
@@ -127,7 +126,7 @@ def get_current_articles(target: str, volume: str, number: str) -> dict[str, lis
         FROM publications p
         JOIN submissions sub ON p.submission_id = sub.submission_id
         JOIN issues i ON p.issue_id = i.issue_id
-            AND i.volume = '{volume}' AND i.number = '{number}'
+            AND i.volume = {vol_int} AND i.number = {num_int}
         JOIN publication_settings ps_title ON p.publication_id = ps_title.publication_id
             AND ps_title.setting_name = 'title' AND ps_title.locale = 'en'
         WHERE p.status = 3
@@ -154,10 +153,12 @@ def get_current_articles(target: str, volume: str, number: str) -> dict[str, lis
 
 def get_current_issue(target: str, volume: str, number: str) -> int | None:
     """Get current issue_id for a volume.number."""
+    vol_int = int(volume)
+    num_int = int(number)
     sql = f"""
         SELECT issue_id FROM issues
         WHERE journal_id = (SELECT journal_id FROM journals WHERE path = 'ea' LIMIT 1)
-            AND volume = '{volume}' AND number = '{number}'
+            AND volume = {vol_int} AND number = {num_int}
         LIMIT 1;
     """
     out = run_sql(target, sql).strip()
@@ -220,6 +221,69 @@ def clean_orphaned_metrics(target: str, dry_run: bool = False):
         print(f'WARNING: Failed to clean orphaned metrics: {e}', file=sys.stderr)
 
 
+DOI_STATUS_REGISTERED = 3
+
+
+def restore_doi_status(target: str, reg_articles: list[dict], reg_issues: list[dict],
+                       dry_run: bool = False):
+    """Mark DOIs as REGISTERED for all DOIs found in JATS/toc.json.
+
+    After reimport, OJS creates fresh dois rows with status=1 (UNREGISTERED).
+    Since these DOIs are already deposited at Crossref, mark them as
+    REGISTERED (status=3) to prevent re-deposit attempts.
+
+    Only updates status=1 rows — won't override ERROR or STALE.
+    """
+    # Collect all known DOIs from JATS and toc.json
+    all_dois = set()
+    for art in reg_articles:
+        if art.get('doi'):
+            all_dois.add(art['doi'])
+    for iss in reg_issues:
+        if iss.get('doi'):
+            all_dois.add(iss['doi'])
+
+    if not all_dois:
+        print('No DOIs found in JATS/toc.json — skipping DOI status restoration.')
+        return
+
+    # Escape for SQL IN clause
+    def _escape_sql(s):
+        return s.replace("\\", "\\\\").replace("'", "\\'")
+
+    doi_list = ', '.join(f"'{_escape_sql(d)}'" for d in sorted(all_dois))
+
+    # Count how many would change
+    count_sql = (
+        f"SELECT COUNT(*) FROM dois "
+        f"WHERE status = 1 AND doi IN ({doi_list});"
+    )
+    try:
+        out = run_sql(target, count_sql)
+        count = int(''.join(c for c in out if c.isdigit()) or '0')
+    except (SqlError, ValueError):
+        count = 0
+
+    if count == 0:
+        print(f'DOI status: all {len(all_dois)} DOIs already have correct status.')
+        return
+
+    if dry_run:
+        print(f'DOI status: {count} DOIs would be marked as REGISTERED '
+              f'(out of {len(all_dois)} in JATS).')
+        return
+
+    update_sql = (
+        f"UPDATE dois SET status = {DOI_STATUS_REGISTERED} "
+        f"WHERE status = 1 AND doi IN ({doi_list});"
+    )
+    try:
+        run_sql(target, update_sql)
+        print(f'DOI status: marked {count} DOIs as REGISTERED.')
+    except SqlError as e:
+        print(f'WARNING: Failed to restore DOI status: {e}', file=sys.stderr)
+
+
 def build_issue_remap_sql(old_id: int, new_id: int) -> list[str]:
     """Build SQL to remap an issue_id from new_id to old_id."""
     if old_id == new_id:
@@ -278,11 +342,12 @@ def main():
             if vol != fv or iss != fn:
                 continue
 
-        # Issue ID from toc.json
+        # Issue ID and DOI from toc.json
         if toc.get('issue_id'):
             reg_issues.append({
                 'volume': vol, 'issue': iss,
                 'issue_id': toc['issue_id'],
+                'doi': toc.get('issue_doi', ''),
             })
 
         # Article IDs from JATS publisher-id
@@ -298,12 +363,14 @@ def main():
             try:
                 tree = ET.parse(jats_path)
                 pid_el = tree.find('.//{*}article-id[@pub-id-type="publisher-id"]')
+                doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
                 if pid_el is not None and pid_el.text:
                     reg_articles.append({
                         'title': art.get('title', ''),
                         'first_author': art.get('authors', '').split('&')[0].split(',')[0].strip() if art.get('authors') else '',
                         'volume': vol, 'issue': iss,
                         'submission_id': int(pid_el.text.strip()),
+                        'doi': doi_el.text.strip() if doi_el is not None and doi_el.text else '',
                     })
                 else:
                     no_publisher_id.append(f'{vol}.{iss}: {art.get("title", "")[:60]}')
@@ -422,6 +489,8 @@ def main():
         print('\nNothing to remap. All IDs already match.')
         print('\nCleaning up orphaned metrics...')
         clean_orphaned_metrics(args.target, args.dry_run)
+        print('\nRestoring DOI status...')
+        restore_doi_status(args.target, reg_articles, reg_issues, args.dry_run)
         return
 
     # Abort if too many unmatched
@@ -474,6 +543,8 @@ def main():
         else:
             print(f'\n{len(sql_parts)} SQL statements would be executed.')
             print('Use --verbose to see full SQL.')
+        print('\nRestoring DOI status...')
+        restore_doi_status(args.target, reg_articles, reg_issues, dry_run=True)
         print('\n=== DRY RUN COMPLETE ===')
         return
 
@@ -512,6 +583,9 @@ def main():
 
     print('\nCleaning up orphaned metrics...')
     clean_orphaned_metrics(args.target, args.dry_run)
+
+    print('\nRestoring DOI status...')
+    restore_doi_status(args.target, reg_articles, reg_issues, args.dry_run)
 
 
 if __name__ == '__main__':

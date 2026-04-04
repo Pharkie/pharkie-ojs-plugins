@@ -44,7 +44,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 - **toc.json `authors` field** is always a string (e.g. `"Emmy van Deurzen & Michael R. Montgomery"`). Do not convert to list — 8+ downstream scripts expect string.
 - **`_manual_html` in toc.json** = hand-corrected HTML galleys. `pipe1_haiku_html.py` skips these automatically.
 - **Haiku extraction can drop repeated/multilingual content.** Always verify HTML galleys against source PDFs for articles with non-English references.
-- **Docker in devcontainer requires `sudo`** for `pipe7_import.sh` and `pipe8_restore_ids.py` (they call `docker` directly). Other pipeline steps (pipe1–pipe6) don't need Docker.
+- **Docker in devcontainer requires `sudo`** for `pipe7_import.sh` and `pipe8_restore.py` (they call `docker` directly). Other pipeline steps (pipe1–pipe6) don't need Docker. For `--target live`, do NOT use `sudo` — it breaks SSH config resolution. Only `--target dev` needs `sudo`.
 - **`pipe3_generate_jats.py` wipes citations AND DOIs** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`. After pipe3+pipe4, run pipe4b to re-attach DOIs from `doi_matches.json` cache (~2 min, no API calls). Only use `--revalidate` when you need to re-score against Crossref (~45 min).
 - **Three HTML stages per article:** `.raw.html` (Haiku extraction), `.post.html` (post-processed), `.galley.html` (from JATS). No file collisions.
 
@@ -58,7 +58,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 5. `python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/<vol.iss>/toc.json`
 6. `python3 backfill/html_pipeline/pipe6_ojs_xml.py <toc.json>` (writes import.xml next to toc.json)
 7. `sudo bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/<vol.iss> --force` (~7 sec)
-8. `sudo python3 backfill/html_pipeline/pipe8_restore_ids.py --target dev --issue <vol.iss>` (~0.6 sec)
+8. `sudo python3 backfill/html_pipeline/pipe8_restore.py --target dev --issue <vol.iss>` (~0.6 sec)
 9. QA in browser — repeat from step 1 if issues found
 
 **Per-issue iteration takes ~8 seconds.** Reprocess only affected volumes, not all 1400 articles — approved articles should not be regressed. Full reimport (`--wipe-articles`, ~20 min) only when all volumes need updating.
@@ -105,7 +105,7 @@ Article data changed for specific volumes only. No need to reimport everything.
 4. Better Stack: pause monitors
 5. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only` — sync import XMLs
 6. `ssh sea-live` → `pipe7_import.sh <affected volumes> --force` — reimport just those issues
-7. `pipe8_restore_ids.py --target live --confirm`
+7. `pipe8_restore.py --target live --confirm`
 8. `pipe9b_citation_dois.py --target live --confirm`
 9. `pipe9c_content_filtered.py --target live --confirm`
 10. Better Stack: unpause monitors
@@ -119,7 +119,7 @@ Nuclear option — wipes all articles and reimports from scratch. Use when syste
 2. Import to dev: `pipe7 --force` + `pipe8` + `pipe9b` + `pipe9c`, verify
 3. Better Stack: pause monitors
 4. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs + wipes + reimports all
-5. `pipe8_restore_ids.py --target live --confirm` — restores submission/issue IDs
+5. `pipe8_restore.py --target live --confirm` — restores submission/issue IDs + DOI status
 6. `pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs
 7. `pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags
 8. Sync Archive Checker reviews: export from dev `archive_checker_reviews`, import to live
@@ -134,7 +134,7 @@ pipe3 wipes JATS (including DOIs from pipe4b). After any pipe3+pipe4 rerun, DOIs
 #### Notes
 
 - `--force` reimports existing issues without wiping. `--wipe-articles` wipes first (preserves users/subscriptions/payments).
-- `pipe8` is always needed after `--wipe-articles` or `--force` to restore original submission IDs (preserves URLs, DOI links, payment records).
+- `pipe8` is always needed after `--wipe-articles` or `--force` to restore original submission IDs and DOI registration status (preserves URLs, DOI links, payment records, prevents re-deposit).
 - `pipe9b` and `pipe9c` are always needed after import — they write to DB tables that the import doesn't populate.
 - Archive Checker reviews survive `--wipe-articles` (custom table, not touched by import). But `publication_id` becomes stale — the `submission_id` column is what matters.
 - Better Stack monitors must be paused before any operation that causes downtime. See memory file `feedback_maintenance_window.md`.

@@ -350,7 +350,7 @@ fi
 if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ]; then
   echo ""
   echo "NOTE: This was a --wipe-articles import. Restore IDs to preserve URLs/DOIs:"
-  echo "  python backfill/html_pipeline/pipe8_restore_ids.py --target dev"
+  echo "  python backfill/html_pipeline/pipe8_restore.py --target dev"
   echo "(runs locally, reads JATS publisher-id, sends SQL to target via SSH)"
 fi
 

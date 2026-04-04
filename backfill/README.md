@@ -67,7 +67,7 @@ flowchart TD
     import_xml --> pipe7["pipe7_import.sh\n<i>load into OJS via CLI</i>"]
     pipe7 --> db
 
-    jats --> pipe8["pipe8_restore_ids\n<i>remap submission/issue IDs</i>"]
+    jats --> pipe8["pipe8_restore\n<i>remap IDs, restore DOI status</i>"]
     toc -- "issue_id, publisher-id" --> pipe8
     db --> pipe8
     pipe8 --> db
