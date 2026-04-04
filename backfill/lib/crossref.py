@@ -48,7 +48,7 @@ def strip_doi_from_text(text, doi):
     pattern = (
         r'\s*'
         r'(?:(?:doi|DOI)\s*:\s*)?'          # optional doi: prefix
-        r'(?:https?://doi\.org/)?'           # optional https://doi.org/
+        r'(?:(?:https?://)?doi\.org/)?'       # optional [https://]doi.org/
         + re.escape(doi)
         + r'\.?'                             # optional trailing dot
         + r'(?:\s*\[Accessed[^\]]*\]\.?)?'   # optional [Accessed...] suffix
