@@ -152,15 +152,29 @@ body {
 
 .ac-layout {
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: 1fr auto;
     grid-template-columns: 320px 1fr 1fr;
     height: 100vh;
     gap: 0;
 }
 
-/* ── Top bar — single row ── */
+/* ── Return link (in sidebar) ── */
 
-.ac-top {
+.ac-return-link {
+    display: block;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--sidebar-text-muted);
+    text-decoration: none;
+    padding: 8px 14px;
+    background: var(--sidebar-brand-bg);
+    transition: color 0.15s;
+}
+.ac-return-link:hover { color: var(--sidebar-text); }
+
+/* ── Bottom bar — review actions ── */
+
+.ac-bottom {
     grid-column: 2 / -1;
     background: var(--sidebar-brand-bg);
     color: var(--sidebar-text);
@@ -168,82 +182,33 @@ body {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    border-bottom: 1px solid var(--sidebar-border);
+    border-top: 1px solid var(--sidebar-border);
 }
 
-/* Row 1: title gets full width */
-.ac-row-1 {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    min-width: 0;
-    flex-wrap: wrap;
-}
-
-.ac-back-btn {
-    background: none;
-    border: none;
-    color: var(--sidebar-text-muted);
-    font-family: var(--font-ui);
-    font-size: 14px;
-    cursor: pointer;
-    padding: 4px 10px 4px 4px;
-    flex-shrink: 0;
-    transition: color 0.15s;
-    border-right: 1px solid var(--sidebar-border);
-    margin-right: 2px;
-}
-.ac-back-btn:hover { color: var(--sidebar-text); }
-
-.ac-app-name {
-    font-family: var(--font-ui);
-    font-size: 14px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--sidebar-text-muted);
-    flex-shrink: 0;
-    padding-right: 12px;
-    border-right: 1px solid var(--sidebar-border);
-}
-
-.ac-title {
-    font-family: var(--font-display);
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    flex: 1;
-    min-width: 0;
-}
-
-.ac-close-btn {
-    font-size: 24px;
-    line-height: 1;
-    color: var(--sidebar-text-muted);
-    text-decoration: none;
-    padding: 0 4px;
-    flex-shrink: 0;
-}
-.ac-close-btn:hover {
-    color: var(--sidebar-text);
-}
-
-.ac-authors {
-    font-family: var(--font-ui);
-    font-size: 16px;
-    color: var(--text-inverse-muted);
-    flex-shrink: 10;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-}
-
-/* Row 2: controls */
-.ac-row-2 {
+.ac-bottom-row {
     display: flex;
     align-items: center;
     gap: 8px;
 }
+
+.ac-bottom-article-link {
+    color: var(--sidebar-text-muted);
+    text-decoration: none;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.ac-bottom-article-link:hover { color: var(--sidebar-text); text-decoration: underline; }
+
+.ac-bottom-guide-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 600;
+}
+.ac-bottom-guide-link:hover { text-decoration: underline; }
 
 .ac-row-spacer { flex: 1; }
 
@@ -299,6 +264,18 @@ body {
     15%  { opacity: 1; }
     70%  { opacity: 1; }
     100% { opacity: 0; }
+}
+
+/* ── Progress (in sidebar brand area) ── */
+
+.ac-drawer-progress {
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+.ac-drawer-progress .ac-progress {
+    white-space: normal;
+    font-size: 12px;
 }
 
 .ac-progress-wrap {
@@ -424,7 +401,7 @@ body {
     transition: border-color 0.15s, background 0.15s;
 }
 
-/* Reject row — slides in as a third row below controls */
+/* Reject row — slides in above the action buttons in the bottom bar */
 .ac-row-reject {
     display: flex;
     align-items: flex-start;
@@ -435,8 +412,8 @@ body {
 
 .ac-textarea {
     resize: vertical;
-    min-height: 60px;
-    max-height: 200px;
+    min-height: 100px;
+    max-height: 300px;
     line-height: 1.4;
     flex: 1;
 }
@@ -463,7 +440,7 @@ body {
 /* ── Drawer: collapsible article list ── */
 
 .ac-drawer {
-    grid-row: 1 / -1;
+    grid-row: 1 / -1; /* spans all rows including return bar, content, and bottom bar */
     grid-column: 1;
     background: var(--sidebar-bg);
     color: var(--sidebar-text);
@@ -619,6 +596,11 @@ body {
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
+}
+
+.ac-drawer-pill-zero {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .ac-drawer-list {
@@ -1291,7 +1273,7 @@ body {
 
 .ac-toast {
     position: fixed;
-    top: 80px;
+    top: 48px;
     right: 16px;
     padding: 12px 22px;
     border-radius: 4px;
@@ -1485,7 +1467,7 @@ body {
 @media (max-width: 1024px) {
     .ac-layout {
         grid-template-columns: 1fr;
-        grid-template-rows: auto auto 1fr;
+        grid-template-rows: 1fr auto;
     }
 
     .ac-left {
@@ -1497,32 +1479,12 @@ body {
         border-left: none;
         border-top: 1px solid var(--divider);
     }
-
-    .ac-row-2 {
-        flex-wrap: wrap;
-    }
-
-    .ac-title {
-        font-size: 16px;
-    }
-
-    .ac-authors {
-        display: none;
-    }
 }
 
 @media (max-width: 640px) {
-    .ac-top {
+    .ac-bottom {
         padding: 6px 10px;
         gap: 4px;
-    }
-
-    .ac-title {
-        font-size: 14px;
-    }
-
-    .ac-app-name {
-        display: none;
     }
 
     .ac-btn {
@@ -1532,7 +1494,6 @@ body {
 
     .ac-progress {
         font-size: 12px;
-        padding: 4px 8px;
     }
 
     .ac-left {

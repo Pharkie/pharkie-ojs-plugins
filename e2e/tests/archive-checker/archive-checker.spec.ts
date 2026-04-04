@@ -114,23 +114,20 @@ test.describe('Archive Checker plugin', () => {
     await expect(page.locator('.pkp_navigation')).not.toBeVisible();
   });
 
-  test('displays article metadata in top bar', async ({ page }) => {
+  test('displays article metadata and status badge', async ({ page }) => {
     test.skip(!articleId, 'No article with galleys found');
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
 
-    // Wait for Alpine to populate (ac-title uses x-text)
-    const title = page.locator('.ac-title');
-    await expect(title).not.toHaveText('Loading...', { timeout: 15_000 });
-    await expect(title).not.toHaveText('No articles found');
+    // Wait for Alpine to populate article metadata
+    const metaTitle = page.locator('.ac-meta-title');
+    await expect(metaTitle).not.toBeEmpty({ timeout: 15_000 });
 
-    const titleText = await title.textContent();
+    const titleText = await metaTitle.textContent();
     expect(titleText).toBeTruthy();
-    // Title includes issue/seq/year pattern
-    expect(titleText).toMatch(/\d+\.\d+ #\d+ \(\d{4}\)/);
 
-    // Status badge visible
+    // Status badge visible in bottom bar
     await expect(page.locator('.ac-badge')).toBeVisible();
   });
 
@@ -261,7 +258,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Metadata header should be visible
     await expect(page.locator('.ac-article-meta')).toBeVisible();
@@ -281,7 +278,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Wait for classification to load
     await page.waitForTimeout(3000);
@@ -310,7 +307,7 @@ test.describe('Archive Checker plugin', () => {
   test('sidebar shows article list with filters', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Sidebar article list should be populated
     const items = page.locator('.ac-drawer-item');
@@ -329,7 +326,7 @@ test.describe('Archive Checker plugin', () => {
   test('sidebar search filters articles', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     const initialCount = await page.locator('.ac-drawer-item').count();
 
@@ -351,7 +348,7 @@ test.describe('Archive Checker plugin', () => {
   test('sidebar search by article ID finds the article', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Search by submission ID — numeric queries must match exact ID only
     await page.fill('.ac-drawer-search', '8994');
@@ -372,7 +369,7 @@ test.describe('Archive Checker plugin', () => {
   test('reviewer pills appear and filter the sidebar', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     const totalCount = await page.locator('.ac-drawer-item').count();
 
@@ -401,7 +398,7 @@ test.describe('Archive Checker plugin', () => {
   test('reviewer pills combine with status pills', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Click "Approved" status pill
     const approvedPill = page.locator('.ac-drawer-pill-status', { hasText: 'Approved' });
@@ -424,7 +421,7 @@ test.describe('Archive Checker plugin', () => {
   test('clear filters resets reviewer pills', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     const totalCount = await page.locator('.ac-drawer-item').count();
 
@@ -451,7 +448,7 @@ test.describe('Archive Checker plugin', () => {
   test('pill counts match sidebar article count', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Total sidebar items
     const sidebarCount = await page.locator('.ac-drawer-item').count();
@@ -470,7 +467,7 @@ test.describe('Archive Checker plugin', () => {
   test('reviewer pill count matches sidebar after click', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
     if (await reviewerPills.count() > 0) {
@@ -492,7 +489,7 @@ test.describe('Archive Checker plugin', () => {
   test('reported pill filters to reported articles', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     const reportedPill = page.locator('.ac-drawer-pill-status', { hasText: 'Reported' });
     if (await reportedPill.count() > 0) {
@@ -509,21 +506,29 @@ test.describe('Archive Checker plugin', () => {
     }
   });
 
-  test('content filtered toggle shows filtered articles', async ({ page }) => {
+  test('content filtered pill shows only filtered articles', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     const countBefore = await page.locator('.ac-drawer-item').count();
 
-    // Click content filtered pill to show them
+    // Click content filtered pill to show ONLY content-filtered articles
     const cfPill = page.locator('.ac-drawer-pill-filtered');
     if (await cfPill.count() > 0) {
       await cfPill.click();
       await page.waitForTimeout(300);
 
       const countAfter = await page.locator('.ac-drawer-item').count();
-      expect(countAfter).toBeGreaterThan(countBefore);
+      // Should show fewer articles (only the ~40 content-filtered ones)
+      expect(countAfter).toBeLessThan(countBefore);
+      expect(countAfter).toBeGreaterThan(0);
+
+      // Click again to deactivate — should restore full list
+      await cfPill.click();
+      await page.waitForTimeout(300);
+      const countRestored = await page.locator('.ac-drawer-item').count();
+      expect(countRestored).toBe(countBefore);
     }
   });
 
@@ -534,15 +539,15 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
-    const firstTitle = await page.locator('.ac-title').textContent();
+    const firstTitle = await page.locator('.ac-meta-title').textContent();
 
     // Click second article in sidebar
     const secondItem = page.locator('.ac-drawer-item').nth(1);
     if (await secondItem.count() > 0) {
       await secondItem.click();
-      await expect(page.locator('.ac-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
+      await expect(page.locator('.ac-meta-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
     }
   });
 
@@ -551,15 +556,15 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(QA_URL);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
-    const firstTitle = await page.locator('.ac-title').textContent();
+    const firstTitle = await page.locator('.ac-meta-title').textContent();
 
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.ac-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
+    await expect(page.locator('.ac-meta-title')).not.toHaveText(firstTitle!, { timeout: 10_000 });
 
     await page.keyboard.press('ArrowLeft');
-    await expect(page.locator('.ac-title')).toHaveText(firstTitle!, { timeout: 10_000 });
+    await expect(page.locator('.ac-meta-title')).toHaveText(firstTitle!, { timeout: 10_000 });
   });
 
   // ── Reviews ──
@@ -569,7 +574,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${articleId}`);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Click approve
     await page.click('.ac-btn-approve');
@@ -583,7 +588,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${articleId}`);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Click Report Problem
     await page.click('.ac-btn-reject');
@@ -596,8 +601,14 @@ test.describe('Archive Checker plugin', () => {
     await textarea.fill('e2e-test-fix-request');
     await textarea.press('Control+Enter');
 
-    // Should auto-advance
+    // Should show "Saved" confirmation
     await page.waitForTimeout(2000);
+
+    // Restore article to approved state so the test doesn't leave it as reported
+    await page.goto(`${QA_URL}?id=${articleId}`);
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
+    await page.click('.ac-btn-approve');
+    await page.waitForTimeout(1000);
   });
 
   // ── API ──
@@ -685,7 +696,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${doiArticleId}`);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Wait for classification to load
     const endmatter = page.locator('.ac-endmatter');
@@ -715,7 +726,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${doiArticleId}`);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
     // Wait for classification
     await expect(page.locator('.ac-endmatter')).toBeVisible({ timeout: 10_000 });
@@ -733,7 +744,7 @@ test.describe('Archive Checker plugin', () => {
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${doiArticleId}`);
-    await expect(page.locator('.ac-title')).not.toHaveText('Loading...', { timeout: 15_000 });
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
     await expect(page.locator('.ac-endmatter')).toBeVisible({ timeout: 10_000 });
 
     // Total references should exceed DOI links (not all refs have DOIs)

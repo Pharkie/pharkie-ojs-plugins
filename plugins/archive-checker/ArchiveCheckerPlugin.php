@@ -251,6 +251,7 @@ class ArchiveCheckerPlugin extends GenericPlugin
 HTMLSTART;
         echo '<link rel="stylesheet" href="' . $pluginUrl . '/css/pdf_viewer.css">';
         echo '<link rel="stylesheet" href="' . $pluginUrl . '/css/archive-checker.css">';
+        echo '<script src="' . $pluginUrl . '/js/tsparticles.confetti.bundle.min.js"></script>';
         echo <<<'HTMLBODY'
 </head>
 <body>
@@ -258,15 +259,23 @@ HTMLSTART;
 
         <!-- Sidebar -->
         <div class="ac-drawer">
+            <a class="ac-return-link" :href="pluginUrl.replace(/\/plugins\/.*/, '')">
+                &larr; Return to journal
+            </a>
             <div class="ac-drawer-brand">
                 <div class="ac-drawer-logo">Archive Checker</div>
-                <div class="ac-drawer-strapline">Help check 35 years of journal articles
-                    <a href="#" class="ac-drawer-more" @click.prevent="showGuide = true">What to check? &rsaquo;</a>
+                <div class="ac-drawer-strapline">Help check 36 years of journal articles</div>
+                <div class="ac-drawer-progress" @click="openDashboard()">
+                    <div class="ac-progress" x-text="progressDisplay"></div>
+                    <div class="ac-progress-bar" x-show="counts">
+                        <div class="ac-progress-bar-approved" :style="'width:' + progressApprovedPct + '%'"></div>
+                        <div class="ac-progress-bar-reported" :style="'width:' + progressReportedPct + '%'"></div>
+                    </div>
                 </div>
             </div>
 
             <div class="ac-drawer-header">
-                <input type="text" class="ac-drawer-search" placeholder="Search title, author, keyword..."
+                <input type="text" class="ac-drawer-search" placeholder="Search title, author, id, keyword..."
                     x-model="searchQuery" @input="refilter()">
                 <button class="ac-search-clear" x-show="searchQuery" @click="searchQuery=''; refilter()">&times;</button>
             </div>
@@ -277,7 +286,7 @@ HTMLSTART;
 
             <div class="ac-drawer-filter-row">
                 <select class="ac-drawer-select" x-model="issueFilter" @change="refilter()">
-                    <option value="">All issues</option>
+                    <option value="">Select issue</option>
                     <template x-for="iss in allIssues" :key="iss.key">
                         <option :value="iss.key" x-text="'Issue ' + iss.key + ' (' + iss.count + ')'"></option>
                     </template>
@@ -286,25 +295,20 @@ HTMLSTART;
 
             <div class="ac-drawer-pills">
                 <template x-for="p in statusPills" :key="p.key">
-                    <button class="ac-drawer-pill ac-drawer-pill-status" :class="{ active: isStatusActive(p.key) }"
+                    <button class="ac-drawer-pill ac-drawer-pill-status" :class="{ active: isStatusActive(p.key), 'ac-drawer-pill-zero': p.count === 0 }"
                         @click="toggleStatus(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
-            </div>
-            <div class="ac-drawer-pills" x-show="sectionPills.length > 0">
                 <template x-for="p in sectionPills" :key="p.key">
                     <button class="ac-drawer-pill ac-drawer-pill-section" :class="{ active: isSectionActive(p.key) }"
                         @click="toggleSection(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
-            </div>
-            <div class="ac-drawer-pills" x-show="reviewerPills.length > 0">
                 <template x-for="p in reviewerPills" :key="p.key">
                     <button class="ac-drawer-pill ac-drawer-pill-reviewer" :class="{ active: isReviewerActive(p.key) }"
                         @click="toggleReviewer(p.key)" x-text="p.label + ' (' + p.count + ')'"></button>
                 </template>
-            </div>
-            <div class="ac-drawer-pills" x-show="contentFilteredCount > 0">
-                <button class="ac-drawer-pill ac-drawer-pill-filtered" :class="{ active: !hideContentFiltered }"
-                    @click="hideContentFiltered = !hideContentFiltered; refilter()"
+                <button class="ac-drawer-pill ac-drawer-pill-filtered" x-show="contentFilteredCount > 0"
+                    :class="{ active: showOnlyContentFiltered }"
+                    @click="showOnlyContentFiltered = !showOnlyContentFiltered; refilter()"
                     x-text="'Content filtered (' + contentFilteredCount + ')'"></button>
             </div>
             <div class="ac-drawer-clear-row" x-show="hasFilters">
@@ -325,46 +329,8 @@ HTMLSTART;
             <div class="ac-drawer-nav">
                 <span x-text="positionDisplay" class="ac-drawer-position"></span>
                 <span class="ac-drawer-random-label" x-show="setFilter && setFilter.type === 'random'">Random batch</span>
-            </div>
-
-            <div class="ac-drawer-footer">
-                <a href="#" class="ac-drawer-shortcuts-link" @click.prevent="showShortcuts = true">Keyboard shortcuts</a>
-            </div>
-        </div>
-
-        <!-- Top bar -->
-        <div class="ac-top">
-            <div class="ac-row-1">
-                <span class="ac-title" x-text="titleDisplay"></span>
-                <a class="ac-close-btn" :href="pluginUrl.replace(/\/plugins\/.*/, '')" title="Back to journal">&times;</a>
-            </div>
-            <div class="ac-row-2">
-                <span :class="statusClass" @click="showFixReason()" :title="article?.comment || ''"
-                    x-text="statusLabel" :style="article?.status === 'needs_fix' ? 'cursor:pointer' : ''"></span>
-                <div class="ac-progress-wrap" @click="openDashboard()">
-                    <div class="ac-progress" x-text="progressDisplay"></div>
-                    <div class="ac-progress-bar" x-show="counts">
-                        <div class="ac-progress-bar-approved" :style="'width:' + progressApprovedPct + '%'"></div>
-                        <div class="ac-progress-bar-reported" :style="'width:' + progressReportedPct + '%'"></div>
-                    </div>
-                </div>
                 <span class="ac-row-spacer"></span>
-                <template x-if="!showRejectForm">
-                    <div style="display:flex;gap:8px;">
-                        <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
-                            title="Report Problem (R)">Report Problem</button>
-                        <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting"
-                            title="Approve (A)" x-text="approveLabel">Approve</button>
-                    </div>
-                </template>
-            </div>
-            <div class="ac-row-reject" x-show="showRejectForm" x-cloak>
-                <textarea class="ac-textarea" x-model="rejectComment" x-ref="rejectTextarea"
-                    placeholder="What did you notice? Describe the problem..." rows="3"
-                    @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()" @keydown.escape="cancelFix()"></textarea>
-                <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
-                    title="Ctrl+Enter to submit" x-text="reportLabel">Report Problem</button>
-                <button class="ac-btn ac-btn-nav" @click="cancelFix()">Cancel</button>
+                <a href="#" class="ac-drawer-shortcuts-link" @click.prevent="showShortcuts = true">Keyboard shortcuts</a>
             </div>
         </div>
 
@@ -446,6 +412,37 @@ HTMLSTART;
                                 </div>
                             </div>
                         </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Bottom bar: review actions -->
+        <div class="ac-bottom">
+            <div class="ac-row-reject" x-show="showRejectForm" x-cloak>
+                <textarea class="ac-textarea" x-model="rejectComment" x-ref="rejectTextarea"
+                    placeholder="What did you notice? Describe the problem..." rows="5"
+                    @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()" @keydown.escape="cancelFix()"></textarea>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                    <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
+                        title="Ctrl+Enter to submit" x-text="reportLabel">Report Problem</button>
+                    <button class="ac-btn ac-btn-nav" @click="cancelFix()">Cancel</button>
+                </div>
+            </div>
+            <div class="ac-bottom-row">
+                <a class="ac-bottom-article-link" :href="api.replace(/\/api\/.*/, '/article/view/' + (article?.submission_id || ''))"
+                    target="_blank" x-show="article">View this article on main site &rarr;</a>
+                <span class="ac-row-spacer"></span>
+                <a href="#" class="ac-bottom-guide-link" @click.prevent="showGuide = true">What to check? &rsaquo;</a>
+                <span class="ac-row-spacer"></span>
+                <span :class="statusClass" @click="showFixReason()" :title="article?.comment || ''"
+                    x-text="statusLabel" :style="article?.status === 'needs_fix' ? 'cursor:pointer' : ''"></span>
+                <template x-if="!showRejectForm">
+                    <div style="display:flex;gap:8px;">
+                        <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
+                            title="Report Problem (R)">Report Problem</button>
+                        <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting"
+                            title="Approve (A)" x-text="approveLabel">Approve</button>
                     </div>
                 </template>
             </div>
