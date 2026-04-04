@@ -349,14 +349,20 @@ if [ -n "$PENDING_OJS_JOBS" ]; then
   fi
 fi
 
-# 6c. Failed jobs
-FAILED_OJS_JOBS=$(require_remote "OJS failed jobs count" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM failed_jobs\"'") || FAILED_OJS_JOBS=""
-if [ -n "$FAILED_OJS_JOBS" ]; then
-  if [ "${FAILED_OJS_JOBS:-0}" -gt 0 ] 2>/dev/null; then
-    fail "$FAILED_OJS_JOBS failed OJS jobs (check failed_jobs table)"
+# 6c. Failed jobs — separate critical (sync, payment) from benign (stats compilation).
+# OJS statistics jobs (CompileMonthlyMetrics etc.) fail after reimports due to FK
+# constraint issues on orphaned metrics rows. These aren't business-critical.
+FAILED_CRITICAL=$(require_remote "OJS critical failed jobs" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM failed_jobs WHERE payload NOT LIKE \\\"%statistics%\\\"\"'") || FAILED_CRITICAL=""
+FAILED_STATS=$(require_remote "OJS stats failed jobs" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM failed_jobs WHERE payload LIKE \\\"%statistics%\\\"\"'") || FAILED_STATS=""
+if [ -n "$FAILED_CRITICAL" ]; then
+  if [ "${FAILED_CRITICAL:-0}" -gt 0 ] 2>/dev/null; then
+    fail "$FAILED_CRITICAL failed OJS jobs (check failed_jobs table)"
   else
-    pass "No failed OJS jobs"
+    pass "No critical failed OJS jobs"
   fi
+fi
+if [ "${FAILED_STATS:-0}" -gt 0 ] 2>/dev/null; then
+  warn "$FAILED_STATS failed OJS statistics jobs (non-critical, will retry next month)"
 fi
 
 # ============================================================
@@ -448,13 +454,15 @@ else
   fi
 fi
 
-# 8b. Container restart count (alert if any restarted in last hour)
+# 8b. Container restart count (info only — RestartCount accumulates until
+# next docker compose up, so a single crash-restart would cause permanent
+# hourly alerts. Crash-restarts are already caught by OOM detection and
+# PHP fatal error checks.)
 for CONTAINER in wp ojs wp-db ojs-db; do
-  STARTED_AT=$(remote "$COMPOSE exec -T $CONTAINER cat /proc/1/stat 2>/dev/null | awk '{print \$22}'" 2>/dev/null) || true
-  RESTART_COUNT=$(remote "docker inspect --format='{{.RestartCount}}' \$(docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null) 2>/dev/null") || RESTART_COUNT="0"
+  RESTART_COUNT=$(remote "docker inspect --format='{{.RestartCount}}' \$($COMPOSE ps -q $CONTAINER 2>/dev/null) 2>/dev/null") || RESTART_COUNT="0"
   RESTART_COUNT=$(echo "$RESTART_COUNT" | tr -d '[:space:]')
   if [ "${RESTART_COUNT:-0}" -gt 0 ] 2>/dev/null; then
-    fail "Container $CONTAINER has restarted $RESTART_COUNT time(s)"
+    info "Container $CONTAINER has restarted $RESTART_COUNT time(s) since last deploy"
   fi
 done
 
@@ -491,9 +499,9 @@ fi
 UPTIME_SECS=$(ssh_retry $SSH_CMD "cat /proc/uptime | cut -d. -f1") || UPTIME_SECS="0"
 CUTOFF=$((UPTIME_SECS - 86400))
 if [ "$CUTOFF" -lt 0 ]; then CUTOFF=0; fi
-OOM_RECENT=$(ssh_retry $SSH_CMD "dmesg -T 2>/dev/null | tail -500 | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_RECENT="0"
+OOM_RECENT=$(ssh_retry $SSH_CMD "dmesg -T 2>/dev/null | tail -500 | grep -ciE '\boom\b|out of memory|oom-killer'" 2>/dev/null) || OOM_RECENT="0"
 OOM_RECENT=$(echo "$OOM_RECENT" | tr -d '[:space:]')
-OOM_24H=$(ssh_retry $SSH_CMD "journalctl -k --since '24 hours ago' 2>/dev/null | grep -ci 'oom\|out of memory'" 2>/dev/null) || OOM_24H="$OOM_RECENT"
+OOM_24H=$(ssh_retry $SSH_CMD "journalctl -k --since '24 hours ago' 2>/dev/null | grep -ciE '\boom\b|out of memory|oom-killer'" 2>/dev/null) || OOM_24H="$OOM_RECENT"
 OOM_24H=$(echo "$OOM_24H" | tr -d '[:space:]')
 if [ "${OOM_24H:-0}" -gt 0 ] 2>/dev/null; then
   fail "OOM killer detected in last 24h ($OOM_24H occurrences)"
