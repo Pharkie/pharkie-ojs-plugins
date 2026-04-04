@@ -211,9 +211,9 @@ class TestBioGrouping:
         assert any('Fletcher' in b for b in result['bios'])
         assert any('Milton' in b for b in result['bios'])
 
-    def test_non_author_bio_in_ref_section_becomes_note(self):
+    def test_non_author_bio_in_ref_section_stays_as_citation(self):
         """A bio-like item about a non-author inside a reference section
-        should be classified as a note, not a bio."""
+        stays as a citation — the heading is the authority."""
         jats = _make_jats("""
         <sec><title>References</title>
         <p>Smith, J. (2005). On anxiety. Journal of Existential Analysis.</p>
@@ -232,8 +232,9 @@ class TestBioGrouping:
             assert 'van Deurzen' not in bio, f"Non-author bio found: {bio[:80]}"
         # John Smith's bio SHOULD be found (he IS the author)
         assert any('John Smith' in b for b in result['bios']), f"Author bio not found: {result['bios']}"
-        # van Deurzen text should be in notes
-        assert any('van Deurzen' in n for n in result['notes']), f"Expected van Deurzen in notes: {result['notes']}"
+        # van Deurzen text stays as citation — heading is the authority
+        assert any('van Deurzen' in c for c in result['citations']), \
+            f"Expected van Deurzen in citations (under References heading): {result['citations']}"
 
     def test_contact_after_section_bio_merged(self):
         """Contact <p> outside the section should merge with bio inside it.

@@ -286,6 +286,24 @@
         "Fourth Estate",
         "philosophical themes"
       ]
+    },
+    "same_title_book_reviews_not_truncated": {
+      "html": "<h2>Zone of the Interior</h2>\n<p>Clancy Sigal. (2005). Pomona. 404 pp. £9.99.</p>\n<p>(Originally published in 1976 by Thomas Y. Crowell Company in New York), 359 pp.</p>\n<p><em>Zone of the Interior</em>, first published in the US and Canada in 1976, is Clancy Sigal's fictionalised, but largely factual, account of his experiences of anti-psychiatry between 1961-65 with R D Laing and the Philadelphia Association charity.</p>\n<p>This UK edition has only been altered by minor re-working.</p>\n<h2>References</h2>\n<p>Barnes, M. and Berke, J. (1971). <em>Mary Barnes</em>. London: MacGibbon</p>\n<p>Sigal, C. (2005). <em>Zone of the Interior</em>. Pomona.</p>\n<h2>Websites:</h2>\n<p>Philadelphia Association - http://www.philadelphia-association.co.uk/</p>\n<h2>Rosemary Moore</h2>\n<h2>Zone of the Interior</h2>\n<p>Clancy Sigal. (2005). Pomona. 404 pp. £9.99.</p>\n<p><em>Zone of the Interior</em> is a very funny, outrageous satire by Joseph Berke.</p>",
+      "article": {
+        "title": "Book Review: Zone of the Interior",
+        "authors": "Rosemary Moore",
+        "section": "Book Reviews",
+        "_next_title": "Book Review: Zone of the Interior"
+      },
+      "should_contain": [
+        "fictionalised, but largely factual, account",
+        "minor re-working",
+        "Barnes, M. and Berke",
+        "Philadelphia Association"
+      ],
+      "should_not_contain": [
+        "Joseph Berke"
+      ]
     }
   },
   "strip_subtitle": {
