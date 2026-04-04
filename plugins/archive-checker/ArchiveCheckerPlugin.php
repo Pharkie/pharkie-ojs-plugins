@@ -312,6 +312,7 @@ HTMLSTART;
                     x-text="'Content filtered (' + contentFilteredCount + ')'"></button>
             </div>
             <div class="ac-drawer-clear-row" x-show="hasFilters">
+                <span class="ac-drawer-random-label" x-show="setFilter && setFilter.type === 'random'">Random 10</span>
                 <button class="ac-drawer-clear" @click="clearFilters()">Clear all filters</button>
             </div>
 
@@ -328,7 +329,6 @@ HTMLSTART;
 
             <div class="ac-drawer-nav">
                 <span x-text="positionDisplay" class="ac-drawer-position"></span>
-                <span class="ac-drawer-random-label" x-show="setFilter && setFilter.type === 'random'">Random batch</span>
                 <span class="ac-row-spacer"></span>
                 <a href="#" class="ac-drawer-shortcuts-link" @click.prevent="showShortcuts = true">Keyboard shortcuts</a>
             </div>
@@ -435,12 +435,11 @@ HTMLSTART;
                 <span class="ac-row-spacer"></span>
                 <a href="#" class="ac-bottom-guide-link" @click.prevent="showGuide = true">What to check? &rsaquo;</a>
                 <span class="ac-row-spacer"></span>
-                <span :class="statusClass" @click="showFixReason()" :title="article?.comment || ''"
-                    x-text="statusLabel" :style="article?.status === 'needs_fix' ? 'cursor:pointer' : ''"></span>
+                <span :class="statusClass" x-text="statusLabel"></span>
                 <template x-if="!showRejectForm">
                     <div style="display:flex;gap:8px;">
                         <button class="ac-btn ac-btn-reject" @click="requestFix()" :disabled="submitting"
-                            title="Report Problem (R)">Report Problem</button>
+                            :title="reportLabel + ' (R)'" x-text="reportLabel">Report Problem</button>
                         <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting"
                             title="Approve (A)" x-text="approveLabel">Approve</button>
                     </div>

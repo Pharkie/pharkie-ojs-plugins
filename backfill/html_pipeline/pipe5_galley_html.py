@@ -271,7 +271,7 @@ def _render_back_matter(back, soup):
                     div.append(p)
                     soup.append(div)
 
-    # Notes/endnotes → <h2>Notes</h2> + <ol>
+    # Notes/endnotes → <ol> (no heading — OJS renders its own)
     fn_group = None
     for child in back:
         if local_name(child.tag) == 'fn-group':
@@ -289,9 +289,6 @@ def _render_back_matter(back, soup):
                         notes.append(text)
         if notes:
             div = soup.new_tag('div', attrs={'class': 'jats-notes'})
-            h2 = soup.new_tag('h2')
-            h2.string = 'Notes'
-            div.append(h2)
             ol = soup.new_tag('ol')
             for note in notes:
                 li = soup.new_tag('li')

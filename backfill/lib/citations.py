@@ -220,6 +220,12 @@ def _is_bio_section(el: ET.Element, ns: str, author_names: list[str] = None) -> 
     if not heading:
         return False
 
+    # Explicit bio/contact label headings — always bio sections
+    BIO_LABEL_HEADINGS = {'author biography', 'author bio', 'author biographies',
+                          'about the author', 'about the authors', 'contact'}
+    if heading.lower().strip() in BIO_LABEL_HEADINGS:
+        return True
+
     # Check if heading matches a known author
     heading_is_author = False
     if author_names:
@@ -768,7 +774,9 @@ def is_author_contact(text: str) -> bool:
         r'^(Contact|Address|Email|E-mail|Correspondence|Tel|Telephone|Fax|Website)(\s+\w+)?\s*:',
         text, re.IGNORECASE
     )) or bool(re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$', text.strip())
-    ) or bool(re.search(r'\bE-?mail\s*:\s*[A-Za-z0-9._%+-]+@', text, re.IGNORECASE))
+    ) or bool(re.search(r'\bE-?mail\s*:\s*[A-Za-z0-9._%+-]+@', text, re.IGNORECASE)
+    ) or bool(re.match(r'^https?://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$', text.strip())
+    ) or bool(re.search(r'\bcontact\s*:\s*(?:www\.|http)', text, re.IGNORECASE))
 
 
 def is_author_bio(text: str) -> bool:
@@ -824,8 +832,9 @@ def is_author_bio(text: str) -> bool:
                 r'Although|While|Whereas|Since|Because|After|'
                 r'Afterwards)\b', text):
         return False
-    # Year-in-parens pattern for rejecting references: (1999), (1980b), etc.
-    _YEAR_IN_PARENS = re.compile(r'\(\d{4}[a-d]?\)')
+    # Year-in-parens pattern for rejecting references: (1999), (1980b),
+    # (1946/2007), (1927/1962), [1942], etc.
+    _YEAR_IN_PARENS = re.compile(r'[\(\[]\d{4}(?:[a-d]|/\d{4})?[\)\]]')
 
     bio_verb = re.search(r'\b(is|was|has)\s', text[:BIO_PHRASE_SEARCH_WINDOW])
     if bio_verb:
@@ -891,9 +900,9 @@ def is_provenance(text: str) -> bool:
         r'^Presentation[,\s]',
         # "Based on a presentation/keynote/talk/version..."
         r'^Based\s+on\s+(?:a\s+)?(?:presentation|version|talk|paper|keynote)',
-        # "Paper/Talk/Keynote given/delivered/presented at..."
+        # "Paper/Talk/Keynote/Keynote address given/delivered/presented at..."
         # Also handles "Invited Paper, given on..."
-        r'^(?:Invited\s+)?(?:Paper|Talk|Keynote)[,\s]+(?:given|delivered|presented)',
+        r'^(?:Invited\s+)?(?:Paper|Talk|Keynote(?:\s+address)?)[,\s]+(?:given|delivered|presented)',
         # "Adapted/Revised/Expanded from..."
         r'^(?:Adapted|Revised|Expanded)\s+(?:from|version)',
         # "* Parts III and IV will be published in..." — forthcoming-parts note

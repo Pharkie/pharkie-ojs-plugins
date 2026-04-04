@@ -1,7 +1,6 @@
 {
   "_doc": "Author bio detection test data. 'true' = is a bio, 'false' = is not.",
   "_instructions": "If a test fails, fix the CODE not this file. These are human-verified ground truths.",
-
   "true": [
     "CHARLES SCOTT is a psychotherapist in private practice in London.",
     "SIMON DU PLOCK is a registered psychologist.",
@@ -34,7 +33,6 @@
     "Roly Fletcher is currently undertaking the Practitioner Doctorate in Psychotherapy and Counselling Psychology at the University of Surrey and works within an NHS psychotherapy department.",
     "Dr Martin Milton is a Chartered Counselling Psychologist, a registered psychotherapist and a BPS Registered Psychologist Specialising in Psychotherapy. He is Senior Lecturer on the University of Surrey Practitioner Doctorate programmes in Psychotherapy and Counselling Psychology."
   ],
-
   "false": [
     "Kierkegaard, S. (1849). The Sickness Unto Death. Princeton University Press.",
     "The existential approach has gained traction in recent years.",
@@ -74,6 +72,8 @@
     "THE ANXIETY OF EMPTINESS AND MEANINGLESSNESS. The anxiety of meaninglessness is anxiety concerning the loss of an ultimate concern.",
     "Although Yalom has not defined the notion of the 'there' and 'now', in practice, however, he has demonstrated on the tapes of his sessions an approach which brings into focus the 'here and now'.",
     "Kierkegaard, S. (1980b). The Sickness onto Death. Trans. H. Hong & E. Hong, Princeton NJ: Princeton University Press.",
-    "Zbigniew Kotowicz has not written such a book. He has, however, tried to put Laing's thinking and working into the context of continental philosophy."
+    "Zbigniew Kotowicz has not written such a book. He has, however, tried to put Laing's thinking and working into the context of continental philosophy.",
+    "Sartre, J-P. (1946/2007). Existentialism is a Humanism. USA: Yale University Press.",
+    "Heidegger, M. (1927/1962). Being and Time. Trans. Macquarrie, J. & Robinson, E. New York: Harper & Row."
   ]
 }
