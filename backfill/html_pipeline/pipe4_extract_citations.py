@@ -136,7 +136,7 @@ def extract_from_jats(jats_path: Path) -> dict:
             if is_bio_section:
                 clean = re.sub(
                     r'^(?:About the Authors?\s*|Author Bio(?:graph(?:y|ies))?\s*'
-                    r'|Author Information\s*|Contact\s*)',
+                    r'|Author Information\s*)',
                     '', item, count=1, flags=re.IGNORECASE).strip()
                 if not clean:
                     continue
