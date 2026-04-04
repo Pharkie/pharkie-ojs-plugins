@@ -307,6 +307,7 @@ Alpine.data('acApp', () => ({
             this.showRejectForm = false;
             this.rejectComment = '';
         }
+        this.approveLabel = 'Approve';
 
         // Load current article, then prefetch nearby once done.
         await Promise.all([
@@ -593,15 +594,13 @@ Alpine.data('acApp', () => ({
             this.recalculateCounts();
 
             if (decision === 'approved') {
-                // Flash confirmation then auto-advance
                 this.approveLabel = 'Approved ✓';
-                setTimeout(() => { this.approveLabel = 'Approve'; }, 2000);
                 this.showRejectForm = false;
                 this.rejectComment = '';
 
                 // Confetti burst from the Approve button
                 if (typeof confetti !== 'undefined') {
-                    const btn = document.querySelector('.ac-btn-approve');
+                    const btn = [...document.querySelectorAll('.ac-btn-approve')].find(b => b.offsetParent !== null);
                     if (btn) {
                         const rect = btn.getBoundingClientRect();
                         const x = (rect.left + rect.width / 2) / window.innerWidth;
@@ -615,9 +614,6 @@ Alpine.data('acApp', () => ({
                         confetti({ ...opts, count: 80, spread: 120, startVelocity: 70, decay: 0.88, drift: -1 });
                         confetti({ ...opts, count: 80, spread: 120, startVelocity: 70, decay: 0.88, drift: 1 });
                     }
-                }
-                if (this.setIndex < this.workingSet.length - 1) {
-                    setTimeout(() => this.goToSetIndex(this.setIndex + 1), 600);
                 }
             } else {
                 // Flash confirmation, stay on article
