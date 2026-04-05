@@ -224,14 +224,15 @@ Alpine.data('acApp', () => ({
     },
 
     get statusLabel() {
-        const labels = { approved: 'Last approved', needs_fix: 'Last reported', recheck: 'Recheck', deferred: 'Deferred', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
+        const labels = { approved: 'Approved', needs_fix: 'Reported', recheck: 'Recheck', deferred: 'Deferred', invalidated: 'Invalidated', unreviewed: 'Unchecked' };
         const a = this.article;
         if (!a) return '';
         let label = labels[a.status] || a.status;
+        if (a.reviewer) label += ' by ' + a.reviewer;
         if (a.reviewed_at) {
             const d = new Date(a.reviewed_at);
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            label += ' ' + String(d.getDate()).padStart(2,'0') + months[d.getMonth()] + String(d.getFullYear()).slice(2);
+            label += ', ' + String(d.getDate()).padStart(2,'0') + months[d.getMonth()] + String(d.getFullYear()).slice(2);
         }
         return label;
     },

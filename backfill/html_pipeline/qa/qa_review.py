@@ -373,92 +373,140 @@ def cmd_clear(target: str, article_ref: str) -> None:
     print(f'Cleared all reviews for: {title} (submission_id={pub_id})')
 
 
-def cmd_sync(source: str, dest: str) -> None:
-    """Sync reviews from one environment to another.
-
-    Matches articles by title (not submission_id, which may differ).
-    Only syncs the latest review per article. Skips articles that
-    already have a newer review on the destination.
-    """
-    # Get all latest reviews from source with titles
-    out = run_sql(source, """
-        SELECT r.submission_id, r.decision, r.username, r.comment,
-               r.created_at, ps.setting_value AS title
-        FROM archive_checker_reviews r
-        LEFT JOIN submissions s ON s.submission_id = r.submission_id
-        LEFT JOIN publication_settings ps ON ps.publication_id = s.current_publication_id
-            AND ps.setting_name = 'title' AND ps.locale = 'en'
-        WHERE r.review_id = (
-            SELECT MAX(r2.review_id) FROM archive_checker_reviews r2
-            WHERE r2.submission_id = r.submission_id
-        )
-        ORDER BY r.created_at DESC;
+def _fetch_all_reviews(target: str) -> list[dict]:
+    """Fetch all review rows from a target."""
+    out = run_sql(target, """
+        SELECT submission_id, decision, username, comment,
+               content_hash, created_at
+        FROM archive_checker_reviews
+        ORDER BY created_at;
     """)
+    rows = []
+    for line in out.strip().splitlines():
+        if not line.strip():
+            continue
+        parts = line.split('\t')
+        if len(parts) >= 6:
+            rows.append({
+                'submission_id': int(parts[0]),
+                'decision': parts[1],
+                'username': parts[2],
+                'comment': parts[3] if parts[3] != 'NULL' else '',
+                'content_hash': parts[4] if parts[4] != 'NULL' else None,
+                'created_at': parts[5],
+            })
+    return rows
 
-    if not out.strip():
-        print(f'No reviews on {source} to sync.')
-        return
 
-    synced = 0
+def _review_fingerprint(r: dict) -> str:
+    """Unique fingerprint for deduplication."""
+    return f"{r['submission_id']}|{r['username']}|{r['created_at']}|{r['decision']}"
+
+
+def _get_publication_ids(target: str) -> dict[int, int]:
+    """Get submission_id → current_publication_id map."""
+    out = run_sql(target, """
+        SELECT submission_id, current_publication_id FROM submissions;
+    """)
+    result = {}
+    for line in out.strip().splitlines():
+        if not line.strip():
+            continue
+        parts = line.split('\t')
+        if len(parts) >= 2:
+            result[int(parts[0])] = int(parts[1])
+    return result
+
+
+def _sync_direction(source_name: str, dest_name: str,
+                    source_rows: list[dict], dest_fingerprints: set[str],
+                    dest_pub_ids: dict[int, int]) -> tuple[list[dict], int, int]:
+    """Find rows to insert from source into dest. Returns (to_insert, skipped, not_found)."""
+    to_insert = []
     skipped = 0
     not_found = 0
 
-    for line in out.strip().splitlines():
-        parts = line.split('\t')
-        if len(parts) < 6:
-            continue
-        src_id, decision, username, comment, created_at, title = parts[:6]
-        if not title or title == 'NULL':
+    for r in source_rows:
+        fp = _review_fingerprint(r)
+        if fp in dest_fingerprints:
             skipped += 1
             continue
 
-        # Find article on destination by title
-        safe_title = title.replace("'", "''").replace('%', '\\%').replace('_', '\\_')
-        dest_out = run_sql(dest, f"""
-            SELECT s.submission_id, s.current_publication_id
-            FROM submissions s
-            JOIN publication_settings ps ON ps.publication_id = s.current_publication_id
-            WHERE ps.setting_name = 'title' AND ps.locale = 'en'
-              AND ps.setting_value = '{safe_title}'
-            LIMIT 1;
-        """)
-
-        dest_row = dest_out.strip()
-        if not dest_row:
+        if r['submission_id'] not in dest_pub_ids:
             not_found += 1
             continue
 
-        dest_parts = dest_row.split('\t')
-        dest_sub_id = int(dest_parts[0])
-        dest_pub_id = int(dest_parts[1])
+        to_insert.append(r)
 
-        # Check if destination already has a newer review
-        dest_latest = run_sql(dest, f"""
-            SELECT created_at FROM archive_checker_reviews
-            WHERE submission_id = {dest_sub_id}
-            ORDER BY review_id DESC LIMIT 1;
-        """).strip()
+    return to_insert, skipped, not_found
 
-        if dest_latest and dest_latest >= created_at:
-            skipped += 1
-            continue
 
-        safe_comment = (comment or '').replace("'", "''")
-        if comment == 'NULL':
-            safe_comment = ''
-        safe_username = (username or 'unknown').replace("'", "''")
+def _insert_reviews(target: str, rows: list[dict], pub_ids: dict[int, int]) -> int:
+    """Batch-insert review rows into target. Returns count inserted."""
+    if not rows:
+        return 0
 
-        run_sql(dest, f"""
-            INSERT INTO archive_checker_reviews
-                (submission_id, publication_id, user_id, username, decision, comment, created_at)
-            VALUES
-                ({dest_sub_id}, {dest_pub_id}, 1, '{safe_username}',
-                 '{decision}', '{safe_comment}', '{created_at}');
-        """)
-        synced += 1
-        print(f'  {decision}: {title[:50]}')
+    values = []
+    for r in rows:
+        pub_id = pub_ids[r['submission_id']]
+        safe_comment = (r['comment'] or '').replace("'", "''")
+        safe_username = (r['username'] or 'unknown').replace("'", "''")
+        content_hash_sql = f"'{r['content_hash']}'" if r['content_hash'] else 'NULL'
+        values.append(
+            f"({r['submission_id']}, {pub_id}, 1, '{safe_username}', "
+            f"'{r['decision']}', '{safe_comment}', {content_hash_sql}, "
+            f"'{r['created_at']}')"
+        )
 
-    print(f'\nSync {source} → {dest}: {synced} synced, {skipped} skipped, {not_found} not found on {dest}')
+    # Insert in batches of 100 to avoid overly long SQL
+    BATCH = 100
+    for i in range(0, len(values), BATCH):
+        batch = values[i:i + BATCH]
+        run_sql(target, (
+            "INSERT INTO archive_checker_reviews "
+            "(submission_id, publication_id, user_id, username, decision, "
+            "comment, content_hash, created_at) VALUES\n"
+            + ",\n".join(batch) + ";"
+        ))
+
+    return len(values)
+
+
+def cmd_sync() -> None:
+    """Bidirectional sync of all review history between dev and live.
+
+    Matches by submission_id (stable across environments after pipe8).
+    Merges all history rows, deduplicating by submission_id + username +
+    created_at + decision. Effective status (newest wins) is automatic
+    via MAX(review_id).
+    """
+    print('Bidirectional sync: dev ↔ live')
+    print('Fetching reviews...')
+
+    dev_rows = _fetch_all_reviews('dev')
+    live_rows = _fetch_all_reviews('live')
+
+    print(f'  dev:  {len(dev_rows)} review rows')
+    print(f'  live: {len(live_rows)} review rows')
+
+    dev_fps = {_review_fingerprint(r) for r in dev_rows}
+    live_fps = {_review_fingerprint(r) for r in live_rows}
+
+    dev_pub_ids = _get_publication_ids('dev')
+    live_pub_ids = _get_publication_ids('live')
+
+    # dev → live
+    to_live, skip_live, nf_live = _sync_direction(
+        'dev', 'live', dev_rows, live_fps, live_pub_ids)
+    inserted_live = _insert_reviews('live', to_live, live_pub_ids)
+
+    # live → dev
+    to_dev, skip_dev, nf_dev = _sync_direction(
+        'live', 'dev', live_rows, dev_fps, dev_pub_ids)
+    inserted_dev = _insert_reviews('dev', to_dev, dev_pub_ids)
+
+    print(f'\ndev → live: {inserted_live} synced, {skip_live} already present, {nf_live} not found on live')
+    print(f'live → dev: {inserted_dev} synced, {skip_dev} already present, {nf_dev} not found on dev')
 
 
 def main():
@@ -503,11 +551,7 @@ def main():
     p_clear.add_argument('article', help='Article: path, submission_id, or title search')
 
     # sync
-    p_sync = sub.add_parser('sync', help='Sync reviews between environments')
-    p_sync.add_argument('--from', dest='sync_from', choices=['dev', 'live'], required=True,
-                        help='Source environment')
-    p_sync.add_argument('--to', dest='sync_to', choices=['dev', 'live'], required=True,
-                        help='Destination environment')
+    sub.add_parser('sync', help='Bidirectional sync of review history between dev and live')
 
     args = parser.parse_args()
 
@@ -526,10 +570,7 @@ def main():
     elif args.command == 'clear':
         cmd_clear(args.target, args.article)
     elif args.command == 'sync':
-        if args.sync_from == args.sync_to:
-            print('Source and destination must be different.', file=sys.stderr)
-            sys.exit(1)
-        cmd_sync(args.sync_from, args.sync_to)
+        cmd_sync()
     else:
         parser.print_help()
         sys.exit(1)
