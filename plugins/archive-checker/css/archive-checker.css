@@ -1370,12 +1370,14 @@ body {
 }
 
 .ac-help-box {
+    position: relative;
     background: var(--surface-warm);
     border-radius: 8px;
     padding: 32px 40px;
     box-shadow: var(--shadow-md);
     max-width: 580px;
     width: 90vw;
+    border-top: 3px solid var(--accent);
 }
 
 .ac-help-box-compact {
@@ -1466,6 +1468,65 @@ body {
     font-family: var(--font-ui);
     font-size: 12px;
     font-weight: 600;
+}
+
+.ac-help-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 4px;
+}
+.ac-help-close:hover {
+    color: var(--text-primary);
+    background: var(--surface-dark-hover);
+}
+
+.ac-help-then {
+    font-weight: 600;
+    margin-top: 16px !important;
+}
+
+.ac-help-action-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0 16px;
+}
+.ac-help-action-card {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+.ac-help-action-icon {
+    margin-right: 6px;
+}
+.ac-help-action-problem { background: rgba(192,57,43,0.08); }
+.ac-help-action-defer { background: rgba(127,140,141,0.1); }
+.ac-help-action-approve { background: rgba(45,122,79,0.08); }
+
+.ac-help-divider {
+    border: none;
+    border-top: 1px solid var(--divider);
+    margin: 16px 0;
+}
+
+.ac-help-footer {
+    margin-top: 12px !important;
+    margin-bottom: 0 !important;
+    font-size: 12px !important;
+    color: var(--text-muted);
+    text-align: center;
+    font-style: italic;
 }
 
 .ac-help-box p:last-child {

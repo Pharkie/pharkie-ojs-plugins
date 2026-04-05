@@ -446,24 +446,27 @@ HTMLSTART;
         <div class="ac-help-overlay" x-show="showGuide" x-cloak @click="dismissGuide()"
             role="dialog" aria-modal="true" aria-label="Guide">
             <div class="ac-help-box" @click.stop>
-                <h3>Help check the archive</h3>
-                <p>We have recently converted all articles in the archive from PDF to structured data and HTML to aid discoverability and readability. This tool makes it easy to compare the original PDF with the HTML version side by side and flag anything that doesn't look right.</p>
-                <p>The <strong>original PDF</strong> is on the left. The <strong>HTML version</strong> is on the right. Scroll through both, then:</p>
-                <ul class="ac-help-actions">
-                    <li><strong>Approve</strong> — everything looks correct</li>
-                    <li><strong>Report Problem</strong> — something needs fixing (describe what you see)</li>
-                </ul>
-                <h3>What to check</h3>
+                <button class="ac-help-close" @click="dismissGuide()" title="Close">&times;</button>
+                <h3>What to check?</h3>
+                <p>We've converted all 36 years of journal articles from PDF to structured HTML to improve discoverability and readability. Your help checking the conversion is invaluable.</p>
+                <p>Compare the <strong>original PDF</strong> (left) with the <strong>HTML version</strong> (right). Scroll through both and check:</p>
                 <ol class="ac-help-checklist">
-                    <li>Title, author(s), page numbers, keywords, and abstract are correct</li>
-                    <li>Article text matches the PDF — nothing missing, garbled, or out of order</li>
-                    <li>No content from neighbouring articles or non-article content mixed in</li>
-                    <li>Notes and author bios are in the right place</li>
-                    <li>References are complete and any DOI links point to the right work</li>
+                    <li>Title, author(s), page numbers, keywords, and abstract match the PDF</li>
+                    <li>Article text is complete &mdash; nothing missing, garbled, or out of order</li>
+                    <li>No content from neighbouring articles mixed in</li>
+                    <li>Notes, references, and author bios are correctly separated</li>
+                    <li>Reference DOI links go to the correct cited work &mdash; click a few to verify</li>
                 </ol>
-                <h3>Known limitations</h3>
-                <p>Images, photographs, tables, and charts have not yet been converted. A small number of articles could not be fully extracted and show limited formatting.</p>
-                <p>Press any key to close</p>
+                <p class="ac-help-then">Then choose an action:</p>
+                <div class="ac-help-action-cards">
+                    <div class="ac-help-action-card ac-help-action-problem"><span class="ac-help-action-icon">&#x26A0;</span> <strong>Report Problem</strong> &mdash; describe what's wrong</div>
+                    <div class="ac-help-action-card ac-help-action-defer"><span class="ac-help-action-icon">&#x23F8;</span> <strong>Defer</strong> &mdash; needs work beyond a quick fix</div>
+                    <div class="ac-help-action-card ac-help-action-approve"><span class="ac-help-action-icon">&#x2713;</span> <strong>Approve</strong> &mdash; looks good</div>
+                </div>
+                <hr class="ac-help-divider"/>
+                <h3>Images, tables, charts</h3>
+                <p>These have not yet been converted. Some articles show limited formatting.</p>
+                <p class="ac-help-footer">To see this again, click &ldquo;What to check?&rdquo; below.</p>
             </div>
         </div>
 
