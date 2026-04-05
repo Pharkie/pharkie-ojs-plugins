@@ -174,7 +174,7 @@ class ArchiveCheckerPlugin extends GenericPlugin
             . "On mobile? Pop back on a desktop later &mdash; the review tool uses side-by-side comparison."
             . '</p>'
             . '<a href="' . htmlspecialchars($qaUrl) . '" '
-            . 'style="display:inline-block;padding:7px 14px;background:#b8860b;color:#fff;'
+            . 'style="display:inline-block;margin-top:10px;padding:7px 14px;background:#b8860b;color:#fff;'
             . 'border-radius:4px;text-decoration:none;font-size:13px;font-weight:600;">'
             . 'Review articles &rarr;</a>'
             . '</div></section>';
