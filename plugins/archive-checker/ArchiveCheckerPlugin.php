@@ -465,7 +465,7 @@ HTMLSTART;
                 </div>
                 <hr class="ac-help-divider"/>
                 <h3>Images, tables, charts</h3>
-                <p>We haven't converted images, tables, or charts yet, so they'll be absent from the HTML. If you spot an article containing these, hit Defer and note what the PDF has that the HTML doesn't.</p>
+                <p>We haven't converted images, tables, or charts yet, so they'll be absent from the HTML. If you spot an article containing these, note what the PDF has that the HTML doesn't, and hit Defer.</p>
                 <p class="ac-help-footer">To see this again, click &ldquo;What to check?&rdquo; below.</p>
             </div>
         </div>
