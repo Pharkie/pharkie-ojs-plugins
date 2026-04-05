@@ -304,6 +304,7 @@ class ArchiveCheckerController extends PKPBaseController
             if ($status === 'approved') $counts['approved']++;
             elseif ($status === 'needs_fix') $counts['needs_fix']++;
             elseif ($status === 'recheck') $counts['recheck']++;
+            elseif ($status === 'deferred') $counts['deferred']++;
             elseif ($status === 'invalidated') $counts['invalidated']++;
             else $counts['unreviewed']++;
 
