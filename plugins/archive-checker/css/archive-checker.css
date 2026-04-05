@@ -1377,6 +1377,8 @@ body {
     box-shadow: var(--shadow-md);
     max-width: 580px;
     width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
     border-top: 3px solid var(--accent);
 }
 
