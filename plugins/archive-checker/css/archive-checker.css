@@ -1590,6 +1590,28 @@ body {
         height: 40vh;
         min-height: 250px;
     }
+
+    .ac-help-overlay {
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    .ac-help-box {
+        padding: 20px 18px;
+        max-height: calc(100vh - 24px);
+        width: 100%;
+        max-width: none;
+        font-size: 14px;
+    }
+
+    .ac-help-box h3 {
+        font-size: 15px;
+    }
+
+    .ac-help-checklist li,
+    .ac-help-action-card {
+        font-size: 13px;
+    }
 }
 
 /* ── QA Dashboard overlay ── */
