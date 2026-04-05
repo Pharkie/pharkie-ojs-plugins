@@ -170,7 +170,7 @@ class ArchiveCheckerPlugin extends GenericPlugin
             . "<strong>{$reviewed}</strong> down, <strong>{$remaining}</strong> to go. "
             . "Please, take a moment to review a few articles and report what needs fixing. "
             . "Discover hidden gems as you go. Start now with a random set of 10. "
-            . "</p><p style=\"margin:0;font-size:14px;line-height:1.5;color:#555;\">"
+            . "</p><p style=\"margin:10px 0 0;font-size:14px;line-height:1.5;color:#555;\">"
             . "On mobile? Pop back on a desktop later &mdash; the review tool uses side-by-side comparison."
             . '</p>'
             . '<a href="' . htmlspecialchars($qaUrl) . '" '
