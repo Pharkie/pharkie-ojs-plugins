@@ -259,6 +259,30 @@ class TestBioGrouping:
         assert 'Paul Gordon is a member' in result['bios'][0]
         assert 'psgordon@talk21.com' in result['bios'][0]
 
+    def test_consecutive_bio_and_contact_sections_merged(self):
+        """Bug 9438: Author Biography and Contact as separate <sec> elements
+        should produce one combined bio, not two."""
+        jats = _make_jats("""
+        <sec><title>Author Biography</title>
+        <p>Dr John Rowan has been a psychotherapist in private practice since 1980.</p>
+        </sec>
+        <sec><title>Contact</title>
+        <p>70 Kings Head Hill, North Chingford, London E4 7LY E-mail: johnrowan@aol.com</p>
+        </sec>
+        <sec><title>References</title>
+        <p>Smith, J. (2005). On anxiety. London: Sage.</p>
+        </sec>
+        """, authors=[('John', 'Rowan')])
+        with tempfile.NamedTemporaryFile(suffix='.jats.xml', mode='w', delete=False) as f:
+            f.write(jats)
+            f.flush()
+            result = extract_from_jats(Path(f.name))
+        os.unlink(f.name)
+        assert len(result['bios']) == 1, f"Expected 1 bio, got {len(result['bios'])}: {result['bios']}"
+        assert 'John Rowan' in result['bios'][0]
+        assert 'johnrowan@aol.com' in result['bios'][0]
+        assert 'Contact:' in result['bios'][0], "Contact prefix should have colon"
+
     def test_inline_notes_extracted(self):
         """Notes in <p><bold>Notes:</bold>(1) text...</p> format should be extracted."""
         jats = _make_jats("""

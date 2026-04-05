@@ -82,17 +82,20 @@ def extract_from_jats(jats_path: Path) -> dict:
     # Scan leading <p> elements (before first <sec>) for provenance notes.
     # Conference/presentation notes appear at the top of the article body,
     # not in reference sections at the tail.
+    # Scan ALL body <p> elements for provenance notes (conference
+    # presentations, amended versions, etc.). Provenance patterns are
+    # very distinctive ("This paper was presented at...", "Based on a
+    # talk given at...") so false positives are rare. Scanning all <p>
+    # catches provenance that appears mid-body, not just at the top.
     leading_provenance = []
     leading_provenance_elements = []
-    for child in body:
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-        if tag == 'sec':
-            break  # Reached first section — stop scanning
+    for p_el in body.iter():
+        tag = p_el.tag.split('}')[-1] if '}' in p_el.tag else p_el.tag
         if tag == 'p':
-            text = extract_text_from_element(child).strip()
+            text = extract_text_from_element(p_el).strip()
             if text and is_provenance(text):
                 leading_provenance.append(text)
-                leading_provenance_elements.append(child)
+                leading_provenance_elements.append(p_el)
 
     sections = find_jats_reference_sections(body, tail_only=True,
                                             author_names=author_names)
@@ -133,6 +136,8 @@ def extract_from_jats(jats_path: Path) -> dict:
             # Priority 2: bio sections — group bio + contact into single bio.
             # Strip heading prefix that find_jats_reference_sections bakes in.
             # Contact-only items are appended to the preceding bio text.
+            # Don't flush between consecutive bio sections (e.g. "Author
+            # Biography" followed by "Contact" = one combined bio).
             if is_bio_section:
                 clean = re.sub(
                     r'^(?:About the Authors?\s*|Author Bio(?:graph(?:y|ies))?\s*'
@@ -140,16 +145,10 @@ def extract_from_jats(jats_path: Path) -> dict:
                     '', item, count=1, flags=re.IGNORECASE).strip()
                 if not clean:
                     continue
-                if is_author_contact(clean):
-                    # If heading was "Contact" and got prepended without
-                    # a colon, normalise to "Contact: email"
-                    if clean.lower().startswith('contact ') and ':' not in clean[:10]:
-                        clean = 'Contact: ' + clean[len('Contact '):].strip()
-                    bio_section_parts.append(clean)
-                else:
-                    if bio_section_parts:
-                        bios.append(' '.join(bio_section_parts))
-                    bio_section_parts = [clean]
+                # Normalise "Contact email" → "Contact: email"
+                if clean.lower().startswith('contact ') and ':' not in clean[:10]:
+                    clean = 'Contact: ' + clean[len('Contact '):].strip()
+                bio_section_parts.append(clean)
                 continue
 
             # Priority 3: author bio/contact in any section — bio trumps heading
