@@ -172,7 +172,7 @@ class ArchiveCheckerPlugin extends GenericPlugin
             . "Please, take a moment to review a few articles and report what needs fixing. "
             . "Discover hidden gems as you go. Start now with a random set of 10. "
             . "</p><p class=\"ac-cta-mobile-note\" style=\"margin:10px 0 0;font-size:14px;line-height:1.5;color:#555;display:none;\">"
-            . "On mobile? Pop back on a desktop later &mdash; the review tool uses side-by-side comparison."
+            . "On mobile? The split interface works best on desktop, but see if it works for you."
             . '</p>'
             . '<a href="' . htmlspecialchars($qaUrl) . '" '
             . 'style="display:inline-block;margin-top:10px;padding:7px 14px;background:#b8860b;color:#fff;'
