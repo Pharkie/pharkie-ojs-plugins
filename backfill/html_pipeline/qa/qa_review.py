@@ -509,6 +509,26 @@ def cmd_sync() -> None:
     print(f'\ndev → live: {inserted_live} synced, {skip_live} already present, {nf_live} not found on live')
     print(f'live → dev: {inserted_dev} synced, {skip_dev} already present, {nf_dev} not found on dev')
 
+    # Clean orphaned reviews (submission_id no longer exists in submissions)
+    total_cleaned = 0
+    for target in ['dev', 'live']:
+        out = run_sql(target, """
+            SELECT COUNT(*) FROM archive_checker_reviews r
+            LEFT JOIN submissions s ON s.submission_id = r.submission_id
+            WHERE s.submission_id IS NULL;
+        """).strip()
+        orphan_count = int(out) if out else 0
+        if orphan_count > 0:
+            run_sql(target, """
+                DELETE r FROM archive_checker_reviews r
+                LEFT JOIN submissions s ON s.submission_id = r.submission_id
+                WHERE s.submission_id IS NULL;
+            """)
+            print(f'Cleaned {orphan_count} orphaned reviews on {target}')
+            total_cleaned += orphan_count
+    if total_cleaned == 0:
+        print('No orphaned reviews found')
+
 
 def main():
     parser = argparse.ArgumentParser(
