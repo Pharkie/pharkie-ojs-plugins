@@ -71,7 +71,7 @@ WordPress plugin that hooks into WooCommerce Subscription lifecycle events and p
 
 ## [Backfill Toolkit](backfill/)
 
-Tools for digitising a journal's print archive into OJS. Takes whole-issue PDFs and produces per-article PDFs, HTML galleys, JATS XML, and OJS Native XML for import.
+Tools for digitising a journal's print archive into OJS. Takes whole-issue PDFs and produces per-article PDFs, plus three galleys per article (PDF, HTML "Full Text", JATS XML) bundled into OJS Native XML for import.
 
 - PDF splitting into per-article files using table-of-contents metadata
 - AI-powered HTML galley generation (Claude API)
