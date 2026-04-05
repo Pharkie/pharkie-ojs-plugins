@@ -448,7 +448,7 @@ HTMLSTART;
             <div class="ac-help-box" @click.stop>
                 <button class="ac-help-close" @click="dismissGuide()" title="Close">&times;</button>
                 <h3>What to check?</h3>
-                <p>We've converted all 36 years of journal articles from PDF to structured HTML to improve discoverability and readability. Your help checking the conversion is invaluable.</p>
+                <p>We've recently converted all 36 years of journal articles from PDF to structured HTML to improve discoverability and readability. This is a big task. Please, help by checking a few articles? And maybe learn something from the archive, along the way.</p>
                 <p>Compare the <strong>original PDF</strong> (left) with the <strong>HTML version</strong> (right). Scroll through both and check:</p>
                 <ol class="ac-help-checklist">
                     <li>Title, author(s), page numbers, keywords, and abstract match the PDF</li>

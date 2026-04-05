@@ -1485,7 +1485,7 @@ body {
 }
 .ac-help-close:hover {
     color: var(--text-primary);
-    background: var(--surface-dark-hover);
+    background: var(--surface-cream);
 }
 
 .ac-help-then {
@@ -1503,16 +1503,18 @@ body {
     font-family: var(--font-ui);
     font-size: 14px;
     padding: 10px 14px;
-    border-radius: 6px;
+    border-radius: 4px;
     color: var(--text-primary);
     line-height: 1.4;
+    border-left: 4px solid transparent;
+    background: var(--surface-cream);
 }
 .ac-help-action-icon {
     margin-right: 6px;
 }
-.ac-help-action-problem { background: rgba(192,57,43,0.08); }
-.ac-help-action-defer { background: rgba(127,140,141,0.1); }
-.ac-help-action-approve { background: rgba(45,122,79,0.08); }
+.ac-help-action-problem { border-left-color: var(--color-fix); }
+.ac-help-action-defer { border-left-color: var(--color-deferred); }
+.ac-help-action-approve { border-left-color: var(--color-approve); }
 
 .ac-help-divider {
     border: none;
