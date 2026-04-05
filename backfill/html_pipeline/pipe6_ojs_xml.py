@@ -421,6 +421,23 @@ def _load_jats_pages(pdf_path):
     return fpage, lpage
 
 
+def load_jats_galley(pdf_path):
+    """Load JATS XML for embedding as a galley.
+
+    Looks for {split_pdf_stem}.jats.xml next to the split PDF.
+    Returns JATS content string or None if no file exists.
+    """
+    if not pdf_path or not os.path.exists(pdf_path):
+        return None
+
+    jats_path = os.path.splitext(pdf_path)[0] + '.jats.xml'
+    if not os.path.exists(jats_path):
+        return None
+
+    with open(jats_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
 def load_html_galley(pdf_path):
     """Load pre-generated HTML galley for an article.
 
@@ -483,6 +500,8 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     pub_id = 3000 + article_idx
     html_file_id = 6000 + article_idx
     html_submission_file_id = 7000 + article_idx
+    jats_file_id = 10000 + article_idx
+    jats_submission_file_id = 11000 + article_idx
 
     lines = []
 
@@ -528,6 +547,26 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
         lines.append(f'{i3}<name locale="en">{escape(html_filename)}</name>')
         lines.append(f'{i3}<file id="{html_file_id}" filesize="{len(html_bytes)}" extension="html">')
         lines.append(f'{i4}<embed encoding="base64">{html_b64}</embed>')
+        lines.append(f'{i3}</file>')
+        lines.append(f'{i2}</submission_file>')
+
+    # JATS XML galley (structured format for OAI-PMH harvesting and preservation)
+    jats_content = None
+    if has_pdf:
+        jats_content = load_jats_galley(pdf_path)
+    if jats_content:
+        jats_bytes = jats_content.encode('utf-8')
+        jats_b64 = base64.b64encode(jats_bytes).decode('ascii')
+        jats_filename = os.path.splitext(os.path.basename(pdf_path))[0] + '.jats.xml'
+        lines.append(f'{i2}<submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+                     f' id="{jats_submission_file_id}" created_at="{date_published}"'
+                     f' file_id="{jats_file_id}" stage="proof"'
+                     f' updated_at="{date_published}" viewable="false"'
+                     f' genre="Article Text" uploader="admin"'
+                     f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
+        lines.append(f'{i3}<name locale="en">{escape(jats_filename)}</name>')
+        lines.append(f'{i3}<file id="{jats_file_id}" filesize="{len(jats_bytes)}" extension="xml">')
+        lines.append(f'{i4}<embed encoding="base64">{jats_b64}</embed>')
         lines.append(f'{i3}</file>')
         lines.append(f'{i2}</submission_file>')
 
@@ -664,6 +703,17 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
         lines.append(f'{i4}<name locale="en">Full Text</name>')
         lines.append(f'{i4}<seq>1</seq>')
         lines.append(f'{i4}<submission_file_ref id="{html_submission_file_id}"/>')
+        lines.append(f'{i3}</article_galley>')
+
+    # JATS XML galley (structured format for machine reading)
+    if jats_content:
+        lines.append(f'{i3}<article_galley xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+                     f' locale="en" approved="false"'
+                     f' xsi:schemaLocation="http://pkp.sfu.ca native.xsd">')
+        lines.append(f'{i4}<id type="internal" advice="ignore">{pub_id + 12000}</id>')
+        lines.append(f'{i4}<name locale="en">JATS XML</name>')
+        lines.append(f'{i4}<seq>2</seq>')
+        lines.append(f'{i4}<submission_file_ref id="{jats_submission_file_id}"/>')
         lines.append(f'{i3}</article_galley>')
 
     lines.append(f'{i2}</publication>')

@@ -12,6 +12,7 @@ from backfill.html_pipeline.pipe6_ojs_xml import (
     parse_date,
     split_author_name,
     generate_xml,
+    load_jats_galley,
     SECTIONS,
 )
 from backfill.html_pipeline.pipe3_generate_jats import (
@@ -435,6 +436,145 @@ class TestDoiInXml:
         assert len(issue_ids) == 1
         assert issue_ids[0].text == '475'
         assert issue_ids[0].get('advice') == 'ignore'
+
+
+# ── JATS XML galley ──
+
+class TestJatsGalley:
+    """Test that JATS XML is included as a third galley alongside PDF and HTML."""
+
+    def _make_article_files(self, tmp_path):
+        """Create minimal PDF, HTML galley, and JATS files for testing."""
+        pdf_path = tmp_path / '01-test-article.pdf'
+        pdf_path.write_bytes(b'%PDF-fake')
+        html_path = tmp_path / '01-test-article.galley.html'
+        html_path.write_text('<p>Test content</p>')
+        jats_path = tmp_path / '01-test-article.jats.xml'
+        jats_path.write_text(
+            '<?xml version="1.0"?>'
+            '<article><front><article-meta>'
+            '<article-id pub-id-type="doi">10.65828/test123</article-id>'
+            '</article-meta></front><body><p>Test</p></body></article>')
+        return str(pdf_path)
+
+    def _make_toc(self, pdf_path):
+        return {
+            'volume': 37, 'issue': 1, 'date': 'January 2026',
+            'articles': [{
+                'title': 'Test Article',
+                'authors': 'John Doe',
+                'section': 'Articles',
+                'split_pdf': pdf_path,
+                'journal_page_start': 1,
+                'journal_page_end': 10,
+                'pdf_page_start': 1,
+                'pdf_page_end': 10,
+            }],
+        }
+
+    def test_jats_galley_present(self, tmp_path):
+        """JATS XML should appear as a galley when .jats.xml file exists."""
+        pdf_path = self._make_article_files(tmp_path)
+        xml_str = generate_xml(self._make_toc(pdf_path))
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        galleys = root.findall('.//ojs:article_galley', ns)
+        galley_names = [g.find('ojs:name', ns).text for g in galleys]
+        assert 'JATS XML' in galley_names
+
+    def test_jats_galley_sequence(self, tmp_path):
+        """JATS XML galley should have seq=2 (after PDF=0 and Full Text=1)."""
+        pdf_path = self._make_article_files(tmp_path)
+        xml_str = generate_xml(self._make_toc(pdf_path))
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        galleys = root.findall('.//ojs:article_galley', ns)
+        jats_galley = [g for g in galleys
+                       if g.find('ojs:name', ns).text == 'JATS XML'][0]
+        assert jats_galley.find('ojs:seq', ns).text == '2'
+
+    def test_three_galleys_when_all_files_exist(self, tmp_path):
+        """Should produce PDF, Full Text, and JATS XML galleys."""
+        pdf_path = self._make_article_files(tmp_path)
+        xml_str = generate_xml(self._make_toc(pdf_path))
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        galleys = root.findall('.//ojs:article_galley', ns)
+        galley_names = sorted(g.find('ojs:name', ns).text for g in galleys)
+        assert galley_names == ['Full Text', 'JATS XML', 'PDF']
+
+    def test_jats_submission_file_present(self, tmp_path):
+        """JATS should have a corresponding submission_file with xml extension."""
+        pdf_path = self._make_article_files(tmp_path)
+        xml_str = generate_xml(self._make_toc(pdf_path))
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        sub_files = root.findall('.//ojs:submission_file', ns)
+        file_names = [sf.find('ojs:name', ns).text for sf in sub_files]
+        jats_files = [n for n in file_names if n.endswith('.jats.xml')]
+        assert len(jats_files) == 1
+        assert jats_files[0] == '01-test-article.jats.xml'
+
+    def test_jats_file_extension_is_xml(self, tmp_path):
+        """The embedded file should have extension='xml'."""
+        pdf_path = self._make_article_files(tmp_path)
+        xml_str = generate_xml(self._make_toc(pdf_path))
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        sub_files = root.findall('.//ojs:submission_file', ns)
+        for sf in sub_files:
+            name = sf.find('ojs:name', ns).text
+            if name.endswith('.jats.xml'):
+                file_el = sf.find('ojs:file', ns)
+                assert file_el.get('extension') == 'xml'
+                break
+        else:
+            raise AssertionError('No JATS submission_file found')
+
+    def test_no_jats_galley_without_jats_file(self, tmp_path):
+        """No JATS galley when .jats.xml file doesn't exist."""
+        pdf_path = tmp_path / '01-test.pdf'
+        pdf_path.write_bytes(b'%PDF-fake')
+        toc = {
+            'volume': 1, 'issue': 1, 'date': 'January 1990',
+            'articles': [{
+                'title': 'Old Article', 'authors': None,
+                'section': 'Articles',
+                'split_pdf': str(pdf_path),
+                'journal_page_start': 1, 'journal_page_end': 10,
+                'pdf_page_start': 1, 'pdf_page_end': 10,
+            }],
+        }
+        xml_str = generate_xml(toc)
+        root = ET.fromstring(xml_str)
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        galleys = root.findall('.//ojs:article_galley', ns)
+        galley_names = [g.find('ojs:name', ns).text for g in galleys]
+        assert 'JATS XML' not in galley_names
+
+
+class TestLoadJatsGalley:
+    """Test the load_jats_galley() helper function."""
+
+    def test_loads_existing_file(self, tmp_path):
+        pdf_path = tmp_path / 'article.pdf'
+        pdf_path.write_bytes(b'%PDF-fake')
+        jats_path = tmp_path / 'article.jats.xml'
+        jats_path.write_text('<article>test</article>')
+        result = load_jats_galley(str(pdf_path))
+        assert result == '<article>test</article>'
+
+    def test_returns_none_when_no_jats(self, tmp_path):
+        pdf_path = tmp_path / 'article.pdf'
+        pdf_path.write_bytes(b'%PDF-fake')
+        result = load_jats_galley(str(pdf_path))
+        assert result is None
+
+    def test_returns_none_for_none_path(self):
+        assert load_jats_galley(None) is None
+
+    def test_returns_none_for_nonexistent_pdf(self):
+        assert load_jats_galley('/tmp/nonexistent.pdf') is None
 
 
 # ── JATS <product> generation (pipe3) ──

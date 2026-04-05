@@ -1,6 +1,6 @@
 # Backfill Toolkit
 
-Tools for digitising a journal's print archive into OJS. Takes whole-issue PDFs and produces per-article PDFs, HTML galleys, JATS 1.3 XML, and OJS Native XML for import.
+Tools for digitising a journal's print archive into OJS. Takes whole-issue PDFs and produces per-article PDFs, plus three galleys per article (PDF, HTML "Full Text", JATS XML) bundled into OJS Native XML for import.
 
 ## Pipeline
 
@@ -61,8 +61,9 @@ flowchart TD
 
     galley --> pipe6["pipe6_ojs_xml\n<i>bundle for OJS import</i>"]
     pdf --> pipe6
+    jats --> pipe6
     toc --> pipe6
-    pipe6 --> import_xml([import.xml])
+    pipe6 --> import_xml([import.xml\n<i>PDF + HTML + JATS galleys</i>])
 
     import_xml --> pipe7["pipe7_import.sh\n<i>load into OJS via CLI</i>"]
     pipe7 --> db
@@ -98,7 +99,7 @@ flowchart TD
 7. **`html_pipeline/pipe4_extract_citations.py`** — finds reference sections in the JATS body, extracts items, writes structured references to `<ref-list>` and notes to `<fn-group>`. See [citation classification rules](../docs/citation-classification.md).
 8. **`html_pipeline/pipe4b_match_dois.py`** — matches extracted references against Crossref DOIs. Writes `<pub-id>` elements to JATS. Optional — skip during QA iteration, run once when refs are finalized. Results cached in `doi_matches.json`. See [Crossref reference linking](../docs/crossref-reference-linking.md).
 9. **`html_pipeline/pipe5_galley_html.py`** — regenerates HTML galleys from JATS (body + notes + bios; references excluded since OJS renders those from its citations table).
-10. **`html_pipeline/pipe6_ojs_xml.py`** — produces OJS Native XML with base64-embedded PDFs and HTML galleys, ready for import.
+10. **`html_pipeline/pipe6_ojs_xml.py`** — produces OJS Native XML with base64-embedded galleys (PDF, HTML "Full Text", JATS XML), ready for import.
 11. **`html_pipeline/pipe7_import.sh <issue-dir>`** — loads the generated XML into OJS via Docker CLI.
 
 ## Directory structure
