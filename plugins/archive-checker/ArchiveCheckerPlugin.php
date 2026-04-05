@@ -465,7 +465,7 @@ HTMLSTART;
                 </div>
                 <hr class="ac-help-divider"/>
                 <h3>Images, tables, charts</h3>
-                <p>These have not yet been converted. Some articles show limited formatting.</p>
+                <p>These have not yet been converted.</p>
                 <p class="ac-help-footer">To see this again, click &ldquo;What to check?&rdquo; below.</p>
             </div>
         </div>
