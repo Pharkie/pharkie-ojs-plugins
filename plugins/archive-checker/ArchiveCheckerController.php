@@ -165,7 +165,7 @@ class ArchiveCheckerController extends PKPBaseController
 
         // Latest review per submission
         $reviews = DB::table('archive_checker_reviews as r1')
-            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id)')
+            ->whereRaw('r1.review_id = (SELECT r2.review_id FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1)')
             ->get()
             ->keyBy('submission_id');
 
@@ -661,7 +661,7 @@ class ArchiveCheckerController extends PKPBaseController
         $rejected = DB::table('archive_checker_reviews as r1')
             ->join('submissions as s', 'r1.submission_id', '=', 's.submission_id')
             ->where('s.context_id', $contextId)
-            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id)')
+            ->whereRaw('r1.review_id = (SELECT r2.review_id FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1)')
             ->where('r1.decision', 'needs_fix')
             ->select('r1.submission_id')
             ->inRandomOrder()
@@ -724,7 +724,7 @@ class ArchiveCheckerController extends PKPBaseController
         $reviewData = DB::table('archive_checker_reviews')
             ->select([
                 'submission_id',
-                DB::raw('MAX(CASE WHEN review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = archive_checker_reviews.submission_id) THEN decision END) as latest_decision'),
+                DB::raw('MAX(CASE WHEN review_id = (SELECT r2.review_id FROM archive_checker_reviews r2 WHERE r2.submission_id = archive_checker_reviews.submission_id ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1) THEN decision END) as latest_decision'),
                 DB::raw('COUNT(DISTINCT user_id) as reviewer_count'),
             ])
             ->groupBy('submission_id')

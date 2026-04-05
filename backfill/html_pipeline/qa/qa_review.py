@@ -339,8 +339,9 @@ def cmd_list(target: str, show_all: bool) -> None:
             AND ps.setting_name = 'title' AND ps.locale = 'en'
         {where}
           AND r.review_id = (
-              SELECT MAX(r2.review_id) FROM archive_checker_reviews r2
+              SELECT r2.review_id FROM archive_checker_reviews r2
               WHERE r2.submission_id = r.submission_id
+              ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1
           )
         ORDER BY r.created_at DESC;
     """)

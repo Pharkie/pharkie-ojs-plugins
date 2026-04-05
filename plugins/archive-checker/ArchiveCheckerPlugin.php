@@ -149,7 +149,7 @@ class ArchiveCheckerPlugin extends GenericPlugin
         $reviewed = DB::table('archive_checker_reviews as r1')
             ->join('submissions as s', 's.submission_id', '=', 'r1.submission_id')
             ->where('s.context_id', $contextId)
-            ->whereRaw('r1.review_id = (SELECT MAX(r2.review_id) FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id)')
+            ->whereRaw('r1.review_id = (SELECT r2.review_id FROM archive_checker_reviews r2 WHERE r2.submission_id = r1.submission_id ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1)')
             ->count();
 
         $remaining = $total - $reviewed;
