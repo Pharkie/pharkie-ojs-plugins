@@ -465,7 +465,7 @@ HTMLSTART;
                 </div>
                 <hr class="ac-help-divider"/>
                 <h3>Images, tables, charts</h3>
-                <p>We haven't converted images, tables, or charts yet, so they'll be missing from the HTML. If you spot an article containing these, hit Defer and let us know what's missing.</p>
+                <p>We haven't converted images, tables, or charts yet, so they'll be absent from the HTML. If you spot an article containing these, hit Defer and let us know what you see.</p>
                 <p class="ac-help-footer">To see this again, click &ldquo;What to check?&rdquo; below.</p>
             </div>
         </div>
