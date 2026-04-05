@@ -460,7 +460,7 @@ HTMLSTART;
                 <p class="ac-help-then">Then choose an action:</p>
                 <div class="ac-help-action-cards">
                     <div class="ac-help-action-card ac-help-action-problem"><span class="ac-help-action-icon">&#x26A0;</span> <strong>Report Problem</strong> &mdash; describe what's wrong</div>
-                    <div class="ac-help-action-card ac-help-action-defer"><span class="ac-help-action-icon">&#x23F8;</span> <strong>Defer</strong> &mdash; needs work beyond a quick fix</div>
+                    <div class="ac-help-action-card ac-help-action-defer"><span class="ac-help-action-icon">&#x23F8;</span> <strong>Defer</strong> &mdash; can't be fixed right now (e.g. missing images)</div>
                     <div class="ac-help-action-card ac-help-action-approve"><span class="ac-help-action-icon">&#x2713;</span> <strong>Approve</strong> &mdash; looks good</div>
                 </div>
                 <hr class="ac-help-divider"/>
