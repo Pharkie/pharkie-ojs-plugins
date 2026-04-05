@@ -445,15 +445,13 @@ test.describe('Archive Checker plugin', () => {
 
   // ── Filter consistency ──
 
-  test('pill counts match sidebar article count', async ({ page }) => {
+  test('status pill counts sum to total articles', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
     await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
-    // Total sidebar items
     const sidebarCount = await page.locator('.ac-drawer-item').count();
 
-    // Sum of status pill counts should equal sidebar count
     const statusPills = page.locator('.ac-drawer-pill-status');
     let pillSum = 0;
     for (let i = 0; i < await statusPills.count(); i++) {
@@ -464,6 +462,97 @@ test.describe('Archive Checker plugin', () => {
     expect(pillSum).toBe(sidebarCount);
   });
 
+  test('section pill counts sum to total articles', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
+
+    const sidebarCount = await page.locator('.ac-drawer-item').count();
+
+    const sectionPills = page.locator('.ac-drawer-pill-section');
+    let pillSum = 0;
+    for (let i = 0; i < await sectionPills.count(); i++) {
+      const text = await sectionPills.nth(i).textContent();
+      const match = text?.match(/\((\d+)\)/);
+      if (match) pillSum += parseInt(match[1], 10);
+    }
+    expect(pillSum).toBe(sidebarCount);
+  });
+
+  test('reviewer pill counts plus unchecked equal total articles', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto(QA_URL);
+    await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
+
+    const sidebarCount = await page.locator('.ac-drawer-item').count();
+
+    // Sum reviewer pill counts (By me + By others)
+    const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
+    let reviewedSum = 0;
+    for (let i = 0; i < await reviewerPills.count(); i++) {
+      const text = await reviewerPills.nth(i).textContent();
+      const match = text?.match(/\((\d+)\)/);
+      if (match) reviewedSum += parseInt(match[1], 10);
+    }
+
+    // Unchecked count from the Unchecked status pill
+    const uncheckedPill = page.locator('.ac-drawer-pill-status', { hasText: 'Unchecked' });
+    let uncheckedCount = 0;
+    if (await uncheckedPill.count() > 0) {
+      const text = await uncheckedPill.textContent();
+      const match = text?.match(/\((\d+)\)/);
+      if (match) uncheckedCount = parseInt(match[1], 10);
+    }
+
+    expect(reviewedSum + uncheckedCount).toBe(sidebarCount);
+  });
+
+  test('progress bar counts match API totals', async ({ page }) => {
+    await loginAsAdmin(page);
+
+    const response = await page.request.get(`${API_BASE}/articles`);
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    const counts = data.counts;
+
+    // Server-side counts must sum to total
+    const statusSum = (counts.approved || 0) + (counts.needs_fix || 0)
+      + (counts.recheck || 0) + (counts.deferred || 0)
+      + (counts.unreviewed || 0) + (counts.invalidated || 0);
+    expect(statusSum).toBe(counts.total);
+
+    // Article count must match total
+    expect(data.articles.length).toBe(counts.total);
+
+    // Count statuses from article data — must match server counts
+    const fromArticles: Record<string, number> = {};
+    for (const a of data.articles) {
+      fromArticles[a.status] = (fromArticles[a.status] || 0) + 1;
+    }
+    expect(fromArticles['approved'] || 0).toBe(counts.approved || 0);
+    expect(fromArticles['needs_fix'] || 0).toBe(counts.needs_fix || 0);
+    expect(fromArticles['recheck'] || 0).toBe(counts.recheck || 0);
+    expect(fromArticles['deferred'] || 0).toBe(counts.deferred || 0);
+    expect(fromArticles['unreviewed'] || 0).toBe(counts.unreviewed || 0);
+
+    // Every reviewed article must have a reviewer, every unreviewed must not
+    for (const a of data.articles) {
+      if (a.status === 'unreviewed') {
+        expect(a.reviewer).toBeFalsy();
+      } else {
+        expect(a.reviewer).toBeTruthy();
+      }
+    }
+
+    // Section counts must sum to total
+    const sectionCounts: Record<string, number> = {};
+    for (const a of data.articles) {
+      sectionCounts[a.section] = (sectionCounts[a.section] || 0) + 1;
+    }
+    const sectionSum = Object.values(sectionCounts).reduce((s, v) => s + v, 0);
+    expect(sectionSum).toBe(counts.total);
+  });
+
   test('reviewer pill count matches sidebar after click', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(QA_URL);
@@ -471,16 +560,13 @@ test.describe('Archive Checker plugin', () => {
 
     const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
     if (await reviewerPills.count() > 0) {
-      // Get count from pill text
       const pillText = await reviewerPills.first().textContent();
       const match = pillText?.match(/\((\d+)\)/);
       const expectedCount = match ? parseInt(match[1], 10) : 0;
 
-      // Click the pill
       await reviewerPills.first().click();
       await page.waitForTimeout(300);
 
-      // Sidebar items should match the pill count
       const sidebarCount = await page.locator('.ac-drawer-item').count();
       expect(sidebarCount).toBe(expectedCount);
     }
