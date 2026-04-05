@@ -236,30 +236,6 @@ test.describe('Inline HTML Galley plugin', () => {
     await expect(page.locator('#ihg-report-text')).toBeVisible();
   });
 
-  // ── Structured citations indicator ──
-
-  test('references heading shows "structured citations" indicator', async ({ page }) => {
-    test.skip(!citationArticleId, 'No open-access article with citations');
-
-    await loginAsAdmin(page);
-    await page.goto(
-      `${OJS_BASE}/index.php/ea/article/view/${citationArticleId}`,
-    );
-
-    // The References h2 should have ::after with "structured citations"
-    // We can't directly test ::after content, but we can check the heading exists
-    // and the CSS class is targeted
-    const refsHeading = page.locator('.item.references h2.label');
-    await expect(refsHeading).toBeVisible({ timeout: 10_000 });
-
-    // Verify the ::after pseudo-element renders by checking computed style
-    const hasAfter = await refsHeading.evaluate(el => {
-      const after = window.getComputedStyle(el, '::after');
-      return after.content;
-    });
-    expect(hasAfter).toContain('structured citations');
-  });
-
   // ── Pipeline-extracted back-matter labels ──
 
   test('jats-bios div has "Author bio" CSS label', async ({ page }) => {

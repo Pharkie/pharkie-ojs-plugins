@@ -434,6 +434,23 @@ $MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, set
   ON DUPLICATE KEY UPDATE setting_value='0';"
 echo "[OJS] User registration enabled."
 
+# --- Workflow metadata fields ---
+# Enable submission metadata fields used by the journal.
+# 'request' = available in workflow + ask author to provide during submission.
+# References (citations) — needed for Crossref reference linking (pipe9b writes DOIs here).
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, '', 'citations', 'request')
+  ON DUPLICATE KEY UPDATE setting_value='request';"
+# Keywords — standard academic metadata.
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, '', 'keywords', 'request')
+  ON DUPLICATE KEY UPDATE setting_value='request';"
+# Publisher ID — not enabled for any object type (submission_id preservation is handled by pipe8).
+$MARIADB -e "INSERT INTO journal_settings (journal_id, locale, setting_name, setting_value)
+  VALUES ($JOURNAL_ID_META, '', 'enablePublisherId', '[]')
+  ON DUPLICATE KEY UPDATE setting_value='[]';"
+echo "[OJS] Workflow metadata fields configured (citations, keywords, publisher ID)."
+
 # --- Editorial team metadata ---
 # User accounts + roles are assigned by scripts/ojs/assign-roles.sh (reads private/editorial-roles.json).
 # This section only configures journal-level metadata: masthead setting, static HTML, contact info.
@@ -710,6 +727,26 @@ $MARIADB <<SQL
   VALUES ('wpojssubscriptionapiplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
 SQL
 
+# --- Plugin enable/disable states (from plugin-states.json) ---
+# Only non-default states — OJS enables most built-in plugins automatically.
+# These are lazy-loaded plugins or explicit overrides.
+PLUGIN_STATES_FILE="$(dirname "$0")/plugin-states.json"
+if [ -f "$PLUGIN_STATES_FILE" ]; then
+  for PLUGIN in $(jq -r '.enable[]' "$PLUGIN_STATES_FILE"); do
+    $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('$PLUGIN', $JOURNAL_ID, 'enabled', '1', 'bool')
+      ON DUPLICATE KEY UPDATE setting_value='1';"
+  done
+  for PLUGIN in $(jq -r '.disable[]' "$PLUGIN_STATES_FILE"); do
+    $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+      VALUES ('$PLUGIN', $JOURNAL_ID, 'enabled', '0', 'bool')
+      ON DUPLICATE KEY UPDATE setting_value='0';"
+  done
+  echo "[OJS] Plugin states applied from plugin-states.json."
+else
+  echo "[OJS] WARNING: plugin-states.json not found, skipping plugin enable/disable."
+fi
+
 # --- Enable Inline HTML Galley plugin ---
 echo "[OJS] Enabling inline-html-galley plugin for journal $JOURNAL_ID..."
 $MARIADB <<SQL
@@ -799,9 +836,8 @@ else
 fi
 
 # --- Enable payments ---
-# Payments must be enabled for the paywall to work. Three payment plugins:
+# Payments must be enabled for the paywall to work. Two payment plugins:
 # - Stripe: preferred (when OJS_STRIPE_SECRET_KEY is set)
-# - PayPal: fallback (when OJS_PAYPAL_ACCOUNT is set)
 # - Manual Payment: always enabled as last resort
 PAYMENTS_ENABLED=$($MARIADB -N -e "SELECT setting_value FROM journal_settings WHERE journal_id=$JOURNAL_ID AND setting_name='paymentsEnabled'" 2>/dev/null)
 
@@ -816,11 +852,9 @@ STRIPE_TEST_WEBHOOK_SECRET="${OJS_STRIPE_TEST_WEBHOOK_SECRET:-}"
 STRIPE_WEBHOOK_SECRET="${OJS_STRIPE_WEBHOOK_SECRET:-}"
 STRIPE_TEST_MODE="${OJS_STRIPE_TEST_MODE:-}"
 
-# Determine which payment plugin to use: Stripe > PayPal > Manual
+# Determine which payment plugin to use: Stripe > Manual
 if [ -n "$STRIPE_SECRET_KEY" ]; then
   PAYMENT_PLUGIN="StripePayment"
-elif [ -n "$PAYPAL_ACCOUNT" ]; then
-  PAYMENT_PLUGIN="PaypalPayment"
 else
   PAYMENT_PLUGIN="ManualPayment"
 fi
@@ -934,37 +968,6 @@ SQL
   echo "[OJS] Stripe configured (${STRIPE_MODE_LABEL} mode)."
 else
   echo "[OJS] Stripe not configured (no OJS_STRIPE_SECRET_KEY)."
-fi
-
-# --- PayPal payment plugin ---
-if [ -n "$PAYPAL_ACCOUNT" ]; then
-  if [ -z "$PAYPAL_CLIENT_ID" ] || [ -z "$PAYPAL_SECRET" ] || [ -z "$PAYPAL_TEST_MODE" ]; then
-    echo "[OJS] ERROR: OJS_PAYPAL_ACCOUNT is set but OJS_PAYPAL_CLIENT_ID, OJS_PAYPAL_SECRET, and OJS_PAYPAL_TEST_MODE are required."
-    exit 1
-  fi
-  PAYPAL_MODE_LABEL="test"
-  [ "$PAYPAL_TEST_MODE" = "0" ] && PAYPAL_MODE_LABEL="LIVE"
-  echo "[OJS] Configuring PayPal payment plugin (${PAYPAL_MODE_LABEL} mode)..."
-  $MARIADB <<SQL
-    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('paypalpayment', $JOURNAL_ID, 'enabled', '1', 'bool')
-    ON DUPLICATE KEY UPDATE setting_value='1';
-    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('paypalpayment', $JOURNAL_ID, 'testMode', '$PAYPAL_TEST_MODE', 'bool')
-    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_TEST_MODE';
-    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('paypalpayment', $JOURNAL_ID, 'accountName', '$PAYPAL_ACCOUNT', 'string')
-    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_ACCOUNT';
-    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('paypalpayment', $JOURNAL_ID, 'clientId', '$PAYPAL_CLIENT_ID', 'string')
-    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_CLIENT_ID';
-    INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-    VALUES ('paypalpayment', $JOURNAL_ID, 'secret', '$PAYPAL_SECRET', 'string')
-    ON DUPLICATE KEY UPDATE setting_value='$PAYPAL_SECRET';
-SQL
-  echo "[OJS] PayPal credentials configured (account: $PAYPAL_ACCOUNT)."
-else
-  echo "[OJS] PayPal not configured (no OJS_PAYPAL_ACCOUNT). Manual Payment is the active plugin."
 fi
 
 # --- DOI configuration ---
