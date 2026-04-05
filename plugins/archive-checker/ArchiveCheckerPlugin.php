@@ -264,7 +264,7 @@ HTMLSTART;
             </a>
             <div class="ac-drawer-brand">
                 <div class="ac-drawer-logo">Archive Checker</div>
-                <div class="ac-drawer-strapline">Help check 36 years of journal articles</div>
+                <div class="ac-drawer-strapline">Compare PDF and HTML side by side</div>
                 <div class="ac-drawer-progress" @click="openDashboard()">
                     <div class="ac-progress" x-text="progressDisplay"></div>
                     <div class="ac-progress-bar" x-show="counts">
@@ -448,7 +448,7 @@ HTMLSTART;
             <div class="ac-help-box" @click.stop>
                 <button class="ac-help-close" @click="dismissGuide()" title="Close">&times;</button>
                 <h3>What to check?</h3>
-                <p>We've recently converted all 36 years of journal articles from PDF to structured HTML to improve discoverability and readability. This is a big task. Please, help by checking a few articles? And maybe learn something from the archive, along the way.</p>
+                <p>We've recently converted decades of journal articles from PDF to structured HTML to improve discoverability and readability. This is a big task. Please, help by checking a few articles? And maybe learn something from the archive, along the way.</p>
                 <p>Compare the <strong>original PDF</strong> (left) with the <strong>HTML version</strong> (right). Scroll through both and check:</p>
                 <ol class="ac-help-checklist">
                     <li>Title, author(s), page numbers, keywords, and abstract match the PDF</li>
