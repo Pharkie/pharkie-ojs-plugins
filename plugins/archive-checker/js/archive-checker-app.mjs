@@ -183,13 +183,9 @@ Alpine.data('acApp', () => ({
                     const wsIdx = this.workingSet.indexOf(artIdx);
                     if (wsIdx >= 0) {
                         start = wsIdx;
-                    } else if (artIdx >= 0) {
-                        // Article exists but not in working set — load directly
-                        this.setIndex = 0;
-                        await this.loadArticle(artIdx);
-                        this.prefetchRandomTarget();
-                        return;
                     }
+                    // If not in working set (e.g. just approved), fall through
+                    // to start=0 so left pane and content stay in sync.
                 } else {
                     const lastSeen = parseInt(localStorage.getItem('ac-last-seen'), 10);
                     if (lastSeen) {
