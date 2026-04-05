@@ -19,7 +19,10 @@ COPY --from=stripe-deps /app/vendor/ /opt/stripe-vendor/
 # Core patches (OJS bugs that can't wait for upstream fixes)
 COPY docker/ojs/patches/ /opt/ojs-patches/
 RUN php /opt/ojs-patches/crossref-error-details.php \
-    && php /opt/ojs-patches/skip-remote-schema-validation.php
+    && php /opt/ojs-patches/skip-remote-schema-validation.php \
+    && php /opt/ojs-patches/recommend-by-similarity.php \
+    && php /opt/ojs-patches/citation-style-dropdown.php \
+    && php /opt/ojs-patches/recommend-by-author.php
 
 # Branding assets (logo, favicon, homepage image, sidebar banners) — applied by setup-ojs.sh
 COPY docker/ojs/branding/ /opt/ojs-branding/

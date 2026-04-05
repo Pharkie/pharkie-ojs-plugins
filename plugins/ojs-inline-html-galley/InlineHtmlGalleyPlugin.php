@@ -428,12 +428,12 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 .inline-html-galley .value .jats-notes::before        { content: "Notes"; }
 .inline-html-galley .value .jats-bios::before         { content: "Author bio"; }
 .inline-html-galley .value .jats-provenance::before   { content: "Provenance"; }
-.item.references h2.label::after {
-    content: " (structured citations)";
-    font-size: 12px;
-    font-weight: 400;
-    color: #999;
-}
+/* Citation box cleanup */
+.citation_formats { border: none !important; padding: 0 !important; margin-top: 8px; }
+/* Citation copy button */
+.citation-copy { float: right; font-weight: 400; cursor: pointer; font-size: 12px; color: #999; background: none; border: none; padding: 0; line-height: inherit; margin-top: 2px; }
+.citation-copy:hover { color: #333; }
+.citation-copy svg { width: 12px; height: 12px; vertical-align: -1px; margin-right: 3px; }
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
@@ -446,6 +446,28 @@ document.addEventListener("DOMContentLoaded", function() {
             refsSection.style.display = "none";
         }
     }
+    // --- Citation copy button ---
+    var citationSection = document.querySelector(".citation_display");
+    var citationOutput = document.getElementById("citationOutput");
+    if (citationSection && citationOutput) {
+        var heading = citationSection.querySelector("h2.label");
+        if (heading) {
+            var copyBtn = document.createElement("button");
+            copyBtn.className = "citation-copy";
+            copyBtn.type = "button";
+            var copyIcon = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1\"/></svg>";
+            copyBtn.innerHTML = copyIcon + "Copy";
+            copyBtn.addEventListener("click", function() {
+                var text = citationOutput.textContent.trim();
+                navigator.clipboard.writeText(text).then(function() {
+                    copyBtn.innerHTML = "Copied!";
+                    setTimeout(function() { copyBtn.innerHTML = copyIcon + "Copy"; }, 2000);
+                });
+            });
+            heading.appendChild(copyBtn);
+        }
+    }
+
     document.querySelectorAll(".obj_galley_link").forEach(function(el) {
         var label = el.textContent.trim();
         // On issue/archive pages, hide article-level galley links (readers click

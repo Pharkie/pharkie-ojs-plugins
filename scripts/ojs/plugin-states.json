@@ -1,0 +1,13 @@
+{
+  "_comment": "Plugin enabled/disabled states applied by setup-ojs.sh. Only non-default states need listing — OJS enables most built-in plugins automatically. Plugins here are lazy-loaded or need explicit override.",
+  "enable": [
+    "announcementfeedplugin",
+    "citationstylelanguageplugin",
+    "recommendbyauthorplugin",
+    "recommendbysimilarityplugin"
+  ],
+  "disable": [
+    "developedbyblockplugin",
+    "jatstemplateplugin"
+  ]
+}

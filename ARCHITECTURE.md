@@ -54,6 +54,36 @@ Uses Stripe Checkout (redirect flow): buyer clicks purchase → OJS creates Chec
 
 Vendor deps (`plugins/stripe-payment/vendor/`) are gitignored. Stripe PHP SDK is installed via multi-stage Docker build (composer stage).
 
+### OJS core patches
+
+OJS ships with built-in plugins and behaviours that sometimes need modification. Since we can't change upstream code, we apply patches at Docker build time via PHP scripts in `docker/ojs/patches/`.
+
+**How it works:**
+1. Patch scripts live in `docker/ojs/patches/` — each is a self-contained PHP file that modifies OJS source files in place (via `str_replace` or `file_put_contents`).
+2. The Dockerfile copies them in and runs them: `RUN php /opt/ojs-patches/<name>.php`
+3. Each patch has a docblock explaining what it changes and why.
+
+**When to use a patch vs other approaches:**
+- **Patch** (this pattern): for OJS core or bundled plugin changes that can't be done via hooks. Survives container rebuilds. Fragile across OJS upgrades — each patch must be re-verified after upgrading OJS.
+- **Custom plugin** (bind-mounted): for new functionality or when OJS provides hooks. Preferred when possible.
+- **`setup-ojs.sh` + `plugin-states.json`**: for configuration (DB settings, plugin enable/disable). Not for code changes.
+
+**Current patches:**
+| Patch | What it does |
+|---|---|
+| `crossref-error-details.php` | Captures Crossref deposit error details (OJS 3.5 silently drops them) |
+| `skip-remote-schema-validation.php` | Skips W3C schema validation that causes 13-second timeouts per DOI deposit |
+| `recommend-by-similarity.php` | "Related articles" — 6 items, no pagination, title-first layout, simplified search link |
+| `citation-style-dropdown.php` | Replaces custom citation format dropdown with native `<select>` — shows current format, standard UX |
+| `recommend-by-author.php` | "Articles by the same author(s)" — 6 items, no pagination, title-first layout, no journal/issue links |
+
+**To apply a patch to a running dev container** (without rebuilding):
+```bash
+sudo docker cp docker/ojs/patches/<name>.php pharkie-ojs-plugins-ojs-1:/opt/ojs-patches/
+sudo docker exec pharkie-ojs-plugins-ojs-1 php /opt/ojs-patches/<name>.php
+sudo docker exec pharkie-ojs-plugins-ojs-1 bash -c "rm -f /var/www/html/cache/t_compile/*.php"
+```
+
 ## WP membership stack
 
 **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles registration/profiles/roles. WCS handles billing. Membership = WP role.
