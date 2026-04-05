@@ -52,6 +52,14 @@ if [ -d /opt/stripe-vendor ] && [ -d /var/www/html/plugins/paymethod/stripe ]; t
   fi
 fi
 
+# Apply OJS core patches (on every start — the /var/www/html volume overlays the image,
+# so Dockerfile RUN patches are lost. Patches are idempotent.)
+if [ -d /opt/ojs-patches ]; then
+  for patch in /opt/ojs-patches/*.php; do
+    [ -f "$patch" ] && php "$patch"
+  done
+fi
+
 # Always re-template config from environment (picks up SMTP, API key, URL changes on restart)
 echo "[OJS] Generating config.inc.php from template..."
 envsubst "$VARS" < "$TEMPLATE" > "$CONFIG"
