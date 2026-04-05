@@ -60,8 +60,10 @@ OJS ships with built-in plugins and behaviours that sometimes need modification.
 
 **How it works:**
 1. Patch scripts live in `docker/ojs/patches/` — each is a self-contained PHP file that modifies OJS source files in place (via `str_replace` or `file_put_contents`).
-2. The Dockerfile copies them in and runs them: `RUN php /opt/ojs-patches/<name>.php`
-3. Each patch has a docblock explaining what it changes and why.
+2. The Dockerfile copies them to `/opt/ojs-patches/` and runs them at build time.
+3. **Critically**, `entrypoint.sh` also runs all patches on every container start — because the `/var/www/html` volume overlays the Docker image, so build-time patches are lost.
+4. All patches must be **idempotent** (`str_replace` is a no-op if the needle is already replaced; `file_put_contents` overwrites the whole file).
+5. Each patch has a docblock explaining what it changes and why.
 
 **When to use a patch vs other approaches:**
 - **Patch** (this pattern): for OJS core or bundled plugin changes that can't be done via hooks. Survives container rebuilds. Fragile across OJS upgrades — each patch must be re-verified after upgrading OJS.
