@@ -620,7 +620,7 @@ class ArchiveCheckerController extends PKPBaseController
             'user_id'        => $user->getId(),
             'username'       => $user->getUsername(),
             'decision'       => $decision,
-            'comment'        => $decision === 'needs_fix' ? trim($comment) : null,
+            'comment'        => ($decision === 'needs_fix' || $decision === 'deferred') ? trim($comment) : null,
             'content_hash'   => $contentHash,
             'created_at'     => Core::getCurrentDate(),
         ]);

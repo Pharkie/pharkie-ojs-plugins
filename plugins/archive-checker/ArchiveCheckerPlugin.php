@@ -466,7 +466,7 @@ HTMLSTART;
                     <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim() || rejectComment.trim() === (article?.comment || '')"
                         title="Report Problem (Ctrl+Enter)"><span class="ac-btn-icon">&#x26A0;</span> <span x-text="reportLabel">Report Problem</span></button>
                     <button class="ac-btn ac-btn-defer" @click="submitDefer()" :disabled="submitting || !rejectComment.trim() || rejectComment.trim() === (article?.comment || '')"
-                        title="Defer (needs separate project)"><span class="ac-btn-icon">&#x23F8;</span> Defer</button>
+                        title="Defer (needs separate project)"><span class="ac-btn-icon">&#x23F8;</span> <span x-text="deferLabel">Defer</span></button>
                     <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting || approveLabel !== 'Approve'"
                         title="Approve (A)"><span class="ac-btn-icon">&#x2713;</span> <span x-text="approveLabel">Approve</span></button>
                 </div>
