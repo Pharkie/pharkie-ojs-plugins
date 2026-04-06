@@ -144,9 +144,8 @@ test.describe('Archive Checker plugin', () => {
     const canvas = page.locator('#pdf-container canvas').first();
     await expect(canvas).toBeVisible({ timeout: 60_000 });
 
-    // Page indicator should show page count
-    const pageInfo = await page.locator('#pdf-page-info').textContent();
-    expect(pageInfo).toMatch(/page/i);
+    // Page indicator should show page count (wait for it to update from "Loading...")
+    await expect(page.locator('#pdf-page-info')).toHaveText(/page/i, { timeout: 10_000 });
   });
 
   test('PDF text layer renders for selection', async ({ page }) => {
@@ -180,11 +179,10 @@ test.describe('Archive Checker plugin', () => {
 
     // Search for a common word — "the" should appear in most articles
     await searchInput.fill('the');
-    await page.waitForTimeout(500); // debounce
 
-    // Should have highlights (official pdf.js .highlight class inside text layer)
+    // Wait for highlights to appear (debounce + search)
     const highlights = page.locator('.textLayer .highlight');
-    await expect(highlights.first()).toBeAttached({ timeout: 5000 });
+    await expect(highlights.first()).toBeAttached({ timeout: 10_000 });
     const highlightCount = await highlights.count();
     expect(highlightCount).toBeGreaterThan(0);
 
@@ -208,26 +206,20 @@ test.describe('Archive Checker plugin', () => {
     await page.click('.ac-pdf-search-toggle');
     const searchInput = page.locator('#pdf-search-input');
     await searchInput.fill('the');
-    await page.waitForTimeout(1500);
 
-    // Should show "1 / N" initially
-    const info1 = await page.locator('.ac-pdf-search-info').textContent();
-    expect(info1).toMatch(/^1 \/ \d+$/);
+    // Wait for search results to appear
+    await expect(page.locator('.ac-pdf-search-info')).toHaveText(/^1 \/ \d+$/, { timeout: 10_000 });
 
     // Should have one selected highlight
     await expect(page.locator('.highlight.selected')).toHaveCount(1);
 
     // Enter advances to next match
     await searchInput.press('Enter');
-    await page.waitForTimeout(500);
-    const info2 = await page.locator('.ac-pdf-search-info').textContent();
-    expect(info2).toMatch(/^2 \/ \d+$/);
+    await expect(page.locator('.ac-pdf-search-info')).toHaveText(/^2 \/ \d+$/, { timeout: 5_000 });
 
     // Shift+Enter goes back
     await searchInput.press('Shift+Enter');
-    await page.waitForTimeout(500);
-    const info3 = await page.locator('.ac-pdf-search-info').textContent();
-    expect(info3).toMatch(/^1 \/ \d+$/);
+    await expect(page.locator('.ac-pdf-search-info')).toHaveText(/^1 \/ \d+$/, { timeout: 5_000 });
   });
 
   // ── HTML galley ──
@@ -280,8 +272,11 @@ test.describe('Archive Checker plugin', () => {
     await page.goto(QA_URL);
     await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
-    // Wait for classification to load
-    await page.waitForTimeout(3000);
+    // Wait for classification to load (or timeout if article has none)
+    await page.waitForFunction(() => {
+      const el = document.querySelector('.ac-endmatter');
+      return el && el.children.length > 0;
+    }, { timeout: 10_000 }).catch(() => {});
 
     // Classification panel may or may not be visible depending on article
     const endmatter = page.locator('.ac-endmatter');
@@ -332,17 +327,16 @@ test.describe('Archive Checker plugin', () => {
 
     // Type a search query
     await page.fill('.ac-drawer-search', 'editorial');
-    await page.waitForTimeout(500);
-
+    await page.waitForFunction(
+      (c) => document.querySelectorAll('.ac-drawer-item').length < c,
+      initialCount, { timeout: 5_000 }
+    );
     const filteredCount = await page.locator('.ac-drawer-item').count();
-    expect(filteredCount).toBeLessThan(initialCount);
     expect(filteredCount).toBeGreaterThan(0);
 
     // Clear search
     await page.click('.ac-search-clear');
-    await page.waitForTimeout(500);
-    const resetCount = await page.locator('.ac-drawer-item').count();
-    expect(resetCount).toBe(initialCount);
+    await expect(page.locator('.ac-drawer-item')).toHaveCount(initialCount, { timeout: 5_000 });
   });
 
   test('sidebar search by article ID finds the article', async ({ page }) => {
@@ -352,16 +346,13 @@ test.describe('Archive Checker plugin', () => {
 
     // Search by submission ID — numeric queries must match exact ID only
     await page.fill('.ac-drawer-search', '8994');
-    await page.waitForTimeout(500);
-
     const items = page.locator('.ac-drawer-item');
-    await expect(items).toHaveCount(1);
+    await expect(items).toHaveCount(1, { timeout: 5_000 });
     await expect(items.first()).toContainText('[id: 8994]');
 
     // Verify numeric search doesn't match text content in other articles
     await page.fill('.ac-drawer-search', '99999');
-    await page.waitForTimeout(500);
-    await expect(page.locator('.ac-drawer-item')).toHaveCount(0);
+    await expect(page.locator('.ac-drawer-item')).toHaveCount(0, { timeout: 5_000 });
   });
 
   // ── Reviewer pills ──
@@ -386,7 +377,7 @@ test.describe('Archive Checker plugin', () => {
 
     // Click the first reviewer pill — should filter the sidebar
     await reviewerPills.first().click();
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
     const filteredCount = await page.locator('.ac-drawer-item').count();
     expect(filteredCount).toBeLessThan(totalCount);
     expect(filteredCount).toBeGreaterThan(0);
@@ -404,14 +395,14 @@ test.describe('Archive Checker plugin', () => {
     const approvedPill = page.locator('.ac-drawer-pill-status', { hasText: 'Approved' });
     if (await approvedPill.count() > 0) {
       await approvedPill.click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
       const afterStatusFilter = await page.locator('.ac-drawer-item').count();
 
       // Now also click a reviewer pill — should further narrow results
       const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
       if (await reviewerPills.count() > 0) {
         await reviewerPills.first().click();
-        await page.waitForTimeout(300);
+        await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
         const afterBothFilters = await page.locator('.ac-drawer-item').count();
         expect(afterBothFilters).toBeLessThanOrEqual(afterStatusFilter);
       }
@@ -429,11 +420,11 @@ test.describe('Archive Checker plugin', () => {
     const reviewerPills = page.locator('.ac-drawer-pill-reviewer');
     if (await reviewerPills.count() > 0) {
       await reviewerPills.first().click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
 
       // Click "Clear all filters"
       await page.click('.ac-drawer-clear');
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
 
       const resetCount = await page.locator('.ac-drawer-item').count();
       expect(resetCount).toBe(totalCount);
@@ -565,7 +556,7 @@ test.describe('Archive Checker plugin', () => {
       const expectedCount = match ? parseInt(match[1], 10) : 0;
 
       await reviewerPills.first().click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
 
       const sidebarCount = await page.locator('.ac-drawer-item').count();
       expect(sidebarCount).toBe(expectedCount);
@@ -584,7 +575,7 @@ test.describe('Archive Checker plugin', () => {
       const expectedCount = match ? parseInt(match[1], 10) : 0;
 
       await reportedPill.click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
 
       const sidebarCount = await page.locator('.ac-drawer-item').count();
       expect(sidebarCount).toBe(expectedCount);
@@ -601,9 +592,9 @@ test.describe('Archive Checker plugin', () => {
 
     // Click content filtered pill to show ONLY content-filtered articles
     const cfPill = page.locator('.ac-drawer-pill-filtered');
-    if (await cfPill.count() > 0) {
+    if (await cfPill.isVisible().catch(() => false)) {
       await cfPill.click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
 
       const countAfter = await page.locator('.ac-drawer-item').count();
       // Should show fewer articles (only the ~40 content-filtered ones)
@@ -612,7 +603,7 @@ test.describe('Archive Checker plugin', () => {
 
       // Click again to deactivate — should restore full list
       await cfPill.click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => new Promise(r => requestAnimationFrame(r)));
       const countRestored = await page.locator('.ac-drawer-item').count();
       expect(countRestored).toBe(countBefore);
     }
@@ -662,39 +653,34 @@ test.describe('Archive Checker plugin', () => {
     await page.goto(`${QA_URL}?id=${articleId}`);
     await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
-    // Click approve
+    // Click approve — button text changes to "Approved ✓"
     await page.click('.ac-btn-approve');
-
-    // Should auto-advance (title changes) or badge updates
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.ac-btn-approve')).toContainText(/approved/i, { timeout: 5_000 });
   });
 
-  test('report problem opens form and submits', async ({ page }) => {
+  test('report problem form submits and restores', async ({ page }) => {
     test.skip(!articleId, 'No article with galleys found');
 
     await loginAsAdmin(page);
     await page.goto(`${QA_URL}?id=${articleId}`);
     await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
 
-    // Click Report Problem
-    await page.click('.ac-btn-reject');
-
-    // Textarea should appear
+    // Textarea is always visible in the bottom bar
     const textarea = page.locator('.ac-textarea');
     await expect(textarea).toBeVisible();
 
-    // Type a comment and submit with Ctrl+Enter
+    // Type a comment and submit via Report Problem button
     await textarea.fill('e2e-test-fix-request');
-    await textarea.press('Control+Enter');
+    await page.click('.ac-btn-reject-submit');
 
-    // Should show "Saved" confirmation
-    await page.waitForTimeout(2000);
+    // Button text changes after submit
+    await expect(page.locator('.ac-btn-reject-submit')).toContainText(/updated/i, { timeout: 5_000 });
 
     // Restore article to approved state so the test doesn't leave it as reported
     await page.goto(`${QA_URL}?id=${articleId}`);
     await expect(page.locator('.ac-meta-title')).not.toBeEmpty({ timeout: 15_000 });
     await page.click('.ac-btn-approve');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.ac-btn-approve')).toContainText(/approved/i, { timeout: 5_000 });
   });
 
   // ── API ──
@@ -866,5 +852,200 @@ test.describe('Archive Checker plugin', () => {
     await expect(link).toBeVisible();
     expect(await link.getAttribute('href')).toContain('mode=random');
     expect(await link.textContent()).toMatch(/review articles/i);
+  });
+
+  // ── Mobile / responsive layout ──
+
+  test('mobile: sidebar hidden, ARTICLES tab visible at narrow viewport', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => { localStorage.setItem('ac-help-seen', '1'); });
+    await page.reload();
+    await page.waitForSelector('.ac-layout', { timeout: 10_000 });
+    // Wait for drawer intro animation to complete (opens then closes)
+    await page.waitForFunction(() => {
+      const d = document.querySelector('.ac-drawer');
+      return d && !d.classList.contains('open');
+    }, { timeout: 10_000 });
+
+    // Sidebar should be off-screen (position: fixed, transform: translateX(-100%))
+    const drawer = page.locator('.ac-drawer');
+    const drawerBox = await drawer.boundingBox();
+    expect(drawerBox).not.toBeNull();
+    expect(drawerBox!.x).toBeLessThan(0);
+
+    // ARTICLES tab should be visible
+    const tab = page.locator('.ac-drawer-tab');
+    await expect(tab).toBeVisible();
+    expect(await tab.textContent()).toBe('ARTICLES');
+  });
+
+  test('mobile: ARTICLES tab opens drawer, selecting article closes it', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => { localStorage.setItem('ac-help-seen', '1'); });
+    await page.reload();
+    await page.waitForSelector('.ac-layout', { timeout: 10_000 });
+    // Wait for drawer intro animation to complete
+    await page.waitForFunction(() => {
+      const d = document.querySelector('.ac-drawer');
+      return d && !d.classList.contains('open');
+    }, { timeout: 10_000 });
+
+    // Click tab — drawer should open
+    await page.click('.ac-drawer-tab');
+    const drawer = page.locator('.ac-drawer');
+    await expect(drawer).toHaveClass(/open/, { timeout: 5_000 });
+
+    // Backdrop should be visible
+    await expect(page.locator('.ac-drawer-backdrop')).toBeVisible();
+
+    // Click an article — drawer should close
+    const items = page.locator('.ac-drawer-item');
+    const count = await items.count();
+    if (count > 1) {
+      await items.nth(1).click();
+      await expect(drawer).not.toHaveClass(/open/, { timeout: 5_000 });
+    }
+  });
+
+  test('mobile: prev/next buttons navigate articles', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => localStorage.setItem('ac-help-seen', '1'));
+    await page.reload();
+    await page.waitForSelector('.ac-layout', { timeout: 10_000 });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('.ac-drawer');
+      return d && !d.classList.contains('open');
+    }, { timeout: 10_000 });
+
+    // Prev/next should be visible
+    const nav = page.locator('.ac-mobile-nav');
+    await expect(nav).toBeVisible();
+
+    // Position should show "1 / N"
+    const position = page.locator('.ac-mobile-position');
+    await expect(position).toHaveText(/^1 \/ \d+$/, { timeout: 5_000 });
+
+    // Click Next — position should change to "2 / N"
+    await page.click('.ac-mobile-nav .ac-btn:last-child');
+    await expect(position).toHaveText(/^2 \/ \d+$/, { timeout: 5_000 });
+  });
+
+  test('mobile: both PDF and HTML panes visible in stacked layout', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => localStorage.setItem('ac-help-seen', '1'));
+    await page.reload();
+    await page.waitForSelector('.ac-layout', { timeout: 10_000 });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('.ac-drawer');
+      return d && !d.classList.contains('open');
+    }, { timeout: 10_000 });
+
+    // Both panes should have non-zero width
+    const leftBox = await page.locator('.ac-left').boundingBox();
+    const rightBox = await page.locator('.ac-right').boundingBox();
+    expect(leftBox).not.toBeNull();
+    expect(rightBox).not.toBeNull();
+    expect(leftBox!.width).toBeGreaterThan(0);
+    expect(rightBox!.width).toBeGreaterThan(0);
+
+    // PDF pane should be above HTML pane
+    expect(leftBox!.y).toBeLessThan(rightBox!.y);
+  });
+
+  test('desktop: sidebar visible, no ARTICLES tab or mobile nav', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => localStorage.setItem('ac-help-seen', '1'));
+    await page.reload();
+    await page.waitForSelector('.ac-drawer-item', { timeout: 10_000 });
+
+    // Sidebar should be visible on-screen
+    const drawer = page.locator('.ac-drawer');
+    const drawerBox = await drawer.boundingBox();
+    expect(drawerBox).not.toBeNull();
+    expect(drawerBox!.x).toBeGreaterThanOrEqual(0);
+
+    // ARTICLES tab should be hidden
+    await expect(page.locator('.ac-drawer-tab')).not.toBeVisible();
+
+    // Mobile nav should be hidden
+    await expect(page.locator('.ac-mobile-nav')).not.toBeVisible();
+  });
+
+  test('phone: pane toggle switches between PDF and HTML', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 414, height: 896 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => localStorage.setItem('ac-help-seen', '1'));
+    await page.reload();
+    await page.waitForSelector('.ac-layout', { timeout: 10_000 });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('.ac-drawer');
+      return d && !d.classList.contains('open');
+    }, { timeout: 10_000 });
+
+    // PDF tab should be active by default
+    const pdfTab = page.locator('.ac-pane-tabs button:nth-child(1)');
+    const htmlTab = page.locator('.ac-pane-tabs button:nth-child(2)');
+    await expect(pdfTab).toHaveClass(/active/);
+    await expect(htmlTab).not.toHaveClass(/active/);
+
+    // PDF pane visible, HTML hidden
+    await expect(page.locator('.ac-left')).toBeVisible();
+    await expect(page.locator('.ac-right')).not.toBeVisible();
+
+    // Switch to HTML
+    await htmlTab.click();
+    await expect(htmlTab).toHaveClass(/active/, { timeout: 2_000 });
+    await expect(page.locator('.ac-right')).toBeVisible();
+
+    // Switch back to PDF — content should still be there
+    await pdfTab.click();
+    await expect(pdfTab).toHaveClass(/active/, { timeout: 2_000 });
+    await expect(page.locator('.ac-left')).toBeVisible();
+  });
+
+  test('phone: articles modal opens and closes', async ({ page }) => {
+    test.skip(!articleId, 'No article with galleys found');
+
+    await loginAsAdmin(page);
+    await page.setViewportSize({ width: 414, height: 896 });
+    await page.goto(QA_URL);
+    await page.evaluate(() => localStorage.setItem('ac-help-seen', '1'));
+    await page.reload();
+    await page.waitForSelector('.ac-layout', { timeout: 10_000 });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('.ac-drawer');
+      return d && !d.classList.contains('open');
+    }, { timeout: 10_000 });
+
+    // Open articles modal via toolbar button
+    await page.click('.ac-mobile-articles-btn');
+    await expect(page.locator('.ac-drawer')).toHaveClass(/open/, { timeout: 5_000 });
+
+    // Close via close button
+    await page.click('.ac-drawer-close');
+    await expect(page.locator('.ac-drawer')).not.toHaveClass(/open/, { timeout: 5_000 });
   });
 });

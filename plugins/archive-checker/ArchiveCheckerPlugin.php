@@ -194,11 +194,19 @@ class ArchiveCheckerPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
-        // Require any authenticated user
+        // Require authenticated user with active subscription (or staff role)
         $request = Application::get()->getRequest();
         $user = $request->getUser();
         if (!$user) {
             $request->redirect(null, 'login');
+            return true;
+        }
+
+        $context = $request->getContext();
+        $contextId = $context ? $context->getId() : 0;
+        if (!self::userHasContentAccess($user->getId(), $contextId)) {
+            // Redirect non-subscribers to the journal homepage
+            $request->redirect(null, 'index');
             return true;
         }
 
@@ -207,23 +215,38 @@ class ArchiveCheckerPlugin extends GenericPlugin
     }
 
     /**
-     * Check if user has Journal Manager or Site Admin role.
+     * Check if user has content access (active subscription, or manager/admin/sub-manager role).
+     * Shared by ArchiveCheckerPlugin (page access) and ArchiveCheckerController (API access).
      */
-    private function userIsManager($user, $request): bool
+    public static function userHasContentAccess(int $userId, int $contextId): bool
     {
-        $context = $request->getContext();
-        $contextId = $context ? $context->getId() : 0;
-
-        return DB::table('user_user_groups')
+        // Staff roles bypass
+        $hasStaffRole = DB::table('user_user_groups')
             ->join('user_groups', 'user_user_groups.user_group_id', '=', 'user_groups.user_group_id')
-            ->where('user_user_groups.user_id', $user->getId())
+            ->where('user_user_groups.user_id', $userId)
             ->where(function ($q) use ($contextId) {
-                $q->where('user_groups.role_id', Role::ROLE_ID_MANAGER)
-                  ->where('user_groups.context_id', $contextId);
+                $q->whereIn('user_groups.role_id', [
+                    Role::ROLE_ID_MANAGER,
+                    Role::ROLE_ID_SUBSCRIPTION_MANAGER,
+                ])
+                ->where('user_groups.context_id', $contextId);
             })
-            ->orWhere(function ($q) use ($user) {
-                $q->where('user_user_groups.user_id', $user->getId())
+            ->orWhere(function ($q) use ($userId) {
+                $q->where('user_user_groups.user_id', $userId)
                   ->where('user_groups.role_id', Role::ROLE_ID_SITE_ADMIN);
+            })
+            ->exists();
+
+        if ($hasStaffRole) return true;
+
+        // Active individual subscription
+        return DB::table('subscriptions')
+            ->where('user_id', $userId)
+            ->where('journal_id', $contextId)
+            ->where('status', 1) // SUBSCRIPTION_STATUS_ACTIVE
+            ->where(function ($q) {
+                $q->whereNull('date_end')
+                  ->orWhere('date_end', '>', now());
             })
             ->exists();
     }
@@ -259,15 +282,16 @@ HTMLSTART;
 <body>
     <div class="ac-layout" x-data="acApp">
 
+        <div class="ac-drawer-backdrop" x-show="drawerOpen && !drawerIntro" x-cloak @click="drawerOpen = false"></div>
+
         <!-- Sidebar -->
-        <div class="ac-drawer">
-            <a class="ac-return-link" :href="pluginUrl.replace(/\/plugins\/.*/, '')">
-                &larr; Return to journal
-            </a>
+        <div class="ac-drawer" :class="{ open: drawerOpen }">
+            <button class="ac-drawer-tab" @click="drawerOpen = !drawerOpen">ARTICLES</button>
+            <button class="ac-drawer-close" @click="drawerOpen = false" title="Close">&times;</button>
             <div class="ac-drawer-brand">
                 <div class="ac-drawer-logo">Archive Checker</div>
-                <div class="ac-drawer-strapline">Compare PDF and HTML side by side</div>
-                <div class="ac-drawer-progress" @click="openDashboard()">
+                <div class="ac-drawer-strapline">Compare PDF with HTML</div>
+                <div class="ac-drawer-progress">
                     <div class="ac-progress" x-text="progressDisplay"></div>
                     <div class="ac-progress-bar" x-show="counts">
                         <div class="ac-progress-bar-approved" :style="'width:' + progressApprovedPct + '%'"></div>
@@ -336,33 +360,44 @@ HTMLSTART;
             </div>
         </div>
 
-        <!-- PDF viewer -->
-        <div class="ac-left">
-            <div class="ac-pdf-toolbar">
-                <span class="ac-pane-label">Original PDF</span>
-                <span id="pdf-page-info" x-text="pdfPageInfo">Loading...</span>
-                <span class="ac-pdf-dark-hint" x-show="isDarkMode" x-cloak>Colours inverted for dark mode</span>
-                <div class="ac-pdf-search" :class="{ open: pdfSearchOpen }">
-                    <button class="ac-pdf-search-toggle" @click="togglePdfSearch()" title="Search PDF (Ctrl+F)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    </button>
-                    <template x-if="pdfSearchOpen">
-                        <div class="ac-pdf-search-bar">
-                            <input id="pdf-search-input" x-ref="pdfSearchInput" type="text" placeholder="Find in PDF..."
-                                @input.debounce.300ms="pdfSearch($el.value)">
-                            <span class="ac-pdf-search-info" x-text="pdfSearchInfo"></span>
-                            <button @click="pdfSearchPrev()" :disabled="pdfSearchInfo === 'No matches'" title="Previous (Shift+Enter)">&lsaquo;</button>
-                            <button @click="pdfSearchNext()" :disabled="pdfSearchInfo === 'No matches'" title="Next (Enter)">&rsaquo;</button>
-                            <button @click="clearPdfSearch(); $refs.pdfSearchInput.value = ''; $refs.pdfSearchInput.focus()" title="Clear">&times;</button>
-                        </div>
-                    </template>
-                </div>
+        <!-- Close button — fixed top-right at desktop, in toolbar at mobile -->
+        <a class="ac-close-btn ac-close-btn-fixed" :href="pluginUrl.replace(/\/plugins\/.*/, '')" title="Close Archive Checker">Close &times;</a>
+
+        <!-- PDF toolbar -->
+        <div class="ac-pdf-toolbar">
+            <button class="ac-mobile-articles-btn" @click="drawerOpen = true">Article list</button>
+            <div class="ac-pdf-search" :class="{ open: pdfSearchOpen }">
+                <button class="ac-pdf-search-toggle" @click="togglePdfSearch()" title="Search PDF (Ctrl+F)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+                <template x-if="pdfSearchOpen">
+                    <div class="ac-pdf-search-bar">
+                        <input id="pdf-search-input" x-ref="pdfSearchInput" type="text" placeholder="Find in PDF..."
+                            @input.debounce.300ms="pdfSearch($el.value)">
+                        <span class="ac-pdf-search-info" x-text="pdfSearchInfo"></span>
+                        <button @click="pdfSearchPrev()" :disabled="pdfSearchInfo === 'No matches'" title="Previous (Shift+Enter)">&lsaquo;</button>
+                        <button @click="pdfSearchNext()" :disabled="pdfSearchInfo === 'No matches'" title="Next (Enter)">&rsaquo;</button>
+                        <button @click="clearPdfSearch(); pdfSearchOpen = false" title="Close search">&times;</button>
+                    </div>
+                </template>
             </div>
+            <span id="pdf-page-info" x-text="pdfPageInfo">Loading...</span>
+            <a class="ac-close-btn ac-close-btn-toolbar" :href="pluginUrl.replace(/\/plugins\/.*/, '')" title="Close Archive Checker">Close &times;</a>
+        </div>
+
+        <!-- PDF viewer -->
+        <div class="ac-left" :class="{ 'pane-hidden': activePane !== 'pdf' }">
             <div class="ac-pdf-container-wrap"><div id="pdf-container" class="ac-pdf-container"><div id="pdf-viewer" class="pdfViewer"></div></div></div>
         </div>
 
+        <!-- Pane toggle tabs (phone only — CSS hides at wider breakpoints) -->
+        <div class="ac-pane-tabs">
+            <button :class="{ active: activePane === 'pdf' }" @click="activePane = 'pdf'">PDF</button>
+            <button :class="{ active: activePane === 'html' }" @click="activePane = 'html'">HTML</button>
+        </div>
+
         <!-- HTML galley + end-matter -->
-        <div class="ac-right">
+        <div class="ac-right" :class="{ 'pane-hidden': activePane !== 'html' }">
             <div class="ac-pane-label ac-pane-label-right">HTML version</div>
             <div class="ac-article-meta" x-show="article">
                 <div class="ac-meta-issue" x-text="(article?.issue_title || '') + ' ' + (article?.volume || '') + '.' + (article?.number || '') + ': ' + (article?.year || '')"></div>
@@ -381,6 +416,8 @@ HTMLSTART;
                 <div class="ac-meta-pages" x-show="article?.pages">
                     <span>Pages: </span><span x-text="article?.pages"></span>
                 </div>
+                <a class="ac-meta-view-link" :href="api.replace(/\/api\/.*/, '/article/view/' + (article?.submission_id || ''))"
+                    target="_blank" x-show="article">View this article on main site &rarr;</a>
                 <div class="ac-meta-keywords" x-show="article?.keywords?.length">
                     <span class="ac-meta-kw-label">Keywords: </span>
                     <span x-text="(article?.keywords || []).join(', ')"></span>
@@ -423,22 +460,25 @@ HTMLSTART;
         <div class="ac-bottom">
             <div class="ac-row-reject">
                 <textarea class="ac-textarea" x-model="rejectComment" x-ref="rejectTextarea"
-                    placeholder="What did you notice? Describe the problem..." rows="3"
+                    placeholder="Describe what needs fixing..." rows="3"
                     @keydown.ctrl.enter="submitFix()" @keydown.meta.enter="submitFix()"></textarea>
                 <div style="display:flex;flex-direction:column;gap:6px;">
-                    <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim()"
+                    <button class="ac-btn ac-btn-reject-submit" @click="submitFix()" :disabled="submitting || !rejectComment.trim() || rejectComment.trim() === (article?.comment || '')"
                         title="Report Problem (Ctrl+Enter)"><span class="ac-btn-icon">&#x26A0;</span> <span x-text="reportLabel">Report Problem</span></button>
-                    <button class="ac-btn ac-btn-defer" @click="submitDefer()" :disabled="submitting || !rejectComment.trim()"
+                    <button class="ac-btn ac-btn-defer" @click="submitDefer()" :disabled="submitting || !rejectComment.trim() || rejectComment.trim() === (article?.comment || '')"
                         title="Defer (needs separate project)"><span class="ac-btn-icon">&#x23F8;</span> Defer</button>
                     <button class="ac-btn ac-btn-approve" @click="approve()" :disabled="submitting || approveLabel !== 'Approve'"
                         title="Approve (A)"><span class="ac-btn-icon">&#x2713;</span> <span x-text="approveLabel">Approve</span></button>
                 </div>
             </div>
             <div class="ac-bottom-row">
-                <a class="ac-bottom-article-link" :href="api.replace(/\/api\/.*/, '/article/view/' + (article?.submission_id || ''))"
-                    target="_blank" x-show="article">View this article on main site &rarr;</a>
+                <div class="ac-mobile-nav">
+                    <button class="ac-btn" @click="navigate(-1)" :disabled="!canGoPrev">&#x25C2; Prev</button>
+                    <span class="ac-mobile-position" x-text="(setIndex+1) + ' / ' + workingSet.length"></span>
+                    <button class="ac-btn" @click="navigate(1)" :disabled="!canGoNext">Next &#x25B8;</button>
+                </div>
                 <span class="ac-row-spacer"></span>
-                <a href="#" class="ac-bottom-guide-link" @click.prevent="showGuide = true">What to check? &rsaquo;</a>
+                <a href="#" class="ac-bottom-guide-link" @click.prevent="showGuide = true">What to check?</a>
                 <span class="ac-row-spacer"></span>
                 <span :class="statusClass" x-text="statusLabel"></span>
             </div>
@@ -451,7 +491,7 @@ HTMLSTART;
                 <button class="ac-help-close" @click="dismissGuide()" title="Close">&times;</button>
                 <h3>What to check?</h3>
                 <p>We've recently converted decades of journal articles from PDF to structured HTML to improve discoverability and readability. This is a big task. Please, help by checking a few articles? And maybe learn something from the archive, along the way.</p>
-                <p>Compare the <strong>original PDF</strong> (left) with the <strong>HTML version</strong> (right). Scroll through both and check:</p>
+                <p>Compare the <strong>original PDF</strong> with the <strong>HTML version</strong>. Scroll through both and check:</p>
                 <ol class="ac-help-checklist">
                     <li>Title, author(s), page numbers, keywords, and abstract match the PDF</li>
                     <li>Article text is complete &mdash; nothing missing, garbled, or out of order</li>

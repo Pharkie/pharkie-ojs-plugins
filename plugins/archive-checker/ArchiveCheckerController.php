@@ -30,8 +30,8 @@ class ArchiveCheckerController extends PKPBaseController
     }
 
     /**
-     * Authorization is handled per-endpoint via requireManager().
-     * This bypasses OJS's role-based middleware since we check roles ourselves.
+     * Any authenticated user can access the Archive Checker (members reviewing articles).
+     * Bypasses OJS role-based middleware; each endpoint calls requireAuthenticated().
      */
     public function authorize(PKPRequest $request, array &$args, array $roleAssignments): bool
     {
@@ -48,7 +48,6 @@ class ArchiveCheckerController extends PKPBaseController
         Route::post('reviews', $this->submitReview(...))->name('ac.reviews.submit');
         Route::get('nav/random-unreviewed', $this->randomUnreviewed(...))->name('ac.nav.random');
         Route::get('nav/problem-case', $this->problemCase(...))->name('ac.nav.problem');
-        Route::get('stats', $this->getStats(...))->name('ac.stats');
     }
 
     // ---------------------------------------------------------------
@@ -66,6 +65,25 @@ class ArchiveCheckerController extends PKPBaseController
         if (!$user) {
             return new JsonResponse(['error' => 'Authentication required'], 401);
         }
+        return null;
+    }
+
+    /**
+     * Require authenticated user with content access (active subscription or staff role).
+     * Delegates to ArchiveCheckerPlugin::userHasContentAccess() for DRY.
+     */
+    private function requireSubscribed(Request $request): ?JsonResponse
+    {
+        $authError = $this->requireAuthenticated($request);
+        if ($authError) return $authError;
+
+        $ojsRequest = Application::get()->getRequest();
+        $user = $ojsRequest->getUser();
+
+        if (!ArchiveCheckerPlugin::userHasContentAccess($user->getId(), $this->getContextId())) {
+            return new JsonResponse(['error' => 'Active subscription required'], 403);
+        }
+
         return null;
     }
 
@@ -385,7 +403,7 @@ class ArchiveCheckerController extends PKPBaseController
      */
     public function getArticlePdf(Request $request): Response|JsonResponse
     {
-        $authError = $this->requireAuthenticated($request);
+        $authError = $this->requireSubscribed($request);
         if ($authError) return $authError;
 
         $submissionId = (int) $request->route('submissionId');
@@ -404,7 +422,7 @@ class ArchiveCheckerController extends PKPBaseController
      */
     public function getArticleHtml(Request $request): Response|JsonResponse
     {
-        $authError = $this->requireAuthenticated($request);
+        $authError = $this->requireSubscribed($request);
         if ($authError) return $authError;
 
         $submissionId = (int) $request->route('submissionId');
@@ -461,7 +479,7 @@ class ArchiveCheckerController extends PKPBaseController
     /**
      * Stream a file to the client using readfile() (kernel-level, no PHP memory).
      */
-    private function streamFile(string $filePath, string $mimeType): void
+    private function streamFile(string $filePath, string $mimeType): never
     {
         header('Content-Type: ' . $mimeType);
         header('Content-Length: ' . filesize($filePath));
@@ -691,87 +709,4 @@ class ArchiveCheckerController extends PKPBaseController
         return new JsonResponse(['submission_id' => null, 'message' => 'No problem cases found']);
     }
 
-    /**
-     * GET /stats — QA progress breakdown by section and reviewer depth.
-     */
-    public function getStats(Request $request): JsonResponse
-    {
-        $authError = $this->requireAuthenticated($request);
-        if ($authError) return $authError;
-
-        $contextId = $this->getContextId();
-
-        // All articles with section info
-        $articles = DB::table('submissions as s')
-            ->join('publications as p', function ($join) {
-                $join->on('p.submission_id', '=', 's.submission_id')
-                     ->whereColumn('p.publication_id', '=', 's.current_publication_id');
-            })
-            ->join('issues as i', 'p.issue_id', '=', 'i.issue_id')
-            ->leftJoin('section_settings as ss', function ($join) {
-                $join->on('ss.section_id', '=', 'p.section_id')
-                     ->where('ss.setting_name', '=', 'title')
-                     ->where('ss.locale', '=', 'en');
-            })
-            ->where('s.context_id', $contextId)
-            ->select([
-                's.submission_id',
-                DB::raw("COALESCE(ss.setting_value, 'Uncategorised') as section"),
-            ])
-            ->get();
-
-        // Latest review per submission + count of distinct reviewers
-        $reviewData = DB::table('archive_checker_reviews')
-            ->select([
-                'submission_id',
-                DB::raw('MAX(CASE WHEN review_id = (SELECT r2.review_id FROM archive_checker_reviews r2 WHERE r2.submission_id = archive_checker_reviews.submission_id ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1) THEN decision END) as latest_decision'),
-                DB::raw('COUNT(DISTINCT user_id) as reviewer_count'),
-            ])
-            ->groupBy('submission_id')
-            ->get()
-            ->keyBy('submission_id');
-
-        // Build section breakdown
-        $sections = [];
-        $overall = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'deferred' => 0, 'unreviewed' => 0];
-        $byReviewerCount = [0 => 0, 1 => 0, 2 => 0]; // 0 reviewers, 1 reviewer, 2+ reviewers
-
-        foreach ($articles as $article) {
-            $section = $article->section;
-            if (!isset($sections[$section])) {
-                $sections[$section] = ['total' => 0, 'approved' => 0, 'needs_fix' => 0, 'recheck' => 0, 'deferred' => 0, 'unreviewed' => 0];
-            }
-
-            $review = $reviewData[$article->submission_id] ?? null;
-            $status = 'unreviewed';
-            $reviewerCount = 0;
-
-            if ($review) {
-                $status = $review->latest_decision;
-                $reviewerCount = (int) $review->reviewer_count;
-            }
-
-            $sections[$section]['total']++;
-            $sections[$section][$status]++;
-            $overall['total']++;
-            $overall[$status]++;
-
-            if ($reviewerCount === 0) $byReviewerCount[0]++;
-            elseif ($reviewerCount === 1) $byReviewerCount[1]++;
-            else $byReviewerCount[2]++;
-        }
-
-        // Sort sections by total descending
-        uasort($sections, fn($a, $b) => $b['total'] <=> $a['total']);
-
-        return new JsonResponse([
-            'overall'          => $overall,
-            'by_section'       => $sections,
-            'by_reviewer_count' => [
-                ['label' => 'No reviews',     'count' => $byReviewerCount[0]],
-                ['label' => '1 reviewer',     'count' => $byReviewerCount[1]],
-                ['label' => '2+ reviewers',   'count' => $byReviewerCount[2]],
-            ],
-        ]);
-    }
 }

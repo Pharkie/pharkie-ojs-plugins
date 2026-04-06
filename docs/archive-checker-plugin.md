@@ -1,12 +1,12 @@
 # Archive Checker Plugin
 
-Visual review tool for checking archive journal articles inside OJS. Three-pane interface: sidebar (left), original PDF (centre), HTML version + end-matter (right).
+Visual review tool for checking archive journal articles inside OJS. Responsive three-tier layout: desktop (sidebar + PDF + HTML side-by-side), tablet (stacked PDF/HTML with slide-out drawer), phone (single-pane with PDF/HTML tab switching).
 
 ## Purpose
 
 After the backfill pipeline converts PDF articles to HTML and imports them into OJS, reviewers compare the originals against the HTML versions. This plugin provides a rapid review workflow:
 
-1. Compare original PDF against HTML version side-by-side
+1. Compare original PDF against HTML version
 2. Verify metadata (title, authors, pages, keywords, abstract)
 3. Check end-matter classification (references, notes, bios, provenance)
 4. Approve articles or report problems with comments
@@ -17,7 +17,7 @@ After the backfill pipeline converts PDF articles to HTML and imports them into 
 
 - OJS 3.5+
 - Articles must be imported into OJS (needs submission_id, HTML/PDF galleys, citations)
-- Any authenticated OJS user can access and review
+- Requires active subscription or manager/admin role (prevents paywall bypass)
 
 ## Installation
 
