@@ -61,8 +61,10 @@ for FORWARD in $FORWARDS; do
   REMOTE_HOST="${REMOTE%%:*}"
   REMOTE_PORT="${REMOTE#*:}"
 
-  socat "TCP-LISTEN:$LOCAL_PORT,fork,reuseaddr" "TCP:$REMOTE_HOST:$REMOTE_PORT" 2>/dev/null &
-  disown
+  # setsid creates a new session so VS Code's postStartCommand cleanup
+  # can't kill the process group. disown alone wasn't enough — VS Code
+  # tears down the entire process tree, not just SIGHUP.
+  setsid socat "TCP-LISTEN:$LOCAL_PORT,fork,reuseaddr" "TCP:$REMOTE_HOST:$REMOTE_PORT" 2>/dev/null &
 
   # Wait up to 3s for it to start listening
   for i in $(seq 1 6); do
