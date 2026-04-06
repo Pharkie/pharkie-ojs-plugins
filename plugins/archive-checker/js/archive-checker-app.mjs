@@ -70,6 +70,13 @@ Alpine.data('acApp', () => ({
         if (a && (a.status === 'needs_fix' || a.status === 'recheck' || a.status === 'deferred')) return 'Update Problem';
         return 'Report Problem';
     },
+    deferSaved: false,
+    get deferLabel() {
+        if (this.deferSaved) return 'Updated \u2713';
+        const a = this.article;
+        if (a && a.status === 'deferred') return 'Update Defer';
+        return 'Defer';
+    },
 
     // PDF search
     pdfSearchQuery: '',
@@ -572,7 +579,7 @@ Alpine.data('acApp', () => ({
         if (this.currentIndex < 0 || this.submitting) return;
         this.submitting = true;
         const a = this.articles[this.currentIndex];
-        const comment = decision === 'needs_fix' ? this.rejectComment.trim() : '';
+        const comment = (decision === 'needs_fix' || decision === 'deferred') ? this.rejectComment.trim() : '';
 
         if (decision === 'needs_fix' && !comment) {
             this.submitting = false;
@@ -617,8 +624,13 @@ Alpine.data('acApp', () => ({
                 }
             } else {
                 // Flash confirmation, stay on article, keep comment visible
-                this.reportSaved = true;
-                setTimeout(() => { this.reportSaved = false; }, 2000);
+                if (decision === 'deferred') {
+                    this.deferSaved = true;
+                    setTimeout(() => { this.deferSaved = false; }, 2000);
+                } else {
+                    this.reportSaved = true;
+                    setTimeout(() => { this.reportSaved = false; }, 2000);
+                }
                 this.rejectComment = comment;
             }
         } catch (err) {
