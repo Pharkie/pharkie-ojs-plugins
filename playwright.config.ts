@@ -22,6 +22,7 @@ for (const line of readFileSync(resolve(projectRoot, '.env'), 'utf-8').split('\n
 }
 
 const isCI = !!process.env.CI;
+const isSafari = !!process.env.SAFARI;
 
 export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
@@ -40,10 +41,25 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: isCI ? 'on-first-retry' : 'off',
   },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'], deviceScaleFactor: 2 },
-    },
-  ],
+  projects: isSafari
+    ? [
+        {
+          name: 'webkit',
+          use: { ...devices['Desktop Safari'], deviceScaleFactor: 2 },
+        },
+        {
+          name: 'ipad',
+          use: { ...devices['iPad Pro 11'] },
+        },
+        {
+          name: 'iphone',
+          use: { ...devices['iPhone 14'] },
+        },
+      ]
+    : [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'], deviceScaleFactor: 2 },
+        },
+      ],
 });
