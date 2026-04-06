@@ -388,12 +388,12 @@ echo ""
 echo "Creating heartbeats..."
 echo ""
 
-# 1. Hourly monitoring workflow (expect every 75 min, grace 30 min)
+# 1. Hourly monitoring workflow (expect every 75 min, grace 45 min)
 create_heartbeat "SEA: Hourly monitoring" "$(cat <<EOF
 {
   "name": "SEA: Hourly monitoring",
   "period": 4500,
-  "grace": 1800,
+  "grace": 2700,
   "call": false,
   "sms": true,
   "email": true,
