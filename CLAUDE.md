@@ -16,6 +16,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`docs/docker-setup.md`](docs/docker-setup.md) — Docker dev environment
 - [`docs/non-docker-setup.md`](docs/non-docker-setup.md) — non-Docker plugin installation
 - [`private/docs/monitoring.md`](private/docs/monitoring.md) — Better Stack monitors, heartbeats, GitHub Actions workflows, troubleshooting
+- [`private/docs/archive-author-stats.md`](private/docs/archive-author-stats.md) — Top authors by publication count and section type
 - [`docs/vps-deployment.md`](docs/vps-deployment.md) — VPS deployment
 - [`docs/support-runbook.md`](docs/support-runbook.md) — support staff quick reference
 - [`docs/archive-checker-plugin.md`](docs/archive-checker-plugin.md) — Archive Checker plugin: visual review interface for backfill article splits
