@@ -104,6 +104,23 @@ else
 fi
 check_contains "2014" "Spans back to at least 2014"
 
+# --- 6. PDF galley loads (not blocked by X-Frame-Options) ---
+echo "6. PDF galley page (8788/33950)"
+HTTP_CODE=$(curl -sL -o "$TMPBODY" -w '%{http_code}' "$OJS_JOURNAL_URL/article/view/8788/33950" 2>/dev/null)
+if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+  pass "PDF galley returns HTTP $HTTP_CODE"
+else
+  fail "PDF galley returns HTTP $HTTP_CODE" "Expected 2xx/3xx"
+fi
+check_contains "pdfJsViewer\|pdfCanvasContainer" "Contains PDF viewer embed"
+# Check that X-Frame-Options is not DENY (would block the PDF.js iframe)
+XFO=$(curl -sI "$OJS_JOURNAL_URL/article/view/8788/33950" 2>/dev/null | grep -i 'x-frame-options' | tr -d '\r')
+if echo "$XFO" | grep -qi "DENY"; then
+  fail "X-Frame-Options is DENY (blocks PDF.js iframe)" "$XFO"
+else
+  pass "X-Frame-Options allows same-origin iframes"
+fi
+
 echo ""
 echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
 [ "$FAILED" -gt 0 ] && exit 1
