@@ -147,23 +147,21 @@ fi
 echo ""
 echo "--- Backup Health ---"
 
-BACKUP_CRON=$(ssh_retry $SSH_CMD "sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
-if [ -n "$BACKUP_CRON" ]; then
-  # Verify the script path in the crontab actually exists on the server
-  BACKUP_SCRIPT_PATH=$(echo "$BACKUP_CRON" | grep -oP '/\S+backup-ojs-db\.sh')
-  if [ -n "$BACKUP_SCRIPT_PATH" ]; then
-    SCRIPT_EXISTS=$(ssh_retry $SSH_CMD "test -f '$BACKUP_SCRIPT_PATH' && echo 'yes' || echo 'no'")
-    if [ "$SCRIPT_EXISTS" = "yes" ]; then
-      pass "Backup cron installed ($(basename "$BACKUP_SCRIPT_PATH"))"
-    else
-      fail "Backup cron points to missing script: $BACKUP_SCRIPT_PATH"
-    fi
-  else
-    pass "Backup cron installed"
-  fi
-else
-  fail "Backup cron not installed"
-fi
+# Single SSH call: read crontab + verify script exists
+BACKUP_CHECK=$(ssh_retry $SSH_CMD "
+  CRON=\$(sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true)
+  if [ -z \"\$CRON\" ]; then echo 'no_cron'; exit; fi
+  SCRIPT=\$(echo \"\$CRON\" | grep -oP '/\S+backup-ojs-db\.sh')
+  if [ -z \"\$SCRIPT\" ]; then echo \"cron_ok\"; exit; fi
+  if [ -f \"\$SCRIPT\" ]; then echo \"script_ok:\$SCRIPT\"; else echo \"script_missing:\$SCRIPT\"; fi
+") || BACKUP_CHECK="ssh_failed"
+case "$BACKUP_CHECK" in
+  script_ok:*)  pass "Backup cron installed ($(basename "${BACKUP_CHECK#script_ok:}"))" ;;
+  cron_ok)      pass "Backup cron installed" ;;
+  script_missing:*) fail "Backup cron points to missing script: ${BACKUP_CHECK#script_missing:}" ;;
+  no_cron)      fail "Backup cron not installed" ;;
+  *)            fail "Could not verify backup cron (SSH: $BACKUP_CHECK)" ;;
+esac
 
 BACKUP_KEY=$(ssh_retry $SSH_CMD "test -f /opt/backups/ojs/.backup-key && echo 'exists' || echo 'missing'")
 if [ "$BACKUP_KEY" = "exists" ]; then
