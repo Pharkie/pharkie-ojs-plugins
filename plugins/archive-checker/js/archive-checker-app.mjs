@@ -65,14 +65,11 @@ Alpine.data('acApp', () => ({
     approveLabel: 'Approve',
     reportSaved: false,
     get reportLabel() {
-        if (this.reportSaved) return 'Saved \u2713';
+        if (this.reportSaved) return 'Updated \u2713';
         const a = this.article;
         if (a && (a.status === 'needs_fix' || a.status === 'recheck' || a.status === 'deferred')) return 'Update Problem';
         return 'Report Problem';
     },
-
-    // Sidebar
-    showChecklist: false,
 
     // PDF search
     pdfSearchQuery: '',
@@ -139,10 +136,20 @@ Alpine.data('acApp', () => ({
 
         await this.loadArticles();
 
-        // Auto-show guide on first visit
-        if (!localStorage.getItem('ac-help-seen')) {
-            this.showGuide = true;
-        }
+        // Post-load UI — run via $nextTick to ensure Alpine reactivity
+        // (async init() loses proxy context after await)
+        this.$nextTick(() => {
+            if (!localStorage.getItem('ac-help-seen')) {
+                this.showGuide = true;
+            } else if (this.shouldIntroduceDrawer()) {
+                this.drawerIntro = true;
+                this.drawerOpen = true;
+                setTimeout(() => this.$nextTick(() => {
+                    this.drawerOpen = false;
+                    this.drawerIntro = false;
+                }), 1500);
+            }
+        });
     },
 
     // ── Data loading ──
@@ -150,6 +157,7 @@ Alpine.data('acApp', () => ({
     async loadArticles() {
         try {
             const res = await fetch(this.api + '/articles', { credentials: 'same-origin' });
+            if (!res.ok) throw new Error('Failed to load articles');
             const data = await res.json();
             this.articles = data.articles || [];
             this.counts = data.counts;
@@ -331,6 +339,7 @@ Alpine.data('acApp', () => ({
         setTimeout(() => { this.diceRolling = false; }, 1500);
         try {
             const res = await fetch(this.api + '/nav/random-unreviewed', { credentials: 'same-origin' });
+            if (!res.ok) throw new Error('Failed to load random articles');
             const data = await res.json();
             const ids = data.submission_ids || [];
             if (ids.length === 0) return;
@@ -525,6 +534,7 @@ Alpine.data('acApp', () => ({
             } else {
                 const res = await fetch(this.api + '/articles/' + submissionId + '/classification', { credentials: 'same-origin' });
                 if (gen !== _pdf.loadGen) return;
+                if (!res.ok) throw new Error('Failed to load classification');
                 data = await res.json();
             }
             if (gen !== _pdf.loadGen) return;
@@ -575,8 +585,8 @@ Alpine.data('acApp', () => ({
                 headers: { 'Content-Type': 'application/json', 'X-Csrf-Token': this.csrfToken },
                 body: JSON.stringify({ submissionId: a.submission_id, decision, comment }),
             });
-            const data = await res.json();
             if (!res.ok) { this.submitting = false; return; }
+            const data = await res.json();
 
             a.status = decision;
             a.reviewer = 'you';
@@ -606,10 +616,10 @@ Alpine.data('acApp', () => ({
                     }
                 }
             } else {
-                // Flash confirmation, stay on article
+                // Flash confirmation, stay on article, keep comment visible
                 this.reportSaved = true;
                 setTimeout(() => { this.reportSaved = false; }, 2000);
-                this.rejectComment = '';
+                this.rejectComment = comment;
             }
         } catch (err) {
             console.error('Review submission error:', err);
@@ -667,20 +677,24 @@ Alpine.data('acApp', () => ({
             || String(a.submission_id) === q;
     },
 
-    // All filters EXCEPT issueFilter (for issue dropdown counts)
-    get _baseFilteredForIssues() {
+    // Core filter — applies all active filters, with optional exclusion for pill counts.
+    // Each pill group needs counts from "all other filters except mine" to show
+    // how many articles would match if that pill were toggled.
+    _filterArticles({ skipIssue, skipSections, skipReviewers } = {}) {
+        const issue = this.issueFilter;
         return this.articles.filter(a => {
             if (!this._matchesContentFilter(a)) return false;
+            if (!skipIssue && issue && (a.volume + '.' + a.number) !== issue) return false;
             if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
-            if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
-            if (!this._matchesReviewerFilter(a)) return false;
+            if (!skipSections && this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
+            if (!skipReviewers && !this._matchesReviewerFilter(a)) return false;
             if (!this._matchesSearch(a)) return false;
             return true;
         });
     },
 
     get allIssues() {
-        const base = this._baseFilteredForIssues;
+        const base = this._filterArticles({ skipIssue: true });
         const issues = {};
         base.forEach(a => {
             const key = a.volume + '.' + a.number;
@@ -695,52 +709,25 @@ Alpine.data('acApp', () => ({
             .map(([k, c]) => ({ key: k, count: c }));
     },
 
-    // All filters INCLUDING activeStatuses (status pills show counts matching the sidebar)
-    get _baseFiltered() {
-        const issue = this.issueFilter;
-        return this.articles.filter(a => {
-            if (!this._matchesContentFilter(a)) return false;
-            if (issue && (a.volume + '.' + a.number) !== issue) return false;
-            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
-            if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
-            if (!this._matchesReviewerFilter(a)) return false;
-            if (!this._matchesSearch(a)) return false;
-            return true;
-        });
-    },
-
-    // All filters EXCEPT activeSections (for section pill counts)
-    get _baseFilteredForSections() {
-        const issue = this.issueFilter;
-        return this.articles.filter(a => {
-            if (!this._matchesContentFilter(a)) return false;
-            if (issue && (a.volume + '.' + a.number) !== issue) return false;
-            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
-            if (!this._matchesReviewerFilter(a)) return false;
-            if (!this._matchesSearch(a)) return false;
-            return true;
-        });
-    },
-
     get contentFilteredCount() {
         return this.articles.filter(a => a.content_filtered).length;
     },
 
     get statusPills() {
-        const base = this._baseFiltered;
+        const base = this._filterArticles();
         const counts = { approved: 0, needs_fix: 0, recheck: 0, deferred: 0, unreviewed: 0 };
         base.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
         return [
-            { key: 'approved', label: 'Approved', count: counts.approved },
-            { key: 'needs_fix', label: 'Problem', count: counts.needs_fix },
-            { key: 'recheck', label: 'Recheck', count: counts.recheck },
-            { key: 'deferred', label: 'Deferred', count: counts.deferred },
-            { key: 'unreviewed', label: 'Unchecked', count: counts.unreviewed },
+            { key: 'approved', label: '\u2713 Approved', count: counts.approved },
+            { key: 'needs_fix', label: '\u26A0 Problem', count: counts.needs_fix },
+            { key: 'recheck', label: '\u21BB Recheck', count: counts.recheck },
+            { key: 'deferred', label: '\u23F8 Deferred', count: counts.deferred },
+            { key: 'unreviewed', label: '\u00B7 Unchecked', count: counts.unreviewed },
         ];
     },
 
     get sectionPills() {
-        const base = this._baseFilteredForSections;
+        const base = this._filterArticles({ skipSections: true });
         const counts = {};
         base.forEach(a => { if (a.section) counts[a.section] = (counts[a.section] || 0) + 1; });
         return Object.entries(counts)
@@ -748,21 +735,8 @@ Alpine.data('acApp', () => ({
             .map(([k, c]) => ({ key: k, label: k, count: c }));
     },
 
-    // All filters EXCEPT activeReviewers (for reviewer pill counts)
-    get _baseFilteredForReviewers() {
-        const issue = this.issueFilter;
-        return this.articles.filter(a => {
-            if (!this._matchesContentFilter(a)) return false;
-            if (issue && (a.volume + '.' + a.number) !== issue) return false;
-            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return false;
-            if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return false;
-            if (!this._matchesSearch(a)) return false;
-            return true;
-        });
-    },
-
     get reviewerPills() {
-        const base = this._baseFilteredForReviewers;
+        const base = this._filterArticles({ skipReviewers: true });
         let byMe = 0, byOthers = 0;
         base.forEach(a => {
             if (!a.reviewer) return;
@@ -800,51 +774,14 @@ Alpine.data('acApp', () => ({
     _buildWorkingSet() {
         // Build working set from current filters without triggering navigation.
         // Used during init to avoid premature article loads.
-        const q = this.searchQuery.toLowerCase();
-        const issue = this.issueFilter;
+        const filtered = this._filterArticles();
+        const indexSet = new Set(filtered.map(a => this.articles.indexOf(a)));
         this.workingSet = [];
-        this.articles.forEach((a, i) => {
-            if (!this._matchesContentFilter(a)) return;
-            if (issue && (a.volume + '.' + a.number) !== issue) return;
-            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
-            if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
-            if (!this._matchesReviewerFilter(a)) return;
-            if (!this._matchesSearch(a)) return;
-            this.workingSet.push(i);
-        });
+        this.articles.forEach((a, i) => { if (indexSet.has(i)) this.workingSet.push(i); });
     },
 
     refilter() {
-        const q = this.searchQuery.toLowerCase();
-        const issue = this.issueFilter;
-
-        this.workingSet = [];
-        this.articles.forEach((a, i) => {
-            if (!this._matchesContentFilter(a)) return;
-            if (issue && (a.volume + '.' + a.number) !== issue) return;
-            if (this.activeStatuses.size > 0 && !this.activeStatuses.has(a.status)) return;
-            if (this.activeSections.size > 0 && !this.activeSections.has(a.section)) return;
-            if (this.activeReviewers.size > 0) {
-                const isMine = a.reviewer === 'you' || a.reviewer === this.currentUsername;
-                const byMe = this.activeReviewers.has('me');
-                const byOthers = this.activeReviewers.has('others');
-                if (byMe && !byOthers && !isMine) return;
-                if (byOthers && !byMe && (isMine || !a.reviewer)) return;
-                if (byMe && byOthers && !a.reviewer) return;
-            }
-            if (q) {
-                const isNumeric = /^\d+$/.test(q);
-                if (isNumeric) {
-                    if (String(a.submission_id) !== q) return;
-                } else {
-                    if (!a.title.toLowerCase().includes(q)
-                        && !a.authors.some(auth => auth.toLowerCase().includes(q))
-                        && !(a.section || '').toLowerCase().includes(q)
-                        && String(a.submission_id) !== q) return;
-                }
-            }
-            this.workingSet.push(i);
-        });
+        this._buildWorkingSet();
 
         this.setFilter = this.hasFilters ? { type: 'filters' } : null;
         this.setIndex = this.workingSet.indexOf(this.currentIndex);
@@ -886,6 +823,7 @@ Alpine.data('acApp', () => ({
     },
 
     selectArticle(si) {
+        this.drawerOpen = false;
         this.goToSetIndex(si);
     },
 
@@ -942,13 +880,17 @@ Alpine.data('acApp', () => ({
                 return;
             }
 
-            // Any key dismisses overlays when visible
+            // Dismiss overlays (highest z-index first)
             if (this.showGuide) {
                 this.dismissGuide();
                 return;
             }
             if (this.showShortcuts) {
                 this.showShortcuts = false;
+                return;
+            }
+            if (this.drawerOpen && e.key === 'Escape') {
+                this.drawerOpen = false;
                 return;
             }
 
@@ -963,10 +905,28 @@ Alpine.data('acApp', () => ({
 
     showGuide: false,
     showShortcuts: false,
+    drawerOpen: false,
+    drawerIntro: false,
+    activePane: 'pdf',
 
     dismissGuide() {
         this.showGuide = false;
         localStorage.setItem('ac-help-seen', '1');
+        if (this.shouldIntroduceDrawer()) {
+            this.drawerIntro = true;
+            this.drawerOpen = true;
+            setTimeout(() => this.$nextTick(() => {
+                this.drawerOpen = false;
+                this.drawerIntro = false;
+            }), 1500);
+        }
+    },
+
+    /** Check if drawer intro should play (tablet/phone only, every load, once per init). */
+    shouldIntroduceDrawer() {
+        if (window.innerWidth > 1024) return false;
+        if (this.drawerIntro) return false; // already in progress
+        return true;
     },
 
     // ── Prefetch ──
@@ -1021,20 +981,6 @@ Alpine.data('acApp', () => ({
         } catch (err) {}
     },
 
-    // ── Stats dashboard ──
-
-    showDashboard: false,
-    dashboardData: null,
-
-    async openDashboard() {
-        this.showDashboard = true;
-        try {
-            const res = await fetch(this.api + '/stats', { credentials: 'same-origin' });
-            this.dashboardData = await res.json();
-        } catch (err) {
-            this.dashboardData = null;
-        }
-    },
 }));
 
 Alpine.start();
