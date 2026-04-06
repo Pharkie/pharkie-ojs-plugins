@@ -115,6 +115,27 @@ test.describe('OJS Journal', () => {
     // This is acceptable — not all visible articles may be paywalled
   });
 
+  test('PDF galley loads in viewer (not blocked by X-Frame-Options)', async ({ page }) => {
+    // Navigate to a known PDF galley page
+    const response = await page.goto(`${OJS_JOURNAL_URL}/article/view/8788/33950`, {
+      waitUntil: 'domcontentloaded',
+    });
+    expect(response?.status()).toBeLessThan(400);
+
+    // The page should contain the PDF.js viewer iframe
+    const pdfContainer = page.locator('#pdfCanvasContainer');
+    await expect(pdfContainer).toBeVisible({ timeout: 5_000 });
+
+    // The iframe inside should load successfully (not blocked by X-Frame-Options)
+    const iframe = pdfContainer.locator('iframe');
+    await expect(iframe).toBeAttached({ timeout: 5_000 });
+
+    // Verify the iframe actually loaded by checking it has non-zero dimensions
+    const box = await iframe.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.height).toBeGreaterThan(100);
+  });
+
   test('open-access content renders (editorial/book review)', async ({ page }) => {
     // Navigate to an issue and look for editorial or book review sections
     await page.goto(OJS_JOURNAL_URL, { waitUntil: 'domcontentloaded' });
