@@ -4,11 +4,24 @@
 # can reach WP/OJS/Adminer via VS Code port forwarding.
 #
 # Safe to run repeatedly — kills stale forwarders first.
-# Called by: postCreateCommand, rebuild-dev.sh, or manually.
+# Called by: postStartCommand (devcontainer.json), rebuild-dev.sh, or manually.
 
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# --- Wait for Docker daemon to be ready (DinD can lag on container start) ---
+MAX_DOCKER_WAIT=30
+for i in $(seq 1 "$MAX_DOCKER_WAIT"); do
+  if docker info >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" = "$MAX_DOCKER_WAIT" ]; then
+    echo "[FAIL] Docker daemon not ready after ${MAX_DOCKER_WAIT}s — cannot forward ports"
+    exit 1
+  fi
+  sleep 1
+done
 
 # Ensure compose services are running (DinD-aware).
 # After a devcontainer rebuild, containers may exist but not be started.
@@ -22,6 +35,18 @@ CONTAINER_ID=$(cat /etc/hostname)
 
 # Connect devcontainer to the compose network (idempotent)
 docker network connect "$NETWORK" "$CONTAINER_ID" 2>/dev/null || true
+
+# --- Wait for DNS resolution of service hostnames (network just connected) ---
+MAX_DNS_WAIT=10
+for i in $(seq 1 "$MAX_DNS_WAIT"); do
+  if getent hosts ojs >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" = "$MAX_DNS_WAIT" ]; then
+    echo "[WARN] DNS for 'ojs' not resolving after ${MAX_DNS_WAIT}s — forwarding may fail"
+  fi
+  sleep 1
+done
 
 # Kill any stale socat forwarders
 pkill -f '[s]ocat.*TCP-LISTEN' 2>/dev/null || true
@@ -37,6 +62,7 @@ for FORWARD in $FORWARDS; do
   REMOTE_PORT="${REMOTE#*:}"
 
   socat "TCP-LISTEN:$LOCAL_PORT,fork,reuseaddr" "TCP:$REMOTE_HOST:$REMOTE_PORT" 2>/dev/null &
+  disown
 
   # Wait up to 3s for it to start listening
   for i in $(seq 1 6); do
