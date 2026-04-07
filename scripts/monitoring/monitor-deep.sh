@@ -147,17 +147,12 @@ fi
 echo ""
 echo "--- Backup Health ---"
 
-# Single SSH call: read crontab + verify script exists
-BACKUP_CHECK=$(ssh_retry $SSH_CMD "
-  CRON=\$(sudo crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true)
-  if [ -z \"\$CRON\" ]; then echo 'no_cron'; exit; fi
-  SCRIPT=\$(echo \"\$CRON\" | grep -oP '/\S+backup-ojs-db\.sh')
-  if [ -z \"\$SCRIPT\" ]; then echo \"cron_ok\"; exit; fi
-  if [ -f \"\$SCRIPT\" ]; then echo \"script_ok:\$SCRIPT\"; else echo \"script_missing:\$SCRIPT\"; fi
-") || BACKUP_CHECK="ssh_failed"
+# Single SSH call: read crontab + verify script exists.
+# Must start with "sudo crontab -l" to match the monitor-shell.sh allowlist
+# (the CI key is forced through that wrapper). Keep this on one line.
+BACKUP_CHECK=$(ssh_retry $SSH_CMD "sudo crontab -l 2>/dev/null | grep -oP '/\S+backup-ojs-db\.sh' | head -1 | { read -r SCRIPT || true; if [ -z \"\$SCRIPT\" ]; then echo no_cron; elif [ -f \"\$SCRIPT\" ]; then echo \"script_ok:\$SCRIPT\"; else echo \"script_missing:\$SCRIPT\"; fi; }") || BACKUP_CHECK="ssh_failed"
 case "$BACKUP_CHECK" in
   script_ok:*)  pass "Backup cron installed ($(basename "${BACKUP_CHECK#script_ok:}"))" ;;
-  cron_ok)      pass "Backup cron installed" ;;
   script_missing:*) fail "Backup cron points to missing script: ${BACKUP_CHECK#script_missing:}" ;;
   no_cron)      fail "Backup cron not installed" ;;
   *)            fail "Could not verify backup cron (SSH: $BACKUP_CHECK)" ;;
