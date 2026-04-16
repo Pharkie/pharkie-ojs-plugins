@@ -374,6 +374,45 @@ Consequence: any workflow that runs `rebuildSearchIndex.php` and then wipes the 
 - **Regression history:** `backfill/html_pipeline/pipe7_import.sh` was changed in commit `82ba72d` (2026-03-31) from a drain loop to `DELETE FROM jobs`, with a misleading comment claiming "rebuildSearchIndex.php processes the core indexing inline". It doesn't. The live site ran with only the 2 most recent issues searchable from the March backfill until the bug was caught 2026-04-16. Monitoring didn't catch it because the check was `COUNT(*) > 0` — passed with any non-zero index. Fix: compare `COUNT(DISTINCT submission_id)` against the published submission count (now in `monitor-deep.sh`, `smoke-test.sh`, and `e2e/tests/wpojs-sync/ojs-search.spec.ts`).
 - **Related gotcha:** pipe7's *pre-import* `DELETE FROM jobs` at line 266 is also destructive if legitimate pending jobs (DOI deposits, WPOJS sync, notifications) are queued. Out of scope for the #25 fix but worth auditing.
 
+### 26. `recommendBySimilarity` query scales O(corpus × keyword-frequency) per article view [plugin-design]
+
+The "Similar Articles" plugin (`plugins/generic/recommendBySimilarity`) runs a query on every article view that searches for other submissions matching any of up to 20 keywords extracted from the current article. For a thematically narrow journal whose corpus-wide keywords all match ≥50% of submissions, this query becomes catastrophically slow.
+
+**Query shape** (from `APP\submission\Collector::searchPhrase()`):
+
+```sql
+SELECT s.* FROM submissions s WHERE s.submission_id IN (
+  -- branch per keyword: keyword-index match OR title LIKE '%kw%' OR author LIKE '%kw%'
+  SELECT ... FROM submission_search_objects ...       -- keyword arm
+  UNION SELECT ... FROM publication_settings WHERE setting_value LIKE CONCAT('%', ?, '%')  -- title arm (leading wildcard = full scan)
+  UNION SELECT ... FROM author_settings WHERE setting_value LIKE CONCAT('%', ?, '%')       -- author arm
+) AND s.submission_id NOT IN (?)  -- self-exclude
+ORDER BY match-count DESC LIMIT 6
+```
+
+Plus two correlated subqueries in the `ORDER BY` that each repeat the keyword-index join for ranking.
+
+**Why it silently works for most journals:** keyword frequency is roughly Zipfian across a broad corpus — no single keyword matches more than a few percent of articles. The OR-branches stay small. Index lookups are quick.
+
+**Why it failed here:** a journal-for-one-topic has its topic word in every article. For this journal's post-backfill state:
+
+| keyword      | matching submissions | corpus share |
+|--------------|---------------------:|-------------:|
+| existential  | 1400                 | 100%         |
+| analysis     | 1400                 | 100%         |
+| world        | 1167                 |  83%         |
+| experience   | 1143                 |  82%         |
+
+Once the plugin's 20-keyword set includes "existential" or "analysis" (inevitable here), the query scans ~100% of the corpus three times over (three OR arms × keyword-index join × ranking subqueries). Measured: 60-2000 seconds per call. With 8 Apache workers, a dozen concurrent article views saturates the pool — site hangs.
+
+**Why this was latent until 2026-04-16:** issue #25 left the search index near-empty (30 of 1400 submissions indexed). The `EXISTS (submission_search_objects ...)` subqueries returned empty fast regardless of keyword frequency. Fixing #25 populated the index, which unveiled this. Load went from ~0.5 to 14.8 within minutes of the index rebuild.
+
+- **Not reported upstream** — the plugin behaviour is correct by design; it only pathologises on thematically-narrow corpora.
+- **Impact:** catastrophic on journals like ours. Whole-site hang while apache workers wait on DB.
+- **Mitigation (active):** plugin disabled via `UPDATE plugin_settings SET setting_value = 0 WHERE plugin_name = 'recommendbysimilarityplugin'`. Site responsive again.
+- **Detection:** `monitor-deep.sh` now runs a slow-query probe (any `information_schema.processlist` entry >10s fails) and a keyword-skew warning (any keyword matching >50% of submissions warns). `content-check.sh` now sweeps 10 random article pages with a 5s timeout. The slow-query probe would have caught this outage in under a minute.
+- **Permanent fix:** pre-compute similar-article lists into a cache table, patch the plugin to read from cache. Live query path is retired. See follow-up plan.
+
 ## Payments
 
 ### 17. Manual Payment plugin has no admin approval UI [known-gap]
