@@ -409,9 +409,9 @@ Once the plugin's 20-keyword set includes "existential" or "analysis" (inevitabl
 
 - **Not reported upstream** — the plugin behaviour is correct by design; it only pathologises on thematically-narrow corpora.
 - **Impact:** catastrophic on journals like ours. Whole-site hang while apache workers wait on DB.
-- **Mitigation (active):** plugin disabled via `UPDATE plugin_settings SET setting_value = 0 WHERE plugin_name = 'recommendbysimilarityplugin'`. Site responsive again.
+- **Mitigation (active):** stock plugin disabled via `UPDATE plugin_settings SET setting_value = 0 WHERE plugin_name = 'recommendbysimilarityplugin'`. Site responsive again.
 - **Detection:** `monitor-deep.sh` now runs a slow-query probe (any `information_schema.processlist` entry >10s fails) and a keyword-skew warning (any keyword matching >50% of submissions warns). `content-check.sh` now sweeps 10 random article pages with a 5s timeout. The slow-query probe would have caught this outage in under a minute.
-- **Permanent fix:** pre-compute similar-article lists into a cache table, patch the plugin to read from cache. Live query path is retired. See follow-up plan.
+- **Replacement plugin:** `plugins/similar-articles/` (`similarArticles` in OJS). Renders the same "Related articles" sidebar from a pre-computed cache table (`similar_articles`). Similarity is computed offline by `scripts/ojs/build_similar_articles.py` — sklearn TF-IDF (min_df=2, max_df=0.5, 1-2-grams) over editor-curated keywords×3 + title + abstract, cosine similarity, top 5 per article. max_df=0.5 auto-filters corpus-wide tokens like "existential" that broke the stock plugin. Render path is a primary-key cache lookup — sub-millisecond, no corpus-skew exposure. Monitor-deep.sh now has cache coverage (fail <50%, warn <80%) and staleness (fail >168h, warn >48h) checks.
 
 ## Payments
 

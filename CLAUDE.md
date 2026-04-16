@@ -33,6 +33,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - **OJS 3.5 upgrade is the biggest risk.** The 3.5 upgrade has significant breaking changes (Slim→Laravel, Vue 2→3). If this goes badly, re-evaluate Janeway migration.
 - **WP usernames are synced to OJS** but sanitized to lowercase-alphanumeric (OJS constraint). WP usernames commonly contain dots, hyphens, underscores, spaces, or `@` — these get stripped, so typing the WP login into OJS may not match. Mitigated: the login page relabels the field to "Email" and sets `autocomplete="email"`. OJS login auto-detects email-shaped input and does email lookup. See `docs/ojs-sync-plugin-api.md#username-sync`.
 - **`rebuildSearchIndex.php` queues jobs, never indexes inline** (OJS 3.5). Always drain the queue with `scripts/ojs/blast-queue.sh` (or `jobs.php run --once`) after. Never `DELETE FROM jobs` after a rebuild. See `docs/ojs-issues-log.md` #25.
+- **Similar articles sidebar** uses the custom `similarArticles` plugin (`plugins/similar-articles/`), not the stock `recommendBySimilarity` (which is disabled — it collapses on this thematically narrow corpus; see `docs/ojs-issues-log.md` #26). Rebuild the cache with `sudo python3 scripts/ojs/build_similar_articles.py --target=dev|live` (sklearn TF-IDF, takes <2s). Nightly cron runs it against live automatically.
 
 ## Backfill pipeline
 
