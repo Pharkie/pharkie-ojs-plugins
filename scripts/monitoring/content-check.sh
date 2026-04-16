@@ -121,6 +121,40 @@ else
   pass "X-Frame-Options allows same-origin iframes"
 fi
 
+# --- 7. Article-page sweep ---
+# 10 random published submissions with a 5s per-request timeout. Catches
+# cascading slow-query regressions on the article view path (e.g. the 2026-04
+# recommendBySimilarity failure where every article page hung after the search
+# index grew). One single-URL probe misses these — the failure only surfaces
+# once several pages stack up against a shared DB bottleneck.
+echo "7. Article-page sweep (10 random published submissions, 5s timeout each)"
+IDS=$($SSH_CMD "cd $REMOTE_DIR && docker compose exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
+  SELECT s.submission_id FROM submissions s WHERE s.status = 3 AND s.current_publication_id IS NOT NULL ORDER BY RAND() LIMIT 10
+\"'" 2>/dev/null | tr -d '\r' | tr '\n' ' ')
+SLOW=0
+MISSING=0
+for id in $IDS; do
+  [ -z "$id" ] && continue
+  TIME_HTTP=$(curl -sL -o /dev/null --max-time 5 -w '%{time_total} %{http_code}' "$OJS_JOURNAL_URL/article/view/$id" 2>/dev/null)
+  code=${TIME_HTTP##* }
+  time=${TIME_HTTP%% *}
+  if [ "$code" = "000" ]; then
+    SLOW=$((SLOW + 1))
+    echo "  [SLOW] article/view/$id timed out (>5s)"
+  elif [ "$code" != "200" ]; then
+    MISSING=$((MISSING + 1))
+    echo "  [MISS] article/view/$id returned HTTP $code"
+  fi
+done
+TOTAL_SWEEP=$(echo $IDS | wc -w)
+if [ "$SLOW" -gt 0 ]; then
+  fail "$SLOW/$TOTAL_SWEEP article pages timed out (>5s)" "Signals a cascading slow-query regression"
+elif [ "$MISSING" -gt 0 ]; then
+  fail "$MISSING/$TOTAL_SWEEP article pages returned non-200"
+else
+  pass "All $TOTAL_SWEEP sampled article pages respond in <5s"
+fi
+
 echo ""
 echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="
 [ "$FAILED" -gt 0 ] && exit 1

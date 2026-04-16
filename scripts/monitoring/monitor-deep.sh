@@ -263,6 +263,38 @@ NEWEST_AUTHOR_SQL="
 test_search_author "oldest" "$OLDEST_AUTHOR_SQL"
 test_search_author "newest" "$NEWEST_AUTHOR_SQL"
 
+# Slow-query probe: flags any ojs query running > 10s. Catches cascading
+# article-page hangs where a DB-bound plugin (e.g. recommendBySimilarity)
+# starts timing out after a corpus change. 2026-04-16 outage sat at 17
+# concurrent 60-2000s queries on processlist before my check — one peek
+# would have caught it instantly.
+SLOW_QUERIES=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM information_schema.processlist WHERE Command IN (\\\"Execute\\\",\\\"Query\\\") AND TIME > 10 AND User = \\\"ojs\\\"\"'" 2>/dev/null | tr -d '[:space:]')
+if [ -n "$SLOW_QUERIES" ] && [ "$SLOW_QUERIES" -gt 0 ] 2>/dev/null; then
+  fail "$SLOW_QUERIES OJS query/queries running >10s on ojs-db (see SHOW PROCESSLIST)"
+elif [ -n "$SLOW_QUERIES" ]; then
+  pass "No OJS queries running >10s"
+fi
+
+# Keyword-skew warning: if any indexed keyword matches >50% of published
+# submissions, the recommendBySimilarity plugin becomes pathologically slow
+# because its OR-branches over that keyword scan >half the corpus per article
+# view. Not an immediate failure — it's a risk indicator for thematic-narrow
+# journals. Warn only.
+SKEWED=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
+  SELECT k.keyword_text, COUNT(DISTINCT sso.submission_id) AS matching
+  FROM submission_search_keyword_list k
+  JOIN submission_search_object_keywords ok ON ok.keyword_id = k.keyword_id
+  JOIN submission_search_objects sso ON sso.object_id = ok.object_id
+  GROUP BY k.keyword_text
+  HAVING matching > (SELECT COUNT(*) / 2 FROM submissions WHERE status = 3 AND current_publication_id IS NOT NULL)
+  ORDER BY matching DESC LIMIT 3
+\"'" 2>/dev/null)
+if [ -n "$SKEWED" ]; then
+  SKEW_LINE=$(echo "$SKEWED" | tr '\t' ':' | tr '\n' ' ')
+  warn "Corpus-wide keywords (>50% of submissions): $SKEW_LINE" \
+       "recommendBySimilarity is slow on any article with these terms — see docs/ojs-issues-log.md #26"
+fi
+
 # ============================================================
 # D4. RECONCILIATION
 # ============================================================
