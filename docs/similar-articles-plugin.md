@@ -147,6 +147,7 @@ The plugin itself has no admin UI. Tune the algorithm by editing `scripts/ojs/bu
 | Constant | Default | Effect |
 |---|---|---|
 | `KEYWORD_WEIGHT` | `3` | How many times the keyword list is repeated in the text blob. Higher = editor-curated keywords dominate over title/abstract. |
+| `TITLE_WEIGHT` | `3` | How many times the title is repeated. Titles carry strong proper-noun signal ("Beauvoir", "Sartre") that keyword lists don't always capture. Raising this (→ 5) clusters papers about the same person/concept more tightly; lowering (→ 1) lets keyword/abstract signals compete. |
 | `MAX_RESULTS` | `5` | Sidebar size. Also hard-capped in the PHP render (`SimilarArticlesPlugin::MAX_RESULTS`). |
 | `MIN_SCORE` | `0.15` | Cosine floor. Matches below this are noise; excluded. Raise to 0.20+ for stricter filtering. |
 | `MAX_SCORE` | `0.95` | Duplicate-detection ceiling. Matches at or above this are near-identical text blobs (usually duplicate imports); excluded. |
