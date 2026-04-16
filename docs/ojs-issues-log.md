@@ -359,6 +359,21 @@ Transient — fires occasionally (observed once per ~12 hours), self-resolves on
 - **Impact:** Log noise. One PHP Fatal per occurrence. No functional impact on scheduled tasks.
 - **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `flock().*LockableFile` to avoid false alerts.
 
+### 25. `rebuildSearchIndex.php` queues jobs only — never indexes inline [by-design]
+
+OJS 3.5's `tools/rebuildSearchIndex.php` dispatches one `UpdateSubmissionSearchIndexJob` per submission and returns. The actual indexing happens only when a queue worker (`jobs.php run`) processes those jobs. The tool's output says "scheduled" — not "completed" — for exactly this reason.
+
+Consequence: any workflow that runs `rebuildSearchIndex.php` and then wipes the `jobs` table (e.g. `DELETE FROM jobs`) leaves the search index empty. Articles already indexed via the normal publish path (each `Publication::publish` dispatches its own indexing job) may still be searchable if those jobs later get processed by the cron scheduler, but the bulk rebuild produces no indexing work.
+
+- **Impact:** Silent failure. Search returns no results (or only recently-published articles, picked up by the hourly scheduler cron). `submission_search_objects` stays empty or sparse. No error log.
+- **Correct pattern:** always drain the queue after scheduling a rebuild:
+  ```
+  php tools/rebuildSearchIndex.php
+  scripts/ojs/blast-queue.sh            # or jobs.php run --once in a loop
+  ```
+- **Regression history:** `backfill/html_pipeline/pipe7_import.sh` was changed in commit `82ba72d` (2026-03-31) from a drain loop to `DELETE FROM jobs`, with a misleading comment claiming "rebuildSearchIndex.php processes the core indexing inline". It doesn't. The live site ran with only the 2 most recent issues searchable from the March backfill until the bug was caught 2026-04-16. Monitoring didn't catch it because the check was `COUNT(*) > 0` — passed with any non-zero index. Fix: compare `COUNT(DISTINCT submission_id)` against the published submission count (now in `monitor-deep.sh`, `smoke-test.sh`, and `e2e/tests/wpojs-sync/ojs-search.spec.ts`).
+- **Related gotcha:** pipe7's *pre-import* `DELETE FROM jobs` at line 266 is also destructive if legitimate pending jobs (DOI deposits, WPOJS sync, notifications) are queued. Out of scope for the #25 fix but worth auditing.
+
 ## Payments
 
 ### 17. Manual Payment plugin has no admin approval UI [known-gap]
