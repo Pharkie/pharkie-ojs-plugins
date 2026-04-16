@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """
-Build the similar_articles cache via offline TF-IDF.
+Build the similar_articles cache via offline hybrid TF-IDF + embedding similarity.
 
 Replaces the stock recommendBySimilarity plugin's corpus-wide live query with
 a pre-computed cache read by plugins/similar-articles at render time.
 
+Scoring per pair = TFIDF_WEIGHT × cosine(tfidf) + EMBED_WEIGHT × cosine(embedding).
+  - TF-IDF (sklearn): surfaces articles that share distinctive terminology.
+    Strong on specific-string matches (hyphenated proper nouns, rare keywords).
+  - Sentence embeddings (sentence-transformers, all-MiniLM-L6-v2): surfaces
+    semantic neighbours, including cases where two articles discuss the same
+    concept using different vocabulary.
+  - Blending at 0.4 / 0.6 gives embedding the majority share while keeping
+    TF-IDF's precision on proper nouns from being washed out entirely.
+
 For each published submission:
-  - Build a text blob from curated keywords (repeated 3x), title, and abstract
-  - Feed all blobs into sklearn's TfidfVectorizer (min_df=2, max_df=0.5 auto-drops
-    corpus-global tokens like "existential" that otherwise dominate naive scoring)
-  - Take cosine similarity, pick top 5 neighbours per article
-  - Apply the section rule: book-review articles only recommend other reviews
+  - Compute a TF-IDF similarity matrix (keywords×3 + title×3 + abstract)
+  - Compute an embedding similarity matrix (natural text: title + keywords + abstract)
+  - Blend into one matrix by weighted sum
+  - Pick top 5 neighbours with the section rule applied (Book Reviews → Book
+    Reviews only) and score band [MIN_SCORE, MAX_SCORE)
   - Write into similar_articles in one bulk transaction
 
 Usage
@@ -23,7 +32,11 @@ Usage
       # after 9795 is republished with edits)
   python3 scripts/ojs/build_similar_articles.py --dry-run         # no writes
 
-Background: docs/ojs-issues-log.md #26, plugins/similar-articles/.
+Dependencies: scikit-learn, pymysql, beautifulsoup4, sentence-transformers.
+First run downloads the MiniLM model (~80 MB) into HuggingFace's cache dir.
+
+Background: docs/ojs-issues-log.md #26, docs/similar-articles-plugin.md,
+plugins/similar-articles/.
 """
 
 import argparse
@@ -52,15 +65,34 @@ KEYWORD_WEIGHT = 3
 TITLE_WEIGHT = 3
 MAX_RESULTS = 5
 
-# Cosine-similarity thresholds used when picking neighbours.
-# MIN_SCORE: filter out weak matches. Below this, the match is noise
-#   (a keyword or two in common) rather than a genuine topical neighbour.
-# MAX_SCORE: filter out near-duplicate submissions. Score 1.0 means
-#   identical text blob, which usually indicates a duplicate import
-#   (e.g. the same book review entered twice with different submission_ids).
-#   Surfacing duplicates in the "Related" sidebar is actively bad UX.
-MIN_SCORE = 0.15
+# Cosine-similarity thresholds used when picking neighbours (applied to the
+# final hybrid score).
+# MIN_SCORE: filter out weak matches. Below this, the match is noise rather
+#   than a genuine topical neighbour. Embedding scores compress into a higher
+#   band than TF-IDF, so at a 0.4/0.6 blend the typical rank-5 is 0.40+ for
+#   a well-clustered article. A 0.30 floor preserves the "silent when no good
+#   match" behaviour — articles without at least one genuine neighbour get no
+#   sidebar rather than filler.
+# MAX_SCORE: filter out near-duplicate submissions. Score >= this (~1.0) means
+#   identical content in both TF-IDF and embedding spaces — a duplicate import.
+MIN_SCORE = 0.30
 MAX_SCORE = 0.95
+
+# Hybrid blend weights. TFIDF_WEIGHT + EMBED_WEIGHT should sum to 1.
+# Chosen 0.4 / 0.6 after corpus-wide evaluation: embeddings legitimately beat
+# TF-IDF on philosopher-cluster recall (Kierkegaard 73% vs 41%, Heidegger 58%
+# vs 45%) but TF-IDF holds ground on specific-string matches (Merleau-Ponty
+# 59% vs 33%). At 0.4 / 0.6 the blend tracks embeddings when they cluster
+# well, falls back to TF-IDF anchoring on the proper-noun cases.
+TFIDF_WEIGHT = 0.4
+EMBED_WEIGHT = 0.6
+
+# sentence-transformers model. all-MiniLM-L6-v2 is 22M params, ~80 MB download,
+# 384-dim embeddings, encodes 1400 short docs in under 5s on CPU. Sweet spot
+# for this corpus — upgrading to all-mpnet-base-v2 would quadruple runtime
+# for marginal quality. Pin via library version in requirements rather than
+# here; sentence-transformers will cache to HF_HOME (default: ~/.cache).
+EMBED_MODEL = 'all-MiniLM-L6-v2'
 
 # Section abbrevs whose articles are restricted to same-section recommendations.
 # Current value: Book Reviews only (BR). Book Review Editorial (bookeditorial)
@@ -193,6 +225,13 @@ def strip_html(text: str) -> str:
 
 
 def build_corpus_text(sub: dict) -> str:
+    """TF-IDF input: keywords ×3, title ×3, abstract once.
+
+    The weighting only matters for TF-IDF — TF-IDF treats term frequency as
+    a linear signal, so repetition amplifies. Don't use this for embeddings:
+    transformer encoders understand phrase importance natively and repetition
+    there just dilutes with redundant tokens.
+    """
     keyword_part = (' '.join(sub['keywords']) + ' ') * KEYWORD_WEIGHT if sub['keywords'] else ''
     title = (sub.get('title', '') or '') + ' '
     title_part = title * TITLE_WEIGHT
@@ -200,11 +239,20 @@ def build_corpus_text(sub: dict) -> str:
     return ' '.join(p for p in (keyword_part, title_part, abstract) if p.strip()).strip()
 
 
+def build_embed_text(sub: dict) -> str:
+    """Embedding input: natural text, one copy. No artificial weighting."""
+    title = sub.get('title') or ''
+    keywords = ', '.join(sub['keywords']) if sub['keywords'] else ''
+    abstract = strip_html(sub.get('abstract') or '')
+    parts = [p for p in (title, keywords, abstract) if p.strip()]
+    return '\n\n'.join(parts)
+
+
 def is_review(sub: dict) -> bool:
     return (sub.get('section_abbrev') or '').strip() in RESTRICTED_SECTION_ABBREVS
 
 
-def compute_similarity(subs: list[dict]) -> np.ndarray:
+def compute_tfidf_similarity(subs: list[dict]) -> np.ndarray:
     texts = [build_corpus_text(s) for s in subs]
     vectorizer = TfidfVectorizer(
         stop_words='english',
@@ -214,6 +262,35 @@ def compute_similarity(subs: list[dict]) -> np.ndarray:
     )
     matrix = vectorizer.fit_transform(texts)
     return cosine_similarity(matrix)
+
+
+def compute_embed_similarity(subs: list[dict]) -> np.ndarray:
+    """Normalised-embedding cosine similarity. Loads the MiniLM model lazily."""
+    # Import inside function so --help and unit tests don't need the model.
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer(EMBED_MODEL)
+    texts = [build_embed_text(s) for s in subs]
+    embeddings = model.encode(
+        texts,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+        batch_size=32,
+    )
+    return embeddings @ embeddings.T   # cosine because normalised
+
+
+def compute_hybrid_similarity(subs: list[dict]) -> np.ndarray:
+    """Weighted blend of TF-IDF and embedding similarities."""
+    t0 = time.time()
+    tfidf_sims = compute_tfidf_similarity(subs)
+    print(f'  TF-IDF similarity: {tfidf_sims.shape} ({time.time() - t0:.1f}s)', flush=True)
+
+    t0 = time.time()
+    embed_sims = compute_embed_similarity(subs)
+    print(f'  Embedding similarity: {embed_sims.shape} ({time.time() - t0:.1f}s)', flush=True)
+
+    return TFIDF_WEIGHT * tfidf_sims + EMBED_WEIGHT * embed_sims
 
 
 def pick_neighbours(sims: np.ndarray, subs: list[dict], src_idx: int) -> list[tuple[int, float]]:
@@ -290,9 +367,8 @@ def main() -> int:
     review_count = sum(1 for s in subs if is_review(s))
     print(f'  Coverage: keywords={kw_coverage:.1%}, abstracts={abs_coverage:.1%}, reviews={review_count}')
 
-    t0 = time.time()
-    sims = compute_similarity(subs)
-    print(f'  Similarity matrix: {sims.shape} ({time.time() - t0:.1f}s)', flush=True)
+    sims = compute_hybrid_similarity(subs)
+    print(f'  Hybrid blend: {TFIDF_WEIGHT} × TF-IDF + {EMBED_WEIGHT} × embeddings', flush=True)
 
     # Decide which submissions to (re)compute
     if args.submission:
