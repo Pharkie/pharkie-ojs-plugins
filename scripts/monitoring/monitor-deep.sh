@@ -295,6 +295,41 @@ if [ -n "$SKEWED" ]; then
        "recommendBySimilarity is slow on any article with these terms — see docs/ojs-issues-log.md #26"
 fi
 
+# similar_articles cache (written by scripts/ojs/build_similar_articles.py).
+# Two health checks: coverage (build actually wrote rows) and staleness
+# (nightly rebuild is running). Skipped silently if the table doesn't exist
+# yet (i.e. similarArticles plugin hasn't been installed on this target).
+SIMILAR_EXISTS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SHOW TABLES LIKE \\\"similar_articles\\\"\"'" 2>/dev/null | tr -d '[:space:]')
+if [ -n "$SIMILAR_EXISTS" ]; then
+  SIMILAR_CACHED=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(DISTINCT submission_id) FROM similar_articles\"'" 2>/dev/null | tr -d '[:space:]')
+  # Reuse $PUBLISHED from earlier search-index coverage check
+  if [ -n "$SIMILAR_CACHED" ] && [ -n "$PUBLISHED" ] && [ "$PUBLISHED" -gt 0 ] 2>/dev/null; then
+    SIMILAR_PCT=$((SIMILAR_CACHED * 100 / PUBLISHED))
+    # Floors are lenient because some articles legitimately have no cache row
+    # (no similar found above MIN_SCORE). Expect ~93-95% cached in a healthy state.
+    if [ "$SIMILAR_PCT" -lt 50 ]; then
+      fail "similar_articles cache low: $SIMILAR_CACHED/$PUBLISHED articles (${SIMILAR_PCT}%)" \
+           "Run: scripts/ojs/build_similar_articles.py --target=<host>"
+    elif [ "$SIMILAR_PCT" -lt 80 ]; then
+      warn "similar_articles cache partial: $SIMILAR_CACHED/$PUBLISHED (${SIMILAR_PCT}%)"
+    else
+      pass "similar_articles cache: $SIMILAR_CACHED/$PUBLISHED articles (${SIMILAR_PCT}%)"
+    fi
+  fi
+  # Staleness: oldest computed_at across all rows. If the nightly rebuild
+  # hasn't run in 2+ days, the cache reflects a stale corpus.
+  SIMILAR_AGE_H=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT IFNULL(TIMESTAMPDIFF(HOUR, MIN(computed_at), NOW()), -1) FROM similar_articles\"'" 2>/dev/null | tr -d '[:space:]')
+  if [ -n "$SIMILAR_AGE_H" ] && [ "$SIMILAR_AGE_H" -ge 0 ] 2>/dev/null; then
+    if [ "$SIMILAR_AGE_H" -gt 168 ]; then
+      fail "similar_articles cache is ${SIMILAR_AGE_H}h old (>7 days)"
+    elif [ "$SIMILAR_AGE_H" -gt 48 ]; then
+      warn "similar_articles cache is ${SIMILAR_AGE_H}h old (>48h)"
+    else
+      pass "similar_articles cache age: ${SIMILAR_AGE_H}h"
+    fi
+  fi
+fi
+
 # ============================================================
 # D4. RECONCILIATION
 # ============================================================
