@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends gh git-lfs python3-pip pipx dnsutils socat poppler-utils sox \
       ocrmypdf tesseract-ocr \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --break-system-packages pyyaml grip pymupdf gspread anthropic beautifulsoup4 "deprecation>=2.1.0"
+    && pip install --break-system-packages pyyaml grip pymupdf gspread anthropic beautifulsoup4 "deprecation>=2.1.0" \
+       scikit-learn pymysql pytest
 
 # SOPS + age (for encrypting secrets in private repo)
 RUN curl -Lo /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64 \
