@@ -42,6 +42,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 # keyword tokens as having N*TF. Matches the intent of "editor-curated keywords
 # are higher-signal than body text" without changing sklearn behaviour.
 KEYWORD_WEIGHT = 3
+# Title is repeated N times in the text blob alongside keywords. Titles carry
+# strong topical signal for papers about specific people/concepts ("Beauvoir",
+# "Sartre", "Heidegger") — without this weight, a paper whose keywords include
+# 8 generic terms like "freedom" and "ethics" gets dominated by those common
+# matches and its distinctive proper noun gets buried. TITLE_WEIGHT=3 was
+# tuned empirically against dev: pushes the 4 Beauvoir articles in the corpus
+# up the rankings for a Beauvoir paper without regressing other cases.
+TITLE_WEIGHT = 3
 MAX_RESULTS = 5
 
 # Cosine-similarity thresholds used when picking neighbours.
@@ -186,9 +194,10 @@ def strip_html(text: str) -> str:
 
 def build_corpus_text(sub: dict) -> str:
     keyword_part = (' '.join(sub['keywords']) + ' ') * KEYWORD_WEIGHT if sub['keywords'] else ''
-    title = sub.get('title', '') or ''
+    title = (sub.get('title', '') or '') + ' '
+    title_part = title * TITLE_WEIGHT
     abstract = strip_html(sub.get('abstract', '') or '')
-    return ' '.join(p for p in (keyword_part, title, abstract) if p.strip()).strip()
+    return ' '.join(p for p in (keyword_part, title_part, abstract) if p.strip()).strip()
 
 
 def is_review(sub: dict) -> bool:

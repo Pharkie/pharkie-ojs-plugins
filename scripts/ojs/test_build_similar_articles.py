@@ -92,6 +92,13 @@ class TestBuildCorpusText:
         assert 'phenomenology' in bsa.build_corpus_text(kw_sub).lower()
         assert 'phenomenology' in bsa.build_corpus_text(title_sub).lower()
 
+    def test_title_repeated_by_weight(self):
+        sub = _sub(1, title='Beauvoir Sartre', keywords=[], abstract='')
+        text = bsa.build_corpus_text(sub)
+        # TITLE_WEIGHT repetitions — each title word should appear that many times
+        assert text.count('Beauvoir') == bsa.TITLE_WEIGHT
+        assert text.count('Sartre') == bsa.TITLE_WEIGHT
+
 
 # ---- is_review (section rule) ----
 
