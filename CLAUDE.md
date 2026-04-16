@@ -32,6 +32,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - **Haiku extraction can drop repeated/multilingual content.** Haiku may treat transliterated references (e.g. Cyrillic then Latin script) as duplicates and omit one set. The prompt now explicitly says to include both, but always verify HTML galleys against source PDFs for articles with non-English references.
 - **OJS 3.5 upgrade is the biggest risk.** The 3.5 upgrade has significant breaking changes (Slim→Laravel, Vue 2→3). If this goes badly, re-evaluate Janeway migration.
 - **WP usernames are synced to OJS** but sanitized to lowercase-alphanumeric (OJS constraint). WP usernames commonly contain dots, hyphens, underscores, spaces, or `@` — these get stripped, so typing the WP login into OJS may not match. Mitigated: the login page relabels the field to "Email" and sets `autocomplete="email"`. OJS login auto-detects email-shaped input and does email lookup. See `docs/ojs-sync-plugin-api.md#username-sync`.
+- **`rebuildSearchIndex.php` queues jobs, never indexes inline** (OJS 3.5). Always drain the queue with `scripts/ojs/blast-queue.sh` (or `jobs.php run --once`) after. Never `DELETE FROM jobs` after a rebuild. See `docs/ojs-issues-log.md` #25.
 
 ## Backfill pipeline
 

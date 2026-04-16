@@ -356,39 +356,84 @@ fi
 
 # --- 10. OJS search ---
 echo "10. OJS search"
-# Check that search index is populated
-SEARCH_OBJECTS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM submission_search_objects\"'") || SEARCH_OBJECTS="0"
-SEARCH_OBJECTS=$(echo "$SEARCH_OBJECTS" | tr -d '[:space:]')
-if [ "$SEARCH_OBJECTS" -gt "0" ] 2>/dev/null; then
-  pass "Search index has $SEARCH_OBJECTS objects"
+# Coverage check: distinct submissions indexed vs published. Catches the bug
+# where rebuildSearchIndex.php runs but the queued jobs are wiped before they
+# process — only freshly-published articles land in the index via the normal
+# publish path, leaving the archive unsearchable.
+INDEXED=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(DISTINCT submission_id) FROM submission_search_objects\"'") || INDEXED="0"
+INDEXED=$(echo "$INDEXED" | tr -d '[:space:]')
+PUBLISHED=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM submissions WHERE status = 3 AND current_publication_id IS NOT NULL\"'") || PUBLISHED="0"
+PUBLISHED=$(echo "$PUBLISHED" | tr -d '[:space:]')
+
+if [ "$PUBLISHED" -gt "0" ] 2>/dev/null; then
+  MISSING=$((PUBLISHED - INDEXED))
+  PCT=$((INDEXED * 100 / PUBLISHED))
+  if [ "$MISSING" -gt 20 ] || [ "$PCT" -lt 90 ]; then
+    fail "Search index coverage: $INDEXED/$PUBLISHED submissions indexed (${PCT}%, $MISSING missing)" \
+         "Run: scripts/ojs/blast-queue.sh --host=$SSH_HOST after rebuildSearchIndex.php"
+  else
+    pass "Search index: $INDEXED/$PUBLISHED submissions indexed (${PCT}%)"
+  fi
 else
-  fail "Search index is empty (run: docker compose exec ojs php tools/rebuildSearchIndex.php)"
+  fail "Could not count published submissions"
 fi
 
-# Test actual search via HTTP — pick a known author
-SEARCH_AUTHOR=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"
+# HTTP search test — oldest and newest author bands. If only the newest succeeds
+# and the oldest fails, the archive is unindexed (2026-04 bug signature).
+# CHAR(102,97,109,105,108,121,78,97,109,101) = 'familyName'
+test_search_author() {
+  local label="$1" sql="$2"
+  local author
+  author=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"$sql\"'") || author=""
+  author=$(echo "$author" | tr -d '[:space:]')
+  if [ -z "$author" ]; then
+    echo "  [SKIP] No $label author found for HTTP search test"
+    return
+  fi
+  local body
+  body=$(curl -s "${OJS_JOURNAL_URL}/search/search?authors=${author}" 2>/dev/null)
+  if echo "$body" | grep -qi "obj_article_summary\|search_results\|$author"; then
+    pass "Search for $label author '$author' returns results"
+  elif echo "$body" | grep -qi "No items found\|no results"; then
+    fail "Search for $label author '$author' returned no results (index may need rebuilding)"
+  else
+    fail "Search page for $label author '$author' returned unexpected content"
+  fi
+}
+
+OLDEST_AUTHOR_SQL="
   SELECT asv.setting_value FROM author_settings asv
   JOIN authors a ON a.author_id = asv.author_id
   JOIN publications p ON a.publication_id = p.publication_id
   JOIN submissions s ON s.submission_id = p.submission_id
-  WHERE asv.setting_name = '\\''familyName'\\'' AND s.status = 3
-  GROUP BY asv.setting_value HAVING COUNT(*) >= 3
+  WHERE asv.setting_name = CHAR(102,97,109,105,108,121,78,97,109,101) AND s.status = 3
+    AND s.submission_id IN (
+      SELECT submission_id FROM (
+        SELECT submission_id FROM submissions WHERE status = 3
+        ORDER BY submission_id ASC LIMIT 200
+      ) t
+    )
+  GROUP BY asv.setting_value HAVING COUNT(*) >= 2
   ORDER BY COUNT(*) DESC LIMIT 1
-\"'") || SEARCH_AUTHOR=""
-SEARCH_AUTHOR=$(echo "$SEARCH_AUTHOR" | tr -d '[:space:]')
+"
+NEWEST_AUTHOR_SQL="
+  SELECT asv.setting_value FROM author_settings asv
+  JOIN authors a ON a.author_id = asv.author_id
+  JOIN publications p ON a.publication_id = p.publication_id
+  JOIN submissions s ON s.submission_id = p.submission_id
+  WHERE asv.setting_name = CHAR(102,97,109,105,108,121,78,97,109,101) AND s.status = 3
+    AND s.submission_id IN (
+      SELECT submission_id FROM (
+        SELECT submission_id FROM submissions WHERE status = 3
+        ORDER BY submission_id DESC LIMIT 200
+      ) t
+    )
+  GROUP BY asv.setting_value HAVING COUNT(*) >= 2
+  ORDER BY COUNT(*) DESC LIMIT 1
+"
 
-if [ -n "$SEARCH_AUTHOR" ]; then
-  SEARCH_BODY=$(curl -s "${OJS_JOURNAL_URL}/search/search?authors=${SEARCH_AUTHOR}" 2>/dev/null)
-  if echo "$SEARCH_BODY" | grep -qi "obj_article_summary\|search_results\|$SEARCH_AUTHOR"; then
-    pass "Search for author '$SEARCH_AUTHOR' returns results"
-  elif echo "$SEARCH_BODY" | grep -qi "No items found\|no results"; then
-    fail "Search for author '$SEARCH_AUTHOR' returned no results (index may need rebuilding)"
-  else
-    fail "Search page for '$SEARCH_AUTHOR' returned unexpected content"
-  fi
-else
-  echo "  [SKIP] No multi-article author found for search test"
-fi
+test_search_author "oldest" "$OLDEST_AUTHOR_SQL"
+test_search_author "newest" "$NEWEST_AUTHOR_SQL"
 
 # --- 11. Reconciliation ---
 echo "11. Reconciliation"

@@ -50,34 +50,54 @@ function findSearchableTitleWord(): string | null {
 }
 
 /**
- * Check if the search index has been built (non-empty).
+ * Count distinct submissions that have search-index rows.
  */
-function searchIndexHasEntries(): boolean {
-  const out = ojsQuery('SELECT COUNT(*) FROM submission_search_objects');
-  return parseInt(out, 10) > 0;
+function indexedSubmissionCount(): number {
+  const out = ojsQuery('SELECT COUNT(DISTINCT submission_id) FROM submission_search_objects');
+  return parseInt(out.trim(), 10);
+}
+
+/**
+ * Count published submissions (status=3 and a current publication).
+ */
+function publishedSubmissionCount(): number {
+  const out = ojsQuery(
+    'SELECT COUNT(*) FROM submissions WHERE status = 3 AND current_publication_id IS NOT NULL',
+  );
+  return parseInt(out.trim(), 10);
 }
 
 test.describe('OJS search functionality', () => {
   test.beforeAll(() => {
-    if (!searchIndexHasEntries()) {
+    if (indexedSubmissionCount() === 0) {
       test.skip();
     }
   });
 
-  test('search index is populated', () => {
-    const objectCount = parseInt(
-      ojsQuery('SELECT COUNT(*) FROM submission_search_objects').trim(),
-      10,
-    );
+  test('search index covers at least 90% of published submissions', () => {
+    // Catches the 2026-04 regression: pipe7_import.sh queued indexing jobs
+    // then DELETEd them before they ran, leaving only ~3% of the archive
+    // indexed. A non-empty index isn't enough — coverage has to match the
+    // actual corpus. 90% floor tolerates a handful of legitimate gaps
+    // (galley-less submissions, edge-case publications) without masking
+    // the "whole archive missing" failure mode.
+    const indexed = indexedSubmissionCount();
+    const published = publishedSubmissionCount();
+    expect(published).toBeGreaterThan(0);
+    const ratio = indexed / published;
+    expect(
+      ratio,
+      `Expected ≥90% of ${published} published submissions to be indexed, got ${indexed} (${(ratio * 100).toFixed(1)}%)`,
+    ).toBeGreaterThanOrEqual(0.9);
+
     const keywordCount = parseInt(
       ojsQuery('SELECT COUNT(*) FROM submission_search_keyword_list').trim(),
       10,
     );
-    expect(objectCount).toBeGreaterThan(0);
     expect(keywordCount).toBeGreaterThan(0);
   });
 
-  test('search by author surname returns results', async ({ page }) => {
+  test('search by author surname returns results matching DB', async ({ page }) => {
     const author = findSearchableAuthor();
     test.skip(!author, 'No searchable author found in DB');
 
@@ -95,17 +115,18 @@ test.describe('OJS search functionality', () => {
     await page.locator('button[type="submit"], input[type="submit"]').first().click();
     await page.waitForLoadState('domcontentloaded');
 
-    // Should find at least one result
     const results = page.locator('.search_results .obj_article_summary, .pkp_search_results .title, .search-results .article');
-    const noResults = page.locator('text=No results');
+    const count = await results.count();
 
-    const hasResults = await results.count() > 0;
-    const hasNoResults = await noResults.isVisible().catch(() => false);
-
-    expect(hasResults || !hasNoResults).toBeTruthy();
-    if (hasResults) {
-      expect(await results.count()).toBeGreaterThanOrEqual(1);
-    }
+    // The HTTP result count should match the DB count (within a small tolerance
+    // for pagination — OJS defaults are high enough that ≤25 authors fits one
+    // page, but allow ≥ to cover any future pagination). A drastically lower
+    // count signals a partial index — the 2026-04 bug would put count at 0-1
+    // here when expectedCount is 3+.
+    expect(
+      count,
+      `DB has ${author!.expectedCount} published submissions by '${author!.surname}' but HTTP search returned ${count}`,
+    ).toBeGreaterThanOrEqual(author!.expectedCount);
   });
 
   test('search by title keyword returns results', async ({ page }) => {

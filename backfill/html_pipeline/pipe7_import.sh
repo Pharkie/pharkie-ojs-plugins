@@ -323,26 +323,26 @@ if [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ]; then
 fi
 
 # --- Rebuild search index ---
-# OJS Native Import doesn't trigger search indexing, so imported articles
-# won't appear in search results until the index is rebuilt.
+# OJS Native Import doesn't trigger search indexing. rebuildSearchIndex.php
+# only QUEUES UpdateSubmissionSearchIndexJob jobs into the `jobs` table —
+# the actual indexing happens when jobs.php run processes them. Draining
+# the queue is MANDATORY; do NOT DELETE FROM jobs afterwards — that
+# regression (commit 82ba72d, 2026-03-31) is why live site search only
+# returned results from the 2 most recent issues until 2026-04-16.
+# See docs/ojs-issues-log.md.
 if [ $SUCCEEDED -gt 0 ]; then
   echo ""
   echo "--- Rebuilding search index ---"
-  echo "  This may take a few minutes for large imports..."
   if docker exec "$CONTAINER" php tools/rebuildSearchIndex.php 2>&1 | grep -v "CROSSREF BOOT"; then
     echo "  OK: Search index jobs scheduled"
+    echo ""
+    echo "--- Draining search index queue ---"
+    echo "  This may take several minutes for large imports..."
+    "$SCRIPT_DIR/../../scripts/ojs/blast-queue.sh" --workers=2 --timeout=3600
   else
     echo "  WARNING: Search index rebuild failed — run manually:"
     echo "    docker exec $CONTAINER php tools/rebuildSearchIndex.php"
-  fi
-
-  # Clear remaining search index jobs — the shutdown handler processes them
-  # one-per-request which cripples response times (1400 jobs = every request
-  # blocked). Search works without draining because rebuildSearchIndex.php
-  # processes the core indexing inline; the queued jobs are supplementary.
-  if [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
-    CLEARED=$(ojs_db_query "DELETE FROM jobs; SELECT ROW_COUNT();")
-    echo "  OK: Cleared $CLEARED queued jobs"
+    echo "    scripts/ojs/blast-queue.sh"
   fi
 fi
 
