@@ -12,7 +12,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 msgid "plugins.generic.similarArticles.displayName"
-msgstr "Similar Articles (Cached)"
+msgstr "Fast Related Articles"
 
 msgid "plugins.generic.similarArticles.description"
-msgstr "Renders a related-articles sidebar on the article page using a pre-computed TF-IDF similarity index. Replaces the stock recommendBySimilarity plugin — render path is a cache lookup, no live analysis, no corpus-skew slowdowns."
+msgstr "Renders a related-articles sidebar on the article page using a pre-computed TF-IDF similarity index. Replacement for the stock recommendBySimilarity plugin — render path is a cache lookup, no live analysis, no corpus-skew slowdowns."

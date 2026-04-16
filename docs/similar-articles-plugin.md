@@ -58,7 +58,7 @@ docker compose exec ojs php lib/pkp/tools/installPluginVersion.php \
   /var/www/html/plugins/generic/similarArticles/version.xml
 ```
 
-Enable it in OJS admin: **Website > Plugins > Generic > Similar Articles (Cached)** → tick. Disable the stock **Recommend Articles by Similarity** plugin at the same time.
+Enable it in OJS admin: **Website > Plugins > Generic > Fast Related Articles** → tick. Disable the stock **Recommend Articles by Similarity** plugin at the same time.
 
 ### Manual (non-Docker / live)
 
@@ -68,7 +68,7 @@ Enable it in OJS admin: **Website > Plugins > Generic > Similar Articles (Cached
    php lib/pkp/tools/installPluginVersion.php \
      plugins/generic/similarArticles/version.xml
    ```
-3. Enable in OJS admin: **Website > Plugins > Generic > Similar Articles (Cached)**.
+3. Enable in OJS admin: **Website > Plugins > Generic > Fast Related Articles**.
 4. Disable the stock **Recommend Articles by Similarity** plugin at the same time to avoid double-rendering.
 5. Run the offline builder once to populate the cache (see next section). Until it runs, the sidebar is silently absent on all articles.
 
