@@ -31,22 +31,39 @@ function findSearchableAuthor(): {
 }
 
 /**
- * Find an article title word (>6 chars) that appears in the search index.
+ * Find an article title word (>6 chars) that appears across multiple titles.
+ *
+ * Implementation note: the previous version ran a GROUP BY over 72k rows in
+ * submission_search_keyword_list joined to 4.2M object_keywords — took 60s+
+ * once the search index was fully populated. This version fetches the ~1400
+ * titles (one indexed SELECT) and counts word frequencies in JS, which runs
+ * in milliseconds.
  */
 function findSearchableTitleWord(): string | null {
-  const out = ojsQuery(`
-    SELECT k.keyword_text
-    FROM submission_search_keyword_list k
-    JOIN submission_search_object_keywords ok ON ok.keyword_id = k.keyword_id
-    JOIN submission_search_objects o ON o.object_id = ok.object_id
-    WHERE o.type = 1
-      AND LENGTH(k.keyword_text) > 6
-    GROUP BY k.keyword_text
-    HAVING COUNT(DISTINCT o.submission_id) >= 2
-    ORDER BY COUNT(DISTINCT o.submission_id) DESC
-    LIMIT 1
+  const titlesRaw = ojsQuery(`
+    SELECT ps.setting_value
+    FROM publication_settings ps
+    JOIN submissions s ON s.current_publication_id = ps.publication_id
+    WHERE ps.setting_name = 'title' AND ps.locale = 'en'
+      AND s.status = 3 AND s.current_publication_id IS NOT NULL
   `);
-  return out.trim() || null;
+  const wordCounts = new Map<string, number>();
+  for (const title of titlesRaw.split('\n')) {
+    const words = title.toLowerCase().match(/\b[a-z]{7,}\b/g) || [];
+    for (const word of new Set(words)) {
+      wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+    }
+  }
+  // Pick the most common word that appears in ≥2 titles
+  let best: string | null = null;
+  let bestCount = 1;
+  for (const [word, count] of wordCounts) {
+    if (count > bestCount) {
+      best = word;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 /**
