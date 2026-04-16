@@ -148,8 +148,14 @@ if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; th
     DELETE FROM issues;
     DELETE FROM section_settings;
     DELETE FROM sections WHERE journal_id = 1;
+    -- Clear similarArticles cache: its submission_id / similar_id columns would
+    -- point at deleted submissions until the nightly rebuild repopulates it
+    -- (up to 24h of blank sidebars). The table may not exist yet on installs
+    -- without the similarArticles plugin — DROP via DELETE is conditional.
     SET FOREIGN_KEY_CHECKS=1;
   " 2>/dev/null
+  # Table may not exist — run separately so errors don't abort the cleanup.
+  docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "TRUNCATE TABLE similar_articles" 2>/dev/null || true
   echo "  OK: All existing issues and articles removed."
   echo
 fi
