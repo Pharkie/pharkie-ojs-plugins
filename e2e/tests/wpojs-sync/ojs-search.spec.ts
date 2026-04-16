@@ -118,15 +118,18 @@ test.describe('OJS search functionality', () => {
     const results = page.locator('.search_results .obj_article_summary, .pkp_search_results .title, .search-results .article');
     const count = await results.count();
 
-    // The HTTP result count should match the DB count (within a small tolerance
-    // for pagination — OJS defaults are high enough that ≤25 authors fits one
-    // page, but allow ≥ to cover any future pagination). A drastically lower
-    // count signals a partial index — the 2026-04 bug would put count at 0-1
-    // here when expectedCount is 3+.
+    // OJS paginates search results at 25 per page by default. Expected count
+    // is min(db_count, page_size) — we can't see beyond page 1 without
+    // navigating pagination, and the point of this test isn't pagination
+    // coverage, it's "does the HTTP result set roughly match what the DB
+    // says should be indexed". The 2026-04 bug would put count at 0-1 when
+    // db_count is 3+, so even clamping at 25 still catches that failure mode.
+    const OJS_SEARCH_PAGE_SIZE = 25;
+    const expectedOnPage = Math.min(author!.expectedCount, OJS_SEARCH_PAGE_SIZE);
     expect(
       count,
-      `DB has ${author!.expectedCount} published submissions by '${author!.surname}' but HTTP search returned ${count}`,
-    ).toBeGreaterThanOrEqual(author!.expectedCount);
+      `DB has ${author!.expectedCount} published submissions by '${author!.surname}'; HTTP page 1 expected ${expectedOnPage}, got ${count}`,
+    ).toBeGreaterThanOrEqual(expectedOnPage);
   });
 
   test('search by title keyword returns results', async ({ page }) => {
