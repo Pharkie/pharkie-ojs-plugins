@@ -3,6 +3,7 @@
 
 # Claude Code runtime data
 .claude-home/
+.claude/scheduled_tasks.lock
 
 # Test lockfile
 .playwright-lock

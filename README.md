@@ -40,7 +40,7 @@ Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automati
 
 ### [Smarter Similar Articles](plugins/smarter-similar-articles/)
 
-Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/pkp/recommendBySimilarity) plugin. The stock plugin runs a corpus-wide live SQL query on every article view, which collapses (60–2000s per request) on journals whose vocabulary is dominated by a few corpus-wide keywords. This plugin pre-computes similarity offline and serves from a cache — the render path is a primary-key lookup, unaffected by corpus skew.
+Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/tree/main/plugins/generic/recommendBySimilarity) plugin. Surfaces more relevant "related articles" by combining shared terminology with how closely two articles match in meaning — so the sidebar finds conceptually close papers, not just ones that happen to share common keywords. All the heavy lifting runs offline on a schedule, and the article page serves pre-computed suggestions instantly, no matter how big the journal grows.
 
 - Hybrid scoring: TF-IDF (sklearn, auto-drops corpus-wide tokens) + sentence embeddings (`bge-base-en-v1.5`, catches semantic neighbours that share no lexical tokens)
 - Render-only PHP plugin; all analysis happens offline via a Python builder (`scripts/ojs/build_smarter_similar_articles.py`)
