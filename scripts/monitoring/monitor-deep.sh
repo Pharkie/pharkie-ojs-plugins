@@ -295,25 +295,30 @@ if [ -n "$SIMILAR_EXISTS" ]; then
   # Reuse $PUBLISHED from earlier search-index coverage check
   if [ -n "$SIMILAR_CACHED" ] && [ -n "$PUBLISHED" ] && [ "$PUBLISHED" -gt 0 ] 2>/dev/null; then
     SIMILAR_PCT=$((SIMILAR_CACHED * 100 / PUBLISHED))
-    # Floors are lenient because some articles legitimately have no cache row
-    # (no similar found above MIN_SCORE). Expect ~93-95% cached in a healthy state.
-    if [ "$SIMILAR_PCT" -lt 50 ]; then
+    # Healthy state is ~93-95% (remaining ~5% legitimately have no match
+    # above MIN_SCORE — editorials, tribute pieces, outliers). Tightened from
+    # the initial 50/80 to catch real-world failures earlier: 93% warn catches
+    # a single missed nightly on a typical day; 85% fail catches genuine
+    # rebuild failure before readers notice.
+    if [ "$SIMILAR_PCT" -lt 85 ]; then
       fail "similar_articles cache low: $SIMILAR_CACHED/$PUBLISHED articles (${SIMILAR_PCT}%)" \
-           "Run: scripts/ojs/build_similar_articles.py --target=<host>"
-    elif [ "$SIMILAR_PCT" -lt 80 ]; then
+           "Run: python3 scripts/ojs/build_similar_articles.py --target=<host>"
+    elif [ "$SIMILAR_PCT" -lt 93 ]; then
       warn "similar_articles cache partial: $SIMILAR_CACHED/$PUBLISHED (${SIMILAR_PCT}%)"
     else
       pass "similar_articles cache: $SIMILAR_CACHED/$PUBLISHED articles (${SIMILAR_PCT}%)"
     fi
   fi
-  # Staleness: oldest computed_at across all rows. If the nightly rebuild
-  # hasn't run in 2+ days, the cache reflects a stale corpus.
+  # Staleness: oldest computed_at across all rows. Nightly rebuild runs at
+  # 04:15 UTC, so a typical morning deep-check reads an age of ~2h. Thresholds
+  # tightened — one missed nightly (24-48h old) warns; two missed (>48h) fails.
+  # Catches silent rebuild failures within one day, not seven.
   SIMILAR_AGE_H=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT IFNULL(TIMESTAMPDIFF(HOUR, MIN(computed_at), NOW()), -1) FROM similar_articles\"'" 2>/dev/null | tr -d '[:space:]')
   if [ -n "$SIMILAR_AGE_H" ] && [ "$SIMILAR_AGE_H" -ge 0 ] 2>/dev/null; then
-    if [ "$SIMILAR_AGE_H" -gt 168 ]; then
-      fail "similar_articles cache is ${SIMILAR_AGE_H}h old (>7 days)"
-    elif [ "$SIMILAR_AGE_H" -gt 48 ]; then
-      warn "similar_articles cache is ${SIMILAR_AGE_H}h old (>48h)"
+    if [ "$SIMILAR_AGE_H" -gt 48 ]; then
+      fail "similar_articles cache is ${SIMILAR_AGE_H}h old (>48h — nightly rebuild failing)"
+    elif [ "$SIMILAR_AGE_H" -gt 28 ]; then
+      warn "similar_articles cache is ${SIMILAR_AGE_H}h old (>28h — one missed nightly)"
     else
       pass "similar_articles cache age: ${SIMILAR_AGE_H}h"
     fi

@@ -33,7 +33,8 @@ Usage
   python3 scripts/ojs/build_similar_articles.py --dry-run         # no writes
 
 Dependencies: scikit-learn, pymysql, beautifulsoup4, sentence-transformers.
-First run downloads the MiniLM model (~80 MB) into HuggingFace's cache dir.
+First run downloads the BAAI/bge-base-en-v1.5 model (~440 MB) into HuggingFace's
+cache dir (~/.cache/huggingface). Subsequent runs hit the cache.
 
 Background: docs/ojs-issues-log.md #26, docs/similar-articles-plugin.md,
 plugins/similar-articles/.
@@ -128,13 +129,23 @@ class SqlError(Exception):
 
 
 def run_sql(target: str, sql: str, timeout: int = 120) -> str:
-    proc = subprocess.run(
-        TARGETS[target],
-        input=sql,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    try:
+        proc = subprocess.run(
+            TARGETS[target],
+            input=sql,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise SqlError(
+            f'SQL call timed out after {timeout}s on target={target}. '
+            f'Likely causes: SSH connection stalled, DB overloaded, huge result set. '
+            f'SQL first 200 chars: {sql[:200]!r}'
+        ) from e
+    except FileNotFoundError as e:
+        # docker/ssh binary missing or wrong path — surface clearly
+        raise SqlError(f'Failed to invoke target {target}: {e}') from e
     if proc.returncode != 0:
         stderr = proc.stderr.strip() or '<no stderr>'
         raise SqlError(f'SQL failed (exit {proc.returncode}): {stderr}')
@@ -259,22 +270,55 @@ def is_review(sub: dict) -> bool:
 
 def compute_tfidf_similarity(subs: list[dict]) -> np.ndarray:
     texts = [build_corpus_text(s) for s in subs]
+    # Guard against a corpus where every text ends up empty after stopword /
+    # min_df / max_df pruning — TfidfVectorizer would raise 'empty vocabulary'
+    # and abort the whole build. Realistically this only happens in tiny
+    # test corpora, but fail with a clear message rather than a cryptic trace.
+    non_empty = sum(1 for t in texts if t.strip())
+    if non_empty < 2:
+        raise SystemExit(
+            f'ERROR: TF-IDF corpus has only {non_empty} non-empty documents '
+            f'out of {len(texts)} submissions. Check that title/abstract/'
+            f'keywords are populated on your published submissions.'
+        )
     vectorizer = TfidfVectorizer(
         stop_words='english',
         min_df=2,
         max_df=0.5,
         ngram_range=(1, 2),
     )
-    matrix = vectorizer.fit_transform(texts)
+    try:
+        matrix = vectorizer.fit_transform(texts)
+    except ValueError as e:
+        # Usually "After pruning, no terms remain" — corpus too narrow
+        # for the min_df/max_df config. Relax or fix upstream.
+        raise SystemExit(
+            f'ERROR: TF-IDF vectorizer rejected the corpus: {e}\n'
+            f'Likely causes: corpus too small for min_df=2, or every token '
+            f'appears in >50% of documents (max_df=0.5 filter removes all).'
+        ) from e
     return cosine_similarity(matrix)
 
 
 def compute_embed_similarity(subs: list[dict]) -> np.ndarray:
-    """Normalised-embedding cosine similarity. Loads the MiniLM model lazily."""
+    """Normalised-embedding cosine similarity. Loads the model lazily.
+
+    Raises SystemExit(1) with a clear message on model download / load failure
+    rather than letting a bare exception propagate through main() and leaving
+    operators guessing whether the DB connection was at fault.
+    """
     # Import inside function so --help and unit tests don't need the model.
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(EMBED_MODEL)
+    try:
+        model = SentenceTransformer(EMBED_MODEL)
+    except Exception as e:
+        raise SystemExit(
+            f'ERROR: Failed to load embedding model {EMBED_MODEL!r}: {e}\n'
+            f'Causes: no network access to HuggingFace, disk full, '
+            f'~/.cache/huggingface permissions, model name typo, '
+            f'or sentence-transformers version mismatch.'
+        ) from e
     texts = [build_embed_text(s) for s in subs]
     embeddings = model.encode(
         texts,
@@ -322,17 +366,26 @@ def write_bulk(target: str, neighbours_by_id: dict[int, list[tuple[int, float]]]
     if not neighbours_by_id:
         return
 
-    # DELETE then bulk INSERT inside a single transaction
+    # DELETE then bulk INSERT inside a single transaction. Intentionally NOT
+    # using TRUNCATE even for full rebuild — TRUNCATE implicitly commits in
+    # MySQL/MariaDB, breaking the transaction so an INSERT failure after it
+    # would leave the table empty with no rollback. DELETE respects the
+    # transaction boundary; the whole write is all-or-nothing.
     if full:
-        delete_sql = 'TRUNCATE TABLE similar_articles;'
+        delete_sql = 'DELETE FROM similar_articles;'
     else:
-        ids = ','.join(str(sid) for sid in neighbours_by_id)
+        ids = ','.join(str(int(sid)) for sid in neighbours_by_id)
         delete_sql = f'DELETE FROM similar_articles WHERE submission_id IN ({ids});'
 
+    # Defence-in-depth: coerce to int before string interpolation. Python's
+    # json.loads already produces ints for JSON numbers, but if an upstream
+    # change ever routes a non-int (bug, mocked test, corrupt data), this
+    # prevents the string from landing in SQL unsanitised.
     rows: list[str] = []
     for sid, neighbours in neighbours_by_id.items():
+        sid_i = int(sid)
         for rank, (sim_id, score) in enumerate(neighbours, start=1):
-            rows.append(f'({sid}, {sim_id}, {rank}, {score:.4f})')
+            rows.append(f'({sid_i}, {int(sim_id)}, {rank}, {float(score):.4f})')
 
     insert_chunks = []
     for i in range(0, len(rows), INSERT_CHUNK):

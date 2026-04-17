@@ -100,6 +100,42 @@ class TestBuildCorpusText:
         assert text.count('Sartre') == bsa.TITLE_WEIGHT
 
 
+class TestBuildEmbedText:
+    """Embedding input is natural text — no artificial repetition (transformers
+    understand phrase importance natively). If we ever accidentally apply
+    keyword/title weighting here, embeddings get diluted with redundant tokens
+    instead of richer semantic content."""
+
+    def test_natural_one_copy_of_each_field(self):
+        sub = _sub(1, title='Beauvoir', keywords=['ethics'], abstract='An abstract')
+        text = bsa.build_embed_text(sub)
+        # Each field appears exactly once, unlike TF-IDF input which repeats.
+        assert text.count('Beauvoir') == 1
+        assert text.count('ethics') == 1
+        assert text.count('An abstract') == 1
+
+    def test_sections_separated(self):
+        # Double-newline separator helps sentence models delimit context
+        sub = _sub(1, title='T', keywords=['K'], abstract='A')
+        assert '\n\n' in bsa.build_embed_text(sub)
+
+    def test_html_stripped_from_abstract(self):
+        sub = _sub(1, title='T', keywords=[], abstract='<p>plain <em>text</em></p>')
+        text = bsa.build_embed_text(sub)
+        assert '<' not in text
+        assert 'plain' in text and 'text' in text
+
+    def test_empty_fields_yield_empty_text(self):
+        sub = _sub(1, title='', keywords=[], abstract='')
+        assert bsa.build_embed_text(sub) == ''
+
+    def test_missing_keywords_does_not_emit_separator(self):
+        # No keywords = skip the keywords section entirely, not a trailing \n\n
+        sub = _sub(1, title='T', keywords=[], abstract='A')
+        text = bsa.build_embed_text(sub)
+        assert text == 'T\n\nA'
+
+
 # ---- is_review (section rule) ----
 
 class TestIsReview:
@@ -236,6 +272,44 @@ class TestPickNeighbours:
         subs = [_sub(i) for i in range(3)]
         result = bsa.pick_neighbours(sims, subs, src_idx=0)
         assert result == []
+
+    def test_exact_max_score_is_filtered(self):
+        # MAX_SCORE uses >= comparison — score exactly at MAX_SCORE must be
+        # filtered as a duplicate, not leak through.
+        sims = self._build_sims(3, {
+            (0, 1): bsa.MAX_SCORE,          # filtered (== boundary)
+            (0, 2): bsa.MAX_SCORE - 0.01,   # passes
+        })
+        subs = [_sub(i) for i in range(3)]
+        result = bsa.pick_neighbours(sims, subs, src_idx=0)
+        ids = [r[0] for r in result]
+        assert subs[1]['submission_id'] not in ids
+        assert subs[2]['submission_id'] in ids
+
+    def test_exact_min_score_passes(self):
+        # Symmetrically: score exactly at MIN_SCORE must pass (>= comparison)
+        sims = self._build_sims(2, {
+            (0, 1): bsa.MIN_SCORE,
+        })
+        subs = [_sub(i) for i in range(2)]
+        result = bsa.pick_neighbours(sims, subs, src_idx=0)
+        assert len(result) == 1
+        assert result[0][0] == subs[1]['submission_id']
+
+    def test_descending_order_preserved(self):
+        # Covers the subtle regression risk of np.argsort(-row) being changed
+        # to np.argsort(row) — would silently return weakest matches first.
+        sims = self._build_sims(6, {
+            (0, 1): 0.90, (0, 2): 0.50, (0, 3): 0.80,
+            (0, 4): 0.60, (0, 5): 0.70,
+        })
+        # Clip MAX_SCORE-filtered values to avoid confounding the test
+        # (0.90 < MAX_SCORE=0.95 so all five should rank)
+        subs = [_sub(i) for i in range(6)]
+        result = bsa.pick_neighbours(sims, subs, src_idx=0)
+        scores = [r[1] for r in result]
+        assert scores == sorted(scores, reverse=True), \
+            f'pick_neighbours returned non-descending scores: {scores}'
 
 
 if __name__ == '__main__':
