@@ -1,6 +1,6 @@
 # Smarter Similar Articles Plugin
 
-Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/pkp/recommendBySimilarity) plugin. Pre-computes article similarity offline using a hybrid of TF-IDF and sentence embeddings, then serves the "Related articles" sidebar from a cache table at render time — one primary-key lookup, sub-millisecond, regardless of corpus size or shape.
+Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/tree/main/plugins/generic/recommendBySimilarity) plugin. Pre-computes article similarity offline using a hybrid of TF-IDF and sentence embeddings, then serves the "Related articles" sidebar from a cache table at render time — one primary-key lookup, sub-millisecond, regardless of corpus size or shape.
 
 ## Why use this instead of the stock plugin
 
