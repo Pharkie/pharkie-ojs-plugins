@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Similar Articles Plugin (cache-backed).
+ * Faster Related Articles Plugin (cache-backed).
  *
  * Renders a "Related articles" sidebar on article pages by reading
  * pre-computed similarity rows from the similar_articles table. Similarity

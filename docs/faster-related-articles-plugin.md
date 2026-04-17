@@ -1,16 +1,20 @@
-# Similar Articles Plugin
+# Faster Related Articles Plugin
 
-Renders a "Related articles" sidebar on the article page footer, reading from a pre-computed cache. Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/pkp/recommendBySimilarity) plugin, intended for journals whose corpus is thematically narrow enough that the stock plugin's live similarity query becomes pathologically slow.
+Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/pkp/recommendBySimilarity) plugin. Pre-computes article similarity offline using a hybrid of TF-IDF and sentence embeddings, then serves the "Related articles" sidebar from a cache table at render time — one primary-key lookup, sub-millisecond, regardless of corpus size or shape.
 
-## When to use this
+## Why use this instead of the stock plugin
 
-Use this plugin if your journal has **corpus-wide keywords** — terms that appear in nearly every article because they name the journal's subject. For example, an existentialism journal where "existential" is in every article; an oncology journal where "cancer" is in every article.
+The stock `recommendBySimilarity` runs a corpus-wide multi-JOIN SQL query on every article view. That's slow even when it works; on journals whose vocabulary is dominated by a few corpus-wide keywords (an existentialism journal where "existential" appears in every article, an oncology journal where "cancer" appears in every article, etc.) the query collapses to 60-2000 seconds per request and takes the site down. See [`docs/ojs-issues-log.md`](ojs-issues-log.md) #26 for the incident that prompted this plugin.
 
-On such corpora, the stock `recommendBySimilarity` plugin issues a live multi-JOIN query on every article view that OR-branches over 20 keywords. When any of those keywords match a large fraction of the corpus, the query takes 60+ seconds. With 8 Apache workers, a dozen concurrent article views saturates the pool and the site hangs. See [`docs/ojs-issues-log.md`](ojs-issues-log.md) #26 for the full incident report.
+For any OJS journal, this plugin is better on three axes:
 
-This plugin avoids that by pre-computing similarity offline with a hybrid of sklearn TF-IDF (which automatically down-weights corpus-wide tokens via the `max_df=0.5` threshold) and sentence-transformers embeddings (which catch semantic neighbours that share no lexical tokens). Top N neighbours go into a cache table; the article page footer reads from the cache in one primary-key lookup — sub-millisecond, no corpus-skew exposure.
+1. **Faster rendering.** One indexed SELECT per article view instead of a multi-JOIN with `LIKE '%...%'` subqueries. Render cost doesn't grow with corpus size.
+2. **Smarter matching.** Hybrid scoring picks up both precise lexical matches (shared proper nouns, rare keywords) via sklearn TF-IDF and semantic neighbours (papers about the same concept in different vocabulary) via sentence-transformers embeddings. The stock plugin has neither IDF weighting nor semantic understanding.
+3. **Tunable.** Blend weights, score thresholds, section isolation rules, and the embedding model are all constants in a single Python file. You can trade precision for breadth, retune for your corpus, or swap in a different model without touching live.
 
-It is an **optional, separate** plugin. The stock `recommendBySimilarity` stays installed; you disable it via OJS's plugin admin UI when you enable this one.
+Trade-offs: the offline build introduces Python + sentence-transformers (~1 GB of torch) on whatever host runs the rebuild — but that host is never the OJS server. Cache refresh is scheduled (typically nightly), so a newly-published article's sidebar has up-to-cache-age staleness. For most journals that's fine; if not, trigger a targeted recompute on publish.
+
+It's an **optional, separate** plugin. The stock `recommendBySimilarity` stays installed; disable it in the OJS admin when you enable this one.
 
 ## Requirements
 
@@ -20,31 +24,25 @@ It is an **optional, separate** plugin. The stock `recommendBySimilarity` stays 
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────┐
-│  Offline builder                         │
-│  scripts/ojs/build_similar_articles.py   │──writes───┐
-│                                          │           │
-│  score = 0.4 × TF-IDF_cosine             │           │
-│        + 0.6 × embed_cosine              │           │
-│                                          │           │
-│  TF-IDF:  sklearn, keywords×3+title×3+abs│           │
-│  Embed:   sentence-transformers MiniLM   │           │
-└──────────────────────────────────────────┘  ┌────────▼─────────┐
-                                              │  similar_articles │
-                                              │  (cache table)    │
-                                              └────────┬──────────┘
-                                                       │ PK lookup, <1ms
-                                            ┌──────────▼─────────┐
-                                            │  PHP plugin        │──renders──► article footer sidebar
-                                            │  similarArticles   │
-                                            └────────────────────┘
+```mermaid
+flowchart LR
+    subgraph offline ["Offline (CI or devcontainer)"]
+        B["scripts/ojs/<br/>build_similar_articles.py<br/><br/>score = 0.4 × TF-IDF + 0.6 × embedding<br/><br/>TF-IDF: sklearn<br/>Embedding: sentence-transformers<br/>(BAAI/bge-base-en-v1.5)"]
+    end
+    subgraph ojs ["OJS server"]
+        C[("similar_articles<br/>cache table")]
+        D["similarArticles plugin<br/>(PHP, render-only)"]
+        E([article footer sidebar])
+    end
+    B -- "writes top 5<br/>per article" --> C
+    C -- "PK lookup<br/>&lt;1 ms" --> D
+    D -- renders --> E
 ```
 
 - Plugin code is render-only. All analysis happens offline.
 - TF-IDF catches distinctive-string matches (proper nouns, rare keywords). Embeddings catch semantic neighbours that share no tokens. The weighted sum keeps both sources of signal.
 - The cache table `similar_articles` holds up to 5 rows per submission (empty when no match scores above `MIN_SCORE`).
-- The builder is idempotent: it deletes and re-inserts either the whole table (`TRUNCATE` mode) or just the affected submissions (`WHERE submission_id IN (...)` mode) inside a single transaction.
+- The builder is idempotent: a single transaction deletes then re-inserts either the whole table or just the affected submissions.
 
 ## Installation
 
@@ -63,7 +61,7 @@ docker compose exec ojs php lib/pkp/tools/installPluginVersion.php \
   /var/www/html/plugins/generic/similarArticles/version.xml
 ```
 
-Enable it in OJS admin: **Website > Plugins > Generic > Fast Related Articles** → tick. Disable the stock **Recommend Articles by Similarity** plugin at the same time.
+Enable it in OJS admin: **Website > Plugins > Generic > Faster Related Articles** → tick. Disable the stock **Recommend Articles by Similarity** plugin at the same time.
 
 ### Manual (non-Docker / live)
 
@@ -73,7 +71,7 @@ Enable it in OJS admin: **Website > Plugins > Generic > Fast Related Articles** 
    php lib/pkp/tools/installPluginVersion.php \
      plugins/generic/similarArticles/version.xml
    ```
-3. Enable in OJS admin: **Website > Plugins > Generic > Fast Related Articles**.
+3. Enable in OJS admin: **Website > Plugins > Generic > Faster Related Articles**.
 4. Disable the stock **Recommend Articles by Similarity** plugin at the same time to avoid double-rendering.
 5. Run the offline builder once to populate the cache (see next section). Until it runs, the sidebar is silently absent on all articles.
 
@@ -122,34 +120,84 @@ python3 scripts/ojs/build_similar_articles.py --target=live --submission=12345 -
 sudo python3 scripts/ojs/build_similar_articles.py --dry-run
 ```
 
-A full rebuild on ~1400 submissions completes in ~2 seconds. Scales linearly with corpus size; `numpy` similarity matrices of a few thousand documents stay in memory easily.
+A full rebuild on ~1400 submissions takes ~2 s (TF-IDF) + ~2 min (embedding compute, dominated by model load). Scales linearly; `numpy` handles a few-thousand-document similarity matrix in memory without issue.
 
 ### Schedule nightly rebuild
 
-Put it in a cron or CI scheduled workflow. Example GitHub Actions workflow (see `private/.github/workflows/rebuild-similar-articles.yml` in our deployment):
+Put it in cron or a CI scheduled workflow. Below is a complete, copy-pasteable GitHub Actions workflow that mirrors what this repo runs against its own production (adapted here with generic names — substitute your host, user, and paths).
+
+**`.github/workflows/rebuild-similar-articles.yml`** (in your deployment-ops repo — does NOT need to live alongside the plugin code; it just needs to `checkout` this public repo for the builder script):
 
 ```yaml
+name: Rebuild similar_articles cache
+
 on:
   schedule:
-    - cron: '15 4 * * *'
+    - cron: '15 4 * * *'   # 04:15 UTC
+  workflow_dispatch:
+
 jobs:
   rebuild:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          repository: <your-org>/<this-repo>
+          ref: main
+
       - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: pip install scikit-learn pymysql beautifulsoup4 sentence-transformers
-      - name: SSH setup
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scripts/ojs/requirements.txt
+
+      - name: Cache HuggingFace model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: huggingface-bge-base-en-v1.5
+
+      - name: Install Python deps
+        run: pip install -r scripts/ojs/requirements.txt
+
+      - name: Set up SSH
         run: |
-          # write ~/.ssh/hetzner key, ~/.ssh/config with sea-live Host alias
-          ...
-      - run: python3 scripts/ojs/build_similar_articles.py --target=live
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/id
+          chmod 600 ~/.ssh/id
+          cat > ~/.ssh/config <<EOF
+          Host my-ojs-host
+            HostName ${{ secrets.OJS_SSH_HOST }}
+            User ${{ secrets.OJS_SSH_USER }}
+            IdentityFile ~/.ssh/id
+            StrictHostKeyChecking accept-new
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh-keyscan -H ${{ secrets.OJS_SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rebuild cache
+        # `--target=live` uses the `sea-live` SSH alias by default; edit
+        # the TARGETS dict in scripts/ojs/build_similar_articles.py to
+        # match your host alias name, or pass one via --target
+        run: python3 scripts/ojs/build_similar_articles.py --target=live
+
+      - name: Clean up SSH key
+        if: always()
+        run: shred -u ~/.ssh/id 2>/dev/null || rm -f ~/.ssh/id
 ```
 
-The script runs on the CI runner (sklearn + sentence-transformers installed there), connects to the OJS DB over SSH, and writes only the cache table rows back. The OJS server itself never needs any Python dependencies.
+Secrets you'll need in the workflow's settings:
+- `SSH_DEPLOY_KEY` — private key with write access to run the script on the OJS host
+- `OJS_SSH_HOST` — hostname / IP of the OJS server
+- `OJS_SSH_USER` — SSH user on the OJS host
 
-**Caching the HuggingFace model between runs**: add an `actions/cache` step keyed on the model name to persist `~/.cache/huggingface` — avoids re-downloading the ~80 MB model on every run. Not required but saves ~5-10 s per run.
+The script runs on the CI runner (all Python deps installed there), opens an SSH tunnel to the OJS DB, and writes only the cache-table rows back. The OJS server itself needs no Python dependencies.
+
+**Caching notes:**
+- The `actions/setup-python` pip cache is keyed on `scripts/ojs/requirements.txt`. First run installs ~1 GB of torch + friends (~2 min); subsequent runs with the same requirements.txt restore wheels from cache (~10-15 s).
+- The `actions/cache` step on `~/.cache/huggingface` persists the ~440 MB bge-base model across runs. First run downloads; subsequent runs restore.
+- Net: first run ~5-6 min. Cached runs ~90 s + embedding compute.
 
 ## Configuration
 

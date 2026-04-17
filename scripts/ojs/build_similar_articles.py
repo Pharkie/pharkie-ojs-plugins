@@ -36,7 +36,7 @@ Dependencies: scikit-learn, pymysql, beautifulsoup4, sentence-transformers.
 First run downloads the BAAI/bge-base-en-v1.5 model (~440 MB) into HuggingFace's
 cache dir (~/.cache/huggingface). Subsequent runs hit the cache.
 
-Background: docs/ojs-issues-log.md #26, docs/similar-articles-plugin.md,
+Background: docs/ojs-issues-log.md #26, docs/faster-related-articles-plugin.md,
 plugins/similar-articles/.
 """
 

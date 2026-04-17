@@ -38,7 +38,7 @@ REST API for OJS user and subscription management — something OJS doesn't prov
 
 Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automatic membership sync from WooCommerce Subscriptions.
 
-### [Fast Related Articles](plugins/similar-articles/)
+### [Faster Related Articles](plugins/similar-articles/)
 
 Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/pkp/recommendBySimilarity) plugin. The stock plugin runs a corpus-wide live SQL query on every article view, which collapses (60–2000s per request) on journals whose vocabulary is dominated by a few corpus-wide keywords. This plugin pre-computes similarity offline and serves from a cache — the render path is a primary-key lookup, unaffected by corpus skew.
 
@@ -48,8 +48,8 @@ Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/p
 - Book-review section isolation, duplicate-import filter, score band for silencing weak matches
 - Render-time cost: one indexed SELECT, sub-millisecond
 
-**Fast Related Articles docs:**
-[Plugin guide](docs/similar-articles-plugin.md)
+**Faster Related Articles docs:**
+[Plugin guide](docs/faster-related-articles-plugin.md)
 
 ### [Archive Checker](plugins/archive-checker/)
 
