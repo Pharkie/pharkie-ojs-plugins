@@ -48,8 +48,7 @@ Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/
 - Book-review section isolation, duplicate-import filter, score band for silencing weak matches
 - Render-time cost: one indexed SELECT, sub-millisecond
 
-**Smarter Similar Articles docs:**
-[Plugin guide](docs/smarter-similar-articles-plugin.md)
+**[Smarter Similar Articles docs](docs/smarter-similar-articles-plugin.md)**
 
 ### [Archive Checker](plugins/archive-checker/)
 
@@ -65,8 +64,7 @@ Visual review tool for checking archive journal articles inside OJS. Three-pane 
 - Content-filtered article warnings
 - CLI companion (`qa_review.py`) for batch operations
 
-**Archive Checker docs:**
-[Plugin guide](docs/archive-checker-plugin.md)
+**[Archive Checker docs](docs/archive-checker-plugin.md)**
 
 ### [WP-OJS Sync](plugins/wpojs-sync/) (WordPress)
 
