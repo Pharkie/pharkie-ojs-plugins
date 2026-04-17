@@ -68,14 +68,15 @@ MAX_RESULTS = 5
 # Cosine-similarity thresholds used when picking neighbours (applied to the
 # final hybrid score).
 # MIN_SCORE: filter out weak matches. Below this, the match is noise rather
-#   than a genuine topical neighbour. Embedding scores compress into a higher
-#   band than TF-IDF, so at a 0.4/0.6 blend the typical rank-5 is 0.40+ for
-#   a well-clustered article. A 0.30 floor preserves the "silent when no good
-#   match" behaviour — articles without at least one genuine neighbour get no
-#   sidebar rather than filler.
+#   than a genuine topical neighbour. Tuned against the bge-base hybrid score
+#   distribution (rank-1 avg ~0.62, rank-5 avg ~0.52, minimum useful threshold
+#   ~0.40). At 0.40 well-clustered articles keep all 5 neighbours; articles
+#   whose "best" match is already weak (editorials, tribute pieces, outliers)
+#   get no sidebar rather than filler. If you switch to a different embedding
+#   model, recalibrate — MiniLM-L6-v2 scores run lower and would want ~0.30.
 # MAX_SCORE: filter out near-duplicate submissions. Score >= this (~1.0) means
 #   identical content in both TF-IDF and embedding spaces — a duplicate import.
-MIN_SCORE = 0.30
+MIN_SCORE = 0.40
 MAX_SCORE = 0.95
 
 # Hybrid blend weights. TFIDF_WEIGHT + EMBED_WEIGHT should sum to 1.
@@ -87,12 +88,16 @@ MAX_SCORE = 0.95
 TFIDF_WEIGHT = 0.4
 EMBED_WEIGHT = 0.6
 
-# sentence-transformers model. all-MiniLM-L6-v2 is 22M params, ~80 MB download,
-# 384-dim embeddings, encodes 1400 short docs in under 5s on CPU. Sweet spot
-# for this corpus — upgrading to all-mpnet-base-v2 would quadruple runtime
-# for marginal quality. Pin via library version in requirements rather than
-# here; sentence-transformers will cache to HF_HOME (default: ~/.cache).
-EMBED_MODEL = 'all-MiniLM-L6-v2'
+# sentence-transformers model. bge-base-en-v1.5 is 110M params, ~440 MB
+# download, 768-dim embeddings, encodes 1400 short docs in ~2 min on CPU.
+# Chosen over MiniLM-L6-v2 after corpus-wide evaluation: bge-base wins
+# notably on philosopher clusters (Heidegger 72% vs 58%, Laing 76% vs 62%,
+# Merleau-Ponty 50% vs 33%) and qualitatively on user-flagged cases
+# (9805 Beauvoir paper: 5/5 Beauvoir articles in top 5 vs 4/5 with MiniLM).
+# Aggregate recall is a wash (51% vs 52%) but per-case quality is better.
+# MiniLM is still the right choice for larger corpora (~10k+) where the
+# inference time cost matters; for ~1400 articles bge-base is practically free.
+EMBED_MODEL = 'BAAI/bge-base-en-v1.5'
 
 # Section abbrevs whose articles are restricted to same-section recommendations.
 # Current value: Book Reviews only (BR). Book Review Editorial (bookeditorial)
