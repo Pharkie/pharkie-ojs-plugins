@@ -1,6 +1,6 @@
 # Pharkie OJS Plugins
 
-A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, membership sync with WordPress, backfill QA review, and a faster drop-in replacement for the stock related-articles sidebar.
+A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, membership sync with WordPress, backfill QA review, and faster related articles.
 
 The plugins were built for a WordPress ↔ OJS integration where WP manages memberships via WooCommerce Subscriptions and OJS hosts a journal behind a paywall. See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together.
 
