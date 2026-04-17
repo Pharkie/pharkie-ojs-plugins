@@ -38,7 +38,7 @@ REST API for OJS user and subscription management — something OJS doesn't prov
 
 Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automatic membership sync from WooCommerce Subscriptions.
 
-### [Smarter Similar Articles](plugins/smarter-similar-articles/)
+### [Smarter Similar Articles](docs/smarter-similar-articles-plugin.md)
 
 Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/tree/main/plugins/generic/recommendBySimilarity) plugin. Surfaces more relevant "related articles" by combining shared terminology with how closely two articles match in meaning — so the sidebar finds conceptually close papers, not just ones that happen to share common keywords. All the heavy lifting runs offline on a schedule, and the article page serves pre-computed suggestions instantly, no matter how big the journal grows.
 
@@ -48,9 +48,7 @@ Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/
 - Book-review section isolation, duplicate-import filter, score band for silencing weak matches
 - Render-time cost: one indexed SELECT, sub-millisecond
 
-**[Smarter Similar Articles docs](docs/smarter-similar-articles-plugin.md)**
-
-### [Archive Checker](plugins/archive-checker/)
+### [Archive Checker](docs/archive-checker-plugin.md)
 
 Visual review tool for checking archive journal articles inside OJS. Three-pane interface: article sidebar (left), original PDF (centre), HTML version + end-matter (right). Linked from article pages so members can help check the archive.
 
@@ -63,8 +61,6 @@ Visual review tool for checking archive journal articles inside OJS. Three-pane 
 - Citation DOIs displayed with clickable links
 - Content-filtered article warnings
 - CLI companion (`qa_review.py`) for batch operations
-
-**[Archive Checker docs](docs/archive-checker-plugin.md)**
 
 ### [WP-OJS Sync](plugins/wpojs-sync/) (WordPress)
 
