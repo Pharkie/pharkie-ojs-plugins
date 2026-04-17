@@ -1,13 +1,13 @@
 # WP-OJS Sync (WordPress Plugin)
 
-WordPress plugin that automatically syncs WooCommerce Subscription membership status to OJS (Open Journal Systems). When a member signs up, renews, cancels, or expires, the plugin pushes the change to OJS via the [WP-OJS Subscription API](../wpojs-subscription-api/) plugin.
+WordPress plugin that automatically syncs WooCommerce Subscription membership status to OJS (Open Journal Systems). When a member signs up, renews, cancels, or expires, the plugin pushes the change to OJS via the [WP-OJS Subscription API](wpojs-subscription-api-plugin.md) plugin.
 
 ## Requirements
 
 - WordPress 5.6+, PHP 7.4+
 - WooCommerce + WooCommerce Subscriptions
 - Action Scheduler (bundled with WooCommerce)
-- The [WP-OJS Subscription API](../wpojs-subscription-api/) plugin installed on OJS
+- The [WP-OJS Subscription API](wpojs-subscription-api-plugin.md) plugin installed on OJS
 
 ## Installation
 
@@ -34,17 +34,21 @@ Set the API key as a constant in `wp-config.php`:
 define('WPOJS_API_KEY', 'your-shared-secret-here');
 ```
 
-The key must match the `WPOJS_API_KEY_SECRET` environment variable on the OJS server. See the [OJS plugin guide](../../docs/wpojs-subscription-api-plugin.md) for server-side configuration.
+The key must match the `WPOJS_API_KEY_SECRET` environment variable on the OJS server. See the [OJS plugin guide](wpojs-subscription-api-plugin.md) for server-side configuration.
 
-## Documentation
+## Sub-docs
 
-- [WP admin guide](../../docs/wp-admin-reference.md)
-- [WP-CLI commands](../../docs/wp-cli-reference.md)
-- [Support runbook](../../docs/support-runbook.md)
-- [WP plugin internals](../../docs/wp-plugin-reference.md)
-- [Docker setup](../../docs/docker-setup.md)
-- [VPS deployment](../../docs/vps-deployment.md)
-- [Non-Docker install](../../docs/non-docker-setup.md)
+The sync story spans WordPress admin, WP-CLI, deployment, and the OJS API — split by aspect:
+
+- [Docker setup](docker-setup.md) — dev environment with WP + OJS in Docker
+- [VPS deployment](vps-deployment.md) — production deployment to a Linux VPS
+- [Non-Docker install](non-docker-setup.md) — bare-metal install without Docker
+- [WP admin guide](wp-admin-reference.md) — the plugin's settings UI and sync log
+- [WP-CLI commands](wp-cli-reference.md) — `wp ojs-sync test-connection`, `bulk-sync`, `sync-user`
+- [Support runbook](support-runbook.md) — triage flowchart for common sync issues
+- [OJS plugin API](ojs-sync-plugin-api.md) — REST endpoint reference the sync plugin calls into
+- [WP plugin internals](wp-plugin-reference.md) — code structure, hooks, queue architecture
+- [Design decisions](discovery.md) — decision trail: what was tried, eliminated, and why
 
 ## LLM Generated, Human Reviewed
 
@@ -52,4 +56,4 @@ This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Developme
 
 ## License
 
-PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../../LICENSE.md).
+PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../LICENSE.md).
