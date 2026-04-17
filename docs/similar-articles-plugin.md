@@ -15,7 +15,7 @@ It is an **optional, separate** plugin. The stock `recommendBySimilarity` stays 
 ## Requirements
 
 - OJS 3.5+
-- Python 3.10+ with `scikit-learn`, `pymysql`, `beautifulsoup4`, `sentence-transformers` (only on the host that runs the offline build, not the OJS server). `sentence-transformers` pulls in `torch` (~800 MB) plus the `all-MiniLM-L6-v2` model (~80 MB, cached to `~/.cache/huggingface` on first load).
+- Python 3.10+ with `scikit-learn`, `pymysql`, `beautifulsoup4`, `sentence-transformers` (only on the host that runs the offline build, not the OJS server). `sentence-transformers` pulls in `torch` (~800 MB) plus the `bge-base-en-v1.5` model (~440 MB, cached to `~/.cache/huggingface` on first load).
 - SSH or direct MySQL access from the build host to the OJS database
 
 ## Architecture
@@ -81,7 +81,7 @@ Enable it in OJS admin: **Website > Plugins > Generic > Fast Related Articles** 
 
 `scripts/ojs/build_similar_articles.py` connects to the OJS database, reads every published submission's title + abstract + curated keywords + section, computes both TF-IDF and embedding similarity, blends them as `0.4 × TF-IDF + 0.6 × embedding`, takes the top 5 neighbours, and writes the result to `similar_articles`.
 
-Runtime on ~1400 submissions: ~35 s (TF-IDF ~1s, embedding compute ~30s incl. model load). Subsequent runs with the model cached: same — the model is loaded into memory each run, there's no persistent server. If you run nightly this is fine; if you run on every article publish, consider a long-lived worker.
+Runtime on ~1400 submissions: ~2.5 min (TF-IDF ~1s, embedding compute ~115s on CPU, model load ~20s on first run). Subsequent runs with the model cached to `~/.cache/huggingface`: same — the model is loaded into memory each run, there's no persistent server. If you run nightly this is fine; if you run on every article publish, consider either a long-lived worker or switching `EMBED_MODEL` to MiniLM-L6-v2 for faster inference.
 
 ### Configure targets
 
@@ -157,11 +157,11 @@ The plugin itself has no admin UI. Tune the algorithm by editing `scripts/ojs/bu
 |---|---|---|
 | `TFIDF_WEIGHT` | `0.4` | Contribution of TF-IDF cosine to the final score. Higher = more precision on exact-string matches (hyphenated proper nouns, rare keywords). Should sum with `EMBED_WEIGHT` to 1. |
 | `EMBED_WEIGHT` | `0.6` | Contribution of sentence-embedding cosine to the final score. Higher = more semantic breadth (catches topically-related papers that share no vocabulary). Embedding scores run in a higher band than TF-IDF, so at this default the blended score is embedding-dominated on matches where both agree. |
-| `EMBED_MODEL` | `'all-MiniLM-L6-v2'` | Sentence-transformers model. MiniLM is 22M params, ~80 MB, fast on CPU. Upgrade to `all-mpnet-base-v2` for marginal quality at 4× runtime. |
+| `EMBED_MODEL` | `'BAAI/bge-base-en-v1.5'` | Sentence-transformers model. bge-base is 110M params, ~440 MB, ~2 min to encode 1400 docs on CPU. Chosen over MiniLM after corpus evaluation — notably better on philosopher clusters (Heidegger, Laing, Merleau-Ponty). For larger corpora (~10k+) where encoding time matters, switch to `'sentence-transformers/all-MiniLM-L6-v2'` (22M params, ~80 MB, ~15 s). |
 | `KEYWORD_WEIGHT` | `3` | (TF-IDF only.) How many times the keyword list is repeated in the TF-IDF text blob. Higher = editor-curated keywords dominate over title/abstract. Does not affect embedding input. |
 | `TITLE_WEIGHT` | `3` | (TF-IDF only.) How many times the title is repeated in the TF-IDF text blob. Raising clusters papers about the same person/concept more tightly for the TF-IDF contribution. Does not affect embedding input (the transformer understands title significance natively). |
 | `MAX_RESULTS` | `5` | Sidebar size. Also hard-capped in the PHP render (`SimilarArticlesPlugin::MAX_RESULTS`). |
-| `MIN_SCORE` | `0.30` | Hybrid-score floor. Matches below this are noise; excluded. Tuned for the 0.4 / 0.6 blend where embedding scores pull the typical floor up. If you change the weights, retune — at pure TF-IDF you'd want ~0.15, pure embeddings ~0.40. |
+| `MIN_SCORE` | `0.40` | Hybrid-score floor. Matches below this are noise; excluded. Tuned against the bge-base hybrid score distribution (rank-1 avg 0.62, rank-5 avg 0.52). Well-clustered articles still get 5 neighbours; articles with no genuinely-close match get no sidebar. If you change the embedding model or the blend weights, retune — MiniLM scores lower and would want ~0.30. |
 | `MAX_SCORE` | `0.95` | Duplicate-detection ceiling. Matches at or above this are near-identical in both TF-IDF and embedding space — duplicate imports. Excluded. |
 | `RESTRICTED_SECTION_ABBREVS` | `{'BR'}` | Section abbrevs whose articles are restricted to same-section recommendations only. Adjust for your section naming. |
 
