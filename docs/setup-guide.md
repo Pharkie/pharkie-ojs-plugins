@@ -18,13 +18,24 @@ Docker-in-Docker in the devcontainer requires the host path for `--project-direc
 
 `scripts/lib/dc.sh` provides `init_dc` which auto-detects DinD via `HOST_PROJECT_DIR` env var (set in `devcontainer.json` from `${localWorkspaceFolder}`). All scripts source it and use `$DC`. No hardcoded host paths anywhere.
 
+### Devcontainer image (`.devcontainer/Dockerfile`)
+
+The image includes Node.js, PHP CLI, Docker CLI, `gh`, Python + backfill libs (pymupdf, bs4, anthropic…), `ocrmypdf` + tesseract, Playwright system deps (chromium + webkit), SOPS + age, hcloud CLI, Claude Code CLI, and `ggshield` (user-level via `pipx`).
+
+Layers are ordered **heavy → volatile** so small additions don't bust the expensive layers:
+
+- The big apt/pip/npm layers are near the top (playwright deps, ocrmypdf, Claude CLI — minutes to rebuild).
+- The **last RUN** is reserved for small/volatile apt packages. When adding a new package (e.g. `git-lfs`), append it to that final RUN, not the big one. Otherwise you invalidate every cached layer above it, turning a <10 s rebuild into a 3 min one.
+
+`postCreateCommand` is kept short on purpose: chown the cache volumes, `npm install` (guarded by `cmp -s package-lock.json node_modules/.package-lock.json` — skipped when nothing changed), `playwright install chromium`, `setup-hooks.sh`, clone private repo. Anything stable should be baked into the image instead.
+
 ## Deployment scripts
 
 - **`scripts/infra/init-vps.sh`** — one-time VPS setup (Hetzner): creates server, firewall, SSH config. Run once per server.
 - **`scripts/infra/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`, `--env-file`.
 - **`scripts/monitoring/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). Includes backup health checks.
 - **`scripts/monitoring/load-test.sh`** — performance tests using `hey` with server resource monitoring.
-- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB → gzip → AES-256-CBC encrypt → rotate (7 daily + 4 weekly).
+- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB + WP DB + OJS files volume → gzip → AES-256-CBC encrypt → rotate (DB: 7 daily + 4 weekly; files tarball: 3 daily + 4 weekly).
 - **`scripts/infra/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → a private backup repo (daily schedule).
 
 ## Secrets management

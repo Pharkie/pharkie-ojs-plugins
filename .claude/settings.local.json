@@ -43,7 +43,9 @@
       "WebSearch",
       "WebFetch",
       "mcp__ide__getDiagnostics",
-      "mcp__ide__executeCode"
+      "mcp__ide__executeCode",
+      "Read(//home/vscode/.claude/plans/**)",
+      "Bash(mkdir -p /home/vscode/.claude/plans/)"
     ]
   }
 }
