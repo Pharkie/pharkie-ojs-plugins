@@ -62,7 +62,7 @@ Visual review tool for checking archive journal articles inside OJS. Three-pane 
 - Content-filtered article warnings
 - CLI companion (`qa_review.py`) for batch operations
 
-### [WP-OJS Sync](plugins/wpojs-sync/) (WordPress)
+### [WP-OJS Sync](docs/wpojs-sync-plugin.md) (WordPress)
 
 WordPress plugin that hooks into WooCommerce Subscription lifecycle events and pushes changes to OJS via the Subscription API plugin above.
 
@@ -72,9 +72,6 @@ WordPress plugin that hooks into WooCommerce Subscription lifecycle events and p
 - Async queue (Action Scheduler) with retry logic
 - Daily reconciliation to catch drift
 - Admin UI with sync log and connection testing
-
-**WP-OJS Sync docs:**
-[Docker setup](docs/docker-setup.md) · [VPS deployment](docs/vps-deployment.md) · [Non-Docker install](docs/non-docker-setup.md) · [WP admin guide](docs/wp-admin-reference.md) · [WP-CLI commands](docs/wp-cli-reference.md) · [Support runbook](docs/support-runbook.md) · [OJS plugin API](docs/ojs-sync-plugin-api.md) · [WP plugin internals](docs/wp-plugin-reference.md) · [Design decisions](docs/discovery.md)
 
 ## [Backfill Toolkit](backfill/)
 
