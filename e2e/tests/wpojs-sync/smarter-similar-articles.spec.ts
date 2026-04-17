@@ -5,7 +5,7 @@ const OJS_BASE = 'http://localhost:8081';
 const JOURNAL = 'ea';
 
 /**
- * Pick an article known to have cached neighbours. The similar_articles
+ * Pick an article known to have cached neighbours. The smarter_similar_articles
  * table is the one source of truth — if this query returns nothing, the
  * cache is empty and the whole suite skips (plugin not installed, or
  * offline builder hasn't run).
@@ -16,7 +16,7 @@ function findArticleWithCachedNeighbours(): {
 } | null {
   const out = ojsQuery(`
     SELECT submission_id, COUNT(*) AS ranks
-    FROM similar_articles
+    FROM smarter_similar_articles
     WHERE rank = 1
     GROUP BY submission_id
     ORDER BY submission_id DESC
@@ -27,17 +27,17 @@ function findArticleWithCachedNeighbours(): {
   const submissionId = parseInt(parts[0], 10);
   // Rank count for this submission specifically
   const rankOut = ojsQuery(
-    `SELECT COUNT(*) FROM similar_articles WHERE submission_id = ${submissionId}`,
+    `SELECT COUNT(*) FROM smarter_similar_articles WHERE submission_id = ${submissionId}`,
   );
   const expectedRanks = parseInt(rankOut.trim(), 10);
   if (!submissionId || !expectedRanks) return null;
   return { submissionId, expectedRanks };
 }
 
-function similarArticlesTableExists(): boolean {
+function smarterSimilarArticlesTableExists(): boolean {
   try {
     const out = ojsQuery(
-      "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'similar_articles'",
+      "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'smarter_similar_articles'",
     );
     return parseInt(out.trim(), 10) > 0;
   } catch {
@@ -45,22 +45,22 @@ function similarArticlesTableExists(): boolean {
   }
 }
 
-test.describe('similarArticles plugin — sidebar render', () => {
+test.describe('smarterSimilarArticles plugin — sidebar render', () => {
   test.beforeAll(() => {
-    if (!similarArticlesTableExists()) {
-      test.skip(true, 'similar_articles table not present — plugin not installed on this target');
+    if (!smarterSimilarArticlesTableExists()) {
+      test.skip(true, 'smarter_similar_articles table not present — plugin not installed on this target');
     }
   });
 
   test('sidebar renders on an article with cached neighbours', async ({ page }) => {
     const article = findArticleWithCachedNeighbours();
-    test.skip(!article, 'No articles have cache rows yet — run build_similar_articles.py');
+    test.skip(!article, 'No articles have cache rows yet — run build_smarter_similar_articles.py');
 
     await page.goto(`${OJS_BASE}/${JOURNAL}/article/view/${article!.submissionId}`);
     await page.waitForLoadState('domcontentloaded');
 
-    // The plugin renders inside a #similarArticlesList section
-    const sidebar = page.locator('#similarArticlesList');
+    // The plugin renders inside a #smarterSimilarArticlesList section
+    const sidebar = page.locator('#smarterSimilarArticlesList');
     await expect(
       sidebar,
       `Article ${article!.submissionId} has ${article!.expectedRanks} cache rows; sidebar should render`,
@@ -88,10 +88,10 @@ test.describe('similarArticles plugin — sidebar render', () => {
   });
 
   test('articles with no cached neighbours render without a sidebar', async ({ page }) => {
-    // Find a submission that exists but has no similar_articles rows.
+    // Find a submission that exists but has no smarter_similar_articles rows.
     const out = ojsQuery(`
       SELECT s.submission_id FROM submissions s
-      LEFT JOIN similar_articles sa ON sa.submission_id = s.submission_id
+      LEFT JOIN smarter_similar_articles sa ON sa.submission_id = s.submission_id
       WHERE s.status = 3 AND s.current_publication_id IS NOT NULL
         AND sa.submission_id IS NULL
       LIMIT 1
@@ -104,7 +104,7 @@ test.describe('similarArticles plugin — sidebar render', () => {
 
     // The sidebar section should NOT render for articles with no cache rows —
     // plugin deliberately renders nothing rather than showing filler.
-    const sidebar = page.locator('#similarArticlesList');
+    const sidebar = page.locator('#smarterSimilarArticlesList');
     await expect(sidebar).toHaveCount(0);
   });
 });

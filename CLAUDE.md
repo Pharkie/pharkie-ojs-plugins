@@ -20,7 +20,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`docs/vps-deployment.md`](docs/vps-deployment.md) — VPS deployment
 - [`docs/support-runbook.md`](docs/support-runbook.md) — support staff quick reference
 - [`docs/archive-checker-plugin.md`](docs/archive-checker-plugin.md) — Archive Checker plugin: visual review interface for backfill article splits
-- [`docs/faster-related-articles-plugin.md`](docs/faster-related-articles-plugin.md) — Faster Related Articles plugin: cached-similarity sidebar (replaces stock recommendBySimilarity)
+- [`docs/smarter-similar-articles-plugin.md`](docs/smarter-similar-articles-plugin.md) — Smarter Similar Articles plugin: cached-similarity sidebar (replaces stock recommendBySimilarity)
 - `private/TODO.md` — roadmap (in private repo)
 
 ## Good to know
@@ -34,7 +34,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - **OJS 3.5 upgrade is the biggest risk.** The 3.5 upgrade has significant breaking changes (Slim→Laravel, Vue 2→3). If this goes badly, re-evaluate Janeway migration.
 - **WP usernames are synced to OJS** but sanitized to lowercase-alphanumeric (OJS constraint). WP usernames commonly contain dots, hyphens, underscores, spaces, or `@` — these get stripped, so typing the WP login into OJS may not match. Mitigated: the login page relabels the field to "Email" and sets `autocomplete="email"`. OJS login auto-detects email-shaped input and does email lookup. See `docs/ojs-sync-plugin-api.md#username-sync`.
 - **`rebuildSearchIndex.php` queues jobs, never indexes inline** (OJS 3.5). Always drain the queue with `scripts/ojs/blast-queue.sh` (or `jobs.php run --once`) after. Never `DELETE FROM jobs` after a rebuild. See `docs/ojs-issues-log.md` #25.
-- **Faster Related Articles plugin** (`similarArticles` slug, `plugins/similar-articles/` folder) (`plugins/similar-articles/`), not the stock `recommendBySimilarity` (which is disabled — it collapses on this thematically narrow corpus; see `docs/ojs-issues-log.md` #26). Rebuild the cache with `sudo python3 scripts/ojs/build_similar_articles.py --target=dev|live` (sklearn TF-IDF, takes <2s). Nightly cron runs it against live automatically. Full docs: `docs/faster-related-articles-plugin.md`.
+- **Smarter Similar Articles plugin** (`smarterSimilarArticles` slug, `plugins/smarter-similar-articles/` folder) replaces the stock `recommendBySimilarity` (which is disabled — it collapses on this thematically narrow corpus; see `docs/ojs-issues-log.md` #26). Rebuild the cache with `python3 scripts/ojs/build_smarter_similar_articles.py --target=dev|live` (hybrid TF-IDF + embeddings, ~2.5 min for ~1400 articles). Nightly GH Actions workflow rebuilds against live automatically. Full docs: `docs/smarter-similar-articles-plugin.md`.
 
 ## Backfill pipeline
 

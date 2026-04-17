@@ -1,20 +1,20 @@
 <?php
 
-namespace APP\plugins\generic\similarArticles;
+namespace APP\plugins\generic\smarterSimilarArticles;
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class SimilarArticlesMigration extends Migration
+class SmarterSimilarArticlesMigration extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('similar_articles')) {
+        if (Schema::hasTable('smarter_similar_articles')) {
             return;
         }
 
-        Schema::create('similar_articles', function (Blueprint $table) {
+        Schema::create('smarter_similar_articles', function (Blueprint $table) {
             $table->unsignedBigInteger('submission_id');
             $table->unsignedBigInteger('similar_id');
             $table->unsignedTinyInteger('rank');
@@ -27,6 +27,6 @@ class SimilarArticlesMigration extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('similar_articles');
+        Schema::dropIfExists('smarter_similar_articles');
     }
 }

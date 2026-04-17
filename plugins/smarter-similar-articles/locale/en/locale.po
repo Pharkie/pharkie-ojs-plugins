@@ -1,8 +1,8 @@
-# Faster Related Articles Plugin
+# Smarter Similar Articles Plugin
 # Copyright (C) 2026 Adam Knowles
 msgid ""
 msgstr ""
-"Project-Id-Version: similarArticles 1.0\n"
+"Project-Id-Version: smarterSimilarArticles 1.0\n"
 "Report-Msgid-Bugs-To: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -11,8 +11,8 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-msgid "plugins.generic.similarArticles.displayName"
-msgstr "Faster Related Articles"
+msgid "plugins.generic.smarterSimilarArticles.displayName"
+msgstr "Smarter Similar Articles"
 
-msgid "plugins.generic.similarArticles.description"
+msgid "plugins.generic.smarterSimilarArticles.description"
 msgstr "Faster, smarter drop-in replacement for the stock Recommend Articles by Similarity plugin. Similarity is pre-computed offline using a hybrid of TF-IDF and sentence embeddings; the article page reads from a cache table at render time (sub-millisecond). Handles corpus-wide keywords that collapse the stock plugin, and catches semantically-related papers that share no lexical tokens."

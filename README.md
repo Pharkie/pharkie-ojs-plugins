@@ -1,6 +1,6 @@
 # Pharkie OJS Plugins
 
-A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, membership sync with WordPress, backfill QA review, and faster related articles.
+A collection of plugins for [OJS](https://pkp.sfu.ca/software/ojs/) (Open Journal Systems) that fill gaps in OJS's built-in functionality: payment processing, inline article display, membership sync with WordPress, backfill QA review, and smarter similar articles.
 
 The plugins were built for a WordPress ↔ OJS integration where WP manages memberships via WooCommerce Subscriptions and OJS hosts a journal behind a paywall. See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together.
 
@@ -38,18 +38,18 @@ REST API for OJS user and subscription management — something OJS doesn't prov
 
 Paired with the [WP-OJS Sync](plugins/wpojs-sync/) WordPress plugin for automatic membership sync from WooCommerce Subscriptions.
 
-### [Faster Related Articles](plugins/similar-articles/)
+### [Smarter Similar Articles](plugins/smarter-similar-articles/)
 
 Drop-in replacement for the stock [`recommendBySimilarity`](https://github.com/pkp/recommendBySimilarity) plugin. The stock plugin runs a corpus-wide live SQL query on every article view, which collapses (60–2000s per request) on journals whose vocabulary is dominated by a few corpus-wide keywords. This plugin pre-computes similarity offline and serves from a cache — the render path is a primary-key lookup, unaffected by corpus skew.
 
 - Hybrid scoring: TF-IDF (sklearn, auto-drops corpus-wide tokens) + sentence embeddings (`bge-base-en-v1.5`, catches semantic neighbours that share no lexical tokens)
-- Render-only PHP plugin; all analysis happens offline via a Python builder (`scripts/ojs/build_similar_articles.py`)
+- Render-only PHP plugin; all analysis happens offline via a Python builder (`scripts/ojs/build_smarter_similar_articles.py`)
 - Cache refresh via nightly scheduled GitHub Actions workflow (or whatever scheduler you prefer)
 - Book-review section isolation, duplicate-import filter, score band for silencing weak matches
 - Render-time cost: one indexed SELECT, sub-millisecond
 
-**Faster Related Articles docs:**
-[Plugin guide](docs/faster-related-articles-plugin.md)
+**Smarter Similar Articles docs:**
+[Plugin guide](docs/smarter-similar-articles-plugin.md)
 
 ### [Archive Checker](plugins/archive-checker/)
 

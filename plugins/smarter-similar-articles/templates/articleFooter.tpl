@@ -1,21 +1,21 @@
 {**
- * plugins/generic/similarArticles/templates/articleFooter.tpl
+ * plugins/generic/smarterSimilarArticles/templates/articleFooter.tpl
  *
  * Renders a "Related articles" sidebar on the article page footer.
  * Layout mirrors the project's existing recommendBySimilarity patched
  * template so the user-facing appearance is unchanged.
  *
- * Backing data: $similarArticles is an ordered array of Submission
+ * Backing data: $smarterSimilarArticles is an ordered array of Submission
  * objects (already in rank order 1..5), assigned by
- * SimilarArticlesPlugin::renderFooter().
+ * SmarterSimilarArticlesPlugin::renderFooter().
  *}
-{if !empty($similarArticles)}
-	<section id="similarArticlesList">
-		<h2 class="label" id="similarArticles">
+{if !empty($smarterSimilarArticles)}
+	<section id="smarterSimilarArticlesList">
+		<h2 class="label" id="smarterSimilarArticles">
 			Related articles
 		</h2>
 		<ul>
-			{foreach from=$similarArticles item=submission}
+			{foreach from=$smarterSimilarArticles item=submission}
 				{assign var=publication value=$submission->getCurrentPublication()}
 
 				<li>

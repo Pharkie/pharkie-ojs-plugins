@@ -1,11 +1,11 @@
 <?php
 
 /**
- * Faster Related Articles Plugin (cache-backed).
+ * Smarter Similar Articles Plugin (cache-backed).
  *
  * Renders a "Related articles" sidebar on article pages by reading
- * pre-computed similarity rows from the similar_articles table. Similarity
- * is computed offline (see scripts/ojs/build_similar_articles.py) — this
+ * pre-computed similarity rows from the smarter_similar_articles table. Similarity
+ * is computed offline (see scripts/ojs/build_smarter_similar_articles.py) — this
  * plugin is render-only and does no analysis on the request path.
  *
  * Replaces the stock recommendBySimilarity plugin, which runs a corpus-wide
@@ -13,10 +13,10 @@
  * narrow journals (see docs/ojs-issues-log.md #26).
  *
  * Deployed via docker-compose bind mount:
- *   ./plugins/similar-articles:/var/www/html/plugins/generic/similarArticles
+ *   ./plugins/smarter-similar-articles:/var/www/html/plugins/generic/smarterSimilarArticles
  */
 
-namespace APP\plugins\generic\similarArticles;
+namespace APP\plugins\generic\smarterSimilarArticles;
 
 use APP\core\Application;
 use APP\facades\Repo;
@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
 use PKP\plugins\GenericPlugin;
 use PKP\plugins\Hook;
 
-class SimilarArticlesPlugin extends GenericPlugin
+class SmarterSimilarArticlesPlugin extends GenericPlugin
 {
     private const MAX_RESULTS = 5;
 
@@ -44,17 +44,17 @@ class SimilarArticlesPlugin extends GenericPlugin
 
     public function getInstallMigration()
     {
-        return new SimilarArticlesMigration();
+        return new SmarterSimilarArticlesMigration();
     }
 
     public function getDisplayName()
     {
-        return __('plugins.generic.similarArticles.displayName');
+        return __('plugins.generic.smarterSimilarArticles.displayName');
     }
 
     public function getDescription()
     {
-        return __('plugins.generic.similarArticles.description');
+        return __('plugins.generic.smarterSimilarArticles.description');
     }
 
     /**
@@ -80,14 +80,14 @@ class SimilarArticlesPlugin extends GenericPlugin
         // to no-sidebar rather than letting the exception abort the whole
         // article-page render.
         try {
-            $similarIds = DB::table('similar_articles')
+            $similarIds = DB::table('smarter_similar_articles')
                 ->where('submission_id', $submissionId)
                 ->orderBy('rank')
                 ->limit(self::MAX_RESULTS)
                 ->pluck('similar_id')
                 ->toArray();
         } catch (\Throwable $e) {
-            error_log('similarArticles: cache query failed for submission '
+            error_log('smarterSimilarArticles: cache query failed for submission '
                 . $submissionId . ': ' . $e->getMessage());
             return Hook::CONTINUE;
         }
@@ -130,7 +130,7 @@ class SimilarArticlesPlugin extends GenericPlugin
         $dropped = count($similarIds) - count($ordered);
         if ($dropped > 0) {
             $missing = array_values(array_diff((array) $similarIds, array_keys($byId)));
-            error_log('similarArticles: dropped ' . $dropped . ' of '
+            error_log('smarterSimilarArticles: dropped ' . $dropped . ' of '
                 . count($similarIds) . ' cached neighbours for submission '
                 . $submissionId . ' (missing: ' . implode(',', $missing) . ')');
         }
@@ -139,7 +139,7 @@ class SimilarArticlesPlugin extends GenericPlugin
             return Hook::CONTINUE;
         }
 
-        $templateManager->assign('similarArticles', $ordered);
+        $templateManager->assign('smarterSimilarArticles', $ordered);
         $output .= $templateManager->fetch($this->getTemplateResource('articleFooter.tpl'));
         return Hook::CONTINUE;
     }
