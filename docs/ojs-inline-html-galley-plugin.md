@@ -92,4 +92,4 @@ This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Developme
 
 ## License
 
-PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../../LICENSE.md).
+PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../LICENSE.md).

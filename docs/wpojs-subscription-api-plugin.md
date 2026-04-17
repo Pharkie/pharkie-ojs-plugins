@@ -99,7 +99,7 @@ All endpoints are under `/api/v1/wpojs/`. Authentication is via `Authorization: 
 | `PUT` | `/subscriptions/expire-by-user/{userId}` | Yes | Expire subscription by user ID. |
 | `POST` | `/subscriptions/status-batch` | Yes | Batch status lookup for multiple users. |
 
-For full endpoint details including request/response schemas, see the [API reference](../../docs/ojs-sync-plugin-api.md).
+For full endpoint details including request/response schemas, see the [API reference](ojs-sync-plugin-api.md).
 
 ## WordPress password hashes
 
@@ -147,4 +147,4 @@ This code was generated with Claude Code (Anthropic, Claude Opus 4.6). Developme
 
 ## License
 
-PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../../LICENSE.md).
+PolyForm Noncommercial 1.0.0 — see [LICENSE.md](../LICENSE.md).
