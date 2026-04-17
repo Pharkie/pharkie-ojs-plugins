@@ -6,7 +6,7 @@ A process guide for reviewing and importing journal back-issues into OJS. This g
 
 - Access to the output directory (`backfill/private/output/`) -- each issue gets its own folder with split PDFs and metadata
 - A PDF viewer to check the split articles
-- Google Sheets (or any spreadsheet editor) for reviewing metadata
+- A browser + login to the [Archive Checker plugin](archive-checker-plugin.md) on the OJS instance — this is the visual review interface once articles are imported
 - A copy of each issue's CONTENTS page for cross-referencing
 
 ## Overview
@@ -14,9 +14,9 @@ A process guide for reviewing and importing journal back-issues into OJS. This g
 Four-step workflow:
 
 1. **Split** -- the pipeline validates the PDF, parses the table of contents, splits it into individual article PDFs, and normalizes author names. Fully automated.
-2. **Human review** -- you check the split PDFs are correct and review metadata in a spreadsheet. This is where most of your time goes.
-3. **Enrich** -- the pipeline uses AI to extract deeper metadata (subjects, disciplines, themes, references). Optional but recommended. You can review the results in a second spreadsheet pass.
-4. **Import** -- the pipeline generates OJS XML and loads it into OJS. It checks for duplicates automatically.
+2. **Check the split PDFs** -- you spot-check that the pipeline split the issue correctly (pages line up, book reviews separated, nothing missing). Flag issues for the pipeline operator to fix in `toc.json`.
+3. **Enrich** -- the pipeline uses AI to extract deeper metadata (subjects, disciplines, themes, references). Optional but recommended.
+4. **Import + review** -- the pipeline generates OJS XML, loads it into OJS, and you review each article in Archive Checker (approve / report problem). Fixes trigger a per-issue reimport (~8 sec) and a re-review. This is where most of your time goes.
 
 ---
 
@@ -44,32 +44,32 @@ Four-step workflow:
        ▼  toc.json + per-article PDFs
        │
 ┌──────┴───────────────────────────────────────────────┐
-│  Step 2: Human review                                │
+│  Step 2: Check the split PDFs                        │
 │                                                      │
-│  Check split PDFs ── page alignment, boundaries,     │
-│       │              book reviews, missing articles   │
-│       │                                              │
-│  Review spreadsheet ── titles, authors, sections,    │
-│       │                 abstracts, keywords           │
+│  Spot-check ── page alignment, boundaries,           │
+│       │        book reviews, missing articles         │
+│       │        Flag problems → fix in toc.json        │
 │                                                      │
 └──────┬───────────────────────────────────────────────┘
        │
-       ▼  corrected metadata
+       ▼  corrected toc.json
        │
 ┌──────┴───────────────────────────────────────────────┐
 │  Step 3: Enrich (AI-powered, optional)               │
 │                                                      │
 │  Extract subjects, disciplines, themes, references   │
-│  Optional: re-export spreadsheet to spot-check       │
 │                                                      │
 └──────┬───────────────────────────────────────────────┘
        │
        ▼  enriched metadata
        │
-  Step 4: Generate XML and import into OJS
+  Step 4: Generate XML, import into OJS,
+          review each article in Archive Checker
        │
-       ▼
-  Verify the import
+       ▼  Archive Checker: approve / report problem
+       │
+  Iterate: pipeline fix → per-issue reimport (~8 sec) →
+           Archive Checker re-review until all approved
 ```
 
 ### What happens in each automated step
@@ -86,11 +86,13 @@ Four-step workflow:
 
 ## Human review
 
-Two parts: check the split PDFs visually, then review metadata in a spreadsheet. The automated pipeline does a good job, but over 30 years of issues you'll find page offsets that are wrong, book reviews that weren't separated properly, titles with OCR artefacts, and abstracts that captured too much or too little. This step catches those problems before they're baked into OJS.
+Two phases: a quick pre-import check that the PDFs were split correctly, then the main post-import review in Archive Checker where you verify each article looks right in OJS and approve it (or flag it for a fix).
 
-### Part 1: Check the split PDFs
+The automated pipeline does a good job, but over 30 years of issues you'll find page offsets that are wrong, book reviews that weren't separated properly, titles with OCR artefacts, and abstracts that captured too much or too little. Catching those problems is what this step is for.
 
-Open the issue output directory and spot-check the split PDFs. The `pdf_file` column in the review spreadsheet (see Part 2) maps each row to its PDF filename.
+### Phase 1: Check the split PDFs (pre-import)
+
+Open the issue output directory and spot-check the split PDFs. Each issue's `toc.json` lists every article with its `pdf_file` field, so you can map each entry to its PDF.
 
 **What to check:**
 
@@ -103,27 +105,26 @@ Open the issue output directory and spot-check the split PDFs. The `pdf_file` co
 - **Page order.** Scan through the numbered PDF filenames (`01-editorial.pdf`, `02-...`, etc.) and confirm they follow the issue's actual article order.
 - **Missing articles.** Compare the PDF count against the CONTENTS page. If articles are missing, flag them for investigation.
 
-If you find problems with page alignment or missing articles, let the person running the pipeline know. See [Backfill Reference](backfill-reference.md) for how to re-run with corrections.
+If you find problems, let the person running the pipeline know — they'll correct `toc.json` and re-run the split. See [Backfill Reference](backfill-reference.md) for how to re-run with corrections.
 
-### Part 2: Review metadata in a spreadsheet
+### Phase 2: Review each article in Archive Checker (post-import)
 
-The pipeline exports metadata to a CSV file. Upload it to Google Sheets, review and correct it, then download and hand it back for import. Each article has a stable ID (like `v37i1a0` -- volume 37, issue 1, article 0), so you can sort, filter, and rearrange the spreadsheet without breaking anything.
+Once the pipeline has imported an issue into OJS, every article shows up in the [Archive Checker](archive-checker-plugin.md) plugin — a three-pane interface showing the article sidebar (left), the original PDF (centre), and the HTML "Full Text" version alongside end-matter (right). Walk through each article, compare the two, and click **Approve** or **Report Problem**.
 
-**What to check per column:**
+**What to check:**
 
-- **title** -- Fix OCR artefacts (broken characters, missing spaces), missing words, or truncated titles. Compare against the PDF if unsure. Book review titles should be `Book Review: <book title>`.
-- **authors** -- Check names are complete and correctly split. Multiple authors should be separated by `&` (e.g. `John Smith & Jane Doe`). Watch for: first/last name swaps, missing initials, OCR mangling of accented characters (van Deurzen, not van Deu rzen).
-- **section** -- Must be exactly one of: `Editorial`, `Articles`, `Book Review Editorial`, `Book Reviews`. Check that: editorials aren't classified as Articles, the Book Review Editorial (introductory overview) isn't mixed in with individual Book Reviews, obituaries and errata are under Editorial.
-- **abstract** -- Check it captured the right text. Common problems: abstract includes the keywords line, abstract is truncated mid-sentence, abstract captured the introduction instead, or abstract is entirely missing (add it manually from the PDF). Not all articles have abstracts -- editorials and book reviews typically don't.
-- **keywords** -- Semicolon-separated (e.g. `phenomenology; therapy; Heidegger`). Check they were extracted correctly. Common problems: keywords merged into one blob, keywords include the heading text ("Key Words:"), or keywords are missing entirely.
-- **pages** -- Page range (read-only). Useful for cross-referencing against the PDF.
-- **pdf_file** -- Filename of the split PDF (read-only). Open this file to check the content matches the row.
+- **title** -- no OCR artefacts (broken characters, missing spaces, truncation). Compare against the PDF. Book review titles should read `Book Review: <book title>`.
+- **authors** -- names complete and correctly split. Multiple authors joined with `&` (e.g. `John Smith & Jane Doe`). Watch for first/last swaps, missing initials, mangled accented characters (`van Deurzen`, not `van Deu rzen`).
+- **section** -- one of `Editorial`, `Articles`, `Book Review Editorial`, `Book Reviews`. Editorials should not be under Articles; the Book Review Editorial (introductory overview) should not be mixed in with individual Book Reviews; obituaries and errata go under Editorial.
+- **abstract** -- matches the article's actual abstract, not the keywords line or the introduction, not truncated mid-sentence, not missing where one exists. Editorials and book reviews typically don't have an abstract.
+- **keywords** -- correctly extracted, not merged into a single blob, not prefixed with heading text ("Key Words:"), not missing.
+- **HTML "Full Text" body** (right pane) -- renders the article's full prose without gaps, misordered paragraphs, or missing diagrams/tables. This is the AI-generated galley; most issues are post-processing fixes that need a pipeline rerun.
+- **Citations and end-matter** (right pane, below body) -- references vs. notes correctly classified, author bios present and complete.
+- **PDF vs HTML consistency** (centre vs right) -- nothing material is missing from the HTML that's in the PDF, and vice versa.
 
-**Don't edit these columns** (used for matching): `id`, `file`, `index`.
+Click **Approve** when everything looks right. Click **Report Problem** with a short note when it doesn't — the report goes into the review log and the pipeline operator picks it up.
 
-**Don't** delete rows (every article must have a row), edit the `id` column, or add rows. The import rejects all of these with a clear error.
-
-After reviewing, download as CSV (File > Download > Comma-separated values) and hand it back for import. A dry-run preview will show every change before anything is written. See [Backfill Reference](backfill-reference.md) for the export/import commands.
+**Iteration loop.** When a problem report needs a pipeline fix, the operator fixes the code, re-runs the relevant pipeline steps (~seconds per issue), reimports the affected issue into dev (~8 sec), and marks the article as `recheck`. You come back to it, re-review, and approve if fixed. Rinse and repeat until everything is green.
 
 ---
 
@@ -156,7 +157,7 @@ This sidecar data is a structured index of the entire 30-year archive. It could 
 
 ### Reviewing enrichment
 
-After enrichment, you can do a second spreadsheet review. The exported CSV will now include `subjects`, `disciplines`, and `keywords_enriched` columns for spot-checking. The same export/review/import process applies.
+Enriched fields (`subjects`, `disciplines`, enriched `keywords`, `coverage`, references) show up on the imported article pages in OJS, so they're visible in Archive Checker alongside everything else — spot-check them as part of Phase 2.
 
 Enrichment is optional -- the import works without it. It's resumable, so if interrupted it picks up where it left off.
 
