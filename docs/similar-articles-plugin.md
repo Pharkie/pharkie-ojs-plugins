@@ -103,21 +103,23 @@ Adapt to your environment — change the SSH host, path, or DB command as needed
 ### Run it
 
 ```bash
-# Full rebuild against dev
-python3 scripts/ojs/build_similar_articles.py
+# Full rebuild against dev — needs sudo because docker-in-devcontainer
+# requires it for the local `docker compose exec` path
+sudo python3 scripts/ojs/build_similar_articles.py
 
-# Full rebuild against live
+# Full rebuild against live — do NOT sudo: the live target uses SSH
+# (sea-live alias), and sudo strips the user's ~/.ssh/config
 python3 scripts/ojs/build_similar_articles.py --target=live
 
 # Recompute one article (e.g. just republished)
-python3 scripts/ojs/build_similar_articles.py --submission=12345
+python3 scripts/ojs/build_similar_articles.py --target=live --submission=12345
 
 # Recompute articles whose current cache points at 12345 (use after
 # --submission when republishing with significant content changes)
-python3 scripts/ojs/build_similar_articles.py --submission=12345 --affected-by=12345
+python3 scripts/ojs/build_similar_articles.py --target=live --submission=12345 --affected-by=12345
 
 # Compute but do not write — useful for validation
-python3 scripts/ojs/build_similar_articles.py --dry-run
+sudo python3 scripts/ojs/build_similar_articles.py --dry-run
 ```
 
 A full rebuild on ~1400 submissions completes in ~2 seconds. Scales linearly with corpus size; `numpy` similarity matrices of a few thousand documents stay in memory easily.
