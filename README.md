@@ -46,7 +46,7 @@ Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/
 - Render-only PHP plugin; all analysis happens offline via a Python builder (`scripts/ojs/build_smarter_similar_articles.py`)
 - Cache refresh via nightly scheduled GitHub Actions workflow (or whatever scheduler you prefer)
 - Book-review section isolation, duplicate-import filter, score band for silencing weak matches
-- Render-time cost: one indexed SELECT, sub-millisecond
+- Render-time cost: reduced from a heavy live SQL join taking many seconds to a single indexed SELECT, sub-millisecond
 
 ### [Archive Checker](docs/archive-checker-plugin.md)
 
