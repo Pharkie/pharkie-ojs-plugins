@@ -211,15 +211,30 @@ Multiple reviews per article stored (audit trail). Most recent = current status.
 
 ## CLI Tool
 
-`backfill/html_pipeline/qa/qa_review.py` is the command-line equivalent:
+`backfill/html_pipeline/qa/qa_review.py` is the command-line equivalent — same actions as the in-browser interface, plus batch list / clear / dev↔live sync:
 
 ```bash
+# Review decisions (same as buttons in the browser)
 python3 backfill/html_pipeline/qa/qa_review.py approve 9494
-python3 backfill/html_pipeline/qa/qa_review.py reject 9494 "references mixed with notes"
-python3 backfill/html_pipeline/qa/qa_review.py status 9494
-python3 backfill/html_pipeline/qa/qa_review.py list
-python3 backfill/html_pipeline/qa/qa_review.py --target live list
+python3 backfill/html_pipeline/qa/qa_review.py reject  9494 "references mixed with notes"
+python3 backfill/html_pipeline/qa/qa_review.py recheck 9494 "re-run pipeline, ready for re-review"
+python3 backfill/html_pipeline/qa/qa_review.py defer   9494 "needs design decision"
+
+# Inspect
+python3 backfill/html_pipeline/qa/qa_review.py status 9494    # full history for one article
+python3 backfill/html_pipeline/qa/qa_review.py list           # problems (rejected / deferred / recheck)
+python3 backfill/html_pipeline/qa/qa_review.py list --all     # every reviewed article
+
+# Administrative
+python3 backfill/html_pipeline/qa/qa_review.py clear 9494     # wipe all review history for this article
+
+# Dev ↔ live
+python3 backfill/html_pipeline/qa/qa_review.py --target live list    # act on the live DB (default is dev)
+python3 backfill/html_pipeline/qa/qa_review.py sync                  # bidirectional merge of review
+                                                                     # history between dev and live
 ```
+
+`sync` matches by `submission_id` (stable across environments once `pipe8_restore.py` has run), merges the full review history (not just latest), and deduplicates by `submission_id + username + created_at + decision`. Idempotent — safe to run repeatedly. Effective status per article is newest-wins via `MAX(review_id)`. Run it after any review activity on either side, or after a reimport that adds `recheck` marks that need pushing to live.
 
 ## QA iteration workflow
 
