@@ -152,7 +152,7 @@ if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; th
   " 2>/dev/null
   echo "  OK: All existing issues and articles removed."
   echo
-  # NB: similarArticles cache cleanup happens AFTER successful reimport
+  # NB: smarterSimilarArticles cache cleanup happens AFTER successful reimport
   # (further down) — not here. If the reimport crashes mid-way, readers
   # on live still get the previous day's sidebar (stale but not blank)
   # rather than blank until the next nightly rebuild.
@@ -350,15 +350,15 @@ if [ $SUCCEEDED -gt 0 ]; then
   fi
 fi
 
-# --- Clear similarArticles cache after successful --wipe-articles reimport ---
+# --- Clear smarterSimilarArticles cache after successful --wipe-articles reimport ---
 # Done AFTER the import succeeds, not before: if reimport crashes mid-way,
 # readers still get the previous (slightly stale) cache rather than blank
 # sidebars until the next nightly rebuild fixes it.
-# Table may not exist (installs without the similarArticles plugin) — ignore
+# Table may not exist (installs without the smarterSimilarArticles plugin) — ignore
 # "no such table" errors.
 if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
-  docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "TRUNCATE TABLE similar_articles" 2>/dev/null \
-    && echo "  OK: similarArticles cache cleared (awaiting next rebuild)" \
+  docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "TRUNCATE TABLE smarter_similar_articles" 2>/dev/null \
+    && echo "  OK: smarterSimilarArticles cache cleared (awaiting next rebuild)" \
     || true
 fi
 
@@ -368,8 +368,8 @@ if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ]; then
   echo "NOTE: This was a --wipe-articles import. Restore IDs to preserve URLs/DOIs:"
   echo "  python backfill/html_pipeline/pipe8_restore.py --target dev"
   echo "(runs locally, reads JATS publisher-id, sends SQL to target via SSH)"
-  echo "Also rebuild the similarArticles cache:"
-  echo "  python3 scripts/ojs/build_similar_articles.py --target=<host>"
+  echo "Also rebuild the smarterSimilarArticles cache:"
+  echo "  python3 scripts/ojs/build_smarter_similar_articles.py --target=<host>"
 fi
 
 [ $FAILED -eq 0 ] || exit 1

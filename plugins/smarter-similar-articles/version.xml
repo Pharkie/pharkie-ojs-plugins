@@ -2,10 +2,10 @@
 <!DOCTYPE version SYSTEM "../../../lib/pkp/dtd/pluginVersion.dtd">
 
 <version>
-    <application>similarArticles</application>
+    <application>smarterSimilarArticles</application>
     <type>plugins.generic</type>
     <release>1.0.0.0</release>
     <date>2026-04-16</date>
     <lazy-load>1</lazy-load>
-    <class>SimilarArticlesPlugin</class>
+    <class>SmarterSimilarArticlesPlugin</class>
 </version>

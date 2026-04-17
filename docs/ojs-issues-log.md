@@ -32,6 +32,9 @@ Issues marked **[reported]** were filed upstream. Others were found by other use
 | 22 | `runScheduledTasks.php` Fatal in CLI | Plausible, needs repro | Report issue |
 | 23 | Native XML import — no idempotent update | By-design | None |
 | 24 | Scheduler `flock()` crash on cache lock | OJS bug | Excluded from monitoring |
+| 25 | `rebuildSearchIndex.php` queues jobs only | By-design | Always drain queue after rebuild |
+| 26 | `recommendBySimilarity` pathologises on narrow corpora | Plugin design | Disabled, replaced with `smarterSimilarArticles` |
+| 27 | Plugin grid 500s when `versions` table has stale duplicate row | Self-inflicted | Don't hardcode versions for bundled plugins |
 
 ## Install bugs
 
@@ -410,8 +413,8 @@ Once the plugin's 20-keyword set includes "existential" or "analysis" (inevitabl
 - **Not reported upstream** — the plugin behaviour is correct by design; it only pathologises on thematically-narrow corpora.
 - **Impact:** catastrophic on journals like ours. Whole-site hang while apache workers wait on DB.
 - **Mitigation (active):** stock plugin disabled via `UPDATE plugin_settings SET setting_value = 0 WHERE plugin_name = 'recommendbysimilarityplugin'`. Site responsive again.
-- **Detection:** `monitor-deep.sh` now runs a slow-query probe (any `information_schema.processlist` entry >10s fails). `content-check.sh` now sweeps 10 random article pages with a 5s timeout. The slow-query probe would have caught this outage in under a minute. (An initial keyword-skew warning check was added and removed — the query itself took ~2:46 because of the same `GROUP BY k.keyword_text` over 4.2M rows that made the stock plugin slow; once `similarArticles` took over, it was redundant with the slow-query probe and no longer worth its cost.)
-- **Replacement plugin:** `plugins/similar-articles/` — OJS slug `similarArticles`, admin label "Faster Related Articles". Renders the same "Related articles" sidebar from a pre-computed cache table (`similar_articles`). Similarity is computed offline by `scripts/ojs/build_similar_articles.py` — hybrid `0.4 × TF-IDF + 0.6 × embedding` scoring (TF-IDF via sklearn with `max_df=0.5` auto-filtering corpus-wide tokens; embeddings via sentence-transformers `BAAI/bge-base-en-v1.5`). Top 5 per article, section-isolation for Book Reviews, duplicate-import filter. Render path is a primary-key cache lookup — sub-millisecond, no corpus-skew exposure regardless of the stock-plugin pathology. Monitor-deep.sh has cache coverage (fail <85%, warn <93%) and staleness (fail >48h, warn >28h) checks. Full plugin docs: [`docs/faster-related-articles-plugin.md`](faster-related-articles-plugin.md).
+- **Detection:** `monitor-deep.sh` now runs a slow-query probe (any `information_schema.processlist` entry >10s fails). `content-check.sh` now sweeps 10 random article pages with a 5s timeout. The slow-query probe would have caught this outage in under a minute. (An initial keyword-skew warning check was added and removed — the query itself took ~2:46 because of the same `GROUP BY k.keyword_text` over 4.2M rows that made the stock plugin slow; once `smarterSimilarArticles` took over, it was redundant with the slow-query probe and no longer worth its cost.)
+- **Replacement plugin:** `plugins/smarter-similar-articles/` — OJS slug `smarterSimilarArticles`, admin label "Smarter Similar Articles". Renders the same "Related articles" sidebar from a pre-computed cache table (`smarter_similar_articles`). Similarity is computed offline by `scripts/ojs/build_smarter_similar_articles.py` — hybrid `0.4 × TF-IDF + 0.6 × embedding` scoring (TF-IDF via sklearn with `max_df=0.5` auto-filtering corpus-wide tokens; embeddings via sentence-transformers `BAAI/bge-base-en-v1.5`). Top 5 per article, section-isolation for Book Reviews, duplicate-import filter. Render path is a primary-key cache lookup — sub-millisecond, no corpus-skew exposure regardless of the stock-plugin pathology. Monitor-deep.sh has cache coverage (fail <85%, warn <93%) and staleness (fail >48h, warn >28h) checks. Full plugin docs: [`docs/smarter-similar-articles-plugin.md`](smarter-similar-articles-plugin.md).
 
 ## Payments
 

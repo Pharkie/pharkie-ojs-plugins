@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Build the similar_articles cache via offline hybrid TF-IDF + embedding similarity.
+Build the smarter_similar_articles cache via offline hybrid TF-IDF + embedding similarity.
 
 Replaces the stock recommendBySimilarity plugin's corpus-wide live query with
-a pre-computed cache read by plugins/similar-articles at render time.
+a pre-computed cache read by plugins/smarter-similar-articles at render time.
 
 Scoring per pair = TFIDF_WEIGHT × cosine(tfidf) + EMBED_WEIGHT × cosine(embedding).
   - TF-IDF (sklearn): surfaces articles that share distinctive terminology.
@@ -20,24 +20,24 @@ For each published submission:
   - Blend into one matrix by weighted sum
   - Pick top 5 neighbours with the section rule applied (Book Reviews → Book
     Reviews only) and score band [MIN_SCORE, MAX_SCORE)
-  - Write into similar_articles in one bulk transaction
+  - Write into smarter_similar_articles in one bulk transaction
 
 Usage
 -----
-  python3 scripts/ojs/build_similar_articles.py                   # dev, full rebuild
-  python3 scripts/ojs/build_similar_articles.py --target=live     # live, full rebuild
-  python3 scripts/ojs/build_similar_articles.py --submission=9795 # just that article
-  python3 scripts/ojs/build_similar_articles.py --affected-by=9795
+  python3 scripts/ojs/build_smarter_similar_articles.py                   # dev, full rebuild
+  python3 scripts/ojs/build_smarter_similar_articles.py --target=live     # live, full rebuild
+  python3 scripts/ojs/build_smarter_similar_articles.py --submission=9795 # just that article
+  python3 scripts/ojs/build_smarter_similar_articles.py --affected-by=9795
       # recompute every article whose current cache points at 9795 (for use
       # after 9795 is republished with edits)
-  python3 scripts/ojs/build_similar_articles.py --dry-run         # no writes
+  python3 scripts/ojs/build_smarter_similar_articles.py --dry-run         # no writes
 
 Dependencies: scikit-learn, pymysql, beautifulsoup4, sentence-transformers.
 First run downloads the BAAI/bge-base-en-v1.5 model (~440 MB) into HuggingFace's
 cache dir (~/.cache/huggingface). Subsequent runs hit the cache.
 
-Background: docs/ojs-issues-log.md #26, docs/faster-related-articles-plugin.md,
-plugins/similar-articles/.
+Background: docs/ojs-issues-log.md #26, docs/smarter-similar-articles-plugin.md,
+plugins/smarter-similar-articles/.
 """
 
 import argparse
@@ -372,10 +372,10 @@ def write_bulk(target: str, neighbours_by_id: dict[int, list[tuple[int, float]]]
     # would leave the table empty with no rollback. DELETE respects the
     # transaction boundary; the whole write is all-or-nothing.
     if full:
-        delete_sql = 'DELETE FROM similar_articles;'
+        delete_sql = 'DELETE FROM smarter_similar_articles;'
     else:
         ids = ','.join(str(int(sid)) for sid in neighbours_by_id)
-        delete_sql = f'DELETE FROM similar_articles WHERE submission_id IN ({ids});'
+        delete_sql = f'DELETE FROM smarter_similar_articles WHERE submission_id IN ({ids});'
 
     # Defence-in-depth: coerce to int before string interpolation. Python's
     # json.loads already produces ints for JSON numbers, but if an upstream
@@ -391,7 +391,7 @@ def write_bulk(target: str, neighbours_by_id: dict[int, list[tuple[int, float]]]
     for i in range(0, len(rows), INSERT_CHUNK):
         chunk = rows[i:i + INSERT_CHUNK]
         insert_chunks.append(
-            'INSERT INTO similar_articles (submission_id, similar_id, rank, score) VALUES\n'
+            'INSERT INTO smarter_similar_articles (submission_id, similar_id, rank, score) VALUES\n'
             + ',\n'.join(chunk) + ';'
         )
 
@@ -434,7 +434,7 @@ def main() -> int:
         if args.affected_by:
             out = run_sql(
                 args.target,
-                f'SELECT DISTINCT submission_id FROM similar_articles WHERE similar_id = {args.affected_by};',
+                f'SELECT DISTINCT submission_id FROM smarter_similar_articles WHERE similar_id = {args.affected_by};',
             )
             for tok in out.split():
                 if tok.strip().isdigit():

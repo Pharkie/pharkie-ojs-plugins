@@ -1,5 +1,5 @@
-# Pinned deps for scripts/ojs/build_similar_articles.py.
-# Consumed by private/.github/workflows/rebuild-similar-articles.yml (nightly
+# Pinned deps for scripts/ojs/build_smarter_similar_articles.py.
+# Consumed by private/.github/workflows/rebuild-smarter-similar-articles.yml (nightly
 # rebuild on live). Dev environments install these via the devcontainer
 # Dockerfile; live never runs this script directly.
 #

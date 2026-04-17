@@ -1,5 +1,5 @@
 """
-Unit tests for scripts/ojs/build_similar_articles.py
+Unit tests for scripts/ojs/build_smarter_similar_articles.py
 
 Covers the pure functions: text-blob construction, section rule, and
 neighbour selection (self-exclude, score thresholds, review restriction,
@@ -7,7 +7,7 @@ max-results cap). Does NOT hit the OJS DB — fetch_submissions() and
 write_bulk() are integration-tested by running the script against dev,
 not here.
 
-Run:  python3 -m pytest scripts/ojs/test_build_similar_articles.py -v
+Run:  python3 -m pytest scripts/ojs/test_build_smarter_similar_articles.py -v
 """
 
 import importlib.util
@@ -22,11 +22,11 @@ import pytest
 # explicitly so pytest doesn't have to deal with sys.path.
 SCRIPT_DIR = Path(__file__).parent
 SPEC = importlib.util.spec_from_file_location(
-    'build_similar_articles',
-    SCRIPT_DIR / 'build_similar_articles.py',
+    'build_smarter_similar_articles',
+    SCRIPT_DIR / 'build_smarter_similar_articles.py',
 )
 bsa = importlib.util.module_from_spec(SPEC)
-sys.modules['build_similar_articles'] = bsa
+sys.modules['build_smarter_similar_articles'] = bsa
 SPEC.loader.exec_module(bsa)
 
 

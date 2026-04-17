@@ -159,7 +159,7 @@ services:
       - ./plugins/stripe-payment:/var/www/html/plugins/paymethod/stripe
       - ./plugins/archive-checker:/var/www/html/plugins/generic/archiveChecker
       - ./plugins/archive-checker/api/v1/archive-checker:/var/www/html/api/v1/archive-checker:ro
-      - ./plugins/similar-articles:/var/www/html/plugins/generic/similarArticles
+      - ./plugins/smarter-similar-articles:/var/www/html/plugins/generic/smarterSimilarArticles
       - ./docker/ojs/entrypoint.sh:/etc/ojs/entrypoint.sh:ro
       - ./docker/ojs/config.inc.php.tmpl:/etc/ojs/config.inc.php.tmpl:ro
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro
