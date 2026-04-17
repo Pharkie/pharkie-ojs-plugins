@@ -4,15 +4,15 @@ Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/
 
 ## Why use this instead of the stock plugin
 
-The stock `recommendBySimilarity` runs a corpus-wide multi-JOIN SQL query on every article view. That's slow even when it works; on journals whose vocabulary is dominated by a few corpus-wide keywords (an existentialism journal where "existential" appears in every article, an oncology journal where "cancer" appears in every article, etc.) the query collapses to 60-2000 seconds per request and takes the site down. See [`docs/ojs-issues-log.md`](ojs-issues-log.md) #26 for the incident that prompted this plugin.
+The stock plugin finds related articles by looking for keyword overlap between the one being viewed and the rest of the journal, searching anew each time a reader opens a page. For most journals that works — but on a thematically narrow corpus, where a handful of terms appear in almost every article (an existentialism journal where "existential" is everywhere, an oncology journal where "cancer" is), the search slows down sharply and can take the site down under load. See [`docs/ojs-issues-log.md`](ojs-issues-log.md) #26 for the incident that prompted this plugin.
 
 For any OJS journal, this plugin is better on three axes:
 
-1. **Faster rendering.** One indexed SELECT per article view instead of a multi-JOIN with `LIKE '%...%'` subqueries. Render cost doesn't grow with corpus size.
-2. **Smarter matching.** Hybrid scoring picks up both precise lexical matches (shared proper nouns, rare keywords) via sklearn TF-IDF and semantic neighbours (papers about the same concept in different vocabulary) via sentence-transformers embeddings. The stock plugin has neither IDF weighting nor semantic understanding.
-3. **Tunable.** Blend weights, score thresholds, section isolation rules, and the embedding model are all constants in a single Python file. You can trade precision for breadth, retune for your corpus, or swap in a different model without touching live.
+1. **Faster.** Similarity is computed once offline on a schedule (usually nightly) and cached. The article page just looks up the pre-computed neighbours, so load time stays constant regardless of how big the journal grows.
+2. **Smarter.** The stock plugin only sees exact word overlap. This one combines two signals: shared terminology (catches proper nouns, rare keywords, specific phrases) and how closely two articles match in meaning (catches papers about the same concept even when the vocabulary differs). The sidebar finds conceptually close papers, not just ones that happen to share common words.
+3. **Tunable.** Score thresholds, blend weights, section rules, and the underlying AI model are all constants in a single Python file. You can trade precision for breadth, retune for your corpus, or swap the model without touching live.
 
-Trade-offs: the offline build introduces Python + sentence-transformers (~1 GB of torch) on whatever host runs the rebuild — but that host is never the OJS server. Cache refresh is scheduled (typically nightly), so a newly-published article's sidebar has up-to-cache-age staleness. For most journals that's fine; if not, trigger a targeted recompute on publish.
+Trade-offs: the offline build needs Python + sentence-transformers on whatever host runs the rebuild (not the OJS server itself). The cache is scheduled rather than live, so a newly-published article's sidebar has up-to-cache-age staleness. For most journals that's fine; if not, trigger a targeted recompute on publish.
 
 It's an **optional, separate** plugin. The stock `recommendBySimilarity` stays installed; disable it in the OJS admin when you enable this one.
 
