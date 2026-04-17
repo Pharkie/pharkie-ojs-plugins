@@ -1,0 +1,13 @@
+# Pinned deps for scripts/ojs/build_similar_articles.py.
+# Consumed by private/.github/workflows/rebuild-similar-articles.yml (nightly
+# rebuild on live). Dev environments install these via the devcontainer
+# Dockerfile; live never runs this script directly.
+#
+# Upper bounds at known-good majors so surprise upgrades don't invalidate
+# the pip cache and push nightly run time past the 15-min workflow timeout.
+# Raise deliberately + re-run the eval if you bump a major version.
+
+scikit-learn>=1.3,<2
+pymysql>=1,<2
+beautifulsoup4>=4,<5
+sentence-transformers>=3,<4
