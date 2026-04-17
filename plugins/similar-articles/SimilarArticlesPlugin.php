@@ -75,12 +75,22 @@ class SimilarArticlesPlugin extends GenericPlugin
         }
         $submissionId = $article->getId();
 
-        $similarIds = DB::table('similar_articles')
-            ->where('submission_id', $submissionId)
-            ->orderBy('rank')
-            ->limit(self::MAX_RESULTS)
-            ->pluck('similar_id')
-            ->toArray();
+        // Defensive: if the table is missing (migration didn't run or got
+        // dropped), or the DB is throwing for any reason, degrade silently
+        // to no-sidebar rather than letting the exception abort the whole
+        // article-page render.
+        try {
+            $similarIds = DB::table('similar_articles')
+                ->where('submission_id', $submissionId)
+                ->orderBy('rank')
+                ->limit(self::MAX_RESULTS)
+                ->pluck('similar_id')
+                ->toArray();
+        } catch (\Throwable $e) {
+            error_log('similarArticles: cache query failed for submission '
+                . $submissionId . ': ' . $e->getMessage());
+            return Hook::CONTINUE;
+        }
 
         if (empty($similarIds)) {
             return Hook::CONTINUE;
@@ -110,6 +120,19 @@ class SimilarArticlesPlugin extends GenericPlugin
             if (isset($byId[$id])) {
                 $ordered[] = $byId[$id];
             }
+        }
+
+        // Log when the collector dropped any cached IDs — means the cache
+        // was built against a submission set wider than the current context
+        // can see (e.g. an article was moved to a different journal, unpub-
+        // lished, or our context filter was tightened). Not a user-facing
+        // error, but operators need visibility to know the cache is drifting.
+        $dropped = count($similarIds) - count($ordered);
+        if ($dropped > 0) {
+            $missing = array_values(array_diff((array) $similarIds, array_keys($byId)));
+            error_log('similarArticles: dropped ' . $dropped . ' of '
+                . count($similarIds) . ' cached neighbours for submission '
+                . $submissionId . ' (missing: ' . implode(',', $missing) . ')');
         }
 
         if (empty($ordered)) {

@@ -148,16 +148,14 @@ if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; th
     DELETE FROM issues;
     DELETE FROM section_settings;
     DELETE FROM sections WHERE journal_id = 1;
-    -- Clear similarArticles cache: its submission_id / similar_id columns would
-    -- point at deleted submissions until the nightly rebuild repopulates it
-    -- (up to 24h of blank sidebars). The table may not exist yet on installs
-    -- without the similarArticles plugin — DROP via DELETE is conditional.
     SET FOREIGN_KEY_CHECKS=1;
   " 2>/dev/null
-  # Table may not exist — run separately so errors don't abort the cleanup.
-  docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "TRUNCATE TABLE similar_articles" 2>/dev/null || true
   echo "  OK: All existing issues and articles removed."
   echo
+  # NB: similarArticles cache cleanup happens AFTER successful reimport
+  # (further down) — not here. If the reimport crashes mid-way, readers
+  # on live still get the previous day's sidebar (stale but not blank)
+  # rather than blank until the next nightly rebuild.
 fi
 
 FAILED=0
@@ -352,12 +350,26 @@ if [ $SUCCEEDED -gt 0 ]; then
   fi
 fi
 
+# --- Clear similarArticles cache after successful --wipe-articles reimport ---
+# Done AFTER the import succeeds, not before: if reimport crashes mid-way,
+# readers still get the previous (slightly stale) cache rather than blank
+# sidebars until the next nightly rebuild fixes it.
+# Table may not exist (installs without the similarArticles plugin) — ignore
+# "no such table" errors.
+if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then
+  docker exec "$DB_CONTAINER" mysql -u ojs -p"$OJS_DB_PASSWORD" ojs -e "TRUNCATE TABLE similar_articles" 2>/dev/null \
+    && echo "  OK: similarArticles cache cleared (awaiting next rebuild)" \
+    || true
+fi
+
 # --- Reminder: restore IDs after wipe-articles import ---
 if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ]; then
   echo ""
   echo "NOTE: This was a --wipe-articles import. Restore IDs to preserve URLs/DOIs:"
   echo "  python backfill/html_pipeline/pipe8_restore.py --target dev"
   echo "(runs locally, reads JATS publisher-id, sends SQL to target via SSH)"
+  echo "Also rebuild the similarArticles cache:"
+  echo "  python3 scripts/ojs/build_similar_articles.py --target=<host>"
 fi
 
 [ $FAILED -eq 0 ] || exit 1

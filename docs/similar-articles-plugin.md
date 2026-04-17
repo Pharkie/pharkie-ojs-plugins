@@ -176,6 +176,42 @@ TF-IDF parameters (inside `compute_similarity()`):
 | `max_df` | `0.5` | **Critical**: drop terms appearing in >50% of corpus. This is what auto-filters corpus-wide tokens and keeps narrow-journal performance sane. |
 | `ngram_range` | `(1, 2)` | Unigrams + bigrams — keeps phrases like "hermeneutic phenomenology" together. |
 
+## Emergency rollback
+
+If the sidebar is rendering bad results or the plugin is otherwise misbehaving on live, disable it in a single DB update — the render path short-circuits on the `enabled=0` flag and the article page renders with no sidebar.
+
+```bash
+ssh <your-host> 'cd /opt/<your-repo> && docker compose exec -T ojs-db \
+  bash -c "mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -e \
+  \"UPDATE plugin_settings SET setting_value = 0 \
+    WHERE plugin_name = '\''similararticlesplugin'\'' \
+    AND setting_name = '\''enabled'\'';\""'
+```
+
+Article pages resume rendering within seconds — no container restart needed.
+
+**Do not re-enable stock `recommendBySimilarity` on a thematically narrow corpus** (see `docs/ojs-issues-log.md` #26) — the stock plugin will reintroduce the 60-2000s live-query regression. If you need a sidebar back urgently, leave both off; the article footer simply has no "Related articles" section.
+
+To fully remove the plugin: disable it, then drop the table:
+
+```sql
+DROP TABLE similar_articles;
+```
+
+The plugin code can stay in place — disabled + table-gone = effectively uninstalled. A later re-install via `installPluginVersion.php` will re-create the table.
+
+## Post-restore from backup
+
+If the OJS database is restored from a backup, the `similar_articles` cache rows are restored along with it — but they reflect the state at backup time. If articles were published/edited since the backup, the cache will contain references to submission IDs that no longer exist (or miss new ones).
+
+Recovery: run a full rebuild immediately after restore.
+
+```bash
+python3 scripts/ojs/build_similar_articles.py --target=<host>
+```
+
+The render path handles missing submission IDs gracefully (silently drops them), but leaving the cache stale means readers see a narrower or possibly-empty sidebar until the next scheduled rebuild.
+
 ## Monitoring
 
 `scripts/monitoring/monitor-deep.sh` runs these checks (added for this plugin):

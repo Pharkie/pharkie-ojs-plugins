@@ -22,12 +22,16 @@
 					<a href="{url router=PKP\core\PKPApplication::ROUTE_PAGE journal=$currentContext->getPath() page="article" op="view" path=$submission->getBestId() urlLocaleForPage=""}">
 						{$publication->getLocalizedFullTitle(null, 'html')|strip_unsafe_html}
 					</a>
+					{* Escape each author name before concatenation rather than at
+					   the end — getFullName() can contain characters that break
+					   the separator (e.g. a comma inside the name), and
+					   defence-in-depth against any upstream XSS in name data. *}
 					{assign var=authors value=""}
 					{foreach from=$publication->getData('authors') item=author}
 						{if $authors != ""}{assign var=authors value=$authors|cat:", "}{/if}
-						{assign var=authors value=$authors|cat:$author->getFullName()}
+						{assign var=authors value=$authors|cat:($author->getFullName()|escape)}
 					{/foreach}
-					{if $authors != ""}<span style="color:#666"> &mdash; {$authors|escape}</span>{/if}
+					{if $authors != ""}<span style="color:#666"> &mdash; {$authors}</span>{/if}
 				</li>
 			{/foreach}
 		</ul>
