@@ -48,7 +48,7 @@ OJS and WordPress both run PHP — they benefit from CPU and RAM more than disk.
 | Docker log rotation | `daemon.json` (10m x 3 files) | Requires Docker restart (brief container restart). |
 | Deploy user | `deploy` user with docker group + limited sudoers | All scripts use `deploy@` (not root). Root key auth kept as emergency backdoor. |
 | Container security | `cap_drop: ALL` + per-service `cap_add` | `no-new-privileges` on all. Web (wp, ojs): CHOWN, DAC_OVERRIDE, FOWNER, NET_BIND_SERVICE, SETGID, SETUID. DB: same minus NET_BIND_SERVICE. Caddy: NET_BIND_SERVICE only. |
-| Backup scope | OJS DB + WP DB + OJS files volume | All encrypted (AES-256-CBC), 7 daily + 4 weekly retention. |
+| Backup scope | OJS DB + WP DB + OJS files volume | All encrypted (AES-256-CBC). DB dumps: 7 daily + 4 weekly. Files tarball: 3 daily + 4 weekly. |
 
 To verify after provisioning:
 ```bash
