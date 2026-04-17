@@ -621,14 +621,13 @@ echo "[OJS] Sidebar blocks configured."
 # --- Static Pages plugin (For Advertisers page, matching live site) ---
 echo "[OJS] Configuring Static Pages plugin..."
 
-# Enable the plugin
+# Enable the plugin (staticPages is bundled with OJS — the image registers it
+# in the versions table automatically, so don't INSERT here: hardcoding 1.0.0.0
+# when the bundled version is 1.2.0.0 creates a second row and breaks the
+# plugin admin grid with a unique-constraint 500 on re-register.)
 $MARIADB -e "INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
   VALUES ('staticpagesplugin', $JOURNAL_ID_META, 'enabled', '1', 'bool')
   ON DUPLICATE KEY UPDATE setting_value='1';"
-
-# Register in versions table (OJS requires this for generic plugins)
-$MARIADB -e "INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
-  VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'staticPages', 'StaticPagesPlugin', 1, 0);"
 
 # Create the advertisers static page (loaded from template file if present)
 ADVERTISERS_TEMPLATE="$BRANDING_SRC/advertisers.html"

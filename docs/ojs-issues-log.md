@@ -447,3 +447,34 @@ Upstream reports confirm the problem affects non-US accounts generally (Japan, G
 - **Standalone reproduction:** `node scripts/dev/test-paypal.js` — creates a PayPal order via REST API, opens sandbox checkout in Playwright, logs in as buyer, captures the rejection. No OJS involved. Screenshot saved to `scripts/paypal-sandbox-result.png`.
 - **Impact:** Cannot complete the PayPal purchase flow from a developer environment. The OJS integration is correct (creates order, redirects to PayPal, return URL wired up), but the sandbox buyer approval step is blocked.
 - **Resolution:** PayPal abandoned in favour of Stripe (2026-03-22). See `private/stripe-live-checklist.md`.
+
+## Administration
+
+### 27. Plugin admin grid 500s when `versions` table holds two `current=1` rows for the same plugin [self-inflicted]
+
+Opening Administration > Settings > Website > Plugins (or any page that fetches `grid/settings/plugins/settings-plugin-grid/fetch-grid`) returns HTTP 500. Log:
+
+```
+PHP Fatal error: Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation:
+  1062 Duplicate entry 'plugins.generic-staticPages-1-2-0-0' for key 'versions_unique'
+  … INSERT INTO versions … VALUES (1, 2, 0, 0, …, 1, 'plugins.generic', 'staticPages', …)
+```
+
+**Root cause:** The `versions` table had two rows for `staticPages` (`1.0.0.0` and `1.2.0.0`), both with `current=1`. OJS's bundled-plugins install registers `staticPages 1.2.0.0` (the version that actually ships with OJS 3.5); our `scripts/ojs/setup-ojs.sh` then fired a hardcoded `INSERT IGNORE ... VALUES (1, 0, 0, 0, ...)`, adding a second row. `VersionDAO::getCurrentVersion` returned `1.0.0.0` (the later-installed row). Next plugin-grid render: `PluginGridHandler::loadCategoryData` compared disk (`1.2.0.0` from `version.xml`) against DB (`1.0.0.0`) and called `insertVersion`, which:
+
+1. `UPDATE versions SET current=0 WHERE product='staticPages'` — flips both rows to `current=0`.
+2. `INSERT INTO versions ... VALUES (1, 2, 0, 0, ...)` — fails on `versions_unique` because `1.2.0.0` already exists.
+
+The UPDATE commits, the INSERT rolls back, and the table is now stuck at *no* `current=1` row for `staticPages`, so every subsequent grid load retries the same failing flow.
+
+**Why only `staticPages`:** of the four plugins `setup-ojs.sh` explicitly registered (`staticPages`, `inlineHtmlGalley`, `archiveChecker`, `stripe`), only `staticPages` is bundled with OJS. The other three are custom plugins in this repo, so the OJS image doesn't pre-register them — the hardcoded `INSERT` creates the only row and there's no collision.
+
+- **Impact:** Plugin admin page unusable until fixed. No other pages affected.
+- **Recovery SQL** (run once per affected DB):
+  ```sql
+  UPDATE versions SET current=1
+    WHERE product='staticPages' AND major=1 AND minor=2 AND revision=0 AND build=0;
+  DELETE FROM versions
+    WHERE product='staticPages' AND major=1 AND minor=0 AND revision=0 AND build=0;
+  ```
+- **Prevention:** removed the `staticPages` `INSERT` from `scripts/ojs/setup-ojs.sh` — the plugin is bundled with OJS and registers itself. Only the `plugin_settings` enable row is still written. For the three custom plugins we still `INSERT IGNORE` a version row: harmless today (versions match disk), but latent drift risk if anyone bumps `<release>` in a plugin's `version.xml` without updating the script.
