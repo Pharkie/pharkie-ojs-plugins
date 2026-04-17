@@ -8,7 +8,7 @@ Each plugin works independently — install only what you need.
 
 ## Plugins
 
-### [Stripe Payment](plugins/stripe-payment/)
+### [Stripe Payment](docs/stripe-payment-plugin.md)
 
 Adds [Stripe](https://stripe.com) as a payment method for non-member article and issue purchases. Uses Stripe Checkout (hosted payment page) — no card data touches your server. Includes webhook handler for reliable payment confirmation.
 
@@ -17,7 +17,7 @@ Adds [Stripe](https://stripe.com) as a payment method for non-member article and
 - Test mode support (Stripe test keys)
 - Amount + currency verification against OJS payment records
 
-### [Inline HTML Galley](plugins/ojs-inline-html-galley/)
+### [Inline HTML Galley](docs/ojs-inline-html-galley-plugin.md)
 
 Renders HTML galley content directly on article landing pages. Readers with access see the full text immediately — no extra click to a separate viewer. Readers without access see a call-to-action with membership/purchase links.
 
@@ -26,7 +26,7 @@ Renders HTML galley content directly on article landing pages. Readers with acce
 - Non-subscriber CTA with membership and purchase links
 - Hides galley links on issue TOC pages (readers click article titles instead)
 
-### [WP-OJS Subscription API](plugins/wpojs-subscription-api/)
+### [WP-OJS Subscription API](docs/wpojs-subscription-api-plugin.md)
 
 REST API for OJS user and subscription management — something OJS doesn't provide natively. Designed for push-sync integrations where an external system manages memberships.
 
