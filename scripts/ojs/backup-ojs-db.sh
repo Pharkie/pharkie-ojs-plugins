@@ -37,6 +37,31 @@ done
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# Check if a compose service is running. Retries 3× with backoff (5s, 10s, 20s)
+# to ride out transient docker daemon hiccups — a missed check here would skip
+# the entire backup for 24h.
+check_container_running() {
+  local service="$1"
+  local attempt=1 max=3 delay=5 out rc
+  while [ $attempt -le $max ]; do
+    out=$(docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
+      ps --services --status running 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ] && echo "$out" | grep -qx "$service"; then
+      return 0
+    fi
+    if [ $attempt -lt $max ]; then
+      log "WARN: $service not running (attempt $attempt/$max, rc=$rc), retrying in ${delay}s..."
+      sleep "$delay"
+      delay=$(( delay * 2 ))
+    else
+      log "Final docker compose output (rc=$rc): ${out:-<empty>}"
+    fi
+    attempt=$(( attempt + 1 ))
+  done
+  return 1
+}
+
 # --- Load credentials ---
 ENV_FILE="$PROJECT_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
@@ -75,8 +100,7 @@ if [ -n "$DRY_RUN" ]; then
 fi
 
 # --- Pre-flight: check Docker is running ---
-if ! docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
-  ps --status running 2>/dev/null | grep -q ojs-db; then
+if ! check_container_running ojs-db; then
   log "ERROR: ojs-db container is not running"
   exit 1
 fi
@@ -122,8 +146,7 @@ if [ -n "$WP_DB_PASSWORD" ]; then
   WP_DUMP_FILE="$DAILY_DIR/wp-$TIMESTAMP.sql.gz.enc"
   WP_TMP_FILE="${WP_DUMP_FILE}.tmp"
 
-  if docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
-    ps --status running 2>/dev/null | grep -q wp-db; then
+  if check_container_running wp-db; then
     log "Starting WordPress database backup..."
     WP_START=$(date +%s)
     docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
@@ -157,8 +180,7 @@ fi
 # --- OJS files volume backup (PDFs, HTML galleys) ---
 OJS_FILES_DUMP="$DAILY_DIR/ojs-files-$TIMESTAMP.tar.gz.enc"
 OJS_FILES_TMP="${OJS_FILES_DUMP}.tmp"
-if docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
-  ps --status running 2>/dev/null | grep -q 'ojs-1\|ojs_1'; then
+if check_container_running ojs; then
   log "Starting OJS files volume backup..."
   FILES_START=$(date +%s)
   docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
