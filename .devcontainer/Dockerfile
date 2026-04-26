@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu
 
 # Node.js (for Claude Code + Playwright)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+RUN curl -fsSL https://deb.nodesource.com/setup_25.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,10 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI + Python pip + DNS tools + socat (for port forwarding to compose services)
-# poppler-utils: pdftotext/pdfinfo for journal backfill pipeline
-# ocrmypdf + tesseract: OCR scanned archive PDFs for backfill
-RUN apt-get update && apt-get install -y --no-install-recommends gh git-lfs python3-pip pipx dnsutils socat poppler-utils sox \
-      ocrmypdf tesseract-ocr \
+RUN apt-get update && apt-get install -y --no-install-recommends gh git-lfs python3-pip pipx dnsutils socat \
+    && apt-get remove -y python3-pluggy \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --break-system-packages pyyaml grip pymupdf gspread anthropic beautifulsoup4 "deprecation>=2.1.0" \
        scikit-learn pymysql pytest sentence-transformers
@@ -51,15 +49,19 @@ RUN curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud
 # the group in the image means new shells pick it up immediately.
 RUN groupadd -f docker && usermod -aG docker vscode
 
+# Pre-create ~/.cache as vscode so Docker's auto-mkdir for the ms-playwright
+# volume mount doesn't leave it owned by root. Without this, VS Code server
+# races postCreateCommand and fails mkdir ~/.cache/Microsoft on first start.
+RUN mkdir -p /home/vscode/.cache && chown vscode:vscode /home/vscode/.cache
+
 # Claude Code CLI — install as vscode user to avoid npm permission errors
 USER vscode
 RUN mkdir -p /home/vscode/.npm-global \
     && npm config set prefix /home/vscode/.npm-global \
-    && npm install -g npm@latest \
     && npm install -g @anthropic-ai/claude-code
 ENV PATH="/home/vscode/.npm-global/bin:${PATH}"
 USER root
 
 # Playwright system deps (for running e2e tests)
-RUN npx playwright install-deps chromium 2>/dev/null || true \
-    && npx playwright install-deps webkit 2>/dev/null || true
+RUN npx playwright install-deps chromium \
+    && npx playwright install-deps webkit
