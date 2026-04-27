@@ -142,9 +142,9 @@ python3 backfill/html_pipeline/pipe4b_match_dois.py \
 
 A DOI to a different edition of the same work is acceptable. The reference text already specifies which edition was cited; the DOI helps the reader find the work. We only reject DOIs that point to a genuinely different work.
 
-## Hybrid approach with Crossref SBMV (planned)
+## Hybrid approach with Crossref SBMV
 
-After our matching, we deposit references to Crossref and poll for their independent Search-Based Matching with Validation ([SBMV](https://www.crossref.org/blog/reference-matching-for-real-this-time/)) results:
+After our matching, we deposit references to Crossref and the `pkp/crossrefReferenceLinking` plugin polls for their independent Search-Based Matching with Validation ([SBMV](https://www.crossref.org/blog/reference-matching-for-real-this-time/)) results on a scheduled task:
 
 ```mermaid
 flowchart TD
@@ -163,7 +163,7 @@ flowchart TD
     style agree fill:#d4edda,stroke:#198754,stroke-width:2px
 ```
 
-### Comparison results
+### Initial comparison
 
 Clean test on vol 20.1 (202 refs, deposited without DOI hints):
 
@@ -176,11 +176,44 @@ Clean test on vol 20.1 (202 refs, deposited without DOI hints):
 
 Our multi-query approach finds significantly more DOIs than SBMV's immediate matching. SBMV resolves some refs instantly, others go to `stored_query` and may resolve hours or days later — but our matching gives results immediately and catches noisy references that SBMV struggles with.
 
-**Important:** When depositing with pre-matched DOIs, SBMV appears to just confirm them rather than independently matching. A clean comparison (no DOI hints) is needed to see SBMV's actual independent performance.
+The Crossref deposit schema (5.4.0) supports both `<doi>` and `<unstructured_citation>` in the same `<citation>` element. We deposit our pre-matched DOI so Cited-by links work immediately. SBMV requires Crossref member credentials and references must be deposited first.
 
-The Crossref deposit schema (5.4.0) supports both `<doi>` and `<unstructured_citation>` in the same `<citation>` element. We deposit our pre-matched DOI so Cited-by links work immediately, while SBMV may find additional matches over time.
+### Production polling — what's been observed
 
-SBMV requires Crossref member credentials and references must be deposited first.
+After full-corpus deposit, the `CrossrefReferenceLinkingInfoSender` scheduled task runs hourly and calls `getResolvedRefs` for every published submission flagged with `crossref::checkCitationsDOIs`. The plugin clears that flag the moment Crossref returns a non-empty `matched-references` array.
+
+Several weeks after deposit (snapshot 2026-04-27, ~3 weeks since deposit):
+
+| | Count |
+|---|---|
+| Submissions flagged for polling | 856 |
+| Submissions where polling has returned matches | **0** |
+| `crossref::doi` rows from our pipe4b → pipe9b | ~6,800 |
+| `crossref::doi` rows added by polling | **0 net** |
+
+Direct probes of `getResolvedRefs` for individual article DOIs return `{"matched-references": []}`. Of our ~10,500 `no_match` references — works pipe4b couldn't find — Crossref's polling hasn't filled in any of them either.
+
+**Conclusion:** for this corpus, pipe4b is the ceiling. The unmatched references genuinely don't have DOIs in Crossref's database (consistent with the publisher pattern in [What doesn't match](#what-doesnt-match): trade publishers, pre-1990 books, small French/German presses). Polling stays enabled — costs nothing and would catch new deposits if Crossref ever indexes them — but isn't a meaningful additional source today.
+
+### Checking polling status
+
+```bash
+# Three counters that show whether polling is doing anything
+mysql ojs -e "
+SELECT 'crossref::doi rows total', COUNT(*) FROM citation_settings WHERE setting_name='crossref::doi'
+UNION ALL
+SELECT 'flagged for polling',     COUNT(*) FROM submission_settings WHERE setting_name='crossref::checkCitationsDOIs' AND setting_value='1'
+UNION ALL
+SELECT 'flag flipped',            COUNT(*) FROM submission_settings WHERE setting_name='crossref::checkCitationsDOIs' AND setting_value!='1';"
+
+# Confirm scheduled task is firing — look for hourly entries
+ls -lt /var/www/files/scheduledTaskLogs/ | grep CrossrefReferenceLinkingInfoSender | head -5
+
+# Probe one DOI directly
+curl -s -X POST "https://doi.crossref.org/getResolvedRefs?doi=<doi>&usr=<user>&pwd=<pass>"
+```
+
+If `flag flipped` is 0 across many submissions for many weeks, polling isn't surfacing anything new. If the scheduled-task log has minute-scale runtimes, the task is doing real work (iterating flagged submissions); short runs mean nothing is queued.
 
 ## Displaying DOIs in OJS
 
