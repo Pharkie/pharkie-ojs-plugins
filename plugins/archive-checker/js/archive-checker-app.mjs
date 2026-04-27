@@ -189,7 +189,9 @@ Alpine.data('acApp', () => ({
             // the wrong article before we handle ?id=.
             this._buildWorkingSet();
 
-            if (params.get('mode') === 'random') {
+            const hasFilterParams = params.has('id') || params.has('issue') || params.has('status') || params.has('section') || params.has('reviewer') || params.has('q');
+
+            if (params.get('mode') === 'random' || !hasFilterParams) {
                 await this.goToRandom();
             } else {
                 let start = 0;
@@ -201,13 +203,6 @@ Alpine.data('acApp', () => ({
                     }
                     // If not in working set (e.g. just approved), fall through
                     // to start=0 so left pane and content stay in sync.
-                } else {
-                    const lastSeen = parseInt(localStorage.getItem('ac-last-seen'), 10);
-                    if (lastSeen) {
-                        const artIdx = this.articles.findIndex(a => a.submission_id === lastSeen);
-                        const wsIdx = this.workingSet.indexOf(artIdx);
-                        if (wsIdx >= 0) start = wsIdx;
-                    }
                 }
                 this.setIndex = start;
                 await this.loadArticle(this.workingSet[start]);
@@ -307,7 +302,6 @@ Alpine.data('acApp', () => ({
             this._prefetchController = null;
         }
 
-        localStorage.setItem('ac-last-seen', a.submission_id);
         const si = this.workingSet.indexOf(index);
         if (si >= 0) this.setIndex = si;
         this.updateUrl();
