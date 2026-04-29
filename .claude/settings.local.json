@@ -45,7 +45,12 @@
       "mcp__ide__getDiagnostics",
       "mcp__ide__executeCode",
       "Read(//home/vscode/.claude/plans/**)",
-      "Bash(mkdir -p /home/vscode/.claude/plans/)"
+      "Bash(mkdir -p /home/vscode/.claude/plans/)",
+      "Bash(cp /Users/adamknowles/dev/SEA/pharkie-ojs-plugins/scripts/lib/common.sh /Users/adamknowles/dev/SEA/membership-platform/scripts/lib/common.sh)",
+      "Bash(cp /Users/adamknowles/dev/SEA/pharkie-ojs-plugins/scripts/lib/check-yaml-syntax.sh /Users/adamknowles/dev/SEA/membership-platform/scripts/lib/check-yaml-syntax.sh)",
+      "Bash(cp /Users/adamknowles/dev/SEA/pharkie-ojs-plugins/scripts/lib/check-env-vars.sh /Users/adamknowles/dev/SEA/membership-platform/scripts/lib/check-env-vars.sh)",
+      "Bash(cp /Users/adamknowles/dev/SEA/pharkie-ojs-plugins/scripts/lib/check-doc-links.sh /Users/adamknowles/dev/SEA/membership-platform/scripts/lib/check-doc-links.sh)",
+      "Bash(cp /Users/adamknowles/dev/SEA/pharkie-ojs-plugins/scripts/lib/resolve-ssh.sh /Users/adamknowles/dev/SEA/membership-platform/scripts/lib/resolve-ssh.sh)"
     ]
   }
 }

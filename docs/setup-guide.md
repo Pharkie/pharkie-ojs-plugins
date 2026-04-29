@@ -56,6 +56,7 @@ Private docs and env files live in a **separate private GitHub repo**, cloned in
 - **Encryption key**: age keypair. Public key in `private/.sops.yaml`. Private key at `~/.config/sops/age/keys.txt` (bind-mounted from host into devcontainer).
 - **SOPS auto-discovers the age key** from `~/.config/sops/age/keys.txt` — no env vars needed.
 - **If the age key is missing**, sops commands will fail with `could not decrypt`. The key must exist on the host machine at `~/.config/sops/age/` before the devcontainer is built.
+- **macOS path quirk**: when running sops directly on macOS (i.e. *outside* the devcontainer), sops looks in `~/Library/Application Support/sops/age/keys.txt` first and only falls back to `~/.config/sops/age/keys.txt` if `SOPS_AGE_KEY_FILE` is unset. The portable fix is to add `export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"` to your shell rc — that pins sops to the same path on both platforms. Verify with `age-keygen -y "$SOPS_AGE_KEY_FILE"` — the output must equal the recipient in `private/.sops.yaml`.
 
 ### Common operations
 

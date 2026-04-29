@@ -3,26 +3,30 @@
 # Idempotent — checks for existing monitors by name before creating.
 #
 # Usage:
-#   scripts/monitoring/setup-betterstack.sh --host=sea-live                 # Create monitors
-#   scripts/monitoring/setup-betterstack.sh --host=sea-live --dry-run       # Show what would be created
-#   scripts/monitoring/setup-betterstack.sh --host=sea-live --delete-all    # Remove all SEA monitors
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live                       # Create monitors
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --dry-run             # Show what would be created
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --delete-all          # Remove all SEA monitors
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --update-heartbeats   # PATCH existing heartbeats to match script-defined config
 #
 # Public status page: https://status.existentialanalysis.org.uk/
 # Admin dashboard:    https://uptime.betterstack.com
 #
 # Requires:
-#   BETTERSTACK_API_TOKEN env var (from Better Stack → Settings → API tokens)
+#   BETTERSTACK_API_TOKEN env var (from Better Stack → Settings → API tokens).
+#   Auto-loaded from private/.env.live via sops if not already exported.
 set -o pipefail
 
 # --- Parse arguments ---
 SSH_HOST=""
 DRY_RUN=false
 DELETE_ALL=false
+UPDATE_HEARTBEATS=false
 for arg in "$@"; do
   case "$arg" in
     --host=*) SSH_HOST="${arg#--host=}" ;;
     --dry-run) DRY_RUN=true ;;
     --delete-all) DELETE_ALL=true ;;
+    --update-heartbeats) UPDATE_HEARTBEATS=true ;;
   esac
 done
 
@@ -32,9 +36,20 @@ if [ -z "$SSH_HOST" ]; then
   exit 1
 fi
 
+# Auto-load BETTERSTACK_API_TOKEN from private/.env.live if unset (devcontainer/local convenience).
+# Skipped when explicitly set (incl. set-but-empty, e.g. tests) so behavior stays predictable in CI.
+if [ -z "${BETTERSTACK_API_TOKEN+x}" ]; then
+  ENV_LIVE="$(cd "$(dirname "$0")/../.." && pwd)/private/.env.live"
+  if [ -f "$ENV_LIVE" ] && command -v sops >/dev/null 2>&1; then
+    BETTERSTACK_API_TOKEN=$(sops -d "$ENV_LIVE" 2>/dev/null | grep '^BETTERSTACK_API_TOKEN=' | head -1 | cut -d= -f2-)
+    export BETTERSTACK_API_TOKEN
+  fi
+fi
+
 if [ -z "$BETTERSTACK_API_TOKEN" ]; then
-  echo "ERROR: Set BETTERSTACK_API_TOKEN env var"
-  echo "  Get it from: Better Stack → Settings → API tokens"
+  echo "ERROR: BETTERSTACK_API_TOKEN not set"
+  echo "  Devcontainer/local: should auto-load from private/.env.live (needs sops + matching age key)"
+  echo "  Manual:             export BETTERSTACK_API_TOKEN=...   (Better Stack → Settings → API tokens)"
   exit 1
 fi
 
@@ -76,15 +91,20 @@ bs_api() {
   local method="$1"
   local path="$2"
   local data="$3"
+  local response status body
   if [ -n "$data" ]; then
-    curl -sf -X "$method" "$API_BASE$path" \
+    response=$(curl -s -w '\n%{http_code}' -X "$method" "$API_BASE$path" \
       -H "Authorization: Bearer $BETTERSTACK_API_TOKEN" \
       -H "Content-Type: application/json" \
-      -d "$data" 2>/dev/null
+      -d "$data")
   else
-    curl -sf -X "$method" "$API_BASE$path" \
-      -H "Authorization: Bearer $BETTERSTACK_API_TOKEN" 2>/dev/null
+    response=$(curl -s -w '\n%{http_code}' -X "$method" "$API_BASE$path" \
+      -H "Authorization: Bearer $BETTERSTACK_API_TOKEN")
   fi
+  status="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+  printf '%s' "$body"
+  [ "${status:-0}" -ge 200 ] && [ "${status:-0}" -lt 300 ]
 }
 
 # --- Fetch existing monitors (paginated) ---
@@ -133,6 +153,10 @@ for h in data.get('data', []):
 
 heartbeat_exists() {
   echo "$EXISTING_HB" | grep -q "^$1|"
+}
+
+heartbeat_id() {
+  echo "$EXISTING_HB" | grep "^$1|" | cut -d'|' -f2
 }
 
 # --- Delete all SEA monitors and heartbeats ---
@@ -338,7 +362,7 @@ create_monitor "SEA: HTTPS Port" "$(cat <<EOF
   "pronounceable_name": "SEA: HTTPS Port",
   "check_frequency": $FREQ,
   "confirmation_period": $CONFIRM,
-  "request_timeout": 15000,
+  "request_timeout": 5000,
   "email": true,
   "regions": ["eu", "us"]
 }
@@ -355,11 +379,32 @@ EOF
 HB_CREATED=0
 HB_SKIPPED=0
 
+HB_UPDATED=0
+
 create_heartbeat() {
   local name="$1"
   local json="$2"
 
   if heartbeat_exists "$name"; then
+    if [ "$UPDATE_HEARTBEATS" = true ]; then
+      local id
+      id=$(heartbeat_id "$name")
+      if [ "$DRY_RUN" = true ]; then
+        echo "  [DRY-RUN] Would PATCH heartbeat: $name (ID: $id)"
+        echo "            $json" | python3 -m json.tool 2>/dev/null || echo "            $json"
+        HB_UPDATED=$((HB_UPDATED + 1))
+        return
+      fi
+      RESPONSE=$(bs_api PATCH "/heartbeats/$id" "$json")
+      if [ $? -eq 0 ]; then
+        echo "  [UPDATED] $name"
+        HB_UPDATED=$((HB_UPDATED + 1))
+      else
+        echo "  [ERROR] Failed to update heartbeat: $name"
+        echo "          $RESPONSE"
+      fi
+      return
+    fi
     echo "  [SKIP] $name (already exists)"
     HB_SKIPPED=$((HB_SKIPPED + 1))
     return
@@ -388,12 +433,15 @@ echo ""
 echo "Creating heartbeats..."
 echo ""
 
-# 1. Hourly monitoring workflow (expect every 75 min, grace 45 min)
+# 1. Hourly monitoring workflow (expect every 75 min, grace 75 min)
+# Total tolerance 150 min — covers GitHub Actions cron drift (xx:00–xx:55) and
+# a single auto-rerun cycle on transient runner-allocation failures (see
+# private/.github/workflows/monitor-rerun.yml).
 create_heartbeat "SEA: Hourly monitoring" "$(cat <<EOF
 {
   "name": "SEA: Hourly monitoring",
   "period": 4500,
-  "grace": 2700,
+  "grace": 4500,
   "call": false,
   "sms": true,
   "email": true,
@@ -459,7 +507,7 @@ EOF
 )"
 
 echo ""
-echo "=== Done: $CREATED monitors created, $SKIPPED skipped; $HB_CREATED heartbeats created, $HB_SKIPPED skipped ==="
+echo "=== Done: $CREATED monitors created, $SKIPPED skipped; $HB_CREATED heartbeats created, $HB_UPDATED updated, $HB_SKIPPED skipped ==="
 if [ "$DRY_RUN" = true ]; then
   echo "(Dry run — no monitors were actually created)"
 fi
