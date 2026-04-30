@@ -1,11 +1,12 @@
 #!/bin/bash
 # Non-mutating monitoring checks for live environments.
-# Runs FROM the devcontainer, GitHub Actions, or any machine with SSH access.
+# Runs FROM the devcontainer, GitHub Actions, server cron, or any machine with SSH access.
 # Does NOT create test users or modify any state on the server.
 #
 # Usage:
-#   scripts/monitoring/monitor-safe.sh                      # Test sea-staging
-#   scripts/monitoring/monitor-safe.sh --host=sea-live      # Test live
+#   scripts/monitoring/monitor-safe.sh                      # Test sea-staging (via SSH)
+#   scripts/monitoring/monitor-safe.sh --host=sea-live      # Test live (via SSH)
+#   scripts/monitoring/monitor-safe.sh --host=local         # Run locally (no SSH); use from cron on the host
 set -o pipefail
 
 # --- Parse arguments ---
@@ -19,8 +20,16 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
-resolve_ssh "$SSH_HOST"
+if [ "$SSH_HOST" = "local" ]; then
+  # Local mode: skip SSH, run commands directly via bash -c.
+  # ssh_retry "$@" runs $@ literally, so SSH_CMD="bash -c" makes
+  # `ssh_retry $SSH_CMD "cmd"` resolve to `bash -c "cmd"`.
+  SSH_CMD="bash -c"
+  SERVER_IP="local"
+else
+  source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
+  resolve_ssh "$SSH_HOST"
+fi
 
 source "$SCRIPTS_ROOT/lib/monitor-helpers.sh"
 
