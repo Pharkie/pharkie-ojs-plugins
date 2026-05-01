@@ -433,15 +433,15 @@ echo ""
 echo "Creating heartbeats..."
 echo ""
 
-# 1. Hourly monitoring workflow (expect every 75 min, grace 75 min)
-# Total tolerance 150 min — covers GitHub Actions cron drift (xx:00–xx:55) and
-# a single auto-rerun cycle on transient runner-allocation failures (see
-# private/.github/workflows/monitor-rerun.yml).
+# 1. Hourly monitoring (expect every 75 min, grace 30 min)
+# Pinged by server cron on sea-live (see private/docs/monitoring.md).
+# 75min period accommodates the 15-past-the-hour cron + a check that takes ~30s;
+# 30min grace catches a single skipped run without alerting on a real outage too late.
 create_heartbeat "SEA: Hourly monitoring" "$(cat <<EOF
 {
   "name": "SEA: Hourly monitoring",
   "period": 4500,
-  "grace": 4500,
+  "grace": 1800,
   "call": false,
   "sms": true,
   "email": true,
