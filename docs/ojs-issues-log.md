@@ -416,6 +416,23 @@ Once the plugin's 20-keyword set includes "existential" or "analysis" (inevitabl
 - **Detection:** `monitor-deep.sh` now runs a slow-query probe (any `information_schema.processlist` entry >10s fails). `content-check.sh` now sweeps 10 random article pages with a 5s timeout. The slow-query probe would have caught this outage in under a minute. (An initial keyword-skew warning check was added and removed — the query itself took ~2:46 because of the same `GROUP BY k.keyword_text` over 4.2M rows that made the stock plugin slow; once `smarterSimilarArticles` took over, it was redundant with the slow-query probe and no longer worth its cost.)
 - **Replacement plugin:** `plugins/smarter-similar-articles/` — OJS slug `smarterSimilarArticles`, admin label "Smarter Similar Articles". Renders the same "Related articles" sidebar from a pre-computed cache table (`smarter_similar_articles`). Similarity is computed offline by `scripts/ojs/build_smarter_similar_articles.py` — hybrid `0.4 × TF-IDF + 0.6 × embedding` scoring (TF-IDF via sklearn with `max_df=0.5` auto-filtering corpus-wide tokens; embeddings via sentence-transformers `BAAI/bge-base-en-v1.5`). Top 5 per article, section-isolation for Book Reviews, duplicate-import filter. Render path is a primary-key cache lookup — sub-millisecond, no corpus-skew exposure regardless of the stock-plugin pathology. Monitor-deep.sh has cache coverage (fail <85%, warn <93%) and staleness (fail >48h, warn >28h) checks. Full plugin docs: [`docs/smarter-similar-articles-plugin.md`](smarter-similar-articles-plugin.md).
 
+### 27. `Core::cleanFileVar()` TypeError on non-UTF-8 request paths [ojs-bug]
+
+`PKP\core\Core::cleanFileVar()` is declared with a `: string` return type but returns `null` when given input that fails UTF-8 sanitization (e.g. a bare `\xC0` byte). Any HTTP request whose path contains invalid UTF-8 therefore crashes with:
+
+```
+PHP Fatal error: Uncaught TypeError: PKP\core\Core::cleanFileVar(): Return value must be of type string, null returned
+  in /var/www/html/lib/pkp/classes/core/Core.php:51
+```
+
+Call chain: `PKPApplication::execute()` → `Dispatcher::dispatch()` → `PluginRegistry::loadCategory('generic')` → `PKPApplication::getEnabledProducts()` → `PKPRouter::getContext()` → `PKPRouter::getRequestedContextPath()` → `Core::getContextPath()` → `Core::cleanFileVar('\xC0')` (returns null) → TypeError.
+
+Easy to provoke from the outside — internet scanners routinely probe random byte sequences as URL paths. Each probe yields one PHP Fatal. The request would have returned a 404 either way; the fatal is just the PKP framework failing to handle it cleanly.
+
+- **Not reported upstream** — should be either `: ?string` or coerce `null → ''`.
+- **Impact:** Log noise. One PHP Fatal per malformed URL. No functional impact (the request fails anyway).
+- **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `Core::cleanFileVar` to avoid false alerts. Same approach as #22 and #24.
+
 ## Payments
 
 ### 17. Manual Payment plugin has no admin approval UI [known-gap]

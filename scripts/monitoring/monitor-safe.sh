@@ -476,22 +476,24 @@ for CONTAINER in wp ojs wp-db ojs-db; do
 done
 
 # 8c. Docker log errors (last hour)
-# Excludes known OJS 3.5 scheduler bugs (see docs/ojs-issues-log.md #22, #24):
+# Excludes known OJS 3.5 framework bugs (see docs/ojs-issues-log.md #22, #24, #27):
 #   - NotFoundHttpException: runScheduledTasks.php has no HTTP request context
 #   - flock()/LockableFile: transient cache lock race condition
+#   - Core::cleanFileVar: TypeError on non-UTF-8 request paths (scanner traffic)
 # Threshold: 1-2 errors = WARN (transient), 3+ = FAIL (persistent problem)
 PHP_ERROR_THRESHOLD=3
+PHP_ERROR_EXCLUDE='NotFoundHttpException.*PKPRouter|flock\(\).*LockableFile|Core::cleanFileVar'
 TOTAL_ERRORS=0
 ERROR_SAMPLE=""
 for CONTAINER in wp ojs; do
   CONTAINER_ID=$(remote "docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null" 2>/dev/null) || CONTAINER_ID=""
   [ -z "$CONTAINER_ID" ] && continue
-  ERROR_COUNT=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -v 'NotFoundHttpException.*PKPRouter' | grep -cv 'flock().*LockableFile'" 2>/dev/null) || ERROR_COUNT="0"
+  ERROR_COUNT=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -vcE '$PHP_ERROR_EXCLUDE'" 2>/dev/null) || ERROR_COUNT="0"
   ERROR_COUNT=$(echo "$ERROR_COUNT" | tr -d '[:space:]')
   TOTAL_ERRORS=$((TOTAL_ERRORS + ${ERROR_COUNT:-0}))
   # Capture the last error line for diagnostics
   if [ "${ERROR_COUNT:-0}" -gt 0 ] 2>/dev/null; then
-    SAMPLE=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -v 'NotFoundHttpException.*PKPRouter' | grep -v 'flock().*LockableFile' | tail -1 | cut -c1-120" 2>/dev/null) || SAMPLE=""
+    SAMPLE=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -vE '$PHP_ERROR_EXCLUDE' | tail -1 | cut -c1-120" 2>/dev/null) || SAMPLE=""
     [ -n "$SAMPLE" ] && ERROR_SAMPLE="[$CONTAINER] $SAMPLE"
   fi
 done
