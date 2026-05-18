@@ -183,9 +183,26 @@ OJS_FILES_TMP="${OJS_FILES_DUMP}.tmp"
 if check_container_running ojs; then
   log "Starting OJS files volume backup..."
   FILES_START=$(date +%s)
+  # Exclude ephemeral dirs that race against the backup:
+  #   scheduledTaskLogs/ — written by OJS scheduler every minute (tar exits 1 on "file changed as we read it")
+  #   temp/              — in-flight uploads
+  # Both are recreated automatically by OJS; excluding them is safe.
+  # Tolerate tar exit code 1 (changed-files warning) but still fail on 2+ (fatal). Final dump-size
+  # check + decrypt round-trip below catches a truly broken archive.
+  set +e
   docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.staging.yml" \
-    exec -T ojs tar czf - -C /var/www/files . \
+    exec -T ojs tar czf - --warning=no-file-changed \
+      --exclude='./scheduledTaskLogs' --exclude='./temp' \
+      -C /var/www/files . \
     | openssl enc -aes-256-cbc -pbkdf2 -pass file:"$KEY_FILE" -out "$OJS_FILES_TMP"
+  TAR_RC=${PIPESTATUS[0]}
+  OPENSSL_RC=${PIPESTATUS[1]}
+  set -e
+  if [ "$OPENSSL_RC" -ne 0 ] || [ "$TAR_RC" -gt 1 ]; then
+    log "ERROR: files backup pipeline failed (tar=$TAR_RC openssl=$OPENSSL_RC). Removing."
+    rm -f "$OJS_FILES_TMP"
+    exit 1
+  fi
 
   FILES_SIZE=$(stat -c%s "$OJS_FILES_TMP" 2>/dev/null || stat -f%z "$OJS_FILES_TMP" 2>/dev/null)
   FILES_ELAPSED=$(( $(date +%s) - FILES_START ))
