@@ -239,7 +239,7 @@ create_monitor "SEA: WP Homepage" "$(cat <<EOF
 EOF
 )"
 
-# 2. WP REST API
+# 2. WP REST API — push-only (email muted; WP Homepage is the alarming primary)
 create_monitor "SEA: WP REST API" "$(cat <<EOF
 {
   "monitor_type": "status",
@@ -248,13 +248,14 @@ create_monitor "SEA: WP REST API" "$(cat <<EOF
   "check_frequency": $FREQ,
   "confirmation_period": $CONFIRM,
   "request_timeout": 15,
-  "email": true,
+  "email": false,
+  "push": true,
   "regions": ["eu", "us"]
 }
 EOF
 )"
 
-# 3. WP Admin
+# 3. WP Admin — push-only (email muted; WP Homepage is the alarming primary)
 create_monitor "SEA: WP Admin" "$(cat <<EOF
 {
   "monitor_type": "status",
@@ -263,7 +264,8 @@ create_monitor "SEA: WP Admin" "$(cat <<EOF
   "check_frequency": $FREQ,
   "confirmation_period": $CONFIRM,
   "request_timeout": 15,
-  "email": true,
+  "email": false,
+  "push": true,
   "follow_redirects": true,
   "regions": ["eu", "us"]
 }
