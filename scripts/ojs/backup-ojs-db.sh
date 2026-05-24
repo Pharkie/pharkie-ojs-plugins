@@ -88,6 +88,23 @@ fi
 # --- Create directories ---
 mkdir -p "$DAILY_DIR" "$WEEKLY_DIR"
 
+# --- Clean orphaned .tmp files from previous failed/killed runs ---
+# The atomic-write pattern (write .tmp → verify → mv) removes its own .tmp on
+# normal error paths, but a SIGKILL (OOM) or the disk filling mid-write skips
+# the cleanup and strands the .tmp. rotate() below matches only FINAL names, so
+# these orphans accumulate forever — four 3.9G ojs-files .tmp orphans filled the
+# disk to 100% on 2026-05-24 and took the DB containers unhealthy. Any .tmp older
+# than an hour is necessarily orphaned: backups run daily via cron and finish in
+# minutes, so nothing legitimate is mid-write at the start of a run.
+if [ -z "$DRY_RUN" ]; then
+  find "$DAILY_DIR" "$WEEKLY_DIR" -name '*.tmp' -type f -mmin +60 2>/dev/null \
+    | while read -r orphan; do
+        [ -z "$orphan" ] && continue
+        log "Removing orphaned temp file: $(basename "$orphan") ($(du -h "$orphan" 2>/dev/null | cut -f1))"
+        rm -f "$orphan"
+      done
+fi
+
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 DAY_OF_WEEK=$(date +%u)  # 1=Monday, 7=Sunday
 DUMP_FILE="$DAILY_DIR/ojs-$TIMESTAMP.sql.gz.enc"

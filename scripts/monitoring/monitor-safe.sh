@@ -381,54 +381,62 @@ echo ""
 echo "--- Server Resources ---"
 
 # 7a. Load average
-LOAD=$(require_ssh "Load average" "cat /proc/loadavg") || LOAD=""
-if [ -n "$LOAD" ]; then
-  LOAD_5MIN=$(echo "$LOAD" | awk '{print $2}')
-  NPROC=$(ssh_retry $SSH_CMD "nproc") || NPROC="3"
-  LOAD_THRESHOLD=$(( NPROC * 2 ))
-  info "Load average: $LOAD (threshold: $LOAD_THRESHOLD)"
-  LOAD_5MIN_INT=$(echo "$LOAD_5MIN" | awk '{printf "%d", $1 * 100}')
-  LOAD_THRESH_INT=$((LOAD_THRESHOLD * 100))
-  if [ "$LOAD_5MIN_INT" -gt "$LOAD_THRESH_INT" ] 2>/dev/null; then
-    fail "Load average too high (5min: $LOAD_5MIN > $LOAD_THRESHOLD)"
-  else
-    pass "Load average OK (5min: $LOAD_5MIN)"
-  fi
+# NB: ssh_retry, NOT require_ssh — require_ssh strips whitespace (tr -d
+# '[:space:]'), collapsing /proc/loadavg into one token and breaking the awk
+# field parse. Same root cause as the disk check below; fail loud if unreadable.
+LOAD=$(ssh_retry $SSH_CMD "cat /proc/loadavg") || LOAD=""
+LOAD_5MIN=$(echo "$LOAD" | awk '{print $2}')
+NPROC=$(ssh_retry $SSH_CMD "nproc") || NPROC="3"
+LOAD_THRESHOLD=$(( NPROC * 2 ))
+info "Load average: $LOAD (threshold: $LOAD_THRESHOLD)"
+LOAD_5MIN_INT=$(echo "$LOAD_5MIN" | awk '{printf "%d", $1 * 100}')
+LOAD_THRESH_INT=$((LOAD_THRESHOLD * 100))
+if ! [[ "$LOAD_5MIN" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+  fail "Load average unreadable (/proc/loadavg: ${LOAD:-<empty>})"
+elif [ "$LOAD_5MIN_INT" -gt "$LOAD_THRESH_INT" ]; then
+  fail "Load average too high (5min: $LOAD_5MIN > $LOAD_THRESHOLD)"
+else
+  pass "Load average OK (5min: $LOAD_5MIN)"
 fi
 
 # 7b. Memory
-MEM_INFO=$(require_ssh "Memory info" "free -m | grep '^Mem:'") || MEM_INFO=""
-if [ -n "$MEM_INFO" ]; then
-  MEM_AVAILABLE=$(echo "$MEM_INFO" | awk '{print $NF}')
-  MEM_TOTAL=$(echo "$MEM_INFO" | awk '{print $2}')
-  if [ "${MEM_AVAILABLE:-0}" -lt 256 ] 2>/dev/null; then
-    fail "Low memory (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
-  else
-    pass "Memory OK (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
-  fi
+MEM_INFO=$(ssh_retry $SSH_CMD "free -m | grep '^Mem:'") || MEM_INFO=""
+MEM_AVAILABLE=$(echo "$MEM_INFO" | awk '{print $NF}')
+MEM_TOTAL=$(echo "$MEM_INFO" | awk '{print $2}')
+if ! [[ "$MEM_AVAILABLE" =~ ^[0-9]+$ ]]; then
+  fail "Memory info unreadable (free -m: ${MEM_INFO:-<empty>})"
+elif [ "$MEM_AVAILABLE" -lt 256 ]; then
+  fail "Low memory (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
+else
+  pass "Memory OK (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
 fi
 
 # 7c. Swap
-SWAP_INFO=$(require_ssh "Swap info" "free -m | grep '^Swap:'") || SWAP_INFO=""
-if [ -n "$SWAP_INFO" ]; then
-  SWAP_USED=$(echo "$SWAP_INFO" | awk '{print $3}')
-  if [ "${SWAP_USED:-0}" -gt 100 ] 2>/dev/null; then
-    fail "High swap usage (${SWAP_USED}MB — indicates memory pressure)"
-  else
-    pass "Swap OK (${SWAP_USED}MB used)"
-  fi
+SWAP_INFO=$(ssh_retry $SSH_CMD "free -m | grep '^Swap:'") || SWAP_INFO=""
+SWAP_USED=$(echo "$SWAP_INFO" | awk '{print $3}')
+if ! [[ "$SWAP_USED" =~ ^[0-9]+$ ]]; then
+  fail "Swap info unreadable (free -m: ${SWAP_INFO:-<empty>})"
+elif [ "$SWAP_USED" -gt 100 ]; then
+  fail "High swap usage (${SWAP_USED}MB — indicates memory pressure)"
+else
+  pass "Swap OK (${SWAP_USED}MB used)"
 fi
 
 # 7d. Disk space
-DISK_INFO=$(require_ssh "Disk info" "df -h / | tail -1") || DISK_INFO=""
-if [ -n "$DISK_INFO" ]; then
-  DISK_PERCENT=$(echo "$DISK_INFO" | awk '{print $5}' | tr -d '%')
-  DISK_AVAIL=$(echo "$DISK_INFO" | awk '{print $4}')
-  if [ "${DISK_PERCENT:-0}" -gt 85 ] 2>/dev/null; then
-    fail "Disk usage high (${DISK_PERCENT}%, ${DISK_AVAIL} available)"
-  else
-    pass "Disk OK (${DISK_PERCENT}% used, ${DISK_AVAIL} available)"
-  fi
+# NB: call ssh_retry directly, NOT require_ssh — require_ssh runs the result
+# through `tr -d '[:space:]'`, which collapses df's whitespace-delimited columns
+# into a single token. That made the awk field parse below return empty, so
+# DISK_PERCENT defaulted to 0 and this check passed at ANY usage. The disk
+# silently filled to 100% on 2026-05-24 with no alert because of this.
+DISK_INFO=$(ssh_retry $SSH_CMD "df -h / | tail -1") || DISK_INFO=""
+DISK_PERCENT=$(echo "$DISK_INFO" | awk '{print $5}' | tr -d '%')
+DISK_AVAIL=$(echo "$DISK_INFO" | awk '{print $4}')
+if ! [[ "$DISK_PERCENT" =~ ^[0-9]+$ ]]; then
+  fail "Disk usage unreadable (df returned: ${DISK_INFO:-<empty>})"
+elif [ "$DISK_PERCENT" -gt 85 ]; then
+  fail "Disk usage high (${DISK_PERCENT}%, ${DISK_AVAIL} available)"
+else
+  pass "Disk OK (${DISK_PERCENT}% used, ${DISK_AVAIL} available)"
 fi
 
 # 7e. Server uptime
