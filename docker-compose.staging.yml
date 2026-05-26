@@ -1,19 +1,23 @@
-# Staging/prod overrides — IP-only mode (no SSL).
-# For SSL with domains, add docker-compose.caddy.yml on top:
-#   docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.caddy.yml up -d
-#
-# Usage (IP-only): docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# Server overlay. In production this is combined with docker-compose.caddy.yml,
+# which fronts all public traffic on 80/443 and reaches wp/ojs over the internal
+# network — so the wp/ojs host ports below are bound to 127.0.0.1 (localhost /
+# SSH-tunnel access only), never the public internet. Docker's iptables bypass
+# UFW, so a 0.0.0.0 binding here would silently publish the app despite the
+# firewall. Caddy is the only public entry point.
+#   Production:  docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.caddy.yml up -d
+# For IP-only mode (no Caddy/SSL, direct public access), publish these ports on
+# 0.0.0.0 explicitly instead.
 
 services:
   wp:
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     environment:
       WP_ENV: staging
 
   ojs:
     ports:
-      - "8081:80"
+      - "127.0.0.1:8081:80"
     environment:
       OJS_SMTP_ENABLED: ${OJS_SMTP_ENABLED:-On}
 
