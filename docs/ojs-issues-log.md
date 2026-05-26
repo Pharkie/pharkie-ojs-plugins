@@ -433,6 +433,21 @@ Easy to provoke from the outside — internet scanners routinely probe random by
 - **Impact:** Log noise. One PHP Fatal per malformed URL. No functional impact (the request fails anyway).
 - **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `Core::cleanFileVar` to avoid false alerts. Same approach as #22 and #24.
 
+### 28. `IssueHandler::initialize()` PHP Fatal on malformed issue/galley URLs [ojs-bug]
+
+`APP\pages\issue\IssueHandler::initialize()` reads a galley id from `$args[1]` and, when present, calls `$issue->getId()` on the issue fetched via `getAuthorizedContextObject(ASSOC_TYPE_ISSUE)`. When the issue context fails to resolve, that object is `null` and the unguarded `$issue->getId()` crashes:
+
+```
+PHP Fatal error: Uncaught Error: Call to a member function getId() on null
+  in /var/www/html/pages/issue/IssueHandler.php:79
+```
+
+Easy to provoke from the outside: a bot mangles an absolute URL into the issue path, e.g. `GET /<journal>/issue/archive/https:/<absolute-url>`. The router parses the stray `https:` segment as `$args[1]` (a truthy "galley id"), so the galley branch runs, but no valid issue is in context → `null->getId()` → Fatal. The authorization stack should have rejected the request with a 404 before `initialize()` dereferences a null issue. Observed as 3 hits in ~7 seconds from one scraper rotating spoofed User-Agents.
+
+- **Not reported upstream** — `initialize()` should guard `$issue` (or the issue authorization policy should reject the request), returning 404 rather than a Fatal.
+- **Impact:** Log noise. One PHP Fatal (HTTP 500) per malformed request. No functional impact — the request would 404 anyway, and no real content is affected.
+- **Workaround:** Excluded from the hourly monitoring check (`monitor-safe.sh`) — the grep now filters out `getId() on null in …IssueHandler`. Same approach as #22, #24, and #27.
+
 ## Payments
 
 ### 17. Manual Payment plugin has no admin approval UI [known-gap]
@@ -467,7 +482,7 @@ Upstream reports confirm the problem affects non-US accounts generally (Japan, G
 
 ## Administration
 
-### 27. Plugin admin grid 500s when `versions` table holds two `current=1` rows for the same plugin [self-inflicted]
+### 29. Plugin admin grid 500s when `versions` table holds two `current=1` rows for the same plugin [self-inflicted]
 
 Opening Administration > Settings > Website > Plugins (or any page that fetches `grid/settings/plugins/settings-plugin-grid/fetch-grid`) returns HTTP 500. Log:
 
