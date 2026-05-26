@@ -39,6 +39,7 @@ MaxAuthTries 3
 MaxSessions 3
 ClientAliveInterval 300
 ClientAliveCountMax 2
+X11Forwarding no
 SSHEOF
 # Restart SSH to pick up changes (safe — we're already connected via key auth)
 # Ubuntu 24.04 uses ssh.service, older versions use sshd.service
