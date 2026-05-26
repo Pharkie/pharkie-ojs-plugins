@@ -488,9 +488,10 @@ done
 #   - NotFoundHttpException: runScheduledTasks.php has no HTTP request context
 #   - flock()/LockableFile: transient cache lock race condition
 #   - Core::cleanFileVar: TypeError on non-UTF-8 request paths (scanner traffic)
+#   - IssueHandler getId() on null: malformed issue/galley URLs from bots (#28)
 # Threshold: 1-2 errors = WARN (transient), 3+ = FAIL (persistent problem)
 PHP_ERROR_THRESHOLD=3
-PHP_ERROR_EXCLUDE='NotFoundHttpException.*PKPRouter|flock\(\).*LockableFile|Core::cleanFileVar'
+PHP_ERROR_EXCLUDE='NotFoundHttpException.*PKPRouter|flock\(\).*LockableFile|Core::cleanFileVar|getId\(\) on null in.*IssueHandler'
 TOTAL_ERRORS=0
 ERROR_SAMPLE=""
 for CONTAINER in wp ojs; do
