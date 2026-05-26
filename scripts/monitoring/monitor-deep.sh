@@ -388,6 +388,36 @@ else
   pass "Scheduler active (last job processed ${LAST_JOB_AGE}h ago)"
 fi
 
+# ============================================================
+# D7. PENDING REBOOT / KERNEL PATCH STATE
+# ============================================================
+echo ""
+echo "--- System Patch State ---"
+
+# /var/run is tmpfs (wiped on boot), so reboot-required's mtime = how long a
+# reboot has been pending since last boot. Nothing surfaced this before — a
+# kernel ran 11 versions behind for 8 weeks unnoticed (2026-05-26). Lives in the
+# DAILY check (not hourly) so a persistent "reboot pending" doesn't pin the
+# hourly heartbeat red and mask acute issues. WARN immediately; escalate to FAIL
+# (alert) after REBOOT_FAIL_DAYS, so a routine patch you'll reboot tomorrow isn't
+# a page but a forgotten one is. Tune REBOOT_FAIL_DAYS to taste.
+REBOOT_FAIL_DAYS=7
+REBOOT_AGE_DAYS=$(remote "if [ -f /var/run/reboot-required ]; then echo \$(( ( \$(date +%s) - \$(stat -c %Y /var/run/reboot-required) ) / 86400 )); else echo NONE; fi") || REBOOT_AGE_DAYS=""
+REBOOT_AGE_DAYS=$(echo "$REBOOT_AGE_DAYS" | tr -d '[:space:]')
+if [ "$REBOOT_AGE_DAYS" = "NONE" ]; then
+  pass "No pending reboot (kernel/library patches active)"
+elif [[ "$REBOOT_AGE_DAYS" =~ ^[0-9]+$ ]]; then
+  RUNNING_KERNEL=$(remote "uname -r" | tr -d '[:space:]')
+  REBOOT_PKGS=$(remote "sort -u /var/run/reboot-required.pkgs 2>/dev/null | tr '\n' ' '")
+  if [ "$REBOOT_AGE_DAYS" -ge "$REBOOT_FAIL_DAYS" ] 2>/dev/null; then
+    fail "Reboot pending ${REBOOT_AGE_DAYS}d (>=${REBOOT_FAIL_DAYS}d) - running kernel ${RUNNING_KERNEL:-?}; schedule a maintenance-window reboot" "pkgs: ${REBOOT_PKGS:-?}"
+  else
+    warn "Reboot pending ${REBOOT_AGE_DAYS}d - running kernel ${RUNNING_KERNEL:-?} (escalates to FAIL at ${REBOOT_FAIL_DAYS}d)"
+  fi
+else
+  warn "Could not read reboot-required state (got: ${REBOOT_AGE_DAYS:-<empty>})"
+fi
+
 # --- Deep Summary ---
 echo ""
 echo "=== Deep results: $PASSED/$TOTAL passed, $FAILED failed ==="
