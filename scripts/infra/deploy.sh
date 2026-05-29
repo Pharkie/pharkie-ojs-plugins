@@ -150,8 +150,12 @@ if ! $SSH_CMD "test -f $REMOTE_DIR/.env"; then
   echo "  scripts/infra/deploy.sh --host=$SSH_HOST --env-file=.env.staging"
   exit 1
 fi
-# Ensure .env is readable by container processes (scp creates 600 by default, Apache needs to read it)
-$SSH_CMD "chmod 644 $REMOTE_DIR/.env"
+# Lock down .env: root + deploy-group read only (640 root:deploy).
+# - root: container master process reads it at startup; host root + backup cron need it.
+# - deploy group: the CI deploy user reads it for remote monitoring (monitor-deep.sh greps it over SSH).
+# - NOT world-readable: .env holds DB/Stripe/API secrets. (scp/editors leave it 600 root:root, which
+#   silently breaks deploy-user monitoring — see docs/monitoring.md. www-data does not read it at runtime.)
+$SSH_CMD "chown root:deploy $REMOTE_DIR/.env && chmod 640 $REMOTE_DIR/.env"
 
 # Validate required env vars are set (catch blank passwords before compose fails with a cryptic error)
 MISSING=$($SSH_CMD "cd $REMOTE_DIR && for VAR in WP_ADMIN_PASSWORD OJS_ADMIN_PASSWORD WP_DB_PASSWORD DB_PASSWORD OJS_DB_PASSWORD WPOJS_API_KEY WPOJS_API_KEY_SECRET OJS_API_KEY_SECRET; do grep -qE \"^\${VAR}=.+\" .env || echo \$VAR; done")
