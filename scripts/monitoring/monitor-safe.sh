@@ -203,11 +203,28 @@ fi
 echo ""
 echo "--- Required Plugins ---"
 
+REQUIRED_PLUGINS="woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync"
 PLUGINS=$(wp_cli "plugin list --status=active --format=csv --fields=name") || PLUGINS=""
 if [ -z "$PLUGINS" ]; then
   fail "Could not retrieve plugin list (SSH or WP-CLI may be down)"
 else
-  for PLUGIN in woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync; do
+  # A single active-plugins read can momentarily omit a plugin that is in fact
+  # active (2026-06-02: one read had ultimate-member missing while the other four
+  # were present; it was active again seconds later — 1 false alarm in ~840 runs).
+  # If anything looks inactive, re-read once before alerting: a genuine outage
+  # stays missing across the re-read, a transient blip clears and never pages.
+  MISSING=""
+  for PLUGIN in $REQUIRED_PLUGINS; do
+    echo "$PLUGINS" | grep -q "^$PLUGIN$" || MISSING="$MISSING $PLUGIN"
+  done
+  if [ -n "$MISSING" ]; then
+    sleep 5
+    # Keep the re-read only if it returned something; an empty second read (e.g.
+    # transient WP-CLI failure) must not flip every plugin to "not active".
+    PLUGINS_RECHECK=$(wp_cli "plugin list --status=active --format=csv --fields=name") || PLUGINS_RECHECK=""
+    [ -n "$PLUGINS_RECHECK" ] && PLUGINS="$PLUGINS_RECHECK"
+  fi
+  for PLUGIN in $REQUIRED_PLUGINS; do
     if echo "$PLUGINS" | grep -q "^$PLUGIN$"; then
       pass "$PLUGIN active"
     else
