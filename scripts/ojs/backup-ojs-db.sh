@@ -9,7 +9,7 @@
 # Output: AES-256-CBC encrypted gzip files (.sql.gz.enc)
 # Encryption key: /opt/backups/ojs/.backup-key (create once, back up separately)
 #
-# Retention: DB dumps 7 daily + 4 weekly; files tarball 3 daily + 4 weekly (Sunday dumps promoted).
+# Retention: DB dumps 7 daily + 4 weekly; files tarball 1 daily + 2 weekly (Sunday dumps promoted).
 # Backups stored in /opt/backups/ojs/
 #
 # Cron (installed by --install-cron from pull-ojs-backup.sh):
@@ -25,8 +25,13 @@ WEEKLY_DIR="$BACKUP_DIR/weekly"
 PROJECT_DIR="/opt/pharkie-ojs-plugins"
 KEY_FILE="$BACKUP_DIR/.backup-key"
 KEEP_DAILY=7
-KEEP_DAILY_FILES=3
+KEEP_DAILY_FILES=1
 KEEP_WEEKLY=4
+# OJS files tarball is ~3.9G and changes slowly (article galleys). Keep fewer
+# copies than the DB dumps (78M, volatile subscription/payment data) to cap disk
+# use: 1 daily + 2 weekly ≈ 12G vs 3 daily + 4 weekly ≈ 27G. DB keeps its full
+# 7 daily + 4 weekly. Two-week recovery window for files remains.
+KEEP_WEEKLY_FILES=2
 DRY_RUN=""
 
 for arg in "$@"; do
@@ -272,6 +277,6 @@ rotate "$DAILY_DIR" "wp-*.sql.gz.enc" "$KEEP_DAILY" "daily WP DB"
 rotate "$DAILY_DIR" "ojs-files-*.tar.gz.enc" "$KEEP_DAILY_FILES" "daily OJS files"
 rotate "$WEEKLY_DIR" "ojs-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly OJS DB"
 rotate "$WEEKLY_DIR" "wp-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly WP DB"
-rotate "$WEEKLY_DIR" "ojs-files-weekly-*.tar.gz.enc" "$KEEP_WEEKLY" "weekly OJS files"
+rotate "$WEEKLY_DIR" "ojs-files-weekly-*.tar.gz.enc" "$KEEP_WEEKLY_FILES" "weekly OJS files"
 
 log "Backup complete."
