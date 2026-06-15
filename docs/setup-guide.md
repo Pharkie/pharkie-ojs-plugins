@@ -35,7 +35,7 @@ Layers are ordered **heavy → volatile** so small additions don't bust the expe
 - **`scripts/infra/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`, `--env-file`.
 - **`scripts/monitoring/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). Includes backup health checks.
 - **`scripts/monitoring/load-test.sh`** — performance tests using `hey` with server resource monitoring.
-- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB + WP DB + OJS files volume → gzip → AES-256-CBC encrypt → rotate (DB: 7 daily + 4 weekly; files tarball: 3 daily + 4 weekly).
+- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB + WP DB + OJS files volume → gzip → AES-256-CBC encrypt → rotate (DB: 7 daily + 4 weekly; files tarball: 1 daily + 2 weekly).
 - **`scripts/infra/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`). Off-server storage via GitHub Actions → a private backup repo (daily schedule).
 
 ## Secrets management
