@@ -156,7 +156,11 @@ ping_heartbeat() {
   [ -z "$hb_url" ] && return
 
   if [ "$failed_count" -gt 0 ]; then
-    curl -sf -d "$(printf "$FAILURE_DETAILS")" "$hb_url/fail" > /dev/null 2>&1 || true
+    # %b expands the \n escapes in FAILURE_DETAILS while treating the text as
+    # data, not a format string — failure messages contain literal % (e.g.
+    # "Disk usage high (87%, ...)") which printf "$FAILURE_DETAILS" mis-parses
+    # as a format spec, erroring out and truncating the alert body at the %.
+    curl -sf -d "$(printf '%b' "$FAILURE_DETAILS")" "$hb_url/fail" > /dev/null 2>&1 || true
   else
     curl -sf "$hb_url" > /dev/null 2>&1 || true
   fi
