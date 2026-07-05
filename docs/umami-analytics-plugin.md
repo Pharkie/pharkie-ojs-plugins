@@ -1,6 +1,6 @@
 # Umami Analytics Plugin
 
-Adds [Umami](https://umami.is) — privacy-friendly, cookieless web analytics — to the reader-facing pages of the OJS journal, plus custom events for the actions worth measuring on a paywalled journal.
+Adds [Umami](https://umami.is) — privacy-friendly, cookieless web analytics — to the reader-facing pages of an OJS journal, plus custom events for the actions worth measuring on a paywalled journal.
 
 Plugin slug: `umamiAnalytics`. Repo folder: `plugins/umami-analytics/` → mounted at `/var/www/html/plugins/generic/umamiAnalytics` (see `docker-compose.yml`).
 
@@ -26,56 +26,46 @@ The membership funnel — `paywall-view` → `membership-click` / `purchase-clic
 
 Only `frontend/` (reader-facing) templates are instrumented; the editorial back office is never tracked. With **Exclude staff** on (default), the tracker is not loaded for logged-in managers, sub-editors, or site admins.
 
-## Where Umami runs: self-hosted on the SEA Hetzner box
+## Getting a Website ID
 
-We self-host Umami at **`https://analytics.existentialanalysis.org.uk`** (on the same Hetzner VPS as OJS), rather than Umami Cloud — Cloud's free tier caps the number of websites, and self-hosting keeps SEA analytics on SEA infrastructure, separate from any personal Cloud properties. Deployment is the `docker-compose.umami.yml` overlay; see [Self-hosted deployment](#self-hosted-deployment) below.
+Umami works with Umami Cloud or a self-hosted instance.
 
-Get the **Website ID**:
-
-1. Log in to `https://analytics.existentialanalysis.org.uk` (admin account created on first boot).
-2. **Settings → Websites → Add website** — name it (e.g. "SEA Journal"), domain `journal.existentialanalysis.org.uk`.
-3. **Edit** the website → copy the **Website ID** (a UUID). Not a secret — it appears in page HTML by design, so it's fine in the OJS settings UI.
-4. In the OJS plugin settings, set **Tracking Script URL** to `https://analytics.existentialanalysis.org.uk/script.js` (the Cloud default won't apply here).
+1. In your Umami dashboard: **Settings → Websites → Add website** — name it and set the domain to the journal hostname.
+2. **Edit** the website → copy the **Website ID** (a UUID). This is *not* a secret — it appears in page HTML by design, so it's fine in the OJS settings UI.
+3. Note your tracking-script URL: `https://cloud.umami.is/script.js` for Umami Cloud, or `https://<your-umami-host>/script.js` for self-hosted.
 
 ## Enabling in OJS
 
 1. **Settings → Website → Plugins → Generic Plugins**, tick **Umami Analytics**.
-2. Click the arrow → **Settings**, paste the **Website ID**, leave the script URL at default, **Save**.
+2. Click the arrow → **Settings**, paste the **Website ID**, set the **Tracking Script URL**, **Save**.
 3. Load the public site in a private window and confirm in Umami's **Realtime** view that the visit registers. Click a PDF/galley link and confirm a `download` event appears under **Events**.
 
 Nothing is loaded until a Website ID is set, so enabling the plugin without configuring it is harmless.
 
 ### Keeping dev/staging out of your stats
 
-Plugin settings are stored per-OJS-database, so dev and live are configured independently. Simplest approach: **only configure the Website ID on live**, leave it blank on dev. If you do want to reuse one Website ID across environments, set **Restrict to Domains** to the live hostname so localhost/staging traffic isn't counted.
+Plugin settings are stored per-OJS-database, so dev and live are configured independently. Simplest approach: **only configure the Website ID on live**, leave it blank on dev. If you want to reuse one Website ID across environments, set **Restrict to Domains** to the live hostname so localhost/staging traffic isn't counted.
 
-## Self-hosted deployment
+## Self-hosting Umami
 
-The Umami service (app + its own MariaDB) is defined in `docker-compose.umami.yml`, fronted by Caddy at `analytics.existentialanalysis.org.uk`.
+A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. This repo includes a `docker-compose.umami.yml` overlay (Umami app + `mysql:8.0`) and a Caddy vhost for exactly that.
 
-**One-time, on the box:**
+> **Note:** Umami requires **MySQL 8 / PostgreSQL** — it fails on MariaDB (the `05_add_visit_id` Prisma migration errors with P3009), so the overlay uses `mysql:8.0` even where the rest of the stack is MariaDB.
 
-1. **DNS** — `analytics.existentialanalysis.org.uk` A → `46.225.173.209` (already added; see `private/dns-management.md`).
-2. **Secrets** — add to `.env.live` (SOPS): `CADDY_UMAMI_DOMAIN=analytics.existentialanalysis.org.uk`, and `UMAMI_DB_PASSWORD`, `UMAMI_DB_ROOT_PASSWORD`, `UMAMI_APP_SECRET` (generate with `openssl rand -hex 24/24/32`). `APP_SECRET` must not change after first boot.
-3. **Deploy** — `ssh sea-live 'cd /opt/pharkie-ojs-plugins && git pull'`, then bring up the stack **with the umami overlay appended** to the existing chain:
-   ```
-   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-     -f docker-compose.caddy.yml -f docker-compose.umami.yml up -d
-   ```
-   (Add `docker-compose.umami.yml` to the pinned overlay list / deploy script so future `up`s include it.)
-4. **First boot** — Umami auto-creates its schema. Log in at the URL with `admin` / `umami`, **change the password immediately**, create the "SEA Journal" website, copy the Website ID.
-5. **Ops** — add a Better Stack monitor + heartbeat for the analytics vhost, and add `umami-db` to the backup routine (its volume is `umami_db_data`; tiny).
+Required env vars (see `.env.example`): `CADDY_UMAMI_DOMAIN`, `UMAMI_DB_PASSWORD`, `UMAMI_DB_ROOT_PASSWORD`, `UMAMI_APP_SECRET` (`APP_SECRET` must not change after first boot). On first boot Umami creates its schema; log in with the default `admin` / `umami` and **change the password immediately**.
 
-**MCP:** point `@mikusnuz/umami-mcp` at the self-hosted instance — set `UMAMI_URL=https://analytics.existentialanalysis.org.uk`, `UMAMI_USERNAME`, `UMAMI_PASSWORD` (the admin creds) in `~/.claude.json`, and drop the stale `UMAMI_API_KEY`. This MCP speaks the self-hosted `/api` dialect, so it works as designed against your own instance.
+The self-hosted `@mikusnuz/umami-mcp` MCP works against a self-hosted instance (it speaks the `/api` dialect with username/password auth); it does **not** work with Umami Cloud's `/v1` API.
+
+*(Deployment specifics for this project's server live in the private repo.)*
 
 ## Deploying the OJS plugin
 
 The plugin itself is a code-only change (new plugin, no article data). Per `CLAUDE.md` → "Code-only changes":
 
-1. `ssh sea-live 'cd /opt/pharkie-ojs-plugins && git pull'`
+1. Pull the repo on the server.
 2. `docker compose up -d ojs` — the new bind mount in `docker-compose.yml` requires the container to be recreated.
 3. Enable + configure the plugin in the live OJS admin (Website ID + script URL above).
-4. `scripts/monitoring/content-check.sh --host=sea-live` — verify the site still works.
+4. Run the content-check smoke test to verify the site still works.
 
 ## Privacy
 
