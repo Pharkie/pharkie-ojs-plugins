@@ -22,6 +22,9 @@ services:
       CADDY_WP_AUTH_USER: ${CADDY_WP_AUTH_USER:-staging}
       CADDY_WP_AUTH_HASH: ${CADDY_WP_AUTH_HASH:-}
       CADDY_OJS_DOMAIN: ${CADDY_OJS_DOMAIN:?Set CADDY_OJS_DOMAIN in .env}
+      # Optional — only set when the umami overlay is in use. Falls back to an
+      # inert localhost address so the shared Caddyfile is valid without it.
+      CADDY_UMAMI_DOMAIN: ${CADDY_UMAMI_DOMAIN:-http://localhost:8083}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

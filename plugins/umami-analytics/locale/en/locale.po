@@ -1,0 +1,48 @@
+# Umami Analytics Plugin
+# Copyright (C) 2026 Adam Knowles
+msgid ""
+msgstr ""
+"Project-Id-Version: umamiAnalytics 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "plugins.generic.umamiAnalytics.displayName"
+msgstr "Umami Analytics"
+
+msgid "plugins.generic.umamiAnalytics.description"
+msgstr "Injects the Umami (privacy-friendly, cookieless) tracking script on reader-facing pages and records custom events for downloads, paywall views, membership/purchase clicks, DOI clicks, and searches."
+
+msgid "plugins.generic.umamiAnalytics.settings"
+msgstr "Umami Analytics Settings"
+
+msgid "plugins.generic.umamiAnalytics.settings.websiteId"
+msgstr "Website ID"
+
+msgid "plugins.generic.umamiAnalytics.settings.websiteIdDesc"
+msgstr "The Umami website ID (a UUID) from Settings → Websites → Edit in your Umami dashboard. Nothing is tracked until this is set."
+
+msgid "plugins.generic.umamiAnalytics.settings.scriptUrl"
+msgstr "Tracking Script URL"
+
+msgid "plugins.generic.umamiAnalytics.settings.scriptUrlDesc"
+msgstr "The Umami script URL. For Umami Cloud use https://cloud.umami.is/script.js (default). For a self-hosted instance use https://your-umami-host/script.js."
+
+msgid "plugins.generic.umamiAnalytics.settings.dataDomains"
+msgstr "Restrict to Domains (optional)"
+
+msgid "plugins.generic.umamiAnalytics.settings.dataDomainsDesc"
+msgstr "Comma-separated hostnames the tracker should run on (e.g. journal.example.org). Leave empty to track on any domain. Use this to stop staging/localhost traffic being counted."
+
+msgid "plugins.generic.umamiAnalytics.settings.options"
+msgstr "Options"
+
+msgid "plugins.generic.umamiAnalytics.settings.trackEventsDesc"
+msgstr "Track custom events (galley downloads, paywall views, membership/purchase clicks, DOI clicks, searches) in addition to page views."
+
+msgid "plugins.generic.umamiAnalytics.settings.excludeStaffDesc"
+msgstr "Do not load the tracker for logged-in managers, sub-editors, and site admins (keeps staff browsing out of reader stats)."
