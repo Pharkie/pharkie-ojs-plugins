@@ -1,0 +1,8 @@
+# WordPress (staging) vhost. Owned by pharkie-ojs-plugins.
+{$CADDY_WP_DOMAIN} {
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	basic_auth {
+		{$CADDY_WP_AUTH_USER} {$CADDY_WP_AUTH_HASH}
+	}
+	reverse_proxy wp:80
+}
