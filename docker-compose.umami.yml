@@ -10,10 +10,10 @@
 # Requires in .env(.live): UMAMI_DB_PASSWORD, UMAMI_DB_ROOT_PASSWORD,
 # UMAMI_APP_SECRET, and CADDY_UMAMI_DOMAIN.
 #
-# DB note: Umami is tested against MySQL 8 / PostgreSQL. MariaDB 10.11 is used
-# here to match the rest of the stack (one engine, one backup/monitoring story).
-# If Umami's first-run Prisma migration ever errors on MariaDB, swap the
-# umami-db image to `mysql:8.0` — the DATABASE_URL below is unchanged.
+# DB note: Umami requires MySQL 8 / PostgreSQL. MariaDB 10.11 was tried first
+# (to match the rest of the stack) but fails Umami's `05_add_visit_id` Prisma
+# migration (P3009), so this uses mysql:8.0 — Umami's supported engine. The
+# DATABASE_URL (mysql://) is unchanged; only the image + healthcheck differ.
 
 services:
   umami:
@@ -36,18 +36,11 @@ services:
       - sea-net
 
   umami-db:
-    image: mariadb:10.11
+    image: mysql:8.0
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETUID
-      - SETGID
-      - DAC_OVERRIDE
-      - CHOWN
-      - FOWNER
+    command: --default-authentication-plugin=caching_sha2_password
     environment:
       MYSQL_ROOT_PASSWORD: ${UMAMI_DB_ROOT_PASSWORD}
       MYSQL_DATABASE: umami
@@ -56,10 +49,10 @@ services:
     volumes:
       - umami_db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - sea-net
 
