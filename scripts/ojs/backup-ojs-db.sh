@@ -1,6 +1,6 @@
 #!/bin/bash
-# Automated OJS database backup with encryption and rotation.
-# Runs ON the VPS (called by cron or manually).
+# Automated database backup (OJS + WordPress + Umami) + OJS files, with
+# encryption and rotation. Runs ON the VPS (called by cron or manually).
 #
 # Usage:
 #   scripts/ojs/backup-ojs-db.sh              # Dump + compress + encrypt + rotate
@@ -199,6 +199,44 @@ if [ -n "$WP_DB_PASSWORD" ]; then
   fi
 fi
 
+# --- Umami analytics database backup (mysql:8, umami overlay) ---
+if [ -n "$UMAMI_DB_ROOT_PASSWORD" ]; then
+  UMAMI_DUMP_FILE="$DAILY_DIR/umami-$TIMESTAMP.sql.gz.enc"
+  UMAMI_TMP_FILE="${UMAMI_DUMP_FILE}.tmp"
+  # umami-db lives in the umami overlay, so its compose calls need that file too.
+  UMAMI_COMPOSE="docker compose -f $PROJECT_DIR/docker-compose.yml -f $PROJECT_DIR/docker-compose.staging.yml -f $PROJECT_DIR/docker-compose.umami.yml"
+
+  if $UMAMI_COMPOSE ps --services --status running 2>/dev/null | grep -qx umami-db; then
+    log "Starting Umami database backup..."
+    UMAMI_START=$(date +%s)
+    # Umami DB is MySQL 8 (not MariaDB) — use mysqldump, not mariadb-dump.
+    $UMAMI_COMPOSE exec -T umami-db mysqldump \
+      --single-transaction \
+      --routines \
+      --triggers \
+      -u root -p"$UMAMI_DB_ROOT_PASSWORD" "${UMAMI_DB_NAME:-umami}" \
+      | gzip \
+      | openssl enc -aes-256-cbc -pbkdf2 -pass file:"$KEY_FILE" -out "$UMAMI_TMP_FILE"
+
+    UMAMI_DUMP_SIZE=$(stat -c%s "$UMAMI_TMP_FILE" 2>/dev/null || stat -f%z "$UMAMI_TMP_FILE" 2>/dev/null)
+    UMAMI_ELAPSED=$(( $(date +%s) - UMAMI_START ))
+    log "Umami dump complete: $(numfmt --to=iec "$UMAMI_DUMP_SIZE" 2>/dev/null || echo "${UMAMI_DUMP_SIZE}B"), ${UMAMI_ELAPSED}s"
+
+    if [ "$UMAMI_DUMP_SIZE" -lt 1024 ]; then
+      log "WARNING: Umami dump suspiciously small ($UMAMI_DUMP_SIZE bytes). Removing."
+      rm -f "$UMAMI_TMP_FILE"
+    elif ! openssl enc -aes-256-cbc -d -pbkdf2 -pass file:"$KEY_FILE" -in "$UMAMI_TMP_FILE" | gzip -t 2>/dev/null; then
+      log "WARNING: Umami dump failed integrity check. Removing."
+      rm -f "$UMAMI_TMP_FILE"
+    else
+      mv "$UMAMI_TMP_FILE" "$UMAMI_DUMP_FILE"
+      log "Umami backup saved: $UMAMI_DUMP_FILE"
+    fi
+  else
+    log "WARNING: umami-db container not running — skipping Umami backup"
+  fi
+fi
+
 # --- OJS files volume backup (PDFs, HTML galleys) ---
 OJS_FILES_DUMP="$DAILY_DIR/ojs-files-$TIMESTAMP.tar.gz.enc"
 OJS_FILES_TMP="${OJS_FILES_DUMP}.tmp"
@@ -254,6 +292,10 @@ if [ "$DAY_OF_WEEK" = "7" ]; then
     cp "$OJS_FILES_DUMP" "$WEEKLY_DIR/ojs-files-weekly-$TIMESTAMP.tar.gz.enc"
     log "Sunday: promoted OJS files to weekly"
   fi
+  if [ -f "$UMAMI_DUMP_FILE" ]; then
+    cp "$UMAMI_DUMP_FILE" "$WEEKLY_DIR/umami-weekly-$TIMESTAMP.sql.gz.enc"
+    log "Sunday: promoted Umami DB to weekly"
+  fi
 fi
 
 # --- Rotate old backups ---
@@ -274,9 +316,11 @@ rotate() {
 
 rotate "$DAILY_DIR" "ojs-2*.sql.gz.enc" "$KEEP_DAILY" "daily OJS DB"
 rotate "$DAILY_DIR" "wp-*.sql.gz.enc" "$KEEP_DAILY" "daily WP DB"
+rotate "$DAILY_DIR" "umami-2*.sql.gz.enc" "$KEEP_DAILY" "daily Umami DB"
 rotate "$DAILY_DIR" "ojs-files-*.tar.gz.enc" "$KEEP_DAILY_FILES" "daily OJS files"
 rotate "$WEEKLY_DIR" "ojs-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly OJS DB"
 rotate "$WEEKLY_DIR" "wp-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly WP DB"
+rotate "$WEEKLY_DIR" "umami-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly Umami DB"
 rotate "$WEEKLY_DIR" "ojs-files-weekly-*.tar.gz.enc" "$KEEP_WEEKLY_FILES" "weekly OJS files"
 
 log "Backup complete."
