@@ -15,6 +15,7 @@ services:
     cap_add:
       - NET_BIND_SERVICE
     # --watch: auto-reload when any project drops/edits its snippet in conf.d.
+    # (Image has no ENTRYPOINT; CMD starts with the caddy binary, so include it.)
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
     ports:
       - "80:80"
