@@ -23,6 +23,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`docs/archive-checker-plugin.md`](docs/archive-checker-plugin.md) — Archive Checker plugin: visual review interface for backfill article splits
 - [`docs/smarter-similar-articles-plugin.md`](docs/smarter-similar-articles-plugin.md) — Smarter Similar Articles plugin: cached-similarity sidebar (replaces stock recommendBySimilarity)
 - [`docs/umami-analytics-plugin.md`](docs/umami-analytics-plugin.md) — Umami Analytics plugin: privacy-friendly reader analytics + custom events (downloads, paywall funnel, DOI clicks, search)
+- [`docs/shared-caddy.md`](docs/shared-caddy.md) — shared Caddy on a multi-project box: per-project `conf.d/*.caddy` drop-in snippets, no shared-file edits
 - `private/TODO.md` — roadmap (in private repo)
 
 ## Good to know

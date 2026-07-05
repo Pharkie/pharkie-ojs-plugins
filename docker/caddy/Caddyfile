@@ -1,28 +1,15 @@
-{$CADDY_WP_DOMAIN} {
-	header X-Robots-Tag "noindex, nofollow, noarchive"
-	basicauth {
-		{$CADDY_WP_AUTH_USER} {$CADDY_WP_AUTH_HASH}
-	}
-	reverse_proxy wp:80
-}
+# Shared edge reverse proxy for the SEA box.
+#
+# This file is intentionally a stable one-liner — DO NOT add vhosts here.
+# Each project owns its own snippet in the shared drop-in directory
+# /etc/caddy/conf.d/<project>.caddy (bind-mounted from /opt/caddy-conf.d on the
+# host). One file per project = no shared-file edits, no merge collisions, and
+# `git pull` on this repo never aborts on a locally-edited Caddyfile.
+#
+# Caddy runs with --watch, so dropping/editing a snippet auto-reloads.
+# pharkie-ojs-plugins' own snippets (wp/ojs/umami) are version-controlled in
+# docker/caddy/conf.d/ and synced to /opt/caddy-conf.d on deploy.
+#
+# See docs/shared-caddy.md for the full convention.
 
-{$CADDY_OJS_DOMAIN} {
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "SAMEORIGIN"
-		Referrer-Policy "strict-origin-when-cross-origin"
-	}
-	reverse_proxy ojs:80
-}
-
-# Umami analytics (self-hosted). Only active when the umami overlay is running;
-# if CADDY_UMAMI_DOMAIN is unset it falls back to an inert localhost address.
-{$CADDY_UMAMI_DOMAIN:http://localhost:8083} {
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-	}
-	reverse_proxy umami:3000
-}
+import /etc/caddy/conf.d/*.caddy

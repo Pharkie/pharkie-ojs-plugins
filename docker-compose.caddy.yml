@@ -14,6 +14,8 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
+    # --watch: auto-reload when any project drops/edits its snippet in conf.d.
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
     ports:
       - "80:80"
       - "443:443"
@@ -27,6 +29,9 @@ services:
       CADDY_UMAMI_DOMAIN: ${CADDY_UMAMI_DOMAIN:-http://localhost:8083}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Shared per-project vhost snippets. Any project on the box drops its own
+      # <project>.caddy here; nobody edits a shared file. See docs/shared-caddy.md.
+      - /opt/caddy-conf.d:/etc/caddy/conf.d:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

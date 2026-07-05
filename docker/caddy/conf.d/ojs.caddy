@@ -1,0 +1,10 @@
+# OJS (public journal) vhost. Owned by pharkie-ojs-plugins.
+{$CADDY_OJS_DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	reverse_proxy ojs:80
+}
