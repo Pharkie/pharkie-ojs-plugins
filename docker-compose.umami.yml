@@ -1,0 +1,67 @@
+# Umami overlay — self-hosted, privacy-friendly web analytics for the SEA
+# estate (journal + anything else). Fronted by Caddy at $CADDY_UMAMI_DOMAIN
+# (see docker-compose.caddy.yml + docker/caddy/Caddyfile); the app host port is
+# bound to 127.0.0.1 only (SSH-tunnel / first-run setup), never public.
+#
+# Production (append to the existing overlay chain):
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     -f docker-compose.caddy.yml -f docker-compose.umami.yml up -d
+#
+# Requires in .env(.live): UMAMI_DB_PASSWORD, UMAMI_DB_ROOT_PASSWORD,
+# UMAMI_APP_SECRET, and CADDY_UMAMI_DOMAIN.
+#
+# DB note: Umami is tested against MySQL 8 / PostgreSQL. MariaDB 10.11 is used
+# here to match the rest of the stack (one engine, one backup/monitoring story).
+# If Umami's first-run Prisma migration ever errors on MariaDB, swap the
+# umami-db image to `mysql:8.0` — the DATABASE_URL below is unchanged.
+
+services:
+  umami:
+    image: ghcr.io/umami-software/umami:mysql-latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:8083:3000"
+    environment:
+      DATABASE_TYPE: mysql
+      DATABASE_URL: mysql://umami:${UMAMI_DB_PASSWORD}@umami-db:3306/umami
+      APP_SECRET: ${UMAMI_APP_SECRET}
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    networks:
+      - sea-net
+
+  umami-db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
+    environment:
+      MYSQL_ROOT_PASSWORD: ${UMAMI_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: umami
+      MYSQL_USER: umami
+      MYSQL_PASSWORD: ${UMAMI_DB_PASSWORD}
+    volumes:
+      - umami_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sea-net
+
+volumes:
+  umami_db_data:
