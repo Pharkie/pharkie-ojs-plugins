@@ -73,9 +73,12 @@ public_files_dir = public
 ;;;;;;;;;;;;;;;;;;
 
 [email]
-default = sendmail
+; OJS 3.4+ picks the mail transport from "default" (smtp|sendmail|log|phpmailer).
+; The 3.3-style "smtp = On" toggle is ignored — with "default = sendmail" all
+; mail (incl. password resets) was piped to the container's unconfigured exim
+; and silently died with SMTP 421.
+default = smtp
 default_envelope_sender = ${OJS_MAIL_FROM}
-smtp = ${OJS_SMTP_ENABLED}
 smtp_server = ${OJS_SMTP_HOST}
 smtp_port = ${OJS_SMTP_PORT}
 smtp_auth = ${OJS_SMTP_AUTH}
