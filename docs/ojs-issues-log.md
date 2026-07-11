@@ -510,3 +510,28 @@ The UPDATE commits, the INSERT rolls back, and the table is now stuck at *no* `c
     WHERE product='staticPages' AND major=1 AND minor=0 AND revision=0 AND build=0;
   ```
 - **Prevention:** removed the `staticPages` `INSERT` from `scripts/ojs/setup-ojs.sh` — the plugin is bundled with OJS and registers itself. Only the `plugin_settings` enable row is still written. For the three custom plugins we still `INSERT IGNORE` a version row: harmless today (versions match disk), but latent drift risk if anyone bumps `<release>` in a plugin's `version.xml` without updating the script.
+
+### 30. No OJS email ever delivered — 3.3-style SMTP config ignored by 3.5, From address unverified [config]
+
+Password-reset (and all other) emails silently failed since go-live. Two stacked causes:
+
+1. **Wrong transport key.** `config.inc.php.tmpl` set `default = sendmail` plus the OJS 3.3-style `smtp = On` toggle. OJS 3.4+ picks the transport solely from `[email] default` (see `PKPContainer::getDefaultMailer()`), so the Resend SMTP settings were never read and mail was piped to the container's unconfigured exim4, failing with `421 Unexpected failure` (visible as a `php:notice` in the Apache log on `POST /ea/login/requestResetPassword`).
+2. **Placeholder From address.** After switching to `default = smtp`, Resend rejected sends with `550 The example.com domain is not verified` — the **site-level** contact (`site_settings.contactEmail`) was still the installer default `admin@example.com`. The reset mailable sends from the site contact, not the journal contact.
+
+- **Fix:** `default = smtp` in the template (deployed 2026-07-11, live config patched in place — takes effect without restart since config is read per request); `site_settings.contactEmail` → `journal@existentialanalysis.org.uk`, `contactName` → `Existential Analysis`. Verified end-to-end: reset email delivered to inbox.
+- **Gotcha:** the dead `smtp = On` key survived two OJS upgrades in the template and looked perfectly healthy. When mail misbehaves, check what `Config::getVar('email', 'default')` resolves to before touching SMTP settings.
+
+### 31. 237 synced members locked out — WpCompatibleHasher couldn't verify legacy WP phpass hashes [bug]
+
+Members who hadn't logged into WP since its 6.8 bcrypt migration (April 2025) still have `$P$B…` phpass hashes in `wp_users`. The sync copies hashes verbatim into OJS, and `WpCompatibleHasher::check()` only handled `$wp$…` and `$2y$…` — a `$P$` hash fell through to `password_verify()`, which always returns false. Those members (including a Journal editor) could not log into OJS with **any** password, and couldn't recover via reset email because of issue 30.
+
+- **Fix:** ported phpass 0.3 `crypt_private` (as bundled in WP <6.8) into the hasher with `hash_equals` comparison; verified hashes lazy-rehash to native bcrypt on first login, same as the `$wp$` path. Unit-tested against the canonical phpass suite vector plus an independently generated WP-cost vector.
+- **Hash census on live at time of fix:** 788 `$2y$` (native), 396 `$wp$` (WP 6.8+), 237 `$P$` (legacy phpass), 1 corrupt (see 32).
+
+### 32. Editorial accounts inaccessible — assign-roles.sh emails didn't match WP member emails; shared admin retired [config]
+
+`scripts/ojs/assign-roles.sh` matches `private/editorial-roles.json` entries to OJS users **by email**. Four entries used aliases/secondary addresses that didn't match the person's WP membership email, so instead of adding roles to their synced member accounts, the script created brand-new accounts with cryptographically random passwords and `must_change_password=1`. With reset email broken (issue 30), those accounts were unusable by anyone, ever. The random-suffix usernames (`ondinesmulders964`, `martinadams947`, `richardswann589`) come from the script's collision handler (`shuf -i 100-999`) colliding with the synced accounts.
+
+- **Fix (live, 2026-07-11):** editor roles + masthead flags moved to the synced member accounts (Ondine 731, Martin 753, Simon 1083, Richard 892); the four orphan accounts (1376, 1377, 2063, 2064) deleted after confirming zero activity; `editorial-roles.json` updated to the real WP member emails. Michal Jablonski has no WP account, so his script-created account (1378) stays.
+- **Gotcha:** the Editorial Masthead page 500'd (`getId() on null` in `AboutContextHandler`) after the users were deleted — `Repo::userGroup()->getMastheadUserIdsByRoleIds()` caches masthead user IDs in the Laravel file cache (`cache/opcache`). Clear it after any direct-SQL masthead/user surgery.
+- **Also:** the shared `admin` account (user 1) was disabled — its bcrypt hash was corrupt anyway (54 chars: a hand-run SQL `UPDATE` had let the shell eat `$…` tokens from the hash). Kept, not deleted: ~96k `event_log` rows and 4,200 `submission_files.uploader_user_id` reference it from backfill imports. Its API key is only used by `setup-ojs.sh` at environment-build time. Site admin lives on the named `adamknowles` account. When hand-writing bcrypt hashes in SQL, single-quote the shell string or pipe via stdin.
