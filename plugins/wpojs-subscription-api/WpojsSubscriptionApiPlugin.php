@@ -62,6 +62,10 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
             $userProvider->setHasher(new WpCompatibleHasher());
         }
 
+        // Synced members get a "password is managed on the membership
+        // site" email instead of an OJS reset link (see WpojsLoginHandler).
+        Hook::add('LoadHandler', $this->loadLoginHandler(...));
+
         // UI messages
         Hook::add('TemplateManager::display', $this->addLoginMessage(...));
         Hook::add('TemplateManager::display', $this->addPasswordResetMessage(...));
@@ -94,6 +98,19 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
         }
 
         return $default;
+    }
+
+    /**
+     * Substitute our login handler for the lost-password submission only.
+     * All other login ops keep the stock handler.
+     */
+    public function loadLoginHandler(string $hookName, array $args): bool
+    {
+        if ($args[0] === 'login' && $args[1] === 'requestResetPassword') {
+            $args[3] = new WpojsLoginHandler();
+            return true;
+        }
+        return Hook::CONTINUE;
     }
 
     /**

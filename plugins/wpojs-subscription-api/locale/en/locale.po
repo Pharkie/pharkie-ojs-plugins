@@ -55,3 +55,9 @@ msgstr "Restore defaults"
 
 msgid "plugins.generic.wpojsSubscriptionApi.settings.saved"
 msgstr "Saved."
+
+msgid "plugins.generic.wpojsSubscriptionApi.wpManagedPassword.subject"
+msgstr "Your password is managed on the membership website"
+
+msgid "plugins.generic.wpojsSubscriptionApi.wpManagedPassword.body"
+msgstr "<p>Dear {$recipientName},</p><p>We received a request to reset your password for the journal website. Your journal access is provided by your membership, so your password is managed on the membership website — the journal always accepts your current membership password.</p><p>To change it, please <a href=\"{$wpResetUrl}\">reset your password on the membership website</a>. Within a minute or so of changing it there, the new password will work on the journal too.</p><p>If you did not request this, you can safely ignore this email and your password will not be changed.</p>"
