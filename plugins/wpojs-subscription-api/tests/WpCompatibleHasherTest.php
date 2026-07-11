@@ -62,6 +62,49 @@ class WpCompatibleHasherTest extends TestCase
     }
 
     // ---------------------------------------------------------------
+    // check() — legacy WP phpass format ($P$, pre-WP 6.8)
+    // ---------------------------------------------------------------
+
+    /** Canonical test vector from the phpass 0.3 test suite. */
+    private const PHPASS_VECTOR_HASH = '$P$9IQRaTwmfeRo7ud9Fh4E2PdI0S3r.L0';
+    private const PHPASS_VECTOR_PASSWORD = 'test12345';
+
+    /** WP-default cost (B = 8192 iterations), cross-validated against an independent implementation. */
+    private const PHPASS_WP_VECTOR_HASH = '$P$BabcdefghC6j6QcIpAaAtQ9nrIbRhz1';
+    private const PHPASS_WP_VECTOR_PASSWORD = 'wp-member-password';
+
+    public function testPhpassVerificationSucceeds(): void
+    {
+        $this->assertTrue($this->hasher->check(self::PHPASS_VECTOR_PASSWORD, self::PHPASS_VECTOR_HASH));
+    }
+
+    public function testPhpassWpDefaultCostVerificationSucceeds(): void
+    {
+        $this->assertTrue($this->hasher->check(self::PHPASS_WP_VECTOR_PASSWORD, self::PHPASS_WP_VECTOR_HASH));
+    }
+
+    public function testPhpassWrongPasswordFails(): void
+    {
+        $this->assertFalse($this->hasher->check('wrong-password', self::PHPASS_VECTOR_HASH));
+    }
+
+    public function testPhpassTruncatedHashFails(): void
+    {
+        $this->assertFalse($this->hasher->check(
+            self::PHPASS_VECTOR_PASSWORD,
+            substr(self::PHPASS_VECTOR_HASH, 0, 20)
+        ));
+    }
+
+    public function testPhpassInvalidCostCharacterFails(): void
+    {
+        // Cost char below the valid range (7..30) must be rejected.
+        $tampered = '$P$1' . substr(self::PHPASS_VECTOR_HASH, 4);
+
+        $this->assertFalse($this->hasher->check(self::PHPASS_VECTOR_PASSWORD, $tampered));
+    }
+
+    // ---------------------------------------------------------------
     // needsRehash()
     // ---------------------------------------------------------------
 
@@ -71,6 +114,11 @@ class WpCompatibleHasherTest extends TestCase
         $wpHash = '$wp$2y$10$somefakehashcontenthere1234567890abc';
 
         $this->assertTrue($this->hasher->needsRehash($wpHash));
+    }
+
+    public function testNeedsRehashReturnsTrueForPhpassHash(): void
+    {
+        $this->assertTrue($this->hasher->needsRehash(self::PHPASS_VECTOR_HASH));
     }
 
     public function testNeedsRehashReturnsFalseForStandardBcrypt(): void
