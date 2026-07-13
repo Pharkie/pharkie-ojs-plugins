@@ -47,6 +47,12 @@ Quick reference for support staff handling member access issues.
 
 </td></tr></table>
 
+### "A published article needs correcting or removing"
+
+Edit the published article in place: OJS Admin → find the submission → **Publication** tab → make the change → Save.
+
+**Never unpublish the issue to change one article.** Unpublishing an issue takes *every* article in it offline for readers and silently removes them all from site search; recovery needs an admin (SQL republish plus a full search reindex — see `docs/ojs-issues-log.md` #33). Unpublishing a single article is also not "delete": it just hides the article and drops it from search. If an article genuinely must come off a published issue's table of contents, ask the site admin.
+
 ---
 
 ## WP-CLI commands

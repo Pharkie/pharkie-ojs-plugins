@@ -34,7 +34,14 @@ Issues marked **[reported]** were filed upstream. Others were found by other use
 | 24 | Scheduler `flock()` crash on cache lock | OJS bug | Excluded from monitoring |
 | 25 | `rebuildSearchIndex.php` queues jobs only | By-design | Always drain queue after rebuild |
 | 26 | `recommendBySimilarity` pathologises on narrow corpora | Plugin design | Disabled, replaced with `smarterSimilarArticles` |
-| 27 | Plugin grid 500s when `versions` table has stale duplicate row | Self-inflicted | Don't hardcode versions for bundled plugins |
+| 27 | `Core::cleanFileVar()` TypeError on non-UTF-8 request paths | OJS bug | Filtered from monitoring greps |
+| 28 | `IssueHandler::initialize()` fatal on malformed issue/galley URLs | OJS bug | Filtered from monitoring greps |
+| 29 | Plugin grid 500s when `versions` table has stale duplicate row | Self-inflicted | Recovery SQL; hardcoded INSERT removed from setup-ojs.sh |
+| 30 | No email delivered — 3.3-style SMTP toggle ignored by 3.5 | Config | `default = smtp`; real site contact address |
+| 31 | Legacy WP phpass (`$P$`) hashes unverifiable — members locked out | Fixed | phpass port in hasher + lazy bcrypt rehash |
+| 32 | assign-roles.sh email mismatch created orphan editorial accounts | Config | Roles moved to synced accounts; emails corrected |
+| 33 | Unpublishing an issue de-indexes all its articles from search | By-design | Republish + full index rebuild + drain |
+| 34 | `jobs.php total` counts all queues; `run` drains only the default | CLI quirk | Workers exit on run's empty-queue message |
 
 ## Install bugs
 
@@ -535,3 +542,28 @@ Members who hadn't logged into WP since its 6.8 bcrypt migration (April 2025) st
 - **Fix (live, 2026-07-11):** editor roles + masthead flags moved to the synced member accounts (Ondine 731, Martin 753, Simon 1083, Richard 892); the four orphan accounts (1376, 1377, 2063, 2064) deleted after confirming zero activity; `editorial-roles.json` updated to the real WP member emails. Michal Jablonski has no WP account, so his script-created account (1378) stays.
 - **Gotcha:** the Editorial Masthead page 500'd (`getId() on null` in `AboutContextHandler`) after the users were deleted — `Repo::userGroup()->getMastheadUserIdsByRoleIds()` caches masthead user IDs in the Laravel file cache (`cache/opcache`). Clear it after any direct-SQL masthead/user surgery.
 - **Also:** the shared `admin` account (user 1) was disabled — its bcrypt hash was corrupt anyway (54 chars: a hand-run SQL `UPDATE` had let the shell eat `$…` tokens from the hash). Kept, not deleted: ~96k `event_log` rows and 4,200 `submission_files.uploader_user_id` reference it from backfill imports. Its API key is only used by `setup-ojs.sh` at environment-build time. Site admin lives on the named `adamknowles` account. When hand-writing bcrypt hashes in SQL, single-quote the shell string or pipe via stdin.
+
+### 33. Unpublishing an issue reverts every article to "scheduled" and silently de-indexes them [by-design]
+
+To remove one book review from a published back issue's TOC (33.2), an editor unpublished the whole issue — the UI offers no per-article "remove from TOC" on a published issue, so "Unpublish Issue" looks like the way in. Unpublishing an issue:
+
+- sets `issues.published = 0` — the issue vanishes from the archive and every article page in it 404s for readers;
+- flips every publication in the issue from published (3) to scheduled (5) — logged as `publication.event.unpublished` + `publication.event.scheduled` per article in `event_log`;
+- dispatches per-article jobs that delete the articles' rows from `submission_search_objects` — they silently disappear from site search.
+
+Separately unpublishing a single publication knocks it to queued (1); it stays assigned to the issue (`publications.issue_id` and `date_published` are kept).
+
+Nothing is deleted — galleys, files, metadata, DOIs, and citations all survive. But there is no clean undo: republishing the issue via the UI restores the *scheduled* articles yet not an individually-unscheduled one, and nothing reinstates the search index rows short of a full `rebuildSearchIndex.php` + queue drain (#25). OJS has no per-issue or per-submission reindex CLI.
+
+- **Impact (2026-07-13):** entire 21-article issue publicly invisible for ~2¼ hours; all its articles missing from search until reindexed.
+- **Restore procedure used:** SQL flips (`issues.published=1`; `publications.status=3` and `submissions.status=3` for the issue's articles) — deliberately bypasses publish hooks so nothing re-fires (DOI deposit was off anyway, `automaticDoiDeposit=0`) — then `rebuildSearchIndex.php` + drain per #25. Verified: pages 200, archive listing back, search hits restored, index coverage = published count.
+- **Detection gap:** no monitor noticed. URL monitors probe fixed article IDs outside the affected issue, and the content-check random sweep samples only *published* articles — a whole unpublished issue is invisible to it. A published-issue-count check (analogous to the index-coverage check added for #25) would catch this class.
+- **Editor guidance:** metadata of a published article can be edited directly (Publication tab → edit → Save); unpublishing the issue is never required for that and takes the whole issue offline. Added to `docs/support-runbook.md`.
+
+### 34. `jobs.php total` counts every queue but `run` drains only the default queue [cli-quirk]
+
+The CLI pairing invites a broken pattern: "loop `run` while `total` > 0". `total` is `Repo::job()->total()` — all queues, no queue filter (only `--failed`). `run` processes only `--queue=` or the configured default (`queues.default_queue`, fallback `queue`). Jobs in any other queue — e.g. `jobs.php test` dispatches into `queuedTestJob` — keep `total` nonzero forever while `run` reports "No jobs available", so a drain loop keyed on `total` spins until its deadline.
+
+- **Impact:** `scripts/ojs/blast-queue.sh` workers idle-looped to their 30-minute deadline whenever jobs sat in a non-default queue. Harmless for real workloads (search indexing, DOI deposits, and notifications all use the default queue) but slow and confusing.
+- **Fix (2026-07-13):** workers now also exit when `run --once` prints its empty-queue message, reporting how many jobs remain in out-of-scope queues. Worst case if PKP rewords the message is the old idle-to-deadline behaviour, never a wrong drain.
+- **Related tooling bug found the same day:** blast-queue.sh's count parsing used `grep -oP` with an `|| echo 0` fallback. BSD grep (macOS) has no `-P`, so run from a Mac the script misread any queue as empty and exited without doing anything — the same failure mode as #25 (a drain that silently doesn't drain), and the same pattern silently disabled the server-load guard. Parsing is now portable (`grep -oE`), the queue-size check errors out rather than guessing zero, and `--env=` was added so local mode works outside the devcontainer. See `docs/blast-queue.md`.
