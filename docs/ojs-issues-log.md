@@ -43,6 +43,7 @@ Issues marked **[reported]** were filed upstream. Others were found by other use
 | 33 | Unpublishing an issue de-indexes all its articles from search | By-design | Republish + full index rebuild + drain |
 | 34 | `jobs.php total` counts all queues; `run` drains only the default | CLI quirk | Workers exit on run's empty-queue message |
 | 35 | Root-owned article files break editorial uploads/deletes | Self-inflicted | pipe7 chowns files+cache to www-data after import |
+| 36 | Galley upload replaces the live file instantly; Cancel doesn't revert | UX design flaw | Recovery via `submission_file_revisions`; editor guidance |
 
 ## Install bugs
 
@@ -579,3 +580,12 @@ Every backfill import runs `php tools/importExport.php` via `docker exec` as roo
 
 - **Fix (2026-07-13):** `pipe7_import.sh` now chowns `/var/www/files/journals` and `/var/www/html/cache` to `www-data:www-data` after every import run, so imports self-heal on both dev and live.
 - **Gotcha:** a failed galley delete is not transactional. If an editor reports "HTTP Error." on upload, check for half-deleted galleys (`publication_galleys` rows with dangling or NULL `submission_file_id`) from any delete attempts that preceded it.
+
+### 36. Galley "Upload File" wizard replaces the live file immediately — Continue/Cancel don't gate it [ojs-design]
+
+The production-stage upload wizard (Production → Galleys → edit galley → Upload a File Ready for Publication) presents three steps — "1. Upload File", "2. Review Details", "3. Confirm" — with Continue and Cancel buttons. The step labels and buttons imply the replacement happens at "Confirm". It doesn't: the moment the file lands in step 1's drop zone, OJS uploads it and swaps the galley's current file (`submission_files.file_id`) to the new upload. Steps 2–3 only edit metadata, and **Cancel does not revert the replacement**. Uploading the wrong file — any file, even a PNG onto a PDF galley — immediately changes what readers download, with no confirmation and no undo in the UI.
+
+Verified on 3.5: an accidental screenshot upload as a "revision" of the PDF galley instantly served `image/png` to readers on a published article.
+
+- **Recovery:** the previous file survives as a prior revision in `submission_file_revisions`. Point `submission_files.file_id` back to the old `file_id`, delete the bad revision row, delete the bad `files` row and its file on disk, and restore the `submission_file_settings` `name` value (the display name is overwritten by the upload and is not revision-tracked).
+- **Editor guidance:** treat the upload drop zone as the commit action. Don't "try" a file to see what happens — see `docs/support-runbook.md`.
