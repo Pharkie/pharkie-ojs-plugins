@@ -44,6 +44,7 @@ Issues marked **[reported]** were filed upstream. Others were found by other use
 | 34 | `jobs.php total` counts all queues; `run` drains only the default | CLI quirk | Workers exit on run's empty-queue message |
 | 35 | Root-owned article files break editorial uploads/deletes | Self-inflicted | pipe7 chowns files+cache to www-data after import |
 | 36 | Galley upload replaces the live file instantly; Cancel doesn't revert | UX design flaw | Recovery via `submission_file_revisions`; editor guidance |
+| 37 | Issue PDF galleys duplicate article content; article fixes miss them | Gotcha | Replace every on-disk copy of the issue PDF too |
 
 ## Install bugs
 
@@ -590,3 +591,12 @@ Verified on 3.5: an accidental screenshot upload as a "revision" of the PDF gall
 - **Recovery:** the previous file survives as a prior revision in `submission_file_revisions`. Point `submission_files.file_id` back to the old `file_id`, delete the bad revision row, delete the bad `files` row and its file on disk, and restore the `submission_file_settings` `name` value (the display name is overwritten by the upload and is not revision-tracked).
 - **Recovery caveat:** this only works when the new file was uploaded *as a revision of* the existing file. Deleting a galley and creating a new one leaves no revision trail — the old file's DB rows are gone (and per #35, possibly half-gone). For pipeline-imported articles the true source of record is the backfill output, so a reimport of the issue is always a fallback.
 - **Editor guidance:** treat the upload drop zone as the commit action. Don't "try" a file to see what happens — see `docs/support-runbook.md`.
+
+### 37. Whole-issue PDF galleys duplicate every article — content corrections must be applied there too [gotcha]
+
+Each back issue carries a whole-issue PDF galley alongside the per-article galleys. It contains a copy of every article's content, and nothing in the article pipeline touches it: an article correction applied via pipe2→pipe7 (or via the editorial UI) leaves the uncorrected text sitting in the issue PDF, still served to readers and still on disk.
+
+Two extra wrinkles found while applying an article redaction to 33.2:
+
+- **Stale import IDs:** `issue_galleys.file_id` can point at an `issue_files` row that still carries the *import-time* `issue_id` (pipe8 remaps the galley's issue but not the file row's), and the PDF then exists on disk under **two** `issues/<id>/public/` directories — the restored ID and the import-time ID. When replacing an issue PDF, find and replace every copy: `find /var/www/files/journals/1/issues -name "vol-X-iss-Y.pdf"`.
+- **Pipeline inputs stay unredacted:** the archival source (`backfill/input/`) is deliberately left untouched, so a re-run of the split pipeline would regenerate unredacted split PDFs for corrected articles. Check `_manual_html`/redaction notes in the volume's toc.json before re-splitting.
