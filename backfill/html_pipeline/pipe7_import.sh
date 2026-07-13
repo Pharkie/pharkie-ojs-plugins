@@ -27,12 +27,14 @@ JOURNAL_PATH="ea"
 ADMIN_USER="admin"
 FORCE=0
 CLEAN=0
+REINDEX=1
 for arg in "$@"; do
   case "$arg" in
     --container=*) CONTAINER="${arg#--container=}" ;;
     --journal=*) JOURNAL_PATH="${arg#--journal=}" ;;
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
     --force) FORCE=1 ;;
+    --no-reindex) REINDEX=0 ;;  # skip full search rebuild (e.g. galley-only changes: JATS/PDF/DOI edits aren't searchable text)
     --wipe-articles) CLEAN=1 ;;
     --clean) CLEAN=1 ;;  # legacy alias
     --help|-h)
@@ -73,6 +75,7 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --journal=<path>    Journal URL path (default: ea)"
   echo "  --admin=<user>      Admin username (default: admin)"
   echo "  --force             Reimport issues that already exist in OJS"
+  echo "  --no-reindex        Skip the full search index rebuild (galley-only changes)"
   echo "  --wipe-articles     Wipe all existing issues/articles before importing (users/subs/payments kept)"
   echo
   echo "Example: backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1"
@@ -345,7 +348,14 @@ fi
 # regression (commit 82ba72d, 2026-03-31) is why live site search only
 # returned results from the 2 most recent issues until 2026-04-16.
 # See docs/ojs-issues-log.md.
-if [ $SUCCEEDED -gt 0 ]; then
+if [ $SUCCEEDED -gt 0 ] && [ "$REINDEX" = "0" ]; then
+  echo ""
+  echo "--- Skipping search index rebuild (--no-reindex) ---"
+  echo "  NOTE: reimported articles are re-indexed by their publish jobs only if"
+  echo "  the queue is drained; body-text changes REQUIRE a full rebuild."
+fi
+
+if [ $SUCCEEDED -gt 0 ] && [ "$REINDEX" = "1" ]; then
   echo ""
   echo "--- Rebuilding search index ---"
   if docker exec "$CONTAINER" php tools/rebuildSearchIndex.php 2>&1 | grep -v "CROSSREF BOOT"; then

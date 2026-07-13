@@ -179,7 +179,11 @@ def process_article(jats_path, email, article_slug, limit=None,
             if verbose:
                 print(f"  [{ref_id}] CACHED ({cached['tier']}: "
                       f"{cached.get('matched_doi', 'N/A')})")
-            results.append(cached)
+            # Re-stamp with the CURRENT ref_id: the cached row keeps the id
+            # from when it was cached, and ref ids shift when a reference is
+            # added or removed. write_dois_to_jats keys on ref_id, so a stale
+            # id hangs the DOI on whichever ref now occupies that position.
+            results.append(dict(cached, ref_id=ref_id, text=text))
             continue
 
         # Query Crossref
