@@ -90,6 +90,8 @@ The `<pub-id>` is a sibling of `<mixed-citation>`, preserving the plain-text cit
 
 Results are written to `doi_matches.json` in each volume directory (alongside `toc.json`). On rerun, already-matched refs are skipped — no duplicate Crossref queries. The file records the tier, DOI, Crossref score, title similarity, and whether the DOI has been written to JATS.
 
+Cache lookups key on reference **text**, so they survive reordering. Each cached row also stores the `ref_id` it had when first matched — that field is historical only: on a cache hit the row is re-stamped with the ref's *current* id before use, because ref ids shift whenever a reference is added or removed and the JATS writer keys on id. (Before this re-stamp existed, deleting a reference hung a cached DOI on whichever ref inherited the old position — issues log #38.)
+
 ## Usage
 
 ```bash
