@@ -36,6 +36,7 @@ scripts/ojs/blast-queue.sh --host=<your-server> --timeout=3600 --tries=1
 |---|---|---|
 | `--host=NAME` | (local) | SSH host to run against. Omit for local dev. |
 | `--env=ENV` | (auto) | Compose environment for local mode (`dev`/`staging`/`prod`), forwarded to `init_dc`. Required when running locally outside the devcontainer. |
+| `--container=NAME` | (auto) | Target a known container directly, skipping compose resolution entirely. Used by `pipe7_import.sh`, which has already resolved the container. |
 | `--workers=N` | 1 | Parallel workers (max 5). Laravel's `FOR UPDATE SKIP LOCKED` prevents double-processing. |
 | `--no-nohup` | (auto) | Run in foreground on remote. Default for remote is nohup (background). |
 | `--purge` | off | Delete all queued jobs without processing them. |

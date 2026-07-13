@@ -4,6 +4,7 @@
 # Usage:
 #   scripts/ojs/blast-queue.sh                              # local dev, single worker (foreground)
 #   scripts/ojs/blast-queue.sh --env=prod                   # local mode outside the devcontainer (e.g. on the VPS)
+#   scripts/ojs/blast-queue.sh --container=NAME             # target a known container directly (skips compose)
 #   scripts/ojs/blast-queue.sh --host=sea-live              # remote: nohup by default (survives SSH disconnect)
 #   scripts/ojs/blast-queue.sh --host=sea-live --no-nohup   # remote: foreground (for debugging)
 #   scripts/ojs/blast-queue.sh --workers=3                  # 3 parallel workers
@@ -33,7 +34,8 @@ set -eo pipefail
 
 WORKERS=1
 HOST=""
-DC_ENV=""  # forwarded to init_dc for local mode outside the devcontainer
+DC_ENV=""     # forwarded to init_dc for local mode outside the devcontainer
+CONTAINER=""  # preset container name (skips compose resolution entirely)
 NOHUP=""  # auto: true for remote, false for local
 PURGE=false
 KILL_ONLY=false
@@ -46,8 +48,9 @@ JOBS_PHP="/var/www/html/lib/pkp/tools/jobs.php"
 
 for arg in "$@"; do
   case "$arg" in
-    --host=*)    HOST="${arg#*=}" ;;
-    --env=*)     DC_ENV="$arg" ;;
+    --host=*)      HOST="${arg#*=}" ;;
+    --env=*)       DC_ENV="$arg" ;;
+    --container=*) CONTAINER="${arg#*=}" ;;
     --workers=*) WORKERS="${arg#*=}" ;;
     --no-nohup)  NOHUP=false ;;
     --purge)     PURGE=true ;;
@@ -95,6 +98,10 @@ if [ -n "$HOST" ]; then
   fi
   DOCKER_EXEC="$SSH docker exec $CONTAINER"
   LOAD_CMD="$SSH uptime"
+elif [ -n "$CONTAINER" ]; then
+  # Caller supplied the container (e.g. pipe7_import.sh) — no compose resolution
+  DOCKER_EXEC="docker exec $CONTAINER"
+  LOAD_CMD="uptime"
 else
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

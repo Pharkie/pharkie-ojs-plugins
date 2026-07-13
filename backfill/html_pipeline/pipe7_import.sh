@@ -182,8 +182,9 @@ for DIR in "${SORTED_DIRS[@]}"; do
   echo "  XML: $XML_FILE ($XML_SIZE)"
 
   # Extract volume and number from import.xml for idempotency check
-  ISSUE_VOL=$(grep -oP '<volume>\K[^<]+' "$XML_FILE" | head -1)
-  ISSUE_NUM=$(grep -oP '<number>\K[^<]+' "$XML_FILE" | head -1)
+  # (sed, not grep -P: BSD grep on macOS has no -P)
+  ISSUE_VOL=$(sed -nE 's/.*<volume>([^<]+)<\/volume>.*/\1/p' "$XML_FILE" | head -1)
+  ISSUE_NUM=$(sed -nE 's/.*<number>([^<]+)<\/number>.*/\1/p' "$XML_FILE" | head -1)
 
   # Validate vol/num are numeric (prevents shell injection into PHP)
   if [ -n "$ISSUE_VOL" ] && ! [[ "$ISSUE_VOL" =~ ^[0-9]+$ ]]; then
@@ -294,6 +295,16 @@ echo "=========================================="
 echo "Complete: $SUCCEEDED imported, $SKIPPED skipped, $FAILED failed out of ${#SORTED_DIRS[@]}"
 echo "=========================================="
 
+# --- Fix file ownership ---
+# The import runs as root (docker exec), so every article directory/file it
+# creates is root-owned. Apache runs as www-data, which then can't write into
+# or delete those files from the editorial UI — galley uploads fail with a bare
+# "HTTP Error." and galley deletes 500. Root-run CLI jobs leave root-owned
+# Laravel cache entries the same way (scheduler flock fatals). Chown both trees.
+echo "Fixing file ownership (www-data)..."
+docker exec "$CONTAINER" sh -c 'chown -R www-data:www-data /var/www/files/journals /var/www/html/cache' \
+  || echo "  WARNING: chown failed — editorial uploads into imported article dirs will fail with 'HTTP Error.'"
+
 # --- Fix archive ordering ---
 # OJS archive page sorts by custom_issue_orders.seq first. Without entries,
 # order is undefined. Populate with newest-first by date_published.
@@ -342,7 +353,7 @@ if [ $SUCCEEDED -gt 0 ]; then
     echo ""
     echo "--- Draining search index queue ---"
     echo "  This may take several minutes for large imports..."
-    "$SCRIPT_DIR/../../scripts/ojs/blast-queue.sh" --workers=2 --timeout=3600
+    "$SCRIPT_DIR/../../scripts/ojs/blast-queue.sh" --workers=2 --timeout=3600 --container="$CONTAINER"
   else
     echo "  WARNING: Search index rebuild failed — run manually:"
     echo "    docker exec $CONTAINER php tools/rebuildSearchIndex.php"
