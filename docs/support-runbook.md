@@ -53,7 +53,7 @@ Edit the published article in place: OJS Admin → find the submission → **Pub
 
 **Never unpublish the issue to change one article.** Unpublishing an issue takes *every* article in it offline for readers and silently removes them all from site search; recovery needs an admin (SQL republish plus a full search reindex — see `docs/ojs-issues-log.md` #33). Unpublishing a single article is also not "delete": it just hides the article and drops it from search. If an article genuinely must come off a published issue's table of contents, ask the site admin.
 
-**Galley file uploads take effect immediately.** In the "Upload a File Ready for Publication" wizard, the file replaces what readers download the moment it uploads in step 1 — the Continue/Confirm steps only edit metadata, and **Cancel does not undo the replacement** (`docs/ojs-issues-log.md` #36). Only drop a file there if it's the final file. If the wrong file goes up, ask the site admin — the previous file is recoverable.
+**Galley file uploads take effect immediately.** In the "Upload a File Ready for Publication" wizard, the file replaces what readers download the moment it uploads in step 1 — the Continue/Confirm steps only edit metadata, and **Cancel does not undo the replacement** (`docs/ojs-issues-log.md` #36). Only drop a file there if it's the final file. If the wrong file goes up, **stop and ask the site admin** — the previous file is usually recoverable, but only when the new file was uploaded as a revision of the old one. Deleting the galley and re-creating it destroys the trail.
 
 ---
 

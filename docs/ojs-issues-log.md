@@ -588,4 +588,5 @@ The production-stage upload wizard (Production → Galleys → edit galley → U
 Verified on 3.5: an accidental screenshot upload as a "revision" of the PDF galley instantly served `image/png` to readers on a published article.
 
 - **Recovery:** the previous file survives as a prior revision in `submission_file_revisions`. Point `submission_files.file_id` back to the old `file_id`, delete the bad revision row, delete the bad `files` row and its file on disk, and restore the `submission_file_settings` `name` value (the display name is overwritten by the upload and is not revision-tracked).
+- **Recovery caveat:** this only works when the new file was uploaded *as a revision of* the existing file. Deleting a galley and creating a new one leaves no revision trail — the old file's DB rows are gone (and per #35, possibly half-gone). For pipeline-imported articles the true source of record is the backfill output, so a reimport of the issue is always a fallback.
 - **Editor guidance:** treat the upload drop zone as the commit action. Don't "try" a file to see what happens — see `docs/support-runbook.md`.
