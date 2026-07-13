@@ -52,6 +52,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 
 - **JATS is the single source of truth** for all per-article data (DOIs, publisher-IDs, page numbers, citations, body content). No registries. `pipe6_ojs_xml.py` reads everything from JATS.
 - **toc.json `authors` field** is always a string (e.g. `"Emmy van Deurzen & Michael R. Montgomery"`). Do not convert to list — 8+ downstream scripts expect string.
+- **Published-article amendments go through the pipeline, never the OJS UI or hand-edits to generated files.** Edit `raw.html`, set `_manual_html` in toc.json, rerun pipe2→pipe6, reimport the issue (`--force` + pipe8/9b/9c). Hand-edits to JATS/galleys are silently lost on the next rerun, and UI edits desync the other galleys, the issue PDF (#37), and the successor system. See `docs/support-runbook.md`.
 - **`_manual_html` in toc.json** = hand-corrected HTML galleys. `pipe1_haiku_html.py` skips these automatically.
 - **Haiku extraction can drop repeated/multilingual content.** Always verify HTML galleys against source PDFs for articles with non-English references.
 - **Docker in devcontainer requires `sudo`** for `pipe7_import.sh` and `pipe8_restore.py` (they call `docker` directly). Other pipeline steps (pipe1–pipe6) don't need Docker. For `--target live`, do NOT use `sudo` — it breaks SSH config resolution. Only `--target dev` needs `sudo`.
@@ -118,7 +119,7 @@ Article data changed for specific volumes only. No need to reimport everything.
 3. Import to dev: `pipe7 --force` + `pipe8` for affected volumes, verify in Archive Checker
 4. Better Stack: pause monitors
 5. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only` — sync import XMLs
-6. `ssh sea-live` → `pipe7_import.sh <affected volumes> --force` — reimport just those issues
+6. `ssh sea-live` → `pipe7_import.sh <affected volumes> --force` — reimport just those issues (add `--no-reindex` if body text is unchanged — JATS/PDF/DOI-only changes aren't searchable text and the full rebuild can grind for ~20 min)
 7. `pipe8_restore.py --target live --confirm`
 8. `pipe9b_citation_dois.py --target live --confirm`
 9. `pipe9c_content_filtered.py --target live --confirm`

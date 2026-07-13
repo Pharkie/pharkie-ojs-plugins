@@ -225,7 +225,10 @@ The `aliases` section is preserved manually for titles that can't be matched aut
 | `--journal=<path>` | `ea` | OJS journal path (URL path component). |
 | `--admin=<user>` | `admin` | OJS admin username for the import. |
 | `--force` | Off | Reimport issues that already exist in OJS. |
+| `--no-reindex` | Off | Skip the full search index rebuild + drain. Use for galley-only redeploys (JATS/PDF/DOI corrections) — those aren't searchable text, and the rebuild's wipe phase can grind for many minutes after repeated same-day rebuilds. Body-text changes REQUIRE the full rebuild. |
 | `--wipe-articles` | Off | Wipe ALL existing issues/articles before importing. |
+
+After every run pipe7 chowns `/var/www/files/journals` and the Laravel cache to `www-data`: imports run as root via `docker exec`, and root-owned article files break editorial uploads/deletes (issues log #35).
 
 ### pipe10_verify.py
 
@@ -283,7 +286,9 @@ backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 
 ## Fixing an HTML galley on live
 
-**Never re-import on live** — it risks duplicates and ID changes. Instead, update the galley file in place:
+The standard route for any content correction is now a **single-issue reimport**: fix the pipeline source (`raw.html` + `_manual_html` flag in toc.json), rerun pipe2→pipe6, then on live `pipe7_import.sh <issue> --force` followed by `pipe8_restore.py --target live --confirm` (restores original submission/issue IDs, so URLs and DOIs survive) and `pipe9b`/`pipe9c`. Add `--no-reindex` when body text is unchanged. This keeps HTML, JATS, and PDF galleys plus citation rows consistent — a hand-edited galley file is overwritten by the next reimport, and hand-edits to generated JATS are lost on the next pipeline rerun (that's how issues log #38 was found). Remember the whole-issue PDF is separate and duplicates every article (#37).
+
+For a **pure cosmetic HTML tweak** where a reimport is overkill, you can still update the galley file in place:
 
 1. Edit the `.galley.html` file in `backfill/private/output/<vol>.<iss>/` and commit
 2. Find the galley file path on live:
