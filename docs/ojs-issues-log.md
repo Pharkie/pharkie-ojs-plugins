@@ -42,6 +42,7 @@ Issues marked **[reported]** were filed upstream. Others were found by other use
 | 32 | assign-roles.sh email mismatch created orphan editorial accounts | Config | Roles moved to synced accounts; emails corrected |
 | 33 | Unpublishing an issue de-indexes all its articles from search | By-design | Republish + full index rebuild + drain |
 | 34 | `jobs.php total` counts all queues; `run` drains only the default | CLI quirk | Workers exit on run's empty-queue message |
+| 35 | Root-owned article files break editorial uploads/deletes | Self-inflicted | pipe7 chowns files+cache to www-data after import |
 
 ## Install bugs
 
@@ -567,3 +568,14 @@ The CLI pairing invites a broken pattern: "loop `run` while `total` > 0". `total
 - **Impact:** `scripts/ojs/blast-queue.sh` workers idle-looped to their 30-minute deadline whenever jobs sat in a non-default queue. Harmless for real workloads (search indexing, DOI deposits, and notifications all use the default queue) but slow and confusing.
 - **Fix (2026-07-13):** workers now also exit when `run --once` prints its empty-queue message, reporting how many jobs remain in out-of-scope queues. Worst case if PKP rewords the message is the old idle-to-deadline behaviour, never a wrong drain.
 - **Related tooling bug found the same day:** blast-queue.sh's count parsing used `grep -oP` with an `|| echo 0` fallback. BSD grep (macOS) has no `-P`, so run from a Mac the script misread any queue as empty and exited without doing anything — the same failure mode as #25 (a drain that silently doesn't drain), and the same pattern silently disabled the server-load guard. Parsing is now portable (`grep -oE`), the queue-size check errors out rather than guessing zero, and `--env=` was added so local mode works outside the devcontainer. See `docs/blast-queue.md`.
+
+### 35. Root-owned article files break editorial uploads ("HTTP Error.") and galley deletes [self-inflicted]
+
+Every backfill import runs `php tools/importExport.php` via `docker exec` as root, so the article directories and files it creates under `/var/www/files/journals/` are `root:root`. Apache runs as `www-data`. Consequences, all silent until an editor touches an imported article:
+
+- **Galley upload** fails with plupload's bare "HTTP Error." — server side it's a PHP Fatal `UnableToWriteFile … Permission denied` writing into the root-owned article directory.
+- **Galley delete** 500s (`Unable to delete file …`) — worse, OJS deletes the DB rows *before* the file deletion throws, leaving the publication with a galley half-removed (we lost a PDF galley's DB rows this way; the file stayed on disk).
+- **Root-run CLI jobs** (`jobs.php run` via docker exec) leave root-owned Laravel cache entries the same way — the likely mechanism behind the scheduler `flock(): argument must be resource, false given` fatals logged as #24 (`fopen` on a root-owned cache file returns false for www-data first).
+
+- **Fix (2026-07-13):** `pipe7_import.sh` now chowns `/var/www/files/journals` and `/var/www/html/cache` to `www-data:www-data` after every import run, so imports self-heal on both dev and live.
+- **Gotcha:** a failed galley delete is not transactional. If an editor reports "HTTP Error." on upload, check for half-deleted galleys (`publication_galleys` rows with dangling or NULL `submission_file_id`) from any delete attempts that preceded it.
