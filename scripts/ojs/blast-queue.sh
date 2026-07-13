@@ -253,7 +253,7 @@ while true; do
   printf '%s\n' \"\$OUT\"
   case \"\$OUT\" in
     *'No jobs available'*)
-      echo \"Default queue empty; \$REMAINING job(s) sit in other queues that 'jobs.php run' does not process.\"
+      echo \"No unreserved jobs in the default queue; \$REMAINING job(s) remain (reserved by other workers, or in other queues 'jobs.php run' does not process).\"
       exit 0
       ;;
   esac
