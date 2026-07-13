@@ -32,6 +32,7 @@ import argparse
 import glob
 import json
 import os
+import shlex
 import subprocess
 import sys
 from xml.etree import ElementTree as ET
@@ -334,10 +335,46 @@ def build_issue_remap_sql(old_id: int, new_id: int) -> list[str]:
         f"UPDATE issues SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE issue_settings SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE issue_galleys SET issue_id = {old_id} WHERE issue_id = {new_id};",
+        f"UPDATE issue_files SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE publications SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE custom_issue_orders SET issue_id = {old_id} WHERE issue_id = {new_id};",
         f"UPDATE journals SET current_issue_id = {old_id} WHERE current_issue_id = {new_id};",
     ]
+
+
+def move_issue_dirs(target: str, issue_remaps: list[tuple[int, int]]):
+    """Move issue file directories to follow an issue_id remap.
+
+    Issue galley files live at files/journals/<j>/issues/<issue_id>/public/.
+    Without this, the remapped issue_files rows point at directories still
+    named after the import-time issue_id, and stale copies accumulate on
+    every reimport (see docs/ojs-issues-log.md #37).
+    """
+    moves = []
+    for old_id, new_id in issue_remaps:
+        if old_id == new_id:
+            continue
+        moves.append(
+            f'for j in /var/www/files/journals/*/issues; do '
+            f'SRC="$j/{new_id}"; DST="$j/{old_id}"; '
+            f'if [ -d "$SRC" ]; then mkdir -p "$DST" && cp -a "$SRC/." "$DST/" '
+            f'&& rm -rf "$SRC" && chown -R www-data:www-data "$DST"; fi; done'
+        )
+    if not moves:
+        return
+    script = ' ; '.join(moves)
+    if target == 'live':
+        cmd = ['ssh', 'sea-live',
+               'cd /opt/pharkie-ojs-plugins && docker compose exec -T ojs sh -c '
+               + shlex.quote(script)]
+    else:
+        cmd = ['docker', 'compose', 'exec', '-T', 'ojs', 'sh', '-c', script]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f'WARNING: issue dir move failed: {result.stderr.strip()}',
+              file=sys.stderr)
+    else:
+        print(f'Moved issue file dirs for {len(moves)} remapped issue(s).')
 
 
 def main():
@@ -600,6 +637,10 @@ def main():
     except SqlError as e:
         print(f'ERROR: {e}', file=sys.stderr)
         sys.exit(1)
+
+    # Move issue file directories to follow the issue_id remap
+    if issue_remaps:
+        move_issue_dirs(args.target, issue_remaps)
 
     # Verify: spot-check a few remapped submissions
     verify_ok = 0
