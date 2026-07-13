@@ -3,6 +3,7 @@
 #
 # Usage:
 #   scripts/ojs/blast-queue.sh                              # local dev, single worker (foreground)
+#   scripts/ojs/blast-queue.sh --env=prod                   # local mode outside the devcontainer (e.g. on the VPS)
 #   scripts/ojs/blast-queue.sh --host=sea-live              # remote: nohup by default (survives SSH disconnect)
 #   scripts/ojs/blast-queue.sh --host=sea-live --no-nohup   # remote: foreground (for debugging)
 #   scripts/ojs/blast-queue.sh --workers=3                  # 3 parallel workers
@@ -10,9 +11,11 @@
 #   scripts/ojs/blast-queue.sh --host=sea-live --kill       # kill any stale workers
 #
 # How it works:
-#   Each worker loops: check queue size → exit if empty → run one batch → repeat.
-#   `jobs.php run` processes up to 30 jobs per invocation then exits cleanly.
+#   Each worker loops: check queue size → exit if empty → run one job → repeat.
 #   No daemon processes, no polling — workers exit reliably when the queue is empty.
+#   Note: `jobs.php total` counts ALL queues while `jobs.php run` drains only the
+#   default queue, so workers also exit when `run` reports the default queue empty
+#   (jobs in other queues, e.g. the test queue, are out of scope for a drain).
 #
 #   Workers are written as a script file inside the container to avoid shell quoting
 #   issues through SSH + docker exec layers. Each worker has a deadline (default 30 min)
@@ -30,6 +33,7 @@ set -eo pipefail
 
 WORKERS=1
 HOST=""
+DC_ENV=""  # forwarded to init_dc for local mode outside the devcontainer
 NOHUP=""  # auto: true for remote, false for local
 PURGE=false
 KILL_ONLY=false
@@ -43,6 +47,7 @@ JOBS_PHP="/var/www/html/lib/pkp/tools/jobs.php"
 for arg in "$@"; do
   case "$arg" in
     --host=*)    HOST="${arg#*=}" ;;
+    --env=*)     DC_ENV="$arg" ;;
     --workers=*) WORKERS="${arg#*=}" ;;
     --no-nohup)  NOHUP=false ;;
     --purge)     PURGE=true ;;
@@ -94,11 +99,22 @@ else
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   source "$SCRIPTS_ROOT/lib/dc.sh"
-  init_dc
+  if [ -n "$DC_ENV" ]; then init_dc "$DC_ENV"; else init_dc; fi
   CONTAINER=$($DC ps --format '{{.Names}}' | grep ojs-1 | grep -v db)
   DOCKER_EXEC="docker exec $CONTAINER"
   LOAD_CMD="uptime"
 fi
+
+# Queue size, parsed portably. This pipeline runs on the INVOKING machine:
+# BSD grep (macOS) has no -P, and the old `grep -oP '\d+' || echo 0` fallback
+# turned that failure into "queue empty". Prints nothing if the count can't
+# be read — callers must handle empty. Success check comes first so error
+# text (e.g. an ssh failure message) is never mined for digits.
+queue_total() {
+  local out
+  out=$($DOCKER_EXEC php $JOBS_PHP total 2>&1) || return 0
+  printf '%s\n' "$out" | grep -oE '[0-9]+' | head -n1 || true
+}
 
 echo "Host: ${HOST:-local}"
 echo "Container: $CONTAINER"
@@ -144,8 +160,8 @@ fi
 
 if $PURGE; then
   echo ""
-  TOTAL=$($DOCKER_EXEC php $JOBS_PHP total 2>&1 | grep -oP '\d+' || echo "0")
-  echo "Purging all $TOTAL queued jobs..."
+  TOTAL=$(queue_total)
+  echo "Purging all ${TOTAL:-?} queued jobs..."
   $DOCKER_EXEC php $JOBS_PHP purge --all 2>&1
   echo "Done."
   exit 0
@@ -157,7 +173,11 @@ kill_stale_workers
 
 # --- Check queue size ---
 
-TOTAL=$($DOCKER_EXEC php $JOBS_PHP total 2>&1 | grep -oP '\d+' || echo "0")
+TOTAL=$(queue_total)
+if ! [[ "$TOTAL" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: Could not read queue size ('php $JOBS_PHP total' failed) — refusing to guess."
+  exit 1
+fi
 echo "Jobs in queue: $TOTAL"
 
 if [ "$TOTAL" = "0" ]; then
@@ -167,7 +187,8 @@ fi
 
 # --- Check server load ---
 
-LOAD=$($LOAD_CMD 2>/dev/null | grep -oP 'load average: \K[\d.]+' || echo "0")
+LOAD=$($LOAD_CMD 2>/dev/null | sed -nE 's/.*load averages?: *([0-9]+[.,][0-9]+).*/\1/p' | tr ',' '.')
+LOAD=${LOAD:-0}
 echo "Server load: $LOAD"
 
 LOAD_STATUS=$(awk "BEGIN {
@@ -209,13 +230,26 @@ while true; do
     exit 0
   fi
 
-  REMAINING=\$(php \$JOBS_PHP total 2>&1 | grep -oP '\d+' || echo '0')
+  REMAINING=\$(php \$JOBS_PHP total 2>&1 | grep -oE '[0-9]+' | head -n1)
+  REMAINING=\${REMAINING:-0}
   if [ \"\$REMAINING\" = '0' ]; then
     echo \"Queue empty\"
     exit 0
   fi
 
-  php \$JOBS_PHP run --once 2>&1
+  # 'total' counts ALL queues but 'run' drains only the default one, so a
+  # nonzero total can be jobs this worker will never touch (e.g. the test
+  # queue). Exit on run's own empty-queue message rather than idling here
+  # until the deadline. If the message wording ever changes, worst case is
+  # the old behaviour (idle until deadline), never a wrong drain.
+  OUT=\$(php \$JOBS_PHP run --once 2>&1)
+  printf '%s\n' \"\$OUT\"
+  case \"\$OUT\" in
+    *'No jobs available'*)
+      echo \"Default queue empty; \$REMAINING job(s) sit in other queues that 'jobs.php run' does not process.\"
+      exit 0
+      ;;
+  esac
 
   # Delay between jobs to avoid Crossref rate limiting
   if [ $DELAY -gt 0 ]; then
@@ -273,7 +307,8 @@ monitor_progress() {
   while true; do
     sleep 30
     local remaining elapsed processed rate eta_s eta_m
-    remaining=$($DOCKER_EXEC php $JOBS_PHP total 2>&1 | grep -oP '\d+' || echo "?")
+    remaining=$(queue_total)
+    remaining=${remaining:-?}
     if [ "$remaining" != "?" ]; then
       elapsed=$(( $(date +%s) - MONITOR_START ))
       processed=$(( MONITOR_INITIAL - remaining ))
@@ -318,8 +353,8 @@ wait $MONITOR_PID 2>/dev/null || true
 trap - EXIT
 
 echo ""
-REMAINING=$($DOCKER_EXEC php $JOBS_PHP total 2>&1 | grep -oP '\d+' || echo "0")
-echo "Done. Remaining in queue: $REMAINING"
+REMAINING=$(queue_total)
+echo "Done. Remaining in queue: ${REMAINING:-?}"
 
 # Show DOI status breakdown if remote
 if [ -n "$HOST" ]; then
