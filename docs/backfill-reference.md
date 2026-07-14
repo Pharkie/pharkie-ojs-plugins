@@ -230,6 +230,15 @@ The `aliases` section is preserved manually for titles that can't be matched aut
 
 After every run pipe7 chowns `/var/www/files/journals` and the Laravel cache to `www-data`: imports run as root via `docker exec`, and root-owned article files break editorial uploads/deletes (issues log #35).
 
+### pipe9_issue_galleys.sh
+
+Attaches whole-issue PDF galleys directly via SQL + file copy (no XML import). Skips issues that already have a galley. Source PDF resolution, in order:
+
+1. `backfill/private/output/<vol.iss>/issue-galley.pdf` — **presave slot**: a hand-corrected or re-typeset issue PDF placed here takes precedence and survives pipeline reruns. Use this for edited issue PDFs (e.g. 33.2's redacted/re-typeset version) — the archival `backfill/input/` scan stays untouched.
+2. `backfill/private/input/<vol.iss>.pdf` — the archival scan, cleaned via PyMuPDF on the fly.
+
+Replacing an already-attached issue galley is manual: overwrite `files/journals/1/issues/<issue_id>/public/vol-X-iss-Y.pdf` in the container (chown `www-data`) — see issues log #37.
+
 ### pipe10_verify.py
 
 | Flag | Description |
