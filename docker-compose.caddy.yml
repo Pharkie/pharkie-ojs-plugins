@@ -35,6 +35,13 @@ services:
       - /opt/caddy-conf.d:/etc/caddy/conf.d:ro
       - caddy_data:/data
       - caddy_config:/config
+      # Access logs. A named volume (not stdout) so each project's log survives a
+      # container recreate and can carry an EXPLICIT retention period — "we keep
+      # access logs for 30 days" is a statement a privacy notice can make, where
+      # "whatever fits in the docker log buffer" isn't. Request logs contain IP
+      # addresses, so bounding them is a compliance matter, not housekeeping.
+      # Each project writes its own file from its own conf.d snippet.
+      - caddy_logs:/var/log/caddy
     depends_on:
       - wp
       - ojs
@@ -44,3 +51,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  caddy_logs:
