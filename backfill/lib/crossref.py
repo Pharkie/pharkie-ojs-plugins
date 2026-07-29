@@ -5,6 +5,8 @@ for confidence-based DOI matching.
 """
 
 import re
+import unicodedata
+from difflib import SequenceMatcher
 import sys
 
 import requests
@@ -340,20 +342,62 @@ def _title_similarity(crossref_title, ref_text):
     return min(raw_sim, 1.0)
 
 
+def _fold(text):
+    """Lowercase and strip diacritics, so "Rédei" and "Redei" compare equal."""
+    decomposed = unicodedata.normalize('NFKD', text)
+    return ''.join(c for c in decomposed if not unicodedata.combining(c)).lower()
+
+
+# Matches split4_normalize_authors' fuzzy threshold for the same job.
+_AUTHOR_SIMILARITY = 0.85
+_AUTHOR_FUZZY_MIN_LEN = 5
+_WORD_RE = re.compile(r'[^\W\d_]+', re.UNICODE)
+# Same particle list pipe6_ojs_xml uses when splitting author names.
+_NAME_PARTICLES = {'van', 'de', 'du', 'von', 'di', 'la', 'le', 'el', 'den', 'der'}
+
+
 def _check_author_match(crossref_authors, ref_text):
     """Check if any Crossref author's family name appears in the reference text.
 
     This catches cases where Crossref returns a review of a book rather than
     the book itself — the review author won't match the reference author.
+
+    Accents are folded, and a near-miss on a long surname still counts. A plain
+    substring test rejected perfect matches against our own archive: some of
+    this journal's metadata was deposited with mangled author names, so
+    Crossref holds "Koèiûnas" where the reference correctly says "Kočiūnas".
+    Folding leaves those one character apart ("koeiunas" / "kociunas"), which
+    is a near-miss rather than a match, and a paper with title similarity 1.0
+    in the right journal was being scored no_match on the strength of it.
     """
     if not crossref_authors:
         return False
 
-    ref_lower = ref_text.lower()
+    ref_folded = _fold(ref_text)
+    ref_words = None  # built lazily; most matches never need it
+
     for author in crossref_authors:
-        family = author.get('family', '').lower()
-        if family and len(family) >= 3 and family in ref_lower:
+        family = author.get('family', '')
+        if not family or len(family) < 3:
+            continue
+        folded = _fold(family)
+        candidates = [folded]
+        # References often invert the particle: Crossref has "van Deurzen"
+        # where the reference reads "Deurzen, E. van". Try the bare surname.
+        head, _, rest = folded.partition(' ')
+        if rest and head in _NAME_PARTICLES:
+            candidates.append(rest)
+        if any(c in ref_folded for c in candidates):
             return True
+        folded = candidates[-1]
+        if len(folded) < _AUTHOR_FUZZY_MIN_LEN:
+            continue
+        if ref_words is None:
+            ref_words = [w for w in _WORD_RE.findall(ref_folded)
+                         if len(w) >= _AUTHOR_FUZZY_MIN_LEN]
+        for word in ref_words:
+            if SequenceMatcher(None, folded, word).ratio() >= _AUTHOR_SIMILARITY:
+                return True
     return False
 
 

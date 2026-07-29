@@ -58,7 +58,7 @@ Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfil
 - **`_manual_html` in toc.json** = hand-corrected HTML galleys. `pipe1_haiku_html.py` skips these automatically.
 - **Haiku extraction can drop repeated/multilingual content.** Always verify HTML galleys against source PDFs for articles with non-English references.
 - **Docker in devcontainer requires `sudo`** for `pipe7_import.sh` and `pipe8_restore.py` (they call `docker` directly). Other pipeline steps (pipe1–pipe6) don't need Docker. For `--target live`, do NOT use `sudo` — it breaks SSH config resolution. Only `--target dev` needs `sudo`.
-- **`pipe3_generate_jats.py` wipes citations AND DOIs** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`. After pipe3+pipe4, run pipe4b to re-attach DOIs from `doi_matches.json` cache (~2 min, no API calls). Only use `--revalidate` when you need to re-score against Crossref (~45 min).
+- **`pipe3_generate_jats.py` wipes citations AND DOIs** — ALWAYS run full pipeline (pipe2→pipe6), never skip `pipe4_extract_citations.py`. The inverse also holds: **never run `pipe4` on its own** against already-extracted JATS. It moves references out of the body, so a second pass finds an empty body and re-derives the back matter from the leftovers — on 37.2 that silently cost one article four of its ten references, and the issue total was unchanged because another article gained exactly four (issues log #40). Diff per-article counts, never the total. After pipe3+pipe4, run pipe4b to re-attach DOIs from `doi_matches.json` cache (~2 min, no API calls). Only use `--revalidate` when you need to re-score against Crossref (~45 min).
 - **Three HTML stages per article:** `.raw.html` (Haiku extraction), `.post.html` (post-processed), `.galley.html` (from JATS). No file collisions.
 - **Three galleys per article in OJS:** PDF, HTML ("Full Text"), and JATS XML. All subject to the same paywall. JATS XML galley is for OAI-PMH harvesting, indexing, and preservation.
 - **Citation classification is heading-driven.** Items under "References" → citations. Items under "Notes" → notes. The heading is the authority — no per-item promotion between categories. Bio/contact headings ("About the Author", "Author Bio", "Contact", "Author Information") → bios. Each item gets exactly 1 classification, never 0 or 2. Contact info is always part of bio.
@@ -155,6 +155,7 @@ pipe3 wipes JATS (including DOIs from pipe4b). After any pipe3+pipe4 rerun, DOIs
 - `pipe9b` and `pipe9c` are always needed after import — they write to DB tables that the import doesn't populate.
 - Archive Checker reviews survive `--wipe-articles` (custom table, not touched by import). But `publication_id` becomes stale — the `submission_id` column is what matters.
 - Better Stack monitors must be paused before any operation that causes downtime. See memory file `feedback_maintenance_window.md`.
+- **One heavy job at a time.** The box is 2 vCPUs / 3.8 GB running thirteen containers. An issue import running alongside a CI-triggered Harbour deploy pinned both cores and took every vhost down — sshd included, so the only way in was `hcloud` (issues log #39). `gh run list --limit 1` in both repos before starting an import, and don't push while one is running.
 
 ### Data and tests
 

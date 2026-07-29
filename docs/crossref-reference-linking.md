@@ -8,6 +8,19 @@ How we match extracted references against Crossref DOIs to enrich citation metad
 
 Our references are stored as plain text `<mixed-citation>` elements in JATS XML. `pipe4b_match_dois.py` queries the Crossref API to find DOIs for cited works, then writes them as `<pub-id pub-id-type="doi">` elements in JATS. This runs as step 8 in the pipeline — after citation extraction (pipe4), before galley HTML generation (pipe5). It's optional during QA iteration and typically run once when references are finalized.
 
+## `--article` rewrites the whole cache
+
+`doi_matches.json` is written afresh at the end of every run from that run's
+results. With `--article <slug>` the run only holds that one article, so the
+file comes back containing only it — every other article's cached matches are
+gone, and the next full run has to re-query Crossref for all of them.
+
+Nothing is lost permanently (the cache is derived, and the file is committed in
+the private repo so the previous version is recoverable with `git checkout`),
+but a full re-query takes minutes where a cache hit takes seconds. If you only
+want to fix one article, expect to pay that on the next full run — or restore
+the file from git afterwards.
+
 ## How it works
 
 ```mermaid

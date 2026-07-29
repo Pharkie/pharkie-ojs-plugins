@@ -290,6 +290,25 @@ backfill/split_pipeline/split_issue.sh path/to/issue.pdf --only=normalize
 
 ---
 
+## Reference sections the extractor recognises
+
+`pipe4_extract_citations.py` is heading-driven (see
+[citation classification](citation-classification.md)). Alongside the obvious
+ones — References, Bibliography, Works Cited, Notes — it treats an obituary's
+list of the subject's own work as citations: "Papers published in <journal>",
+"Works by <person>". Those belong in the reference list and earn DOI links.
+
+Deliberately **not** matched: "Publications received for review", which is a
+list of books sent in to the journal, not references.
+
+Two things to know before adding a heading here:
+
+- The section must sit in the contiguous back matter at the *end* of the body.
+  A reference list mid-article (an appendix's own list, say) is not picked up —
+  37.2's Twelve-Day War paper has three, and only the last is extracted.
+- Adding a pattern changes every issue, not just the one in front of you. Diff
+  per-article citation counts across the archive before and after.
+
 ## Fixing a bad split or HTML galley
 
 1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`

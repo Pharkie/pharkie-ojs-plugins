@@ -123,10 +123,34 @@ python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/$V/toc.j
 roughly 40% of references to match a DOI — that is the rate across the archive,
 not a sign something is wrong.
 
-Order matters: `pipe3` rewrites the JATS from scratch, wiping citations and DOIs,
-so `pipe4` and `pipe4b` must follow it and `pipe5`/`pipe6` must follow them.
+**Run these in order, as a block.** `pipe3` rewrites the JATS from scratch,
+putting references back in the body and wiping citations and DOIs; `pipe4`
+expects exactly that state. Running `pipe4` on its own against already-extracted
+JATS finds an empty body and re-derives the back matter from the leftovers — on
+37.2 that quietly cost one article four of its ten references (issues log #40).
+
+**Check per article, not in total.** That same mistake left the issue total
+unchanged, because one article gained exactly what another lost. Before
+importing, diff the counts:
+
+```bash
+python3 - <<'EOF'
+import json, os
+from xml.etree import ElementTree as ET
+toc = json.load(open('backfill/private/output/<vol>.<iss>/toc.json'))
+for a in toc['articles']:
+    f = os.path.splitext(a['split_pdf'])[0] + '.jats.xml'
+    print(f"{len(ET.parse(f).findall('.//{*}ref')):>4}  {os.path.basename(f)}")
+EOF
+```
 
 ## 5. Import to dev and check it
+
+> **Nothing else may be touching the box.** It is 2 vCPUs and 3.8 GB running
+> thirteen containers. An import running alongside a CI deploy exhausted it and
+> took every site down, sshd included (issues log #39). Before you start:
+> `gh run list --limit 1` in both repos, and don't push while an import runs.
+
 
 ```bash
 bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/$V
@@ -175,6 +199,8 @@ python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev
 Follow "Specific issues changed" in [`CLAUDE.md`](../CLAUDE.md#deploying-to-live),
 with the new-issue differences:
 
+0. **Check nothing else is running.** `gh run list --limit 1` in both repos —
+   a CI deploy building alongside the import will take the box down (#39).
 1. Pause the Better Stack monitors.
 2. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only`
 3. On the box: `pipe7_import.sh <issue dir>` (no `--force` — the issue is new).
