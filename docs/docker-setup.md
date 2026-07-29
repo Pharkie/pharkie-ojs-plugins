@@ -6,6 +6,17 @@
 > 2026-07-29). It is kept because the integration is still in production until
 > Harbour cut-over. **Live WordPress is on Krystal, not here.**
 
+> **The WordPress container is not given `.env`.** Bedrock's config reads its
+> 17 variables from the container environment instead (`environment:` in the
+> `wp` service, the same pattern the OJS service uses). Mounting the file would
+> put all 82 of this project's secrets — the OJS admin and DB-root passwords
+> among them — inside a public-facing web container to supply those 17.
+> Note `application.php` guards with `file_exists`, not `is_readable`, so an
+> *unreadable* `.env` is worse than none: it enters the branch and phpdotenv
+> throws, taking out wp-admin with a stack trace. Don't leave an empty
+> `wordpress/.env` placeholder lying around — that is exactly what happened
+> (fixed 2026-07-29).
+
 `docker-compose.yml` (in the project root) runs four containers — WordPress + MariaDB, OJS + MariaDB — on a shared network so WP can call OJS endpoints directly. Setup scripts (`scripts/wp/setup-wp.sh`, `scripts/ojs/setup-ojs.sh`) run after containers start to create the journal, configure subscriptions, activate plugins, and optionally import sample data. Both plugins are bind-mounted from `plugins/` so edits are reflected immediately. All config comes from `.env`.
 
 The same stack works locally, on staging, and in production — only the `.env` and compose overrides differ.

@@ -26,11 +26,33 @@ services:
       WORDPRESS_DB_NAME: wordpress
       WP_ADMIN_PASSWORD: ${WP_ADMIN_PASSWORD:?WP_ADMIN_PASSWORD not set in .env}
       WPOJS_BASE_URL: ${WPOJS_BASE_URL:?WPOJS_BASE_URL not set in .env}
+      # WordPress's own config (Bedrock reads these through env()). Passed as
+      # named variables rather than mounting .env, which would put all 82 of
+      # this project's secrets — OJS admin and DB-root passwords among them —
+      # inside a public-facing web container to supply the 17 below.
+      # DB_PREFIX and DISABLE_WP_CRON are deliberately absent: application.php
+      # falls back to 'wp_' and false, which is the behaviour today.
+      DB_HOST: ${DB_HOST:?DB_HOST not set in .env}
+      DB_NAME: ${DB_NAME:?DB_NAME not set in .env}
+      DB_USER: ${DB_USER:?DB_USER not set in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD not set in .env}
+      WP_HOME: ${WP_HOME:?WP_HOME not set in .env}
+      WP_SITEURL: ${WP_SITEURL:?WP_SITEURL not set in .env}
+      WP_ENV: ${WP_ENV:?WP_ENV not set in .env}
+      WP_DEBUG_LOG: ${WP_DEBUG_LOG:-}
+      WPOJS_API_KEY: ${WPOJS_API_KEY:?WPOJS_API_KEY not set in .env}
+      AUTH_KEY: ${AUTH_KEY:?AUTH_KEY not set in .env}
+      SECURE_AUTH_KEY: ${SECURE_AUTH_KEY:?SECURE_AUTH_KEY not set in .env}
+      LOGGED_IN_KEY: ${LOGGED_IN_KEY:?LOGGED_IN_KEY not set in .env}
+      NONCE_KEY: ${NONCE_KEY:?NONCE_KEY not set in .env}
+      AUTH_SALT: ${AUTH_SALT:?AUTH_SALT not set in .env}
+      SECURE_AUTH_SALT: ${SECURE_AUTH_SALT:?SECURE_AUTH_SALT not set in .env}
+      LOGGED_IN_SALT: ${LOGGED_IN_SALT:?LOGGED_IN_SALT not set in .env}
+      NONCE_SALT: ${NONCE_SALT:?NONCE_SALT not set in .env}
     volumes:
       - ./wordpress:/var/www/html
       - ./plugins/wpojs-sync:/var/www/html/web/app/plugins/wpojs-sync
       - wp_uploads:/var/www/html/web/app/uploads
-      - ./.env:/var/www/html/.env:ro
       - ./scripts:/var/www/html/scripts:ro
       - ./docker/data/test-users.csv:/data/test-users.csv:ro
     depends_on:
