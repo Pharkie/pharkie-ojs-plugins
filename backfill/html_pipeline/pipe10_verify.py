@@ -27,6 +27,9 @@ import json
 import argparse
 import subprocess
 
+# Mirrors pipe6_ojs_xml.ACCESS_OVERRIDES — toc.json "access" beats the section.
+ACCESS_OVERRIDES = {'open': '1', 'subscription': '0', 'paywalled': '0'}
+
 
 def run_db_query(query, docker_container=None, db_host=None, db_port=None,
                  db_name='ojs', db_user='ojs', db_pass='ojs'):
@@ -190,8 +193,13 @@ def verify_issue(toc_data, container=None, journal_path='ea', **db_opts):
                 check(f'Section: {expected["title"][:50]}', False,
                       f'expected={exp_section}, got={ojs_section}')
 
-            # Check access status
+            # Check access status. Section sets the default, but an article
+            # can override it in toc.json ("access": "open") -- an obituary
+            # filed under Articles that the editors chose to open, say.
             exp_access = '0' if exp_section == 'Articles' else '1'
+            override = str(expected.get('access', '')).strip().lower()
+            if override in ACCESS_OVERRIDES:
+                exp_access = ACCESS_OVERRIDES[override]
             ojs_access = ojs_row[3]
             if str(ojs_access) != exp_access:
                 check(f'Access: {expected["title"][:50]}', False,

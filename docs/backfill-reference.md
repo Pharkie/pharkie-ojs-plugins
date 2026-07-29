@@ -149,6 +149,12 @@ The pipeline maps articles to four OJS sections with specific paywall settings:
 | Book Review Editorial | `bookeditorial` | No (open) | No | No |
 | Book Reviews | `BR` | Yes | No | No |
 
+Access follows the section by default. An individual article can override it
+with `"access": "open"` (or `"subscription"`) in toc.json — see the
+[TOC guide](backfill-toc-guide.md). `pipe6_ojs_xml.py` prints every article
+whose access departs from its section default, so overrides are visible in the
+run rather than buried in the XML.
+
 Classification rules:
 
 | TOC title | Section |

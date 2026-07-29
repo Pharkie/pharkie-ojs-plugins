@@ -126,8 +126,25 @@ class HTMLToJATSConverter(HTMLParser):
             self._emit('<break/>')
         elif tag in ('span', 'div', 'font', 'center'):
             pass  # skip wrapper tags, keep content
-        elif tag in ('table', 'thead', 'tbody', 'tr', 'td', 'th',
-                     'img', 'figure', 'figcaption', 'hr'):
+        elif tag == 'figure':
+            self._emit('<fig>')
+        elif tag == 'figcaption':
+            self._emit('<caption><p>')
+        elif tag == 'img':
+            # Born-digital issues carry real photographs; scans never did, so
+            # the backfill dropped them. The file sits beside the JATS, and
+            # pipe5 inlines it when it builds the galley.
+            src = attrs_dict.get('src', '')
+            alt = attrs_dict.get('alt', '')
+            if src:
+                graphic = f'<graphic xlink:href="{escape(src)}"'
+                if alt:
+                    graphic += f' xlink:title="{escape(alt)}"'
+                width = attrs_dict.get('data-width', '')
+                if width:
+                    graphic += f' content-type="width:{escape(width)}"'
+                self._emit(graphic + '/>')
+        elif tag in ('table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr'):
             # Can't meaningfully convert these — skip tag but keep text
             pass
         elif tag in ('html', 'head', 'body', 'meta', 'title', 'style', 'script'):
@@ -137,7 +154,11 @@ class HTMLToJATSConverter(HTMLParser):
     def handle_endtag(self, tag):
         tag = tag.lower()
 
-        if tag in ('h2', 'h3'):
+        if tag == 'figure':
+            self._emit('</fig>\n')
+        elif tag == 'figcaption':
+            self._emit('</p></caption>')
+        elif tag in ('h2', 'h3'):
             self._emit('</title>\n')
         elif tag == 'p':
             if self._in_blockquote:
@@ -486,10 +507,21 @@ def generate_article_jats(article: dict, volume: int, issue: int,
         with open(html_path, 'r', encoding='utf-8') as f:
             if '<!-- AUTO-EXTRACTED:' in f.read(200):
                 is_content_filtered = True
+    # Born-digital flag. Articles read straight from a publisher's PDF text
+    # layer were never "restored" from anything, and must not carry the
+    # archive-restoration notice the scanned back-issues need.
+    born_digital = str(article.get('_html_extractor', '')).startswith('layout')
+
+    custom_meta = []
     if is_content_filtered:
+        custom_meta.append(('content-filtered', 'true'))
+    if born_digital:
+        custom_meta.append(('born-digital', 'true'))
+    if custom_meta:
         lines.append('<custom-meta-group>')
-        lines.append('<custom-meta><meta-name>content-filtered</meta-name>'
-                     '<meta-value>true</meta-value></custom-meta>')
+        for name, value in custom_meta:
+            lines.append(f'<custom-meta><meta-name>{name}</meta-name>'
+                         f'<meta-value>{value}</meta-value></custom-meta>')
         lines.append('</custom-meta-group>')
 
     lines.append('</article-meta>')

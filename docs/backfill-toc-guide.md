@@ -45,6 +45,13 @@ Every item in the `articles` array has these fields:
 | `pdf_page_start` | yes | 0-based PDF page index. Page 0 is the first page of the PDF. |
 | `pdf_page_end` | yes | 0-based PDF page index of the last page (inclusive). |
 
+Optional on any article:
+
+| Field | Description |
+|---|---|
+| `access` | `open`, `subscription` or `paywalled`. Overrides the section's default access for this article alone — an obituary filed under Articles that the editors want everyone to read, say. Omit it to follow the section. An unrecognised value is a validation error, not a silent fallback: a paywall set the wrong way is not something to discover from a reader. |
+| `figures` | Alt text for images extracted from the PDF, in order of appearance: `[{"alt": "Portrait photograph of ..."}]`. Only born-digital issues have extractable figures. Without it the image still appears, with `alt=""` — and `pipe1d_layout_html.py` says how many are missing. |
+
 Book reviews have additional fields:
 
 | Field | Required | Description |

@@ -17,6 +17,11 @@ from pathlib import Path
 REQUIRED_ISSUE_FIELDS = ['volume', 'date', 'articles']
 REQUIRED_ARTICLE_FIELDS = ['title', 'authors', 'section', 'pdf_page_start', 'pdf_page_end']
 
+# Optional per-article access override. Access normally follows the section,
+# but an individual article can be opened or paywalled against that default --
+# an obituary under Articles that the editors want everyone to read, say.
+VALID_ACCESS = {'open', 'subscription', 'paywalled'}
+
 
 def validate_toc(toc_path: Path) -> list[str]:
     """Validate a toc.json file. Returns list of error strings (empty = valid)."""
@@ -45,6 +50,19 @@ def validate_toc(toc_path: Path) -> list[str]:
         # authors must be a string
         if 'authors' in article and not isinstance(article['authors'], str):
             errors.append(f'{prefix}: "authors" must be a string, got {type(article["authors"]).__name__}')
+
+        # Per-article access override. Reject anything unrecognised rather
+        # than falling back to the section default: the failure mode of a
+        # typo here is an article the editors meant to open staying behind
+        # the paywall, which nothing downstream would flag.
+        if 'access' in article:
+            access = article['access']
+            if not isinstance(access, str) or access.strip().lower() not in VALID_ACCESS:
+                errors.append(
+                    f'{prefix}: "access" must be one of '
+                    f'{", ".join(sorted(VALID_ACCESS))} (got {access!r}); '
+                    f'omit it to follow the section default'
+                )
 
         # Page range sanity
         start = article.get('pdf_page_start')

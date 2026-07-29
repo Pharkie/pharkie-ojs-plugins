@@ -201,7 +201,16 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 
         // Archive quality notice (configurable)
         $archiveNotice = '';
-        if ($this->cfg('archiveNoticeEnabled')) {
+
+        // Articles read straight from the publisher's PDF text layer were
+        // never restored from anything, so the notice would simply be untrue.
+        // Set per-article by pipe9c from the JATS born-digital flag.
+        $isBornDigital = DB::table('publication_settings')
+            ->where('publication_id', $publication->getId())
+            ->where('setting_name', 'bornDigital')
+            ->exists();
+
+        if ($this->cfg('archiveNoticeEnabled') && !$isBornDigital) {
             $request = Application::get()->getRequest();
             $user = $request->getUser();
 

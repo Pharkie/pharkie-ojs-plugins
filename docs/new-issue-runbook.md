@@ -40,7 +40,10 @@ mkdir -p backfill/private/output/<vol>.<iss>
 ```
 
 Write `backfill/private/output/<vol>.<iss>/toc.json` following
-[the TOC guide](backfill-toc-guide.md). Claude can draft it from the PDF; it
+[the TOC guide](backfill-toc-guide.md). Note the optional `access` field: an
+article's access normally follows its section, but anything can be opened or
+paywalled individually — obituaries sit under Articles for citation purposes
+and the editors may well want them open. Claude can draft it from the PDF; it
 still needs checking against the CONTENTS page and the article pages.
 
 Two things the CONTENTS page will not give you:
@@ -78,6 +81,19 @@ worth knowing.
 python3 backfill/html_pipeline/pipe1d_layout_html.py backfill/private/output/<vol>.<iss>/toc.json --audit
 python3 backfill/html_pipeline/pipe1d_layout_html.py backfill/private/output/<vol>.<iss>/toc.json
 ```
+
+It also lifts any photographs out of the PDF, saving them as
+`<slug>-figN.jpg` beside the split PDF and placing them in the flow. The run
+reports how many need alt text; supply it per article in toc.json:
+
+```json
+"figures": [{"alt": "Portrait photograph of Rimantas Antanas Kocinas."}]
+```
+
+Nobody can write a useful description of a photograph from its bounding box,
+so an image without alt text ships as `alt=""` rather than something invented.
+Look at the extracted files and write the alt text — it takes a minute and it
+is the difference between a screen-reader user getting the picture or not.
 
 `--audit` checks the layout model against the actual PDF before writing
 anything. It compares every non-furniture character in the source against the

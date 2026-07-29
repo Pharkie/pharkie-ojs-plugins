@@ -95,6 +95,26 @@ class Line:
         return max(round(s['size'], 1) for s in self.spans)
 
 
+class Figure:
+    """A raster image lifted out of the PDF, standing in the line stream so it
+    can be placed in reading order alongside the text."""
+
+    __slots__ = ('meta', 'alt', 'page', 'y0')
+
+    def __init__(self, meta, alt=''):
+        self.meta = meta
+        self.alt = alt
+        self.page = meta['page']
+        self.y0 = meta['y0']
+
+    def html(self):
+        alt = html.escape(self.alt, quote=True)
+        pct = self.meta.get('measure_pct')
+        width = f' data-width="{pct}%"' if pct else ''
+        return (f'<figure><img src="{html.escape(self.meta["filename"], quote=True)}"'
+                f' alt="{alt}"{width}/></figure>')
+
+
 def read_lines(doc):
     """Flatten a PDF into a list of Line objects in reading order."""
     out = []
@@ -208,15 +228,24 @@ def _mark_spans(ln):
 def _join(chunks_a, chunks_b):
     """Append one line's chunks to a running paragraph.
 
-    Two cases take no joining space: a trailing hyphen (this template has
-    automatic hyphenation off, so it is always part of a compound word), and a
-    URL wrapped across a line (URLs contain no spaces)."""
+    Whether a line break is also a word break is mostly not something to
+    infer: the typesetter recorded it. A line wrapping mid-word -- a compound
+    hyphen, or a URL split across lines -- carries no trailing space, and a
+    line wrapping between words does.
+
+    The exception is a line ending in a hyphen that *does* carry a trailing
+    space, which happens when a long URL breaks at a hyphen in its path
+    (".../a-moment-that-changed-me-i-was-bullied- " continuing "over-my-..."):
+    there the space is justification padding, not a word break. A line-final
+    hyphen always means the word continues, so it wins over the space."""
     if not chunks_a:
         return list(chunks_b)
-    prev_text = chunks_a[-1][0].rstrip()
-    last_token = prev_text.rsplit(None, 1)[-1] if prev_text.split() else ''
-    mid_url = last_token.startswith(('http://', 'https://', 'www.'))
-    sep = '' if (prev_text.endswith(('-', '‐', '‑')) or mid_url) else ' '
+    raw_prev = chunks_a[-1][0]
+    prev_text = raw_prev.rstrip()
+    if prev_text.endswith(('-', '‐', '‑')):
+        sep = ''
+    else:
+        sep = ' ' if raw_prev != prev_text else ''
     merged = list(chunks_a)
     merged[-1] = (prev_text + sep,) + merged[-1][1:]
     merged.extend(chunks_b)
@@ -281,11 +310,61 @@ def _emit_quote(group, out):
     out.append('</blockquote>')
 
 
-def article_html(pdf_path):
-    """Convert one split PDF into body-only HTML."""
+def extract_figures(doc, pdf_path, write=True):
+    """Pull embedded raster images out of the PDF and save them alongside it.
+
+    Historic scans had nothing worth extracting -- every page WAS an image --
+    so the backfill dropped figures entirely. Born-digital issues carry real
+    photographs as separate objects, and those belong in the HTML.
+
+    Returns a list of dicts ordered by position in the document.
+    """
+    stem = os.path.splitext(pdf_path)[0]
+    figures = []
+    for page_index, page in enumerate(doc):
+        placed = []
+        for xref, *_ in page.get_images(full=True):
+            rects = page.get_image_rects(xref)
+            if not rects:
+                continue
+            placed.append((rects[0], xref))
+        for rect, xref in sorted(placed, key=lambda r: (r[0].y0, r[0].x0)):
+            n = len(figures) + 1
+            pix = fitz.Pixmap(doc, xref)
+            if pix.n - pix.alpha >= 4:              # CMYK -> RGB
+                pix = fitz.Pixmap(fitz.csRGB, pix)
+            # These are photographs and the galley carries them inline, so a
+            # lossless PNG would add a megabyte per portrait for no visible
+            # gain. Only images with transparency need PNG.
+            use_png = bool(pix.alpha)
+            filename = f'{os.path.basename(stem)}-fig{n}.' + ('png' if use_png else 'jpg')
+            if write:
+                data = (pix.tobytes('png') if use_png
+                        else pix.tobytes('jpeg', jpg_quality=85))
+                with open(os.path.join(os.path.dirname(stem), filename), 'wb') as fh:
+                    fh.write(data)
+            figures.append({
+                'filename': filename,
+                'page': page_index,
+                'y0': rect.y0,
+                'width': int(rect.width),
+                'height': int(rect.height),
+            })
+    return figures
+
+
+def article_html(pdf_path, alts=None, write_figures=True):
+    """Convert one split PDF into body-only HTML.
+
+    alts maps a 1-based figure number to its alt text (from toc.json
+    "figures"). Anything not supplied gets alt="", which is honest -- nobody
+    can write a useful description of a photograph from its bounding box.
+    """
+    alts = alts or {}
     doc = fitz.open(pdf_path)
     lines = read_lines(doc)
     metrics = page_metrics(lines)
+    figures = extract_figures(doc, pdf_path, write=write_figures)
 
     # Annotate each line: (line, is_indented, is_quote_width)
     annotated = []
@@ -299,11 +378,39 @@ def article_html(pdf_path):
         quote_width = indented and right_gap > QUOTE_RIGHT_INSET
         annotated.append((ln, role, indented, quote_width, right_gap))
 
+    # Drop each figure into the flow at the top of the paragraph it sits
+    # beside. These are floated portraits with text wrapping round them, so
+    # the nearest paragraph boundary above is the honest place for it.
+    for n, fig in enumerate(reversed(figures), 1):
+        number = len(figures) - n + 1
+        at = len(annotated)
+        for i, (ln, role, _ind, _qw, _gap) in enumerate(annotated):
+            if role == 'furniture':
+                continue
+            if (ln.page, ln.y0) >= (fig['page'], fig['y0']):
+                at = i
+                break
+        while at > 0:
+            prev = annotated[at - 1]
+            if prev[1] != 'body' or prev[0].page != fig['page'] or prev[2]:
+                break
+            at -= 1
+        # Reproduce the proportion the image had in print. These are floated
+        # portraits set to about half the measure; blown up to the full column
+        # they dominate a page they were never meant to.
+        page_metric = metrics.get(fig['page'])
+        if page_metric and page_metric['margins']:
+            measure = page_metric['right'] - page_metric['margins'][0]
+            if measure > 0:
+                fig['measure_pct'] = max(25, min(100, round(100 * fig['width'] / measure)))
+        alt = alts.get(number, '')
+        annotated.insert(at, (Figure(fig, alt), 'figure', False, False, 0.0))
+
     # Split into regions at headings so hanging-indent detection is local.
     # Titles and headings wrap over several lines in this template, so
     # consecutive lines of the same role belong to one element.
     non_body = ('banner', 'title', 'booktitle', 'byline', 'strapline',
-                'heading', 'subheading')
+                'heading', 'subheading', 'figure')
     regions = []
     current = []
     for item in annotated:
@@ -311,7 +418,7 @@ def article_html(pdf_path):
         if role == 'furniture':
             continue
         if role in non_body:
-            if regions and current == [] and regions[-1][0][1] == role:
+            if role != 'figure' and regions and current == [] and regions[-1][0][1] == role:
                 regions[-1].append(item)   # continuation of the previous heading
                 continue
             if current:
@@ -329,6 +436,9 @@ def article_html(pdf_path):
     out = []
     for region in regions:
         role = region[0][1]
+        if role == 'figure':
+            out.append(region[0][0].html())
+            continue
         if role in tag_for:
             chunks = []
             for ln, *_rest in region:
@@ -381,7 +491,7 @@ def article_html(pdf_path):
 
 # --- audit ------------------------------------------------------------------
 
-def audit_article(pdf_path, section=''):
+def audit_article(pdf_path, section='', alts=None):
     """Check the layout model actually fits this PDF. Returns list of problems."""
     problems = []
     doc = fitz.open(pdf_path)
@@ -405,7 +515,7 @@ def audit_article(pdf_path, section=''):
         problems.append(f'{section} has neither a title nor a section banner')
 
     # Every non-furniture character in the PDF must survive into the HTML.
-    produced = article_html(pdf_path)
+    produced = article_html(pdf_path, alts=alts, write_figures=False)
     stripped = re.sub(r'<[^>]+>', '', produced)
     stripped = html.unescape(stripped)
 
@@ -430,6 +540,15 @@ def audit_article(pdf_path, section=''):
             f'text mismatch at char {i} (source {len(src)} chars, html {len(got)}): '
             f'source={src[max(0, i - 30):i + 30]!r} html={got[max(0, i - 30):i + 30]!r}'
         )
+
+    # The character check above ignores spacing, so it cannot see two words
+    # run together at a line join. Long unbroken letter runs are the tell.
+    for token in stripped.split():
+        letters = re.sub(r'[^A-Za-z]', '', token)
+        if len(letters) > 28 and not re.search(r'[/@.:]', token):
+            problems.append(f'words look run together at a line break: {token[:60]!r}')
+            break
+
     return problems
 
 
@@ -466,8 +585,11 @@ def main():
             total += 1
             label = f'{vol_iss}/{idx + 1:02d} {art["title"][:48]}'
 
+            alts = {i + 1: (f or {}).get('alt', '')
+                    for i, f in enumerate(art.get('figures') or [])}
+
             if args.audit:
-                problems = audit_article(pdf, art.get('section', ''))
+                problems = audit_article(pdf, art.get('section', ''), alts)
                 if problems:
                     failed += 1
                     print(f'  FAIL  {label}')
@@ -483,7 +605,7 @@ def main():
                 print(f'  skip  {label} (exists)')
                 continue
 
-            problems = audit_article(pdf, art.get('section', ''))
+            problems = audit_article(pdf, art.get('section', ''), alts)
             if problems:
                 failed += 1
                 print(f'  FAIL  {label}', file=sys.stderr)
@@ -491,11 +613,14 @@ def main():
                     print(f'          {p}', file=sys.stderr)
                 continue
 
+            body = article_html(pdf, alts=alts)
             with open(out_path, 'w') as f:
-                f.write(article_html(pdf))
+                f.write(body)
             art['_html_extractor'] = f'layout-v{EXTRACTOR_VERSION}'
             written += 1
-            print(f'  ok    {label}')
+            missing_alt = body.count('alt=""')
+            note = f'  ({missing_alt} figure(s) need alt text)' if missing_alt else ''
+            print(f'  ok    {label}{note}')
 
         if not args.audit:
             with open(toc_path, 'w') as f:

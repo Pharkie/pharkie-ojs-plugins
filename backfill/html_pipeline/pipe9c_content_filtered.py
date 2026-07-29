@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Write content-filtered flags from JATS to OJS publication_settings table.
+Write JATS custom-meta flags to OJS publication_settings.
 
-Reads <custom-meta><meta-name>content-filtered</meta-name> elements from
-JATS XML (written by pipe3_generate_jats.py) and writes them to OJS's
-publication_settings table as 'contentFiltered' entries.
+Reads <custom-meta> elements from JATS XML (written by pipe3_generate_jats.py)
+and writes them to OJS's publication_settings table, where the reader-facing
+plugins consult them:
+
+  content-filtered -> contentFiltered  extraction was incomplete, prefer PDF
+  born-digital     -> bornDigital      read from a publisher PDF, not restored
 
 JATS is the single source of truth.
 
@@ -34,13 +37,20 @@ from html_pipeline.pipe9b_citation_dois import (
     TARGETS, run_sql, check_connectivity, SqlError, _normalize, _escape_sql,
 )
 
-SETTING_NAME = 'contentFiltered'
+# JATS <custom-meta> name -> OJS publication_settings.setting_name.
+# Both are per-article booleans the reader-facing plugins consult:
+#   contentFiltered — extraction was incomplete, prefer the PDF
+#   bornDigital     — read from a publisher PDF, so NOT an archive restoration
+FLAGS = {
+    'content-filtered': 'contentFiltered',
+    'born-digital': 'bornDigital',
+}
 
 
 def load_content_filtered_from_jats(vol_dirs):
-    """Load all content-filtered articles from JATS across all volumes.
+    """Load every article carrying a recognised JATS custom-meta flag.
 
-    Returns list of dicts: {vol, slug, title, volume, issue}.
+    Returns list of dicts: {vol, slug, title, volume, issue, flags}.
     """
     all_articles = []
     for vol_dir in vol_dirs:
@@ -67,22 +77,24 @@ def load_content_filtered_from_jats(vol_dirs):
             if not title:
                 continue
 
-            # Check for content-filtered custom-meta
+            # Collect every recognised custom-meta flag on this article
             tree = ET.parse(jats_path)
-            is_filtered = False
+            found = set()
             for cm in list(tree.findall('.//{*}custom-meta')) + list(tree.findall('.//custom-meta')):
-                mn = cm.find('{*}meta-name') or cm.find('meta-name')
-                if mn is not None and mn.text == 'content-filtered':
-                    is_filtered = True
-                    break
+                mn = cm.find('{*}meta-name')
+                if mn is None:
+                    mn = cm.find('meta-name')
+                if mn is not None and mn.text in FLAGS:
+                    found.add(mn.text)
 
-            if is_filtered:
+            if found:
                 all_articles.append({
                     'vol': vol_dir.name,
                     'slug': slug,
                     'title': title,
                     'volume': volume,
                     'issue': issue,
+                    'flags': found,
                 })
 
     return all_articles
@@ -125,7 +137,7 @@ def fetch_all_publications(target):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Write content-filtered flags from JATS to OJS database')
+        description='Write JATS custom-meta flags to OJS publication_settings')
     parser.add_argument('--target', required=True, choices=['dev', 'live'])
     parser.add_argument('--issue', help='Process only one issue (e.g., 12.1)')
     parser.add_argument('--dry-run', action='store_true')
@@ -157,9 +169,9 @@ def main():
         )
 
     # Step 1: Load content-filtered articles from JATS
-    print('Loading content-filtered articles from JATS...')
+    print('Loading flagged articles from JATS...')
     filtered_articles = load_content_filtered_from_jats(vol_dirs)
-    print(f'  {len(filtered_articles)} content-filtered articles found')
+    print(f'  {len(filtered_articles)} flagged articles found')
 
     if not filtered_articles:
         print('Nothing to write.')
@@ -185,11 +197,10 @@ def main():
             errors += 1
             continue
 
-        inserts.append(
-            f"({pub_id}, '', '{SETTING_NAME}', '1')"
-        )
+        for meta_name in sorted(art['flags']):
+            inserts.append(f"({pub_id}, '', '{FLAGS[meta_name]}', '1')")
 
-    print(f'\n{len(inserts)} content-filtered flags to write, {errors} errors')
+    print(f'\n{len(inserts)} flags to write, {errors} errors')
 
     if not inserts:
         print('Nothing to write.')
@@ -212,7 +223,7 @@ def main():
         print(f'\nExecuting bulk insert ({len(inserts)} rows)...')
         try:
             run_sql(args.target, bulk_sql)
-            print(f'Done. {len(inserts)} content-filtered flags written.')
+            print(f'Done. {len(inserts)} flags written.')
         except SqlError as e:
             print(f'ERROR: {e}', file=sys.stderr)
             sys.exit(1)

@@ -11,6 +11,8 @@ Usage:
 """
 
 import argparse
+import base64
+import mimetypes
 import os
 import sys
 from collections import Counter
@@ -30,6 +32,24 @@ _INLINE_TAG_MAP = {
 }
 
 
+# Directory of the JATS file currently being converted, so <graphic> can find
+# the image sitting next to it. Set by jats_to_html; this script is
+# single-threaded and processes one article at a time.
+_CURRENT_DIR: Path | None = None
+
+
+def _inline_image(filename: str) -> str | None:
+    """Read an image from beside the JATS and return it as a data: URI."""
+    if not filename or _CURRENT_DIR is None:
+        return None
+    path = _CURRENT_DIR / filename
+    if not path.exists():
+        print(f'  WARNING: figure not found: {path}', file=sys.stderr)
+        return None
+    mime = mimetypes.guess_type(str(path))[0] or 'application/octet-stream'
+    return f'data:{mime};base64,' + base64.b64encode(path.read_bytes()).decode('ascii')
+
+
 def jats_to_html(jats_path: Path) -> str | None:
     """Convert JATS article to HTML galley content.
 
@@ -42,6 +62,9 @@ def jats_to_html(jats_path: Path) -> str | None:
     Returns HTML body content (no DOCTYPE/html/head wrapper — OJS adds those).
     Returns None if no body found.
     """
+    global _CURRENT_DIR
+    _CURRENT_DIR = Path(jats_path).parent
+
     try:
         tree = ET.parse(jats_path)
     except ET.ParseError:
@@ -130,6 +153,39 @@ def _convert_element(et_el, parent, soup, sec_depth=0):
         a = soup.new_tag('a', href=href)
         _add_inline_content(et_el, a, soup)
         parent.append(a)
+
+    elif tag_name == 'fig':
+        fig = soup.new_tag('figure')
+        for child in et_el:
+            _convert_element(child, fig, soup, sec_depth)
+        parent.append(fig)
+
+    elif tag_name == 'graphic':
+        href = et_el.get('{http://www.w3.org/1999/xlink}href', '')
+        title = et_el.get('{http://www.w3.org/1999/xlink}title', '')
+        # Inline the bytes rather than referencing the file. OJS serves an HTML
+        # galley as a single file with no way to ship its images alongside, so
+        # a src pointing at a filename would simply be a broken image. This way
+        # the galley is self-contained through import, reimport and the
+        # Harbour migration alike.
+        data_uri = _inline_image(href)
+        if data_uri:
+            img = soup.new_tag('img', src=data_uri)
+            img['alt'] = title
+            # The extracted bitmap is at print resolution and far wider than
+            # the reading column; without this it would blow out the layout.
+            content_type = et_el.get('content-type', '')
+            width = ''
+            if content_type.startswith('width:'):
+                width = f'width:{content_type[len("width:"):]};'
+            img['style'] = f'{width}max-width:100%;height:auto'
+            parent.append(img)
+
+    elif tag_name == 'caption':
+        cap = soup.new_tag('figcaption')
+        _add_inline_content(_find_p(et_el) if _find_p(et_el) is not None else et_el,
+                            cap, soup)
+        parent.append(cap)
 
     elif tag_name == 'break':
         parent.append(soup.new_tag('br'))

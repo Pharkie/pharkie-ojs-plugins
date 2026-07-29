@@ -65,6 +65,10 @@ SECTIONS = {
     },
 }
 
+# Per-article override for toc.json "access". Anything else falls back to the
+# section default above.
+ACCESS_OVERRIDES = {'open': '1', 'subscription': '0', 'paywalled': '0'}
+
 # Month name to number
 MONTH_MAP = {
     'January': '01', 'February': '02', 'March': '03', 'April': '04',
@@ -476,7 +480,13 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
 
     section_config = SECTIONS.get(article['section'], SECTIONS['Articles'])
     section_ref = section_config['ref']
-    access_status = section_config['access_status']
+    # Access normally follows the section, but individual pieces can override
+    # it — an obituary sits under Articles for indexing and citation, yet the
+    # editors may want it readable by everyone. toc.json: "access": "open".
+    access_status = ACCESS_OVERRIDES.get(
+        str(article.get('access', '')).strip().lower(),
+        section_config['access_status'],
+    )
 
     title = escape(article['title'])
     abstract = article.get('abstract', '')
@@ -840,6 +850,16 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
         if issue_doi:
             parts.append("1 issue")
         print(f"DOIs preserved: {', '.join(parts)}", file=sys.stderr)
+
+    # Say out loud which articles depart from their section's access default —
+    # a paywall set the wrong way is not something to discover from a reader.
+    for art in toc_data['articles']:
+        override = str(art.get('access', '')).strip().lower()
+        if override in ACCESS_OVERRIDES:
+            section_default = SECTIONS.get(art['section'], SECTIONS['Articles'])['access_status']
+            if ACCESS_OVERRIDES[override] != section_default:
+                print(f"Access override: {art['title'][:56]} "
+                      f"({art['section']} -> {override})", file=sys.stderr)
 
     # Close
     lines.append(f'  </issue>')
