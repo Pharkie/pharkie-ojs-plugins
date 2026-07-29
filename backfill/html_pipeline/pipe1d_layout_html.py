@@ -310,6 +310,28 @@ def _emit_quote(group, out):
     out.append('</blockquote>')
 
 
+# JPEG only accepts Grayscale, RGB or CMYK. A PDF image can be indexed, a
+# stencil mask, or -- as in 37.2 revB -- a DeviceN separation, and InDesign's
+# export settings decide which, so the same photograph can change colourspace
+# between two exports of the same issue.
+_JPEG_SAFE = {'DeviceGray', 'DeviceRGB'}
+
+
+def _normalise_pixmap(pix):
+    """Return (pixmap, use_png) ready to encode.
+
+    Transparency and stencil masks go to PNG. Anything else is converted into a
+    colourspace JPEG understands: single-channel to greyscale (a black-only
+    separation is greyscale in all but name, and staying 1-channel keeps the
+    inlined data URI small), everything else to RGB.
+    """
+    if pix.alpha or pix.colorspace is None:
+        return pix, True
+    if pix.colorspace.name not in _JPEG_SAFE:
+        pix = fitz.Pixmap(fitz.csGRAY if pix.n == 1 else fitz.csRGB, pix)
+    return pix, False
+
+
 def extract_figures(doc, pdf_path, write=True):
     """Pull embedded raster images out of the PDF and save them alongside it.
 
@@ -330,17 +352,16 @@ def extract_figures(doc, pdf_path, write=True):
             placed.append((rects[0], xref))
         for rect, xref in sorted(placed, key=lambda r: (r[0].y0, r[0].x0)):
             n = len(figures) + 1
-            pix = fitz.Pixmap(doc, xref)
-            if pix.n - pix.alpha >= 4:              # CMYK -> RGB
-                pix = fitz.Pixmap(fitz.csRGB, pix)
-            # These are photographs and the galley carries them inline, so a
-            # lossless PNG would add a megabyte per portrait for no visible
-            # gain. Only images with transparency need PNG.
-            use_png = bool(pix.alpha)
+            pix, use_png = _normalise_pixmap(fitz.Pixmap(doc, xref))
             filename = f'{os.path.basename(stem)}-fig{n}.' + ('png' if use_png else 'jpg')
+            # Encode even when not writing, so --audit exercises this path.
+            # A colourspace JPEG cannot represent is a hard failure at write
+            # time, and an audit that skipped encoding would miss it: revB of
+            # 37.2 came back with its photographs as DeviceN separations and
+            # the audit passed 22/22 immediately before the run crashed.
+            data = (pix.tobytes('png') if use_png
+                    else pix.tobytes('jpeg', jpg_quality=85))
             if write:
-                data = (pix.tobytes('png') if use_png
-                        else pix.tobytes('jpeg', jpg_quality=85))
                 with open(os.path.join(os.path.dirname(stem), filename), 'wb') as fh:
                     fh.write(data)
             figures.append({

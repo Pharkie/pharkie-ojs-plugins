@@ -63,6 +63,37 @@ Then:
 python3 backfill/validate_toc.py backfill/private/output/<vol>.<iss>/toc.json
 ```
 
+## 1b. If this is a corrected re-export, diff it first
+
+Dean will sometimes send a revised PDF. Before rerunning anything, check what
+actually changed — you want to know that the corrections you asked for landed
+and nothing else moved:
+
+```bash
+python3 - <<'EOF'
+import fitz, re, difflib
+old = fitz.open('backfill/private/input/<vol>.<iss>.pdf')          # the published one
+new = fitz.open('<the new file>.pdf')
+flat = lambda t: re.sub(r'\s+', ' ', t).strip()
+real = [i for i in range(old.page_count)
+        if flat(old[i].get_text()) != flat(new[i].get_text())]
+print('page count', old.page_count, '->', new.page_count)
+print('pages with real content change:', real)
+for i in real:
+    a, b = flat(old[i].get_text()).split(), flat(new[i].get_text()).split()
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
+        if tag != 'equal':
+            print(f"  p{i}: -{' '.join(a[i1:i2])[:50]} +{' '.join(b[j1:j2])[:50]}")
+EOF
+```
+
+Normalising whitespace matters: a re-export reflows justified text on far more
+pages than it changes words. On 37.2 revB, 38 pages differed but only 13 had a
+real content change, and every one traced to a query we had raised.
+
+**If the page count changed, or any article's first page moved, the page ranges
+in `toc.json` are no longer valid** and must be rechecked before splitting.
+
 ## 2. Split into per-article PDFs
 
 ```bash
@@ -94,6 +125,13 @@ Nobody can write a useful description of a photograph from its bounding box,
 so an image without alt text ships as `alt=""` rather than something invented.
 Look at the extracted files and write the alt text — it takes a minute and it
 is the difference between a screen-reader user getting the picture or not.
+
+A re-export can change how the photographs are stored. 37.2 revB came back with
+its two portraits as `DeviceN(1, DeviceCMYK, Black)` separations where revA had
+them in a plain colourspace, and JPEG accepts only Grayscale, RGB or CMYK — so
+the run crashed part-way through. `pipe1d` now converts anything unusual (single
+channel to greyscale, everything else to RGB) and `--audit` encodes each figure
+without writing it, so the same surprise fails the audit rather than the run.
 
 `--audit` checks the layout model against the actual PDF before writing
 anything. It compares every non-furniture character in the source against the
