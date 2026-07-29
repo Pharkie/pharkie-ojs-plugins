@@ -27,6 +27,23 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`docs/shared-caddy.md`](docs/shared-caddy.md) — shared Caddy on a multi-project box: per-project `conf.d/*.caddy` drop-in snippets, no shared-file edits
 - `private/TODO.md` — roadmap (in private repo)
 
+## The WordPress here is a test rig, not a future site
+
+**Decided 2026-07-29.** The `wp` / `wp-db` services on the box
+(`wp-staging.*`, basic-auth gated, `noindex`) exist for one reason: to exercise
+the WP↔OJS integration before a change reaches the live WordPress. They are
+**never** going to be promoted to the real site — Harbour replaces WordPress,
+and the migration this mirror was built for is not being resumed.
+
+They are kept anyway, and should be, because the integration they test is still
+in production: the live WP on Krystal runs the sync until Harbour cut-over.
+Deleting the rig would leave that with nowhere to rehearse.
+
+So: keep it working, don't invest in it, and don't confuse it with live.
+**Live WordPress is on Krystal, reached as `sea-wp-live`** — never the box. Once
+cut-over completes and the sync is retired, the rig and its smoke-test sections
+(1, 1b, 3, 6, 7, 9) can go.
+
 ## Good to know
 
 - **OJS has NO subscription REST API.** The endpoints don't exist. That's why a custom OJS plugin is needed. See `docs/ojs-sync-plugin-api.md`.

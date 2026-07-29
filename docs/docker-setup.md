@@ -1,5 +1,11 @@
 # Docker Setup Guide
 
+> **The WordPress in this stack is a test rig.** It exists to exercise the
+> WP↔OJS integration before a change reaches the live site, and will never be
+> promoted to be the real site — Harbour replaces WordPress (decided
+> 2026-07-29). It is kept because the integration is still in production until
+> Harbour cut-over. **Live WordPress is on Krystal, not here.**
+
 `docker-compose.yml` (in the project root) runs four containers — WordPress + MariaDB, OJS + MariaDB — on a shared network so WP can call OJS endpoints directly. Setup scripts (`scripts/wp/setup-wp.sh`, `scripts/ojs/setup-ojs.sh`) run after containers start to create the journal, configure subscriptions, activate plugins, and optionally import sample data. Both plugins are bind-mounted from `plugins/` so edits are reflected immediately. All config comes from `.env`.
 
 The same stack works locally, on staging, and in production — only the `.env` and compose overrides differ.
