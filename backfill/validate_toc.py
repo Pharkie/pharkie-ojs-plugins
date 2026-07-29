@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-REQUIRED_ISSUE_FIELDS = ['volume', 'date_published', 'articles']
+REQUIRED_ISSUE_FIELDS = ['volume', 'date', 'articles']
 REQUIRED_ARTICLE_FIELDS = ['title', 'authors', 'section', 'pdf_page_start', 'pdf_page_end']
 
 

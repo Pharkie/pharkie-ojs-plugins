@@ -197,28 +197,43 @@ def update_jats(jats_path, submission_id, doi, dry_run=False):
 
     changed = False
 
+    def find_or_insert(pub_id_type, position):
+        """Find an <article-id> of this type, inserting one if absent.
+
+        Back-issues arrive with both ids already in their JATS, so this only
+        ever updated them. A newly published issue has neither until OJS mints
+        them, and without inserting, the snapshot would silently do nothing and
+        the issue would lose its ids and DOIs on the next reimport."""
+        el = meta.find(f'{{*}}article-id[@pub-id-type="{pub_id_type}"]')
+        if el is None:
+            el = meta.find(f'article-id[@pub-id-type="{pub_id_type}"]')
+        if el is not None or dry_run:
+            return el
+        el = ET.Element('article-id')
+        el.set('pub-id-type', pub_id_type)
+        meta.insert(position, el)
+        return el
+
     # Update publisher-id
-    pid_el = meta.find('{*}article-id[@pub-id-type="publisher-id"]')
-    if pid_el is None:
-        pid_el = meta.find('article-id[@pub-id-type="publisher-id"]')
+    pid_el = find_or_insert('publisher-id', 0)
     if pid_el is not None:
         if pid_el.text != str(submission_id):
             if not dry_run:
                 pid_el.text = str(submission_id)
             changed = True
-    # If no publisher-id element exists, we'd need to insert one — but
-    # generate_jats.py should have created it. Skip if missing.
+    elif dry_run:
+        changed = True
 
     # Update DOI
     if doi:
-        doi_el = meta.find('{*}article-id[@pub-id-type="doi"]')
-        if doi_el is None:
-            doi_el = meta.find('article-id[@pub-id-type="doi"]')
+        doi_el = find_or_insert('doi', 1)
         if doi_el is not None:
             if doi_el.text != doi:
                 if not dry_run:
                     doi_el.text = doi
                 changed = True
+        elif dry_run:
+            changed = True
 
     if changed and not dry_run:
         tree.write(jats_path, xml_declaration=True, encoding='unicode')

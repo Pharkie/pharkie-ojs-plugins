@@ -66,3 +66,6 @@ e2e/playwright-report/
 .cache_ggshield
 plugins/stripe-payment/vendor/
 .phpunit.result.cache
+
+# Local Python virtualenv (host runs of the backfill pipeline)
+.venv/

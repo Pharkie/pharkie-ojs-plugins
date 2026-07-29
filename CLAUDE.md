@@ -46,7 +46,9 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 Imports journal back-issues (whole-issue PDFs) into OJS. See [`backfill/README.md`](backfill/README.md) for the pipeline overview, [`docs/backfill-reference.md`](docs/backfill-reference.md) for command reference, and [`docs/archive-checker-plugin.md`](docs/archive-checker-plugin.md) for the QA workflow.
 
-Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfill/html_pipeline/` (HTML/JATS/import, pipe1–pipe10), `backfill/lib/` (shared code), `backfill/validate_toc.py`.
+Structure: `backfill/split_pipeline/` (PDF splitting, split1–split5), `backfill/html_pipeline/` (HTML/JATS/import, pipe1–pipe11), `backfill/lib/` (shared code), `backfill/validate_toc.py`.
+
+**Publishing a NEW issue is a different path** — see [`docs/new-issue-runbook.md`](docs/new-issue-runbook.md). Born-digital issues use `pipe1d_layout_html.py` (layout analysis, no API calls) instead of `pipe1_haiku_html.py`; DOIs are minted after import by `pipe11_assign_dois.sh` and then written back into JATS by `tools/snapshot_ids.py`; `pipe8_restore.py` is skipped on the first import because there are no prior IDs to restore.
 
 ### Gotchas
 

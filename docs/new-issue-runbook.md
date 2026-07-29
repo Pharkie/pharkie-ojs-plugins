@@ -1,0 +1,200 @@
+# Publishing a new issue
+
+How to take the finished issue PDF from the production editor and get it live on
+OJS. For importing historical back-issues, see [Backfill Pipeline](backfill-pipeline.md)
+and [Backfill Reference](backfill-reference.md) — this runbook reuses the same
+tooling, with the differences called out below.
+
+The whole run takes roughly an hour, most of it checking rather than waiting.
+
+## What's different from a back-issue
+
+Back-issues were scanned, and their DOIs already existed at Crossref. A new issue
+is neither of those things, and three steps change as a result.
+
+| | Back-issue | New issue |
+|---|---|---|
+| HTML extraction | `pipe1_haiku_html.py` — page images through the Claude API, because the source is a scan | `pipe1d_layout_html.py` — reads the PDF's own text layer. Free, instant, identical on every run |
+| DOIs | Already registered; carried in the import XML and restored by `pipe8_restore.py` | Do not exist. Minted by `pipe11_assign_dois.sh` **after** import, then deposited |
+| `pipe8_restore.py` | Required — restores original submission IDs | **Skip it.** There are no prior IDs to restore |
+
+Everything between (`pipe2` → `pipe6`) is unchanged.
+
+## Before you start
+
+- The issue PDF, as supplied by the production editor. Use the **electronic**
+  edition, not the Amazon/print one — that has a wraparound cover and different
+  trim.
+- Python with `pymupdf`, `beautifulsoup4` and `requests`. The devcontainer has
+  these; on a bare host, `python3 -m venv .venv && .venv/bin/pip install pymupdf
+  beautifulsoup4 requests`.
+- The dev OJS stack running (`docker compose up -d`).
+
+No API key is needed. `pipe1d` does not call a model.
+
+## 1. Stage the PDF and write the TOC
+
+```bash
+cp "<supplied file>.pdf" backfill/private/input/<vol>.<iss>.pdf
+mkdir -p backfill/private/output/<vol>.<iss>
+```
+
+Write `backfill/private/output/<vol>.<iss>/toc.json` following
+[the TOC guide](backfill-toc-guide.md). Claude can draft it from the PDF; it
+still needs checking against the CONTENTS page and the article pages.
+
+Two things the CONTENTS page will not give you:
+
+- **Individual book reviews.** The contents lists only "Book Reviews" and one
+  page number. Read the review pages for each book's title, author, year,
+  publisher and the reviewer's byline at the end.
+- **Abstracts and keywords.** These are on each article's first page.
+
+Watch for **the contents page and the article page disagreeing** — author-name
+spellings and title capitalisation drift between the two. The article page is
+usually right, but query anything you change.
+
+Then:
+
+```bash
+python3 backfill/validate_toc.py backfill/private/output/<vol>.<iss>/toc.json
+```
+
+## 2. Split into per-article PDFs
+
+```bash
+backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf
+```
+
+Check the report: every article should verify, and each split PDF should end on
+its author's byline or its reference list — not part-way through, and not
+carrying the back matter (advertising rates, "Publications received", the
+membership page). See `private/backfill-lessons-learned.md` for the failure modes
+worth knowing.
+
+## 3. Extract the HTML
+
+```bash
+python3 backfill/html_pipeline/pipe1d_layout_html.py backfill/private/output/<vol>.<iss>/toc.json --audit
+python3 backfill/html_pipeline/pipe1d_layout_html.py backfill/private/output/<vol>.<iss>/toc.json
+```
+
+`--audit` checks the layout model against the actual PDF before writing
+anything. It compares every non-furniture character in the source against the
+generated HTML, so a mismatch means text was dropped or invented. **A failing
+audit is a stop sign, not a warning** — the template has probably changed, and
+the sizes at the top of `pipe1d_layout_html.py` need revisiting. Run the audit
+again until it is clean.
+
+If the issue is a scan rather than born-digital, the audit will report no body
+text. Use `pipe1_haiku_html.py` for that issue instead.
+
+## 4. The rest of the pipeline
+
+Unchanged from the backfill, and all of it is free and rerunnable:
+
+```bash
+V=<vol>.<iss>
+python3 backfill/html_pipeline/pipe2_postprocess.py backfill/private/output/$V/toc.json --verify
+python3 backfill/html_pipeline/pipe3_generate_jats.py backfill/private/output/$V/toc.json
+python3 backfill/html_pipeline/pipe4_extract_citations.py --extract --volume $V
+python3 backfill/html_pipeline/pipe4b_match_dois.py --volume $V --email <your email>
+python3 backfill/html_pipeline/pipe5_galley_html.py backfill/private/output/$V/toc.json
+python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/$V/toc.json
+```
+
+`pipe4b` queries Crossref for each reference and takes a few minutes. Expect
+roughly 40% of references to match a DOI — that is the rate across the archive,
+not a sign something is wrong.
+
+Order matters: `pipe3` rewrites the JATS from scratch, wiping citations and DOIs,
+so `pipe4` and `pipe4b` must follow it and `pipe5`/`pipe6` must follow them.
+
+## 5. Import to dev and check it
+
+```bash
+bash backfill/html_pipeline/pipe7_import.sh backfill/private/output/$V
+python3 backfill/html_pipeline/pipe10_verify.py backfill/private/output/$V/toc.json --docker
+```
+
+`pipe7` also sets the new issue as the journal's current issue and reorders the
+archive. Then review in the browser (and in [Archive Checker](archive-checker-plugin.md)):
+the issue TOC, a few article pages, and at least one Full Text galley end to end
+against the PDF. Check the section split and the paywall labels — Editorial and
+Book Reviews should be open, Articles paywalled.
+
+If you need to fix something, correct the source (`toc.json`, or the pipeline)
+and rerun from the affected step, then `pipe7_import.sh ... --force`. Add
+`--no-reindex` when the body text has not changed.
+
+## 6. Mint the DOIs
+
+**Only once the content is final.** A `--force` reimport deletes and recreates
+the articles, which discards their DOIs and mints different ones next time.
+
+```bash
+bash backfill/html_pipeline/pipe11_assign_dois.sh $V --dry-run
+bash backfill/html_pipeline/pipe11_assign_dois.sh $V
+python3 backfill/html_pipeline/tools/snapshot_ids.py --target dev --issue $V
+```
+
+`pipe11` uses OJS's own repository code, so suffixes follow the journal's
+configured pattern and match the rest of the archive. It skips anything that
+already has a DOI, so it is safe to rerun.
+
+`snapshot_ids.py` is the step that makes this durable: it writes the assigned
+submission IDs and DOIs back into the JATS files, so the issue becomes
+self-describing. From then on it behaves exactly like a back-issue — a future
+reimport carries the same IDs and DOIs, and `pipe8_restore.py` applies again.
+**Do not skip it**, or a later reimport will silently change published DOIs.
+
+Then write the citation DOIs into the database:
+
+```bash
+python3 backfill/html_pipeline/pipe9b_citation_dois.py --target dev
+```
+
+## 7. Deploy to live
+
+Follow "Specific issues changed" in [`CLAUDE.md`](../CLAUDE.md#deploying-to-live),
+with the new-issue differences:
+
+1. Pause the Better Stack monitors.
+2. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only`
+3. On the box: `pipe7_import.sh <issue dir>` (no `--force` — the issue is new).
+4. **Skip `pipe8_restore.py`** on the first deploy. There are no prior live IDs;
+   running it does nothing useful. It applies from the second deploy onwards,
+   once `snapshot_ids.py` has been run against live.
+5. `bash backfill/html_pipeline/pipe11_assign_dois.sh <vol>.<iss> --host=sea-live`
+   — live mints its own DOIs, which will differ from the dev ones. Dev DOIs are
+   a rehearsal and are thrown away.
+6. `python3 backfill/html_pipeline/tools/snapshot_ids.py --target live --issue <vol>.<iss>`
+7. `pipe9b_citation_dois.py --target live --confirm`
+8. `pipe9c_content_filtered.py --target live --confirm`
+9. Unpause monitors, then `scripts/monitoring/content-check.sh --host=sea-live`.
+
+## 8. Deposit the DOIs at Crossref
+
+Assigning is not depositing. From the OJS admin, **Tools → DOIs**, select the new
+issue's articles and deposit. Live has real Crossref credentials with test mode
+off, so this is a real deposit — check the status column afterwards rather than
+assuming a submitted deposit succeeded.
+
+## 9. Bring the new site up to date
+
+Harbour's journal content is imported from OJS, so the new issue reaches
+newsite.existentialanalysis.org.uk by rerunning the importer. It upserts on
+`source_ref`, so it adds the new issue and leaves everything else alone —
+**never pass `--wipe`**, which clears all journal rows. Dry-run first and read
+the report. See [`membership-platform/docs/migration-import.md`](../../membership-platform/docs/migration-import.md).
+
+Afterwards, rerun `scripts/migrate/link-authors-members.ts` so the issue's
+authors are linked to member records where the names match.
+
+## Where this should end up
+
+The production editor should not need any of this. The shape of the eventual
+job: upload the issue PDF, the pipeline runs, and the result is presented for
+approval before publishing. Every step above except writing `toc.json` is
+already non-interactive, and `toc.json` is the piece that still needs a person —
+which is the right place to put the review, since it is where the errors are.
