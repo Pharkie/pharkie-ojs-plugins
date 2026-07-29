@@ -563,7 +563,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('toc_json', nargs='+')
     ap.add_argument('--article', type=int, default=None, help='1-indexed article')
-    ap.add_argument('--overwrite', action='store_true', help='regenerate existing .raw.html')
+    ap.add_argument('--overwrite', action='store_true',
+                    help='regenerate existing .raw.html (still skips _manual_html)')
     ap.add_argument('--audit', action='store_true',
                     help='check the layout model fits; write nothing')
     args = ap.parse_args()
@@ -600,6 +601,13 @@ def main():
                 continue
 
             out_path = raw_output_path(pdf)
+            # Hand-corrected HTML is never regenerated, --overwrite or not.
+            # Same contract as pipe1_haiku_html: the flag is the only thing
+            # standing between an editorial correction and the next rerun.
+            if art.get('_manual_html') and os.path.exists(out_path):
+                skipped += 1
+                print(f'  skip  {label} (_manual_html)')
+                continue
             if os.path.exists(out_path) and not args.overwrite:
                 skipped += 1
                 print(f'  skip  {label} (exists)')

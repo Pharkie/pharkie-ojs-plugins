@@ -37,9 +37,6 @@ REFERENCE_HEADING_RE = re.compile(
     r'|Selected Further Reading'
     r'|References:'
     r'|Author [Ss]tatement'
-    r'|Papers published in [^.:]+'
-    r'|(?:Selected )?[Pp]apers published'
-    r'|Works by [^.:]+'
     r')(?:\s*[&;]\s*\w+)*'  # optional "& Filmography"
     r'(?:\s*\([^)]*\))?'  # optional parenthetical
     r'[.:]?$',
@@ -53,15 +50,7 @@ PURE_REFERENCE_HEADING_RE = re.compile(
     r'|References and Bibliography|References and further reading'
     r'|Selected Bibliography|References:|References and Notes'
     r'|Bibliography and References'
-    r'|Notes and References'
-    # Obituaries list the subject's own published work under headings like
-    # "Papers published in Existential Analysis" or "Works by X". These are
-    # citations and belong in the reference list. NOT "Publications received
-    # for review", which is a list of books sent in, not references.
-    r'|Papers published in [^.:]+'
-    r'|(?:Selected )?[Pp]apers published'
-    r'|Works by [^.:]+'
-    r')(?:\s*[&;]\s*\w+)*(?:\s*\([^)]*\))?[.:]?$',
+    r'|Notes and References)(?:\s*[&;]\s*\w+)*(?:\s*\([^)]*\))?[.:]?$',
     re.IGNORECASE
 )
 
