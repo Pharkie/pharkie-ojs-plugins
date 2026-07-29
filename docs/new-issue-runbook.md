@@ -181,20 +181,47 @@ with the new-issue differences:
 4. **Skip `pipe8_restore.py`** on the first deploy. There are no prior live IDs;
    running it does nothing useful. It applies from the second deploy onwards,
    once `snapshot_ids.py` has been run against live.
-5. `bash backfill/html_pipeline/pipe11_assign_dois.sh <vol>.<iss> --host=sea-live`
-   — live mints its own DOIs, which will differ from the dev ones. Dev DOIs are
-   a rehearsal and are thrown away.
+5. **Nothing to mint.** `snapshot_ids.py` put the dev-minted DOIs into the JATS
+   at step 6, so `pipe6` wrote them into the import XML and live came up already
+   carrying them. Dev and live agree, which is what you want. (`pipe11` is only
+   needed if you skipped the dev pass.)
 6. `python3 backfill/html_pipeline/tools/snapshot_ids.py --target live --issue <vol>.<iss>`
+   — now capture live's *submission ids* into the JATS. The DOIs already match;
+   this is what protects live URLs on any future reimport.
 7. `pipe9b_citation_dois.py --target live --confirm`
 8. `pipe9c_content_filtered.py --target live --confirm`
 9. Unpause monitors, then `scripts/monitoring/content-check.sh --host=sea-live`.
 
 ## 8. Deposit the DOIs at Crossref
 
-Assigning is not depositing. From the OJS admin, **Tools → DOIs**, select the new
-issue's articles and deposit. Live has real Crossref credentials with test mode
-off, so this is a real deposit — check the status column afterwards rather than
-assuming a submitted deposit succeeded.
+Assigning is not depositing.
+
+```bash
+bash backfill/html_pipeline/pipe12_deposit_dois.sh $V --host=sea-live            # list
+bash backfill/html_pipeline/pipe12_deposit_dois.sh $V --host=sea-live --confirm  # send
+```
+
+Scoped to one issue on purpose: OJS's own "deposit all" sweeps up every DOI
+needing deposit in the journal, including unrelated stale ones.
+
+Crossref rate-limits bursts and will 429 the odd one even with the built-in
+pacing. **Re-run the command** — it is idempotent and picks up only what has not
+registered. Then check nothing is left in error:
+
+```bash
+ssh sea-live 'cd /opt/pharkie-ojs-plugins && docker compose exec -T ojs-db bash -c "mysql -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT status, COUNT(*) FROM dois GROUP BY status;\""'
+```
+
+Status 3 is registered, 4 is error, 5 is stale. Verify by resolution rather than
+by the status column — OJS marks a DOI registered on a successful HTTP response,
+which really means *submitted*:
+
+```bash
+curl -sI https://doi.org/<the-doi> | head -1
+```
+
+A 302 to the article page is the real confirmation. Crossref's REST API lags by
+hours, so a 404 from `api.crossref.org` right after depositing is normal.
 
 ## 9. Bring the new site up to date
 
