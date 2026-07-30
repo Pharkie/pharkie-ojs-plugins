@@ -330,6 +330,25 @@ the report. See [`membership-platform/docs/migration-import.md`](../../membershi
 Afterwards, rerun `scripts/migrate/link-authors-members.ts` so the issue's
 authors are linked to member records where the names match.
 
+## Republishing this page to Outline
+
+The repo copy is canonical. To push it to the knowledge base:
+
+```bash
+python3 scripts/dev/publish-doc-to-outline.py docs/new-issue-runbook.md 2e168ab2-e50c-4bcb-988f-f3143a98ce23
+#   --dry-run   prints what would be sent and changes nothing
+```
+
+It rewrites relative links to absolute GitHub URLs and unwraps hard-wrapped
+prose, leaving code, tables and lists alone. Doing that by hand produced two
+broken links: `CLAUDE.md` pointed at `docs/CLAUDE.md` when it is at the repo root,
+and `migration-import.md` pointed inside this repo when it lives in
+membership-platform. The script resolves paths rather than prefixing them, and
+knows membership-platform is a different repo.
+
+The token comes from the keychain (`sea-outline-api`), so it never appears in a
+command line.
+
 ## Where this should end up
 
 The production editor should not need any of this. The shape of the eventual
