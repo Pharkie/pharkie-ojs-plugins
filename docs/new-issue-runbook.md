@@ -63,6 +63,38 @@ Then:
 python3 backfill/validate_toc.py backfill/private/output/<vol>.<iss>/toc.json
 ```
 
+## 1a. First: has this already been published?
+
+Worth thirty seconds before you touch anything. Picking this up mid-flight, or
+after a handover, the honest answer is often "yes, mostly". Four checks, in order
+of how much they tell you:
+
+```bash
+# 1. Is the staged input the file you were actually sent?
+shasum -a 256 backfill/private/input/<vol>.<iss>.pdf "/path/to/what Dean sent.pdf"
+
+# 2. Did the IDs get snapshotted? If every JATS carries BOTH, the import
+#    completed and a future reimport will preserve URLs and DOIs.
+cd private/backfill/output/<vol>.<iss>
+grep -lc 'pub-id-type="publisher-id"' *.jats.xml | wc -l   # want: all of them
+grep -lc 'pub-id-type="doi"' *.jats.xml | wc -l             # want: all of them
+
+# 3. What does the private submodule say happened?
+cd private && git log --oneline -3
+```
+
+**4. Check a BODY marker on the live site, never a title.** This is the one that
+catches people out. Article titles and author names are *metadata* and get
+hand-corrected directly in OJS when a query comes in — so the live titles can be
+completely right while the body text is still from the previous export. A title
+proves nothing about whether the PDF was reimported.
+
+Pick something that exists only in the new PDF and only in the body: a corrected
+URL, a sentence that was added, a changed figure caption. On 37.2 revB the two
+good markers were the fixed Guardian URL (`2023/may/03`, where revA had
+`2023 may/03`) and "Published 27th August." in the book review's references.
+Both live meant the reimport had genuinely happened.
+
 ## 1b. If this is a corrected re-export, diff it first
 
 Dean will sometimes send a revised PDF. Before rerunning anything, check what
