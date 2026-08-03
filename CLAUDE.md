@@ -136,13 +136,13 @@ Article data changed for specific volumes only. No need to reimport everything.
 1. Reprocess affected volumes on dev: pipe2→pipe6 for each volume
 2. Re-attach DOIs: run the DOI re-attachment script (reads `doi_matches.json`, writes to JATS)
 3. Import to dev: `pipe7 --force` + `pipe8` for affected volumes, verify in Archive Checker
-4. Better Stack: pause monitors
+4. Better Stack: `scripts/monitoring/maintenance-window.sh --pause`
 5. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only` — sync import XMLs
 6. `ssh sea-live` → `pipe7_import.sh <affected volumes> --force` — reimport just those issues (add `--no-reindex` if body text is unchanged — JATS/PDF/DOI-only changes aren't searchable text and the full rebuild can grind for ~20 min)
 7. `pipe8_restore.py --target live --confirm`
 8. `pipe9b_citation_dois.py --target live --confirm`
 9. `pipe9c_content_filtered.py --target live --confirm`
-10. Better Stack: unpause monitors
+10. Better Stack: `scripts/monitoring/maintenance-window.sh --resume`
 11. `scripts/monitoring/content-check.sh --host=sea-live`
 
 #### Full reimport (all 68 volumes)
@@ -151,13 +151,13 @@ Nuclear option — wipes all articles and reimports from scratch. Use when syste
 
 1. Full pipeline rerun on dev: pipe2→pipe6 for all volumes + DOI re-attachment
 2. Import to dev: `pipe7 --force` + `pipe8` + `pipe9b` + `pipe9c`, verify
-3. Better Stack: pause monitors
+3. Better Stack: `scripts/monitoring/maintenance-window.sh --pause`
 4. `scripts/dev/backfill-remote.sh --host=sea-live` — syncs + wipes + reimports all
 5. `pipe8_restore.py --target live --confirm` — restores submission/issue IDs + DOI status
 6. `pipe9b_citation_dois.py --target live --confirm` — writes citation DOIs
 7. `pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags
 8. Sync Archive Checker reviews: export from dev `archive_checker_reviews`, import to live
-9. Better Stack: unpause monitors
+9. Better Stack: `scripts/monitoring/maintenance-window.sh --resume`
 10. `scripts/monitoring/smoke-test.sh --host=sea-live` — infrastructure (28 checks)
 11. `scripts/monitoring/content-check.sh --host=sea-live` — content (14 checks)
 
@@ -170,8 +170,10 @@ pipe3 wipes JATS (including DOIs from pipe4b). After any pipe3+pipe4 rerun, DOIs
 - `--force` reimports existing issues without wiping. `--wipe-articles` wipes first (preserves users/subscriptions/payments).
 - `pipe8` is always needed after `--wipe-articles` or `--force` to restore original submission IDs and DOI registration status (preserves URLs, DOI links, payment records, prevents re-deposit).
 - `pipe9b` and `pipe9c` are always needed after import — they write to DB tables that the import doesn't populate.
+- **An import can REMOVE content, not just add it.** Everything an article carries beyond its title — galleys, citations, DOI, page numbers — is read from the files beside its `split_pdf` in toc.json. A path that doesn't resolve on the host you're running from produces a valid-looking `import.xml` with the articles hollowed out, and `pipe7 --force` then strips that content from the journal. This happened on 2026-08-03: three toc.json files still held absolute `/workspaces/...` devcontainer paths, so regenerating 36.1 on a Mac emitted 18 articles with no galleys and no citations, printed "XML valid: 18 articles", imported cleanly, and cost the issue all 54 galleys and 302 citations on dev. **pipe6 now errors instead of warning**, and all paths are relative. After any reimport, reconcile per-volume citation counts against the JATS rather than trusting a green run.
+- **Stale files on disk are not part of the issue.** `toc.json` is the manifest; a `<slug>.jats.xml` that isn't listed there is a leftover from an earlier split or numbering and is never imported. 45 such files were removed on 2026-08-03. They matter because they inflate any count taken by globbing the output directory — which is exactly how the reconciliation above can look wrong when it isn't. `issue-galley.pdf` is NOT one of these: it's the presave slot for a corrected whole-issue PDF (#37).
 - Archive Checker reviews survive `--wipe-articles` (custom table, not touched by import). But `publication_id` becomes stale — the `submission_id` column is what matters.
-- Better Stack monitors must be paused before any operation that causes downtime. See memory file `feedback_maintenance_window.md`.
+- **Better Stack monitors must be paused before any operation that causes downtime** — `scripts/monitoring/maintenance-window.sh --pause`, and `--resume` the moment the deploy is verified. `--status` says what is paused right now, which is the question worth being able to answer: a monitor left paused is worse than one that alerted, because the site is unwatched and nothing says so. Needs a valid `BETTERSTACK_API_TOKEN` in `private/.env.live` — the one stored there was rejected as invalid on 2026-08-03, so mint a fresh Team API token before relying on it.
 - **One heavy job at a time.** The box is 2 vCPUs / 3.8 GB running thirteen containers. An issue import running alongside a CI-triggered Harbour deploy pinned both cores and took every vhost down — sshd included, so the only way in was `hcloud` (issues log #39). `gh run list --limit 1` in both repos before starting an import, and don't push while one is running.
 
 ### Data and tests

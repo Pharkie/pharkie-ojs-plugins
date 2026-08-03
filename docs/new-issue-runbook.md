@@ -271,7 +271,7 @@ with the new-issue differences:
 
 0. **Check nothing else is running.** `gh run list --limit 1` in both repos —
    a CI deploy building alongside the import will take the box down (#39).
-1. Pause the Better Stack monitors.
+1. Pause the Better Stack monitors: `scripts/monitoring/maintenance-window.sh --pause`
 2. `scripts/dev/backfill-remote.sh --host=sea-live --sync-only`
 3. On the box: `pipe7_import.sh <issue dir>` (no `--force` — the issue is new).
 4. **Skip `pipe8_restore.py`** on the first deploy. There are no prior live IDs;
@@ -286,7 +286,8 @@ with the new-issue differences:
    this is what protects live URLs on any future reimport.
 7. `pipe9b_citation_dois.py --target live --confirm`
 8. `pipe9c_content_filtered.py --target live --confirm`
-9. Unpause monitors, then `scripts/monitoring/content-check.sh --host=sea-live`.
+9. `scripts/monitoring/maintenance-window.sh --resume`, then
+   `scripts/monitoring/content-check.sh --host=sea-live`.
 
 ## 8. Deposit the DOIs at Crossref
 
