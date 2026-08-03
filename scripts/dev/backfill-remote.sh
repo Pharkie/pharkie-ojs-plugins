@@ -83,8 +83,14 @@ if [ -z "$IMPORT_ONLY" ]; then
   $SCP_CMD "$TARBALL" "$SCP_HOST:/tmp/backfill-import-xmls.tar.gz"
 
   echo "--- Extracting on $SSH_HOST ---"
+  # --overwrite, explicitly. Without it GNU tar refused to replace one existing
+  # file — "./37.2/import.xml: Cannot open: File exists" — and, because the
+  # extraction is chained with &&, aborted before anything was verified. The box
+  # kept a week-old XML while the script reported success. Not TAR_OPTIONS, not
+  # permissions, not disk: tar simply would not clobber that file, and
+  # --overwrite makes the intent explicit rather than relying on the default.
   $SSH_CMD "mkdir -p '$REMOTE_DIR/backfill/private/output' && \
-    tar xzf /tmp/backfill-import-xmls.tar.gz -C '$REMOTE_DIR/backfill/private/output' && \
+    tar xzf /tmp/backfill-import-xmls.tar.gz --overwrite -C '$REMOTE_DIR/backfill/private/output' && \
     rm /tmp/backfill-import-xmls.tar.gz"
   rm -f "$TARBALL"
 
