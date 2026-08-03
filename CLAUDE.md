@@ -15,7 +15,7 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 - [`docs/discovery.md`](docs/discovery.md) — decision trail: what was tried, eliminated, and why
 - [`docs/docker-setup.md`](docs/docker-setup.md) — Docker dev environment
 - [`docs/non-docker-setup.md`](docs/non-docker-setup.md) — non-Docker plugin installation
-- [`private/docs/monitoring.md`](private/docs/monitoring.md) — Better Stack monitors, heartbeats, GitHub Actions workflows, troubleshooting
+- [`private/docs/monitoring.md`](private/docs/monitoring.md) — Better Stack monitors, heartbeats, GitHub Actions workflows, troubleshooting. **The account is capped at 10 monitors and all 10 are used** — two journal checks (OJS Login Page, OJS Index Redirect) were lost to that cap, and Harbour cut-over will hit it again.
 - [`private/docs/incidents.md`](private/docs/incidents.md) — live incident log (SEA-specific details; generic post-mortems go in the issues log)
 - [`private/docs/archive-author-stats.md`](private/docs/archive-author-stats.md) — Top authors by publication count and section type
 - [`private/docs/wp-mailchimp-sync.md`](private/docs/wp-mailchimp-sync.md) — WP↔MailChimp sync diagnostics, plugin behaviour, recurring counting gotchas
