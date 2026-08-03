@@ -295,6 +295,16 @@ def write_dois_to_jats(jats_path, refs):
     written = 0
     removed = 0
 
+    # An article can never be its own reference. Crossref matching scores on
+    # title similarity, so an author citing their own earlier work under a
+    # near-identical title matches the citing article itself — five articles in
+    # the corpus ended up with a reference that linked back to the page the
+    # reader was already on (e.g. 37.2/13 cites "Mohammadi, R. (2026)...
+    # [Unpublished manuscript]", which is a DIFFERENT work, and got this
+    # article's own DOI). Self-matches are dropped, never written.
+    own_doi_el = root.find(".//article-id[@pub-id-type='doi']")
+    own_doi = (own_doi_el.text or '').strip().lower() if own_doi_el is not None else None
+
     # Build set of ref_ids that should have DOIs
     matched_refs = {}
     no_match_refs = set()
@@ -308,14 +318,19 @@ def write_dois_to_jats(jats_path, refs):
         ref_id = ref_el.get('id', '')
         existing = ref_el.find("pub-id[@pub-id-type='doi']")
 
-        # Remove stale pub-id for refs that are now no_match
-        if ref_id in no_match_refs and existing is not None:
+        # Remove stale pub-id for refs that are now no_match, or one that points
+        # at the citing article itself.
+        self_ref = (own_doi is not None and existing is not None
+                    and (existing.text or '').strip().lower() == own_doi)
+        if (ref_id in no_match_refs or self_ref) and existing is not None:
             ref_el.remove(existing)
             removed += 1
             continue
 
         # Add pub-id for matched refs that don't have one yet
         doi = matched_refs.get(ref_id)
+        if doi and own_doi is not None and doi.strip().lower() == own_doi:
+            continue
         if doi and existing is None:
             pub_id = ET.SubElement(ref_el, 'pub-id')
             pub_id.set('pub-id-type', 'doi')
