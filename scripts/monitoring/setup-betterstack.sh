@@ -316,41 +316,23 @@ create_monitor "SEA: OJS Article Content" "$(cat <<EOF
 EOF
 )"
 
-# 7. Keyword: OJS login page
-create_monitor "SEA: OJS Login Page" "$(cat <<EOF
-{
-  "monitor_type": "keyword",
-  "url": "$OJS_JOURNAL_URL/login",
-  "pronounceable_name": "SEA: OJS Login Page",
-  "required_keyword": "Login",
-  "check_frequency": $FREQ,
-  "confirmation_period": $CONFIRM,
-  "request_timeout": 15,
-  "email": true,
-  "regions": ["eu", "us"]
-}
-EOF
-)"
 
-# 8. OJS /ea/index redirect (verifies Caddy redirect rule works)
-create_monitor "SEA: OJS Index Redirect" "$(cat <<EOF
-{
-  "monitor_type": "status",
-  "url": "$OJS_BASE_URL/ea/index",
-  "pronounceable_name": "SEA: OJS Index Redirect",
-  "check_frequency": $FREQ,
-  "confirmation_period": $CONFIRM,
-  "request_timeout": 15,
-  "email": true,
-  "follow_redirects": true,
-  "regions": ["eu", "us"]
-}
-EOF
-)"
 
 # 9. Stripe webhook route exists (GET returns 405 Method Not Allowed, not 404)
 # Dropped: Better Stack treats 400/405 as failure. Stripe config is verified
 # by the hourly SSH checks instead (Stripe API key valid, plugin active).
+
+# SEA: OJS Login Page and SEA: OJS Index Redirect were defined here for months
+# and never existed in Better Stack. Not deleted by anyone — the account caps at
+# 10 monitors and the API refused them: "Monitor quota reached." Removed
+# 2026-08-03 so this file describes what actually runs, and so --dry-run stops
+# reporting work it can never do.
+#
+# The journal is not unwatched: OJS Homepage, OJS Journal and OJS Article
+# Content cover it, and the last of those is a keyword check that catches the
+# site serving pages with no articles. If the quota is ever raised — Harbour
+# cut-over will want monitors for the member area, checkout and email sending —
+# these two are worth reinstating.
 
 # 10. TCP: HTTPS port
 create_monitor "SEA: HTTPS Port" "$(cat <<EOF
