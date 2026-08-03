@@ -67,7 +67,15 @@ if [ -z "$IMPORT_ONLY" ]; then
   # Create tar.gz of just the import.xml files (preserving dir structure)
   # XML with base64 compresses very well (~60-70% reduction)
   TARBALL="/tmp/backfill-import-xmls.tar.gz"
-  (cd "$BACKFILL_OUTPUT" && find . -name 'import.xml' -print0 | tar czf "$TARBALL" --null -T -)
+  # COPYFILE_DISABLE stops macOS bsdtar adding an AppleDouble "._import.xml"
+  # entry per file to carry xattrs. GNU tar on the box then fails to write them
+  # ("._import.xml: Cannot open: Permission denied") and aborts the extraction
+  # with "Exiting with failure status", leaving the real import.xml files as
+  # they were. The sync LOOKS like it ran and the box keeps the old XML, so the
+  # reimport that follows silently republishes stale content. Cost one
+  # maintenance window on 2026-08-03. Harmless on Linux, where it is ignored.
+  (cd "$BACKFILL_OUTPUT" && find . -name 'import.xml' -print0 \
+     | COPYFILE_DISABLE=1 tar czf "$TARBALL" --null -T -)
   TAR_SIZE=$(du -h "$TARBALL" | cut -f1)
   echo "  Compressed: $XML_SIZE → $TAR_SIZE"
 
