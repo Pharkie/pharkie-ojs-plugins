@@ -48,6 +48,7 @@ USAGE
 import argparse
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
@@ -80,7 +81,13 @@ JOURNAL_TITLE = "Existential Analysis: Journal of The Society for Existential An
 
 
 def furniture_strings(xml: str) -> set[str]:
+    # Section headings count as furniture for MATCHING purposes: they sit in the
+    # PDF's line stream between the paragraph runs they introduce, but they are
+    # <title> in the JATS, never <p>. Leaving them in makes every multi-section
+    # run look discontiguous.
     out = {JOURNAL_TITLE}
+    out.update(re.sub(r"\s+", " ", TAG.sub("", t)).strip()
+               for t in re.findall(r"<title>(.*?)</title>", xml, re.S))
     title = re.search(r"<article-title>(.*?)</article-title>", xml, re.S)
     if title:
         out.add(re.sub(r"\s+", " ", TAG.sub("", title.group(1))).strip())
@@ -97,14 +104,27 @@ def is_furniture(paragraph: str, furniture: set[str]) -> bool:
     return bool(re.fullmatch(r"\d{1,4}", p)) or squash(p) in furniture
 
 
-def pdf_paragraphs(pdf_path: Path) -> list[str]:
-    """Paragraphs as the PDF itself delimits them: a trailing space continues."""
+def pdf_paragraphs(pdf_path: Path, furniture: set[str] | None = None) -> list[str]:
+    """Paragraphs as the PDF itself delimits them: a trailing space continues.
+
+    Furniture is dropped at LINE level, before paragraphs are assembled, which
+    is the only place it can be. A running head lands wherever the page breaks,
+    so it usually falls in the middle of a wrapped paragraph and gets glued into
+    it — "...a state of anxiety The Twelve-Day War Experience: A
+    phenomenological-existential reappraisal and agitation...". Filtering
+    assembled paragraphs, as an earlier version did, never sees it: the header
+    is not a paragraph, it is a splinter inside one. Removing the line first
+    also lets the text either side rejoin, which is what the page does visually.
+    """
+    furniture = furniture or set()
     doc = fitz.open(pdf_path)
     text = "".join(doc[i].get_text() for i in range(doc.page_count))
     doc.close()
 
     paragraphs, current = [], ""
     for line in text.split("\n"):
+        if is_furniture(line, furniture):
+            continue
         if not line.strip():
             if current:
                 paragraphs.append(current.strip())
@@ -156,34 +176,58 @@ def resplit(stream: str, targets: list[str]) -> list[str] | None:
     return pieces
 
 
+def paragraph_runs(body: str) -> list[tuple[str, list]]:
+    """Every maximal run of consecutive <p>, tagged with its heading.
+
+    A run, not a section. Block quotes sit between paragraphs — three sections of
+    37.2/13 are built that way — so treating a whole heading as one span
+    swallowed the <disp-quote> and had to refuse. Per-run also means one awkward
+    run no longer costs the rest of the section.
+    """
+    runs, run, title = [], [], "(untitled)"
+    for m in re.finditer(r"<title>.*?</title>|<p>.*?</p>|<[^>]+>|[^<\s][^<]*", body, re.S):
+        frag = m.group(0)
+        if frag.startswith("<p>"):
+            run.append(m)
+            continue
+        if len(run) >= 2:
+            runs.append((title, run))
+        run = []
+        if frag.startswith("<title>"):
+            title = re.sub(r"\s+", " ", TAG.sub("", frag)).strip()
+    if len(run) >= 2:
+        runs.append((title, run))
+    return runs
+
+
 def reflow(xml: str, pdf_path: Path) -> tuple[str, list[str], list[str]]:
-    """Returns (new_xml, sections_rebuilt, sections_refused)."""
+    """Returns (new_xml, runs_rebuilt, runs_refused)."""
     furniture = furniture_strings(xml)
-    pdf_paras = [p for p in pdf_paragraphs(pdf_path) if not is_furniture(p, furniture)]
+    pdf_paras = pdf_paragraphs(pdf_path, furniture)
     body_start, body_end = xml.find("<body>"), xml.rfind("</body>")
     if body_start < 0:
         return xml, [], ["no <body>"]
 
-    rebuilt, refused = [], []
-    out, cursor = [], body_start
+    rebuilt, refused, edits = [], [], []
+    body = xml[body_start:body_end]
 
-    for sec in re.finditer(r"<sec>(.*?)</sec>", xml[body_start:body_end], re.S):
-        inner = sec.group(1)
-        title_m = re.search(r"<title>(.*?)</title>", inner, re.S)
-        title = TAG.sub("", title_m.group(1)).strip() if title_m else "(untitled)"
-        paras = PARAGRAPH.findall(inner)
-        if len(paras) < 2:
+    for title, run in paragraph_runs(body):
+        # A reference list is already one entry per paragraph by design — that is
+        # not wrapped prose and must never be re-flowed into a block.
+        if re.search(r"\b(references|bibliography|notes|endnotes)\b", title, re.I):
             continue
 
+        paras = [PARAGRAPH.match(m.group(0)).group(1) for m in run]
         combined = squash("".join(paras))
-        # Find the run of PDF paragraphs that reconstructs this section.
-        targets, acc, start = None, "", None
+
+        # The contiguous run of PDF paragraphs that reconstructs this run.
+        targets = None
         for i in range(len(pdf_paras)):
-            acc, start = "", i
+            acc = ""
             for j in range(i, len(pdf_paras)):
                 acc += squash(pdf_paras[j])
                 if acc == combined:
-                    targets = pdf_paras[start : j + 1]
+                    targets = pdf_paras[i : j + 1]
                     break
                 if not combined.startswith(acc):
                     break
@@ -196,25 +240,17 @@ def reflow(xml: str, pdf_path: Path) -> tuple[str, list[str], list[str]]:
         if len(targets) == len(paras):
             continue  # already correct
 
-        stream = " ".join(paras)
-        pieces = resplit(stream, targets)
+        pieces = resplit(" ".join(paras), targets)
         if pieces is None:
             refused.append(f"{title} — text did not line up when re-splitting")
             continue
 
-        new_inner = inner
-        first = re.search(r"<p>", inner)
-        last = list(PARAGRAPH.finditer(inner))[-1]
-        replacement = "\n".join(f"<p>{p}</p>" for p in pieces)
-        new_inner = inner[: first.start()] + replacement + inner[last.end() :]
-
-        abs_start = body_start + sec.start()
-        abs_end = body_start + sec.end()
-        out.append((abs_start, abs_end, "<sec>" + new_inner + "</sec>"))
+        edits.append((body_start + run[0].start(), body_start + run[-1].end(),
+                      "\n".join(f"<p>{p}</p>" for p in pieces)))
         rebuilt.append(f"{title}: {len(paras)} -> {len(pieces)} paragraphs")
 
-    for abs_start, abs_end, text in reversed(out):
-        xml = xml[:abs_start] + text + xml[abs_end:]
+    for a, b, text in reversed(edits):
+        xml = xml[:a] + text + xml[b:]
     return xml, rebuilt, refused
 
 
@@ -241,10 +277,19 @@ def main() -> int:
             print(f"    SKIP {r}")
         if rebuilt:
             total_changed += 1
-            if args.write and squash(new_xml) == squash(xml):
+            if args.write:
+                # Both gates, every file: the text must be unchanged, and the
+                # result must still parse. Reflow only moves paragraph
+                # boundaries, so anything else is a bug and must not reach disk.
+                if squash(new_xml) != squash(xml):
+                    print("    ABORTED — reflow changed the text, not just the markup")
+                    continue
+                try:
+                    ET.fromstring(new_xml)
+                except ET.ParseError as e:
+                    print(f"    ABORTED — result is not well-formed XML: {e}")
+                    continue
                 f.write_text(new_xml, encoding="utf-8")
-            elif args.write:
-                print("    ABORTED — reflow changed the text, not just the markup")
 
     print(f"\n{'Rebuilt' if args.write else 'Would rebuild'} {total_changed} article(s).")
     return 0
