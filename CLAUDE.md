@@ -44,6 +44,22 @@ So: keep it working, don't invest in it, and don't confuse it with live.
 cut-over completes and the sync is retired, the rig and its smoke-test sections
 (1, 1b, 3, 6, 7, 9) can go.
 
+## Asking for a decision — 🛑 HARD RULE
+
+**When the work needs a decision that is Adam's, ask it as an interactive
+question, in the turn the need arises.** Not "say the word", not "if you want X
+I can" — those read as narration and are invisible, so the work stalls while
+Claude believes it has handed over. Put the context in the question and its
+options, lead with a recommendation, and say what each choice costs.
+
+**Name things as Adam would recognise them.** An article is "The Twelve-Day War
+Experience, by Rezgar Mohammadi (37.2, pp. 394–413)", never
+`37.2/13-the-twelve-day-war-experience-...jats.xml` and never "37.2/13". Slugs
+are how the pipeline addresses files, not how anyone thinks about the content.
+
+Routine judgement calls are still Claude's to make and act on. Reporting
+finished work stays prose — only the decision must be interactive.
+
 ## Good to know
 
 - **OJS has NO subscription REST API.** The endpoints don't exist. That's why a custom OJS plugin is needed. See `docs/ojs-sync-plugin-api.md`.
