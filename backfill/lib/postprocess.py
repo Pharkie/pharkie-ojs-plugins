@@ -570,22 +570,104 @@ def _strip_running_headers_soup(soup):
             el.decompose()
 
 
-def _fix_bio_contact_spacing_soup(soup):
-    """Ensure email addresses and ORCID URLs aren't concatenated across <br/>.
+# Contact details are what marks a paragraph as an author bio: an article's own
+# prose never carries an email address and an ORCID.
+_FUSED_BIO_CONTACT = re.compile(r'\bContact:|[\w.+-]+@[\w.-]+\.\w+|orcid\.org/')
 
-    Haiku sometimes outputs bios like:
-      Contact: user@example.com<br/>https://orcid.org/...
-    where the <br/> provides a visual break but text extraction concatenates
-    them. Replace <br/> between email-like text and a URL with ". ".
+
+def _fix_bio_contact_spacing_soup(soup):
+    """Ensure a <br/> inside a bio doesn't concatenate the words around it.
+
+    Haiku outputs bios with <br/> as the visual line break:
+      ...freelance writer.<br/>Contact: user@example.com<br/>https://orcid.org/...
+    Bios are stored as PLAIN TEXT (pipe3 writes `<bio><p>{escape(bio)}</p></bio>`),
+    so every tag inside one is dropped — and a dropped <br/> with no substitute
+    welds the two lines together. That is where "...freelance writer.Contact:
+    charles@..." came from: seven articles in the corpus, and it would have
+    recurred on every issue.
+
+    An earlier version only handled email<br/>URL, which is why the far more
+    common prose<br/>Contact: case survived. Any <br/> between two word
+    characters now becomes a separator: ". " between an email and a URL,
+    otherwise a plain space.
+
+    Confined to paragraphs carrying contact details, because a <br/> in ordinary
+    prose is a real line break — pipe3 emits it as <break/> and JATS renders it.
+    Only bio text is flattened to a plain string, so only bio text loses it.
     """
     for br in list(soup.find_all('br')):
+        para = br.find_parent('p')
+        if para is None or not _FUSED_BIO_CONTACT.search(para.get_text()):
+            continue
         prev_text = br.previous_sibling
         next_text = br.next_sibling
-        if (isinstance(prev_text, NavigableString)
-                and isinstance(next_text, NavigableString)
-                and re.search(r'[\w.+-]+@[\w.-]+\.\w+\s*$', str(prev_text))
-                and re.match(r'\s*https?://', str(next_text))):
+        if not (isinstance(prev_text, NavigableString)
+                and isinstance(next_text, NavigableString)):
+            continue
+        before, after = str(prev_text), str(next_text)
+        # \S, not \w: the line before the break usually ENDS a sentence, so the
+        # character to its left is a full stop ("...freelance writer.<br/>").
+        # Requiring a word character there was why this case slipped through.
+        if not (re.search(r'\S\s*$', before) and re.match(r'\s*\S', after)):
+            continue
+        if re.search(r'[\w.+-]+@[\w.-]+\.\w+\s*$', before) and re.match(r'\s*https?://', after):
+            # An email and a URL are two units on one contact line, not a
+            # sentence boundary — ". " is what reads correctly between them.
             br.replace_with('. ')
+        else:
+            # Don't double up where the markup already carries a space.
+            spaced = before.endswith((' ', '\n')) or after.startswith((' ', '\n'))
+            br.replace_with('' if spaced else ' ')
+
+
+def _split_fused_author_bios_soup(soup):
+    """Give an author bio its own <p> when extraction welded it to the body.
+
+    pipe4 promotes a trailing paragraph to <bio> only when the WHOLE paragraph
+    reads as a bio. For eleven articles Haiku never broke the line, so the bio
+    sat inside the article's closing paragraph — "...as we traverse our dark
+    nights of the soul.<strong>Carla Willig</strong> is Professor Emerita at
+    City..." — and the classifier, correctly, saw one body paragraph.
+
+    Splitting it here (pipe2, before JATS exists) means pipe4's existing
+    trailing-bio scan does the rest, and the repair survives a rerun. The
+    alternative — hand-editing the JATS — is silently lost the next time pipe3
+    regenerates it from the post-processed HTML.
+
+    Conservative on purpose: only splits at a <strong> that is followed by
+    contact details and is not already at the start of its paragraph.
+    """
+    # A worklist, not a snapshot: a two-author run splits into body + bio, and
+    # that new bio paragraph still holds the second author, so it goes back in
+    # the queue. 37.2/02 (Willig and Vincent) is the case that needs this.
+    queue = list(soup.find_all('p'))
+    while queue:
+        para = queue.pop(0)
+        for strong in para.find_all('strong', recursive=False):
+            # Already starts the paragraph — pipe4's own scan handles it.
+            if strong.previous_sibling is None:
+                continue
+            tail = ''.join(str(s) for s in strong.next_siblings)
+            if not _FUSED_BIO_CONTACT.search(BeautifulSoup(tail, 'html.parser').get_text()):
+                continue
+            bio = soup.new_tag('p')
+            for node in [strong] + list(strong.next_siblings):
+                bio.append(node.extract())
+            # These bios have no <br/> before "Contact:" — the line break was
+            # never in the extraction at all, so the words are welded directly
+            # ("...United States.Contact: michael@..."). Nothing downstream can
+            # tell that apart from a word, so separate it here.
+            for text in bio.find_all(string=True):
+                spaced = re.sub(r'([\w,.\)])(Contact:)', r'\1 \2', str(text))
+                if spaced != str(text):
+                    text.replace_with(spaced)
+            # The body paragraph now ends on the space that used to sit before
+            # the author's name.
+            if para.contents and isinstance(para.contents[-1], NavigableString):
+                para.contents[-1].replace_with(str(para.contents[-1]).rstrip())
+            para.insert_after(bio)
+            queue.append(bio)
+            break
 
 
 def _strip_heading_sups_soup(soup):
@@ -1155,7 +1237,10 @@ def postprocess_article(html, article, pdf_path=None):
     # Strip running headers and bare page numbers
     _strip_running_headers_soup(soup)
 
-    # Fix contact detail spacing (email<br/>ORCID → email. ORCID)
+    # Give a bio welded to the body its own <p>, so pipe4 can classify it
+    _split_fused_author_bios_soup(soup)
+
+    # Fix contact detail spacing (a <br/> inside a bio must not weld two words)
     _fix_bio_contact_spacing_soup(soup)
 
     # Splice complete notes from PyMuPDF if Haiku dropped any.

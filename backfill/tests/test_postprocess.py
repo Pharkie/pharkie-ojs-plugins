@@ -37,6 +37,7 @@ from backfill.lib.postprocess import (
     _title_in_text,
     _find_block_by_text,
     _fix_bio_contact_spacing_soup,
+    _split_fused_author_bios_soup,
     _parse,
 )
 from backfill.lib.citations import is_citation_like
@@ -367,12 +368,28 @@ class TestFixBioContactSpacing:
         _fix_bio_contact_spacing_soup(soup)
         assert soup.find('br') is not None
 
-    def test_preserves_br_without_url(self):
-        """<br/> after email but before non-URL text is left alone."""
-        html = '<p>Contact: user@example.com<br/>Some other text</p>'
-        soup = _parse(html)
+    def test_separates_email_and_following_line(self):
+        """A <br/> inside a bio becomes a space, even when no URL follows.
+
+        This used to assert the <br/> was preserved. The live corpus disproves
+        it: bios are written into JATS as plain text (`escape(bio)`), so the
+        tag is dropped with nothing in its place and the two lines weld
+        together. Seven published articles read "...freelance
+        writer.Contact: charles@cggtherapy.co.uk" for exactly this reason —
+        see 29.2/10-to-have-a-self-or-to-be-a-non-self.
+        """
+        soup = _parse('<p>Contact: user@example.com<br/>Some other text</p>')
         _fix_bio_contact_spacing_soup(soup)
-        assert soup.find('br') is not None
+        assert 'user@example.com Some other text' in soup.get_text()
+
+    def test_separates_prose_from_contact_line(self):
+        """The common shape: bio prose, <br/>, then the contact line."""
+        soup = _parse('<p><strong>Charles Gordon-Graham</strong> is a counsellor '
+                      'and freelance writer.<br/>Contact: charles@cggtherapy.co.uk</p>')
+        _fix_bio_contact_spacing_soup(soup)
+        text = soup.get_text()
+        assert 'freelance writer. Contact: charles@' in text
+        assert 'writer.Contact:' not in text
 
     def test_real_example_from_qa(self):
         """Exact pattern from QA #9796."""
@@ -383,6 +400,77 @@ class TestFixBioContactSpacing:
         text = soup.get_text()
         assert 'SB2967@live.mdx.ac.uk. https://orcid.org/' in text
         assert soup.find('br') is None  # <br> should be replaced
+
+
+# ===============================================================
+# _split_fused_author_bios_soup — bio welded into the body paragraph
+# ===============================================================
+
+class TestSplitFusedAuthorBios:
+    """Eleven articles in 37.2 had the author bio inside the article's closing
+    paragraph, so pipe4 — which promotes a whole paragraph to <bio> — correctly
+    saw body prose and left it there. The reader got the last sentence running
+    straight into "Michael R. Montgomery is an existential psychoanalyst...".
+
+    The text below is taken verbatim from the tail of
+    backfill/private/output/37.2/12-icarus-...raw.html, not written for the test.
+    """
+
+    ICARUS_TAIL = (
+        '<p>We promise to row toward the pain and suffering, and in doing so, become a '
+        'vessel for something sacred. Not rescue, but witness; not flight, but '
+        'empowerment and liberation. <strong>Michael R. Montgomery</strong> is an '
+        'existential psychoanalyst. He is on the faculty of the New School of '
+        'Existential Psychoanalysis, California, and is founder of the Logic23 Group. '
+        'He resides in Greater Boston in the United States.Contact: '
+        'michael@mrmtherapy.com https://orcid.org/0000-0002-8936-0138</p>'
+    )
+
+    def test_bio_gets_its_own_paragraph(self):
+        soup = _parse(self.ICARUS_TAIL)
+        _split_fused_author_bios_soup(soup)
+        paras = soup.find_all('p')
+        assert len(paras) == 2
+        assert paras[0].get_text().endswith('empowerment and liberation.')
+        assert paras[1].get_text().startswith('Michael R. Montgomery is an')
+
+    def test_welded_contact_gets_its_space(self):
+        soup = _parse(self.ICARUS_TAIL)
+        _split_fused_author_bios_soup(soup)
+        text = soup.get_text()
+        assert 'United States. Contact: michael@' in text
+        assert 'States.Contact:' not in text
+
+    def test_two_authors_split_into_two_bios(self):
+        """37.2/02: Willig and Vincent, both fused into the closing paragraph."""
+        soup = _parse(
+            '<p>as we traverse our dark nights of the soul.<strong>Carla Willig</strong> '
+            'is Professor Emerita at City, University of London.Contact: '
+            'C.Willig@city.ac.uk<strong>Dr Anna Vincent,</strong> (DCPsych) is an HCPC '
+            'Registered Counselling Psychologist.Contact: annavincent@example.com</p>'
+        )
+        _split_fused_author_bios_soup(soup)
+        paras = soup.find_all('p')
+        assert len(paras) == 3
+        assert paras[0].get_text().endswith('dark nights of the soul.')
+        assert paras[1].get_text().startswith('Carla Willig is Professor')
+        assert paras[2].get_text().startswith('Dr Anna Vincent, (DCPsych)')
+
+    def test_leaves_a_bio_that_is_already_its_own_paragraph(self):
+        """The normal, correct shape — pipe4 handles it, so don't touch it."""
+        html = ('<p><strong>Claire Phoenix</strong> works as a counsellor in a London '
+                'Sexual Health Clinic. Contact: claire.phoenix@yahoo.com</p>')
+        soup = _parse(html)
+        _split_fused_author_bios_soup(soup)
+        assert len(soup.find_all('p')) == 1
+
+    def test_leaves_bold_body_prose_alone(self):
+        """A <strong> mid-paragraph with no contact details is emphasis, not a bio."""
+        html = ('<p>Heidegger calls this <strong>Geworfenheit</strong>, a thrownness '
+                'that precedes any choice we might make about it.</p>')
+        soup = _parse(html)
+        _split_fused_author_bios_soup(soup)
+        assert len(soup.find_all('p')) == 1
 
 
 # ===============================================================
