@@ -378,6 +378,80 @@ create_monitor "SEA: HTTPS Port" "$(cat <<EOF
 EOF
 )"
 
+# 11-14. Added in the Better Stack UI, not here, and so invisible to this script
+# until 2026-08-03. That mattered: --delete-all removes every monitor whose name
+# starts with "SEA:" — all ten — and a setup run afterwards would have recreated
+# only the nine defined here, quietly dropping these four. Config captured from
+# the live monitors so re-creating them reproduces what is actually running.
+
+create_monitor "SEA: Docs Knowledge Base" "$(cat <<EOF
+{
+  "monitor_type": "status",
+  "url": "https://docs.existentialanalysis.org.uk",
+  "pronounceable_name": "SEA: Docs Knowledge Base",
+  "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
+  "request_timeout": 15,
+  "recovery_period": 180,
+  "verify_ssl": true,
+  "follow_redirects": true,
+  "email": true,
+  "regions": ["eu", "us"]
+}
+EOF
+)"
+
+create_monitor "SEA: New Site Homepage" "$(cat <<EOF
+{
+  "monitor_type": "status",
+  "url": "https://newsite.existentialanalysis.org.uk",
+  "pronounceable_name": "SEA: New Site Homepage",
+  "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
+  "request_timeout": 15,
+  "recovery_period": 180,
+  "verify_ssl": true,
+  "follow_redirects": true,
+  "email": true,
+  "regions": ["eu", "us"]
+}
+EOF
+)"
+
+create_monitor "SEA: Harbour Health" "$(cat <<EOF
+{
+  "monitor_type": "status",
+  "url": "https://harbour.existentialanalysis.org.uk/api/health",
+  "pronounceable_name": "SEA: Harbour Health",
+  "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
+  "request_timeout": 15,
+  "recovery_period": 180,
+  "verify_ssl": true,
+  "follow_redirects": true,
+  "email": true,
+  "regions": ["eu", "us"]
+}
+EOF
+)"
+
+create_monitor "SEA: Umami Analytics" "$(cat <<EOF
+{
+  "monitor_type": "status",
+  "url": "https://analytics.existentialanalysis.org.uk/api/heartbeat",
+  "pronounceable_name": "SEA: Umami Analytics",
+  "check_frequency": $FREQ,
+  "confirmation_period": $CONFIRM,
+  "request_timeout": 15,
+  "recovery_period": 180,
+  "verify_ssl": true,
+  "follow_redirects": true,
+  "email": true,
+  "regions": ["eu", "us"]
+}
+EOF
+)"
+
 # ============================================================
 # HEARTBEATS
 # ============================================================
