@@ -88,6 +88,40 @@ if [ -z "$IMPORT_ONLY" ]; then
     rm /tmp/backfill-import-xmls.tar.gz"
   rm -f "$TARBALL"
 
+  # --- Prove it actually landed ---
+  #
+  # tar's exit status is not enough, and neither is "no errors scrolled past".
+  # On 2026-08-03 this sync reported success while leaving 37.2/import.xml on the
+  # box untouched — dated a week earlier, a different size — and the reimport
+  # that followed would have quietly republished the uncorrected article. That is
+  # the worst failure this script can have: it undoes a correction and says OK.
+  #
+  # So compare sizes, every file, every run. Cheap (one ssh, one stat per file)
+  # against the cost of finding out later from a reader.
+  echo "--- Verifying ---"
+  # LC_ALL=C sort on BOTH sides, applied after collection. macOS and Linux sort
+  # differently by default (locale collation), so sorting inside each `find`
+  # produced two orderings of the same data and the diff flagged every line
+  # while the single real mismatch was buried. Compare sets, not sequences.
+  LOCAL_SIZES=$(cd "$BACKFILL_OUTPUT" && find . -name 'import.xml' \
+    | while read -r f; do echo "${f#./} $(wc -c < "$f" | tr -d ' ')"; done \
+    | LC_ALL=C sort)
+  REMOTE_SIZES=$($SSH_CMD "cd '$REMOTE_DIR/backfill/private/output' && \
+    find . -name import.xml | while read -r f; do \
+      echo \"\${f#./} \$(wc -c < \"\$f\" | tr -d ' ')\"; done" | LC_ALL=C sort)
+
+  if [ "$LOCAL_SIZES" = "$REMOTE_SIZES" ]; then
+    echo "  OK: $(echo "$LOCAL_SIZES" | wc -l | tr -d ' ') import XMLs match local byte-for-byte"
+  else
+    echo "  MISMATCH — these did not sync correctly:"
+    diff <(echo "$LOCAL_SIZES") <(echo "$REMOTE_SIZES") | grep '^[<>]' | head -20
+    echo ""
+    echo "  DO NOT IMPORT. The box holds different bytes from local, so a reimport"
+    echo "  would publish the wrong content. Re-run the sync, or scp the offending"
+    echo "  files directly, then check again."
+    exit 1
+  fi
+
   echo "$(phase_time) Sync complete."
 
   if [ -n "$SYNC_ONLY" ]; then
