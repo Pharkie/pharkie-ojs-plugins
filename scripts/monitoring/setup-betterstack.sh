@@ -262,22 +262,12 @@ create_monitor "SEA: WP REST API" "$(cat <<EOF
 EOF
 )"
 
-# 3. WP Admin — push-only (email muted; WP Homepage is the alarming primary)
-create_monitor "SEA: WP Admin" "$(cat <<EOF
-{
-  "monitor_type": "status",
-  "url": "$WP_PUBLIC_URL/wp-admin/",
-  "pronounceable_name": "SEA: WP Admin",
-  "check_frequency": $FREQ,
-  "confirmation_period": $CONFIRM,
-  "request_timeout": 15,
-  "email": false,
-  "push": true,
-  "follow_redirects": true,
-  "regions": ["eu", "us"]
-}
-EOF
-)"
+# 3. WP Admin — REMOVED 2026-08-03. It watched wp-staging, which is a test
+# rig that will never be promoted (see "The WordPress here is a test rig"
+# above), so an alert on it is noise about something nobody would act on.
+# It had no live counterpart either: defined here but absent from Better
+# Stack, one of three such drifts found when the definitions were
+# reconciled against the API.
 
 # 4. OJS homepage
 create_monitor "SEA: OJS Homepage" "$(cat <<EOF
