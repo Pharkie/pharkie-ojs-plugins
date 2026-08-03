@@ -104,6 +104,30 @@ def is_furniture(paragraph: str, furniture: set[str]) -> bool:
     return bool(re.fullmatch(r"\d{1,4}", p)) or squash(p) in furniture
 
 
+# The trailing-space convention belongs to a typesetting workflow, not to PDFs in
+# general. Newer born-digital issues mark wrapped lines with a trailing space;
+# older volumes do not, and there EVERY line looks like a paragraph end, so
+# reflowing shreds correct prose into one paragraph per line — the exact defect
+# it exists to repair, inflicted on healthy articles.
+#
+# Measured over the whole corpus before this gate existed: of the articles the
+# tool would change, all 24 it improved had a ratio of 0.65 or higher (median
+# 0.80), while the 48 it made worse had a median of 0.00. Below the threshold
+# the PDF cannot answer the question and the article is left alone.
+MIN_WRAP_RATIO = 0.65
+
+
+def wrap_ratio(pdf_path: Path) -> float:
+    """Share of non-blank lines that end with a space, i.e. that are wrapped."""
+    doc = fitz.open(pdf_path)
+    text = "".join(doc[i].get_text() for i in range(doc.page_count))
+    doc.close()
+    lines = [l for l in text.split("\n") if l.strip()]
+    if not lines:
+        return 0.0
+    return sum(1 for l in lines if l.endswith(" ")) / len(lines)
+
+
 def pdf_paragraphs(pdf_path: Path, furniture: set[str] | None = None) -> list[str]:
     """Paragraphs as the PDF itself delimits them: a trailing space continues.
 
@@ -176,6 +200,17 @@ def resplit(stream: str, targets: list[str]) -> list[str] | None:
     return pieces
 
 
+# A paragraph that ends mid-sentence is the visible symptom of the defect, so it
+# is also the measure of whether a repair helped.
+TERMINAL = re.compile(r"[.!?:;”\"’')\]]\s*$")
+
+
+def count_midsentence(xml: str) -> int:
+    body = xml[xml.find("<body>") : xml.rfind("</body>")]
+    paras = [re.sub(r"\s+", " ", TAG.sub("", m)).strip() for m in PARAGRAPH.findall(body)]
+    return sum(1 for p in paras if p and not TERMINAL.search(p))
+
+
 def paragraph_runs(body: str) -> list[tuple[str, list]]:
     """Every maximal run of consecutive <p>, tagged with its heading.
 
@@ -202,6 +237,15 @@ def paragraph_runs(body: str) -> list[tuple[str, list]]:
 
 def reflow(xml: str, pdf_path: Path) -> tuple[str, list[str], list[str]]:
     """Returns (new_xml, runs_rebuilt, runs_refused)."""
+    original = xml
+    ratio = wrap_ratio(pdf_path)
+    if ratio < MIN_WRAP_RATIO:
+        return xml, [], [
+            f"PDF does not mark wrapped lines ({ratio:.0%} of lines end with a "
+            f"space, need {MIN_WRAP_RATIO:.0%}) — cannot tell a wrap from a "
+            f"paragraph break, so leaving it alone"
+        ]
+
     furniture = furniture_strings(xml)
     pdf_paras = pdf_paragraphs(pdf_path, furniture)
     body_start, body_end = xml.find("<body>"), xml.rfind("</body>")
@@ -251,6 +295,19 @@ def reflow(xml: str, pdf_path: Path) -> tuple[str, list[str], list[str]]:
 
     for a, b, text in reversed(edits):
         xml = xml[:a] + text + xml[b:]
+
+    # Acceptance test, on the defect itself rather than on a proxy: reflowing is
+    # only worth doing if FEWER paragraphs end mid-sentence afterwards. Where it
+    # ends up with more, the PDF's paragraphs are not the article's — verse is
+    # the clearest case, since a poem's line breaks are the author's and the
+    # page wraps them like any other text (37.1/06, "poetic reflections", went
+    # from 4 mid-sentence paragraphs to 38). Twenty-two articles behaved this
+    # way; each is now declined whole rather than half-improved.
+    if edits and count_midsentence(xml) > count_midsentence(original):
+        return original, [], [
+            "reflow left MORE paragraphs ending mid-sentence than it found — "
+            "the PDF's paragraph structure is not this article's, so declining it"
+        ]
     return xml, rebuilt, refused
 
 
