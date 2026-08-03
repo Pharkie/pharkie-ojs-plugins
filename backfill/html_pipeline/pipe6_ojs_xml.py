@@ -938,14 +938,30 @@ def main():
                 embed = find(galley, './/issue_file/embed')
                 if embed is None or not embed.text or len(embed.text) < 100:
                     raise ValueError("Issue galley embed is empty or truncated")
-        # Check article galleys have content
+        # Check article galleys have content.
+        #
+        # This is an ERROR, not a warning. Everything an article carries beyond
+        # its title — galleys, citations, DOI, page numbers — is read from the
+        # files beside its split_pdf, so an unresolvable path produces a
+        # syntactically valid import.xml with the article gutted. It used to
+        # warn, once per article, and scroll past.
+        #
+        # That cost a real issue: on 2026-08-03 three toc.json files still held
+        # absolute devcontainer paths (/workspaces/...), so regenerating 36.1
+        # outside the container emitted 18 articles with no galleys and no
+        # citations, and importing it stripped them from the journal. Nothing
+        # failed; the run said "XML valid: 18 articles".
         if not args.no_pdfs:
+            gutted = []
             for art in articles:
-                art_galleys = findall(art, './/article_galley')
-                if not art_galleys:
+                if not findall(art, './/article_galley'):
                     title_el = find(art, './/title')
-                    title = title_el.text if title_el is not None else '?'
-                    print(f"WARNING: Article '{title}' has no galleys", file=sys.stderr)
+                    gutted.append(title_el.text if title_el is not None else '?')
+            if gutted:
+                raise ValueError(
+                    f"{len(gutted)} of {len(articles)} articles have no galleys, so importing "
+                    f"this file would REMOVE their galleys and citations. Usually a split_pdf "
+                    f"path in toc.json that does not resolve on this host. First: {gutted[0]!r}")
         print(f"XML valid: {len(articles)} articles", file=sys.stderr)
     except (ET.ParseError, ValueError) as e:
         print(f"ERROR: XML validation failed: {e}", file=sys.stderr)
