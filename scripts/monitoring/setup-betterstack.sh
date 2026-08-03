@@ -41,7 +41,14 @@ fi
 if [ -z "${BETTERSTACK_API_TOKEN+x}" ]; then
   ENV_LIVE="$(cd "$(dirname "$0")/../.." && pwd)/private/.env.live"
   if [ -f "$ENV_LIVE" ] && command -v sops >/dev/null 2>&1; then
-    BETTERSTACK_API_TOKEN=$(sops -d "$ENV_LIVE" 2>/dev/null | grep '^BETTERSTACK_API_TOKEN=' | head -1 | cut -d= -f2-)
+    # Strip any trailing `# comment` and surrounding quotes. The line in
+    # .env.live carries one, so a bare `cut -d= -f2-` returns 116 characters
+    # for a 24-character token and Better Stack rejects it as an invalid token
+    # — which reads like an expired credential rather than a parsing bug.
+    BETTERSTACK_API_TOKEN=$(sops -d "$ENV_LIVE" 2>/dev/null \
+      | grep '^BETTERSTACK_API_TOKEN=' | head -1 | cut -d= -f2- \
+      | sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
+      | tr -d '"'"'")
     export BETTERSTACK_API_TOKEN
   fi
 fi

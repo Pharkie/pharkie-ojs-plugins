@@ -48,11 +48,21 @@ if [ -z "$ACTION" ]; then
 fi
 
 # Same loading path as setup-betterstack.sh, so there is one place to put the token.
+#
+# The trailing-comment strip is load-bearing. The line in .env.live is:
+#   BETTERSTACK_API_TOKEN=<token> # Uptime API token, restored ... (also in keychain)
+# and a plain `cut -d= -f2-` hands back token AND comment — 116 characters where
+# the token is 24. Better Stack then answers "Invalid Team API token", which
+# reads exactly like an expired credential and sent me looking for a new one on
+# 2026-08-03 when the stored token was fine all along.
 if [ -z "${BETTERSTACK_API_TOKEN+x}" ]; then
   REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
   ENV_LIVE="$REPO_ROOT/private/.env.live"
   if [ -f "$ENV_LIVE" ] && command -v sops >/dev/null 2>&1; then
-    BETTERSTACK_API_TOKEN=$(sops -d "$ENV_LIVE" 2>/dev/null | grep '^BETTERSTACK_API_TOKEN=' | head -1 | cut -d= -f2-)
+    BETTERSTACK_API_TOKEN=$(sops -d "$ENV_LIVE" 2>/dev/null \
+      | grep '^BETTERSTACK_API_TOKEN=' | head -1 | cut -d= -f2- \
+      | sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' \
+      | tr -d '"'"'")
     export BETTERSTACK_API_TOKEN
   fi
 fi
