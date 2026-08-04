@@ -311,6 +311,28 @@ def reflow(xml: str, pdf_path: Path) -> tuple[str, list[str], list[str]]:
     return xml, rebuilt, refused
 
 
+def apply_reflow(xml: str, pdf_path: Path) -> tuple[str, list[str]]:
+    """Reflow with every safety gate applied — the entry point for pipe3.
+
+    pipe3 calls this on every JATS it generates, which is what makes the
+    repair durable: the 2026-08-03 reflow was applied to the generated files
+    only, and the next regeneration (37.2 revC, the following morning) undid
+    it. Returns (xml_to_write, log_lines); on any gate failure the original
+    xml comes back unchanged.
+    """
+    new_xml, rebuilt, refused = reflow(xml, pdf_path)
+    log = [f'reflow: {r}' for r in rebuilt]
+    if not rebuilt:
+        return xml, log
+    if squash(new_xml) != squash(xml):
+        return xml, log + ['reflow ABORTED — text changed, not just markup']
+    try:
+        ET.fromstring(new_xml)
+    except ET.ParseError as e:
+        return xml, log + [f'reflow ABORTED — not well-formed: {e}']
+    return new_xml, log
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+")

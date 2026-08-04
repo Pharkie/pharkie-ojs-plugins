@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from html_pipeline.pipe6_ojs_xml import (
     parse_date, split_author_name, SECTIONS,
 )
+from html_pipeline.reflow_paragraphs import apply_reflow
 from lib.citations import sort_notes_by_number
 
 JOURNAL_TITLE = 'Existential Analysis'
@@ -660,6 +661,18 @@ def process_toc(toc_path: Path, dry_run: bool = False,
         jats_xml = generate_article_jats(
             article, volume, issue, date_published, html_path, doi,
             publisher_id=publisher_id)
+
+        # Reflow paragraphs the extractor split at PDF line wraps. Lives HERE,
+        # not as a manual pass over the generated files: the 2026-08-03 reflow
+        # was applied to outputs only, and the very next regeneration (37.2
+        # revC) silently undid it. Every gate (wrap-ratio, match refusal,
+        # mid-sentence acceptance, text identity, well-formedness) is inside
+        # apply_reflow — on any doubt the JATS is written as generated.
+        split_pdf = Path(article['split_pdf'])
+        if split_pdf.exists():
+            jats_xml, reflow_log = apply_reflow(jats_xml, split_pdf)
+            for line in reflow_log:
+                print(f'  {vol_dir.name}/{slug}: {line}')
 
         with open(jats_path, 'w', encoding='utf-8') as f:
             f.write(jats_xml)
