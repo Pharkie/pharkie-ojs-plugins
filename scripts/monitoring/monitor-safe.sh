@@ -429,14 +429,21 @@ else
 fi
 
 # 7c. Swap
+# Threshold is a share of total, not an absolute: the old >100MB test dates
+# from when the box had no swap and ANY usage was suspicious. Since the 3GB
+# swapfile (2026-08-04), a few hundred MB of cold pages parked there is the
+# file doing its job — it alerted at 105MB the same afternoon, at load 0.2
+# with 1GB of RAM free. Half full is where swap stops being parking and
+# starts being pressure.
 SWAP_INFO=$(ssh_retry $SSH_CMD "free -m | grep '^Swap:'") || SWAP_INFO=""
 SWAP_USED=$(echo "$SWAP_INFO" | awk '{print $3}')
-if ! [[ "$SWAP_USED" =~ ^[0-9]+$ ]]; then
+SWAP_TOTAL=$(echo "$SWAP_INFO" | awk '{print $2}')
+if ! [[ "$SWAP_USED" =~ ^[0-9]+$ ]] || ! [[ "$SWAP_TOTAL" =~ ^[0-9]+$ ]]; then
   fail "Swap info unreadable (free -m: ${SWAP_INFO:-<empty>})"
-elif [ "$SWAP_USED" -gt 100 ]; then
-  fail "High swap usage (${SWAP_USED}MB — indicates memory pressure)"
+elif [ "$SWAP_TOTAL" -gt 0 ] && [ "$SWAP_USED" -gt $((SWAP_TOTAL / 2)) ]; then
+  fail "High swap usage (${SWAP_USED}MB of ${SWAP_TOTAL}MB — over half full indicates real memory pressure)"
 else
-  pass "Swap OK (${SWAP_USED}MB used)"
+  pass "Swap OK (${SWAP_USED}MB of ${SWAP_TOTAL}MB used)"
 fi
 
 # 7d. Disk space
