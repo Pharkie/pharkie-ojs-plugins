@@ -5,23 +5,29 @@
 # preserving all existing article IDs, DOIs, and URLs. Safe to run on live.
 #
 # Usage:
-#   backfill/add-issue-galleys.sh [--host=sea-live] [--dry-run] [issue_dir...]
+#   backfill/add-issue-galleys.sh [--host=sea-live] [--dry-run] [--replace] [issue_dir...]
 #
 # Examples:
 #   backfill/add-issue-galleys.sh backfill/private/output/*           # dev (local docker)
 #   backfill/add-issue-galleys.sh --host=sea-live backfill/private/output/*  # live
 #   backfill/add-issue-galleys.sh --dry-run backfill/private/output/*  # preview only
+#   backfill/add-issue-galleys.sh --replace backfill/private/output/37.2  # corrected PDF:
+#     swap the file behind an EXISTING galley in place (pipe7 --force never
+#     replaces issue galley files — issues log #37). Without --replace,
+#     issues that already have a galley are skipped.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 HOST=""
 DRY_RUN=""
+REPLACE=""
 ISSUE_DIRS=()
 
 for arg in "$@"; do
   case "$arg" in
     --host=*) HOST="${arg#--host=}" ;;
     --dry-run) DRY_RUN=1 ;;
+    --replace) REPLACE=1 ;;
     *) ISSUE_DIRS+=("$arg") ;;
   esac
 done
@@ -76,7 +82,8 @@ FAILED=0
 MAX_FAILURES=3
 
 # Sort issue dirs numerically (1, 2, 3, ..., 10.1, 10.2, ..., 37.1)
-IFS=$'\n' SORTED_DIRS=($(for d in "${ISSUE_DIRS[@]}"; do echo "$d"; done | sort -t/ -k$(echo "${ISSUE_DIRS[0]}" | tr '/' '\n' | wc -l) -V))
+# macOS wc -l pads with spaces, which breaks sort -k — strip them.
+IFS=$'\n' SORTED_DIRS=($(for d in "${ISSUE_DIRS[@]}"; do echo "$d"; done | sort -t/ -k$(echo "${ISSUE_DIRS[0]}" | tr '/' '\n' | wc -l | tr -d ' ') -V))
 unset IFS
 
 for ISSUE_DIR in "${SORTED_DIRS[@]}"; do
@@ -129,12 +136,25 @@ print(f'{vol} {iss} {date}')
     continue
   fi
 
-  # Check if issue already has a galley
+  # Check if issue already has a galley. A plain run only ADDS missing
+  # galleys; pipe7 --force never touches issue galley files either (issues
+  # log #37), so a corrected issue PDF needs --replace to swap the file
+  # in place, keeping the existing galley row and file name.
   EXISTING=$(run_db "SELECT COUNT(*) FROM issue_galleys WHERE issue_id=$ISSUE_ID")
+  MODE="add"
   if [ "$EXISTING" != "0" ]; then
-    echo "SKIP: $VOL_ISS (id=$ISSUE_ID) already has a galley"
-    SKIPPED=$((SKIPPED + 1))
-    continue
+    if [ -z "$REPLACE" ]; then
+      echo "SKIP: $VOL_ISS (id=$ISSUE_ID) already has a galley (--replace to swap the file)"
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
+    MODE="replace"
+    FILENAME=$(run_db "SELECT f.file_name FROM issue_files f JOIN issue_galleys g ON g.file_id=f.file_id WHERE g.issue_id=$ISSUE_ID LIMIT 1")
+    if [ -z "$FILENAME" ]; then
+      echo "FAIL: $VOL_ISS — galley exists but no issue_files row"
+      FAILED=$((FAILED + 1))
+      continue
+    fi
   fi
 
   # Use pre-saved cleaned PDF if available, otherwise re-save from source
@@ -167,10 +187,12 @@ except Exception as e:
     fi
     CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
   fi
-  FILENAME="vol-${VOL}-iss-${ISS}.pdf"
+  if [ "$MODE" = "add" ]; then
+    FILENAME="vol-${VOL}-iss-${ISS}.pdf"
+  fi
 
   if [ -n "$DRY_RUN" ]; then
-    echo "$VOL_ISS (id=$ISSUE_ID): $RESULT [dry-run]"
+    echo "$VOL_ISS (id=$ISSUE_ID): $RESULT [dry-run, would $MODE $FILENAME]"
     rm -f "$CLEAN_PDF"
     ADDED=$((ADDED + 1))
     continue
@@ -190,6 +212,14 @@ except Exception as e:
     continue
   fi
   run_ojs "chown www-data:www-data $FILES_DIR/$FILENAME"
+
+  if [ "$MODE" = "replace" ]; then
+    run_db "UPDATE issue_files SET file_size=$CLEAN_SIZE, date_modified=NOW() WHERE issue_id=$ISSUE_ID AND file_name='$FILENAME'"
+    rm -f "$CLEAN_PDF"
+    echo "$VOL_ISS (id=$ISSUE_ID): $RESULT — replaced $FILENAME"
+    ADDED=$((ADDED + 1))
+    continue
+  fi
 
   # Insert DB rows (file first, then galley referencing it)
   run_db "INSERT INTO issue_files (issue_id, file_name, original_file_name, file_type, file_size, content_type, date_uploaded, date_modified) VALUES ($ISSUE_ID, '$FILENAME', '${VOL_ISS}.pdf', 'application/pdf', $CLEAN_SIZE, 1, '$DATE', '$DATE')"

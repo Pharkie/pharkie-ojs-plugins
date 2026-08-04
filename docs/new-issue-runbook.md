@@ -126,6 +126,41 @@ real content change, and every one traced to a query we had raised.
 **If the page count changed, or any article's first page moved, the page ranges
 in `toc.json` are no longer valid** and must be rechecked before splitting.
 
+**If the correction is an author's name, fix the registry FIRST.** The split's
+normalise step (`backfill/private/authors.json`) fuzzy-matches names back to
+their canonical form — so a corrected name in toc.json gets silently reverted
+to the old spelling on the next split. Make the corrected name canonical and
+demote the old one to its `variants` list, then correct toc.json. (37.2 revC:
+"Jun Woo Kwon" was re-normalised back to "Kwan" until the registry was
+flipped.)
+
+## 1c. Metadata-only corrections: the fast path
+
+When the change is metadata plus its appearances in one article's text — an
+author name, a title typo — the full reimport (steps 2–7, with its search
+reindex and pipe8/9b/9c retinue) is the wrong tool. After fixing the registry,
+toc.json and rerunning pipe1d–pipe5 for the issue:
+
+```bash
+# Diff JATS against OJS and patch metadata + that article's galley files:
+python3 backfill/html_pipeline/pipe13_patch_metadata.py \
+    backfill/private/output/<vol>.<iss>/toc.json --target dev --article <N> --galleys
+# same again with --confirm, then --target live --confirm
+
+# The whole-issue PDF also carries the correction (issues log #37):
+backfill/html_pipeline/pipe9_issue_galleys.sh --replace backfill/private/output/<vol>.<iss>
+backfill/html_pipeline/pipe9_issue_galleys.sh --replace --host=sea-live backfill/private/output/<vol>.<iss>
+
+# Crossref holds authors/title for registered DOIs — send the correction:
+backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
+    --redeposit=<the-article-doi> --confirm
+```
+
+pipe13 dispatches a scoped reindex (one job per changed article, drained
+automatically) — no 1,400-job rebuild. It refuses structural changes (author
+count, abstract, missing submissions): those go through the reimport path.
+Harbour still needs its importer rerun afterwards (step 9).
+
 ## 2. Split into per-article PDFs
 
 ```bash

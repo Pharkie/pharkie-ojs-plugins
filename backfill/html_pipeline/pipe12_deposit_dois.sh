@@ -11,6 +11,11 @@
 #   backfill/html_pipeline/pipe12_deposit_dois.sh 37.2                    # list only
 #   backfill/html_pipeline/pipe12_deposit_dois.sh 37.2 --host=sea-live --confirm
 #
+# Metadata correction on an already-registered DOI (Crossref holds a copy of
+# authors/title, so it must be redeposited after e.g. an author-name fix):
+#   backfill/html_pipeline/pipe12_deposit_dois.sh 37.2 --host=sea-live \
+#     --redeposit=10.65828/rg2zhd62 --confirm
+#
 # Deposit is asynchronous: drain the job queue afterwards, and remember that
 # "submitted" is not "registered" until Crossref confirms.
 
@@ -22,10 +27,12 @@ VOL_ISS=""
 HOST=""
 CONFIRM=""
 
+REDEPOSIT=""
 for arg in "$@"; do
   case "$arg" in
     --host=*) HOST="${arg#--host=}" ;;
     --confirm) CONFIRM="--confirm" ;;
+    --redeposit=*) REDEPOSIT="$arg" ;;
     *) VOL_ISS="$arg" ;;
   esac
 done
@@ -52,7 +59,7 @@ if [ -n "$HOST" ]; then
   scp -q -i ~/.ssh/hetzner "$TOOL" "root@$SERVER_IP:/tmp/deposit-dois.php"
   $SSH_CMD "cd $REMOTE_DIR \
     && docker compose cp /tmp/deposit-dois.php ojs:$REMOTE_TOOL \
-    && docker compose exec -T ojs php $REMOTE_TOOL $VOL $ISS $CONFIRM; \
+    && docker compose exec -T ojs php $REMOTE_TOOL $VOL $ISS $CONFIRM $REDEPOSIT; \
     rc=\$?; \
     docker compose exec -T ojs rm -f $REMOTE_TOOL; sudo rm -f /tmp/deposit-dois.php 2>/dev/null || true; exit \$rc"
 else
@@ -67,7 +74,7 @@ else
   echo "OJS container: $CONTAINER"
   docker cp "$TOOL" "$CONTAINER:$REMOTE_TOOL"
   set +e
-  docker exec -i "$CONTAINER" php "$REMOTE_TOOL" "$VOL" "$ISS" $CONFIRM
+  docker exec -i "$CONTAINER" php "$REMOTE_TOOL" "$VOL" "$ISS" $CONFIRM $REDEPOSIT
   rc=$?
   set -e
   docker exec -i "$CONTAINER" rm -f "$REMOTE_TOOL"

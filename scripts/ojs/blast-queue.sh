@@ -42,6 +42,8 @@ KILL_ONLY=false
 TRIES=1
 DELAY=0  # seconds between jobs per worker (0 = no delay)
 MAX_TIMEOUT=1800  # 30 minutes max runtime per worker
+# Load thresholds are derived from core count at the check site (see
+# "Check server load" below); these are only last-resort fallbacks.
 MAX_LOAD_WARN=2.0
 MAX_LOAD_REFUSE=5.0
 JOBS_PHP="/var/www/html/lib/pkp/tools/jobs.php"
@@ -193,10 +195,23 @@ if [ "$TOTAL" = "0" ]; then
 fi
 
 # --- Check server load ---
+# Thresholds scale with the measured machine's core count: load 5 means
+# saturation on the 2-core box but idle on a 10-core dev Mac. The formula
+# (warn at 1.0/core, refuse at 2.5/core) reproduces the old fixed 2.0/5.0
+# exactly on the box.
+
+if [ -n "$HOST" ]; then
+  CORES=$($SSH nproc 2>/dev/null)
+else
+  CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
+fi
+CORES=${CORES:-2}
+MAX_LOAD_WARN=$(awk "BEGIN {print $CORES * 1.0}")
+MAX_LOAD_REFUSE=$(awk "BEGIN {print $CORES * 2.5}")
 
 LOAD=$($LOAD_CMD 2>/dev/null | sed -nE 's/.*load averages?: *([0-9]+[.,][0-9]+).*/\1/p' | tr ',' '.')
 LOAD=${LOAD:-0}
-echo "Server load: $LOAD"
+echo "Server load: $LOAD (cores: $CORES, refuse above $MAX_LOAD_REFUSE)"
 
 LOAD_STATUS=$(awk "BEGIN {
   if ($LOAD > $MAX_LOAD_REFUSE) print \"refuse\"

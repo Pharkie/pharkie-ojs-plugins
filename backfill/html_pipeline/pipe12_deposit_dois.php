@@ -58,6 +58,16 @@ class DepositIssueDoisTool extends CommandLineTool
         [$volume, $number] = $this->argv;
         $confirm = in_array('--confirm', $this->argv, true);
 
+        // --redeposit=<doi>: deposit this DOI again even though it is
+        // registered — for metadata corrections (author name, title) that
+        // Crossref must receive. Everything else keeps the registered-skip.
+        $redeposit = null;
+        foreach ($this->argv as $arg) {
+            if (str_starts_with($arg, '--redeposit=')) {
+                $redeposit = substr($arg, strlen('--redeposit='));
+            }
+        }
+
         $contextDao = DAORegistry::getDAO('JournalDAO');
         $context = $contextDao->getByPath('ea');
         if (!$context) {
@@ -105,9 +115,13 @@ class DepositIssueDoisTool extends CommandLineTool
             }
             $status = (int) $doi->getData('status');
             if ($status === Doi::STATUS_REGISTERED) {
-                echo "  already registered, skipping: {$doi->getData('doi')}\n";
-                $skipped++;
-                continue;
+                if ($redeposit !== null && $doi->getData('doi') === $redeposit) {
+                    echo "  registered but --redeposit requested: {$doi->getData('doi')}\n";
+                } else {
+                    echo "  already registered, skipping: {$doi->getData('doi')}\n";
+                    $skipped++;
+                    continue;
+                }
             }
             $toDeposit[] = ['id' => $submission->getId(), 'doi' => $doi, 'title' => $title];
         }
