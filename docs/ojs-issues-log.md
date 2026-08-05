@@ -656,3 +656,40 @@ change" while two articles were wrong.
   says run the full pipe2→pipe6 chain; this is what happens if you don't.)
 - **Verify per article, not in total.** Compensating changes hide in a sum.
   Diff the per-article counts against the previous run before importing.
+
+### 41. OJS database hit a 2GB size alert with ~300MB of real content — session and search-index bloat [ops]
+
+The daily DB-size check tripped its 2GB threshold. The breakdown said the
+threshold was right and the database was wrong: of 2070.9MB, only ~300MB was
+journal content.
+
+- **`sessions` (275MB, 339k rows):** OJS 3.5's Laravel session handler writes a
+  DB row for every anonymous visitor — mostly crawlers, here ~12.5k/day. GC
+  honours the ~30-day session lifetime, so steady state was 339k rows of which
+  only **54** belonged to logged-in users.
+- **`submission_search_object_keywords` (1470MB):** rebuilt to 507MB. Repeated
+  reindexing (delete + reinsert) fragments InnoDB tablespaces, and freed pages
+  still count toward `information_schema` sizes.
+
+Fix, with the site up throughout (~1 min of DB work total):
+`DELETE FROM sessions WHERE user_id IS NULL AND last_activity <` (now − 2 days)
+— 285,694 rows — then `OPTIMIZE TABLE` on both tables (InnoDB does
+recreate + analyze). Result: **2070.9MB → 845.1MB**. Search verified working
+after the rebuild (query returns article summaries).
+
+- **Rule:** deleting rows never shrinks a reported InnoDB size — only a table
+  rebuild (`OPTIMIZE TABLE`) returns the space. When a DB "grows", check the
+  anonymous share of `sessions` and the search tables' rebuilt-vs-actual size
+  before treating it as content growth or raising the threshold.
+
+**Design assessment.** Row-per-request DB sessions is stock Laravel plumbing;
+the OJS problem is adopting it unmodified for a public journal frontend whose
+traffic is mostly crawlers that never return a cookie. There is no separate
+retention for guest vs authenticated sessions and no built-in pruning tool, so
+the single knob (`session_lifetime`, here 30 days — really a "keep members
+signed in" setting) also governs how long crawler junk is kept. Result: ~97%
+of the sessions table is worthless rows retained for a month, inflating every
+nightly dump, and trimming them requires hand-written SQL outside the
+application. **Decision: leave as-is, no purge cron** — this deployment is
+being replaced by the successor system, and upkeep of this kind is part of the
+reason. The daily size check remains the backstop.
