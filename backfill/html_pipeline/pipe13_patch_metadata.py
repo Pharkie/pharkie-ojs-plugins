@@ -123,7 +123,10 @@ def load_jats(toc_path, only_index=None):
         if only_index is not None and i != only_index:
             continue
         jats_path = os.path.splitext(art['split_pdf'])[0] + '.jats.xml'
-        if not os.path.isabs(jats_path):
+        # split_pdf paths are repo-root-relative (like pipe6 reads them), not
+        # toc-dir-relative; fall back to the toc dir only if root-relative
+        # doesn't resolve.
+        if not os.path.isabs(jats_path) and not os.path.exists(jats_path):
             jats_path = os.path.join(os.path.dirname(os.path.abspath(toc_path)),
                                      jats_path)
         tree = ET.parse(jats_path)
