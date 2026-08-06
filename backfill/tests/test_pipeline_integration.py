@@ -344,8 +344,11 @@ class TestJatsPreservation:
         import json
         toc_path.write_text(json.dumps(toc))
 
-        # Create split PDF (needed for slug)
-        (tmp_path / '01-test.pdf').write_bytes(b'%PDF-fake')
+        # Create split PDF — a real one: pipe3 opens it for paragraph reflow
+        import fitz
+        pdf = fitz.open()
+        pdf.new_page()
+        pdf.save(str(tmp_path / '01-test.pdf'))
 
         # Create existing JATS with DOI and publisher-id
         jats_path = tmp_path / '01-test.jats.xml'
@@ -388,7 +391,10 @@ class TestJatsPreservation:
         toc_path = tmp_path / 'toc.json'
         import json
         toc_path.write_text(json.dumps(toc))
-        (tmp_path / '01-brand-new.pdf').write_bytes(b'%PDF-fake')
+        import fitz
+        pdf = fitz.open()
+        pdf.new_page()
+        pdf.save(str(tmp_path / '01-brand-new.pdf'))
         (tmp_path / '01-brand-new.html').write_text('<p>New content</p>')
 
         stats = process_toc(Path(toc_path))
@@ -399,6 +405,46 @@ class TestJatsPreservation:
         tree = ET.parse(jats_path)
         doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
         assert doi_el is None  # No DOI for brand new article
+
+    def test_unreadable_pdf_declines_reflow(self, tmp_path):
+        """A corrupt split PDF must decline the reflow gate, not crash pipe3.
+
+        The reflow step opens the split PDF for its wrap markers; a file it
+        can't parse is a gate failure like any other — the JATS is written
+        as generated (DOI intact), the run continues.
+        """
+        from pathlib import Path
+        from backfill.html_pipeline.pipe3_generate_jats import process_toc
+
+        toc = {
+            'volume': 99, 'issue': 1, 'date': 'January 2026',
+            'articles': [{
+                'title': 'Corrupt Split',
+                'authors': 'John Doe',
+                'section': 'Articles',
+                'split_pdf': str(tmp_path / '01-corrupt-split.pdf'),
+                'pdf_page_start': 1, 'pdf_page_end': 1,
+            }],
+        }
+        toc_path = tmp_path / 'toc.json'
+        import json
+        toc_path.write_text(json.dumps(toc))
+        (tmp_path / '01-corrupt-split.pdf').write_bytes(b'%PDF-fake')
+        (tmp_path / '01-corrupt-split.html').write_text('<p>Body</p>')
+        jats_path = tmp_path / '01-corrupt-split.jats.xml'
+        jats_path.write_text(
+            '<?xml version="1.0"?>\n'
+            '<article><front><article-meta>'
+            '<article-id pub-id-type="publisher-id">5678</article-id>'
+            '<article-id pub-id-type="doi">10.65828/preserved</article-id>'
+            '</article-meta></front></article>')
+
+        process_toc(Path(toc_path))  # must not raise
+
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(jats_path)
+        doi_el = tree.find('.//{*}article-id[@pub-id-type="doi"]')
+        assert doi_el is not None and doi_el.text == '10.65828/preserved'
 
 
 class TestVerifySplitIntegration:

@@ -320,7 +320,14 @@ def apply_reflow(xml: str, pdf_path: Path) -> tuple[str, list[str]]:
     it. Returns (xml_to_write, log_lines); on any gate failure the original
     xml comes back unchanged.
     """
-    new_xml, rebuilt, refused = reflow(xml, pdf_path)
+    try:
+        new_xml, rebuilt, refused = reflow(xml, pdf_path)
+    except (fitz.FileDataError, fitz.mupdf.FzErrorBase) as e:
+        # An unopenable split PDF is a gate failure like any other: without
+        # the PDF's wrap markers nothing can be verified, so decline rather
+        # than crash the whole pipe3 run mid-issue.
+        return xml, [f'reflow ABORTED — split PDF unreadable ({e}); '
+                     'JATS written as generated']
     log = [f'reflow: {r}' for r in rebuilt]
     if not rebuilt:
         return xml, log
