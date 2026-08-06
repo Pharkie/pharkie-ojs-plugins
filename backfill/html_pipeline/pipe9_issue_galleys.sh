@@ -52,7 +52,7 @@ if [ -n "$HOST" ]; then
     $SSH_CMD "cd $REMOTE_DIR && docker compose exec -T ojs bash -c '$1'" 2>/dev/null
   }
   copy_to_ojs() {
-    scp -q -i ~/.ssh/hetzner "$1" "root@$SERVER_IP:/tmp/_galley_upload.pdf"
+    $SCP_CMD -q "$1" "$SCP_HOST:/tmp/_galley_upload.pdf"
     $SSH_CMD "cd $REMOTE_DIR && docker compose cp /tmp/_galley_upload.pdf ojs:$2 && rm /tmp/_galley_upload.pdf" 2>/dev/null
   }
 else
