@@ -693,3 +693,50 @@ nightly dump, and trimming them requires hand-written SQL outside the
 application. **Decision: leave as-is, no purge cron** — this deployment is
 being replaced by the successor system, and upkeep of this kind is part of the
 reason. The daily size check remains the backstop.
+
+### 42. Author name change end-to-end — the copies nothing recomputes and the tools that had never run remotely [gotchas, fixed]
+
+First full author-name change (33.1, 2026-08-06: contributor renamed, re-typeset
+issue PDF supplied) exercised the §1c fast path against live for the first time
+and surfaced five gaps. All are fixed in code or captured in the runbook; the
+checklist in `new-issue-runbook.md` §1c is now the procedure.
+
+- **`copyrightHolder` was left behind.** It's stamped at publish time as
+  `<first author> (Author)` (all 1,422 archive rows follow that form, first
+  author only even for multi-author articles) and nothing recomputes it — so
+  the article page's DC.Rights meta kept the old name after pipe13 patched the
+  author rows. pipe13 now compares it against the expected form and patches it,
+  which also self-heals drift from before the fix.
+- **Orphaned `authors` rows from pre-remap-era imports still carried the old
+  name** — 13 of them, attached to publication ids that no longer exist (the
+  same import-id churn class as #37; pipe8 cleans orphan *citations*, not
+  authors). Invisible to readers but the name was still in the DB. Swept by
+  hand; sweep query: `SELECT a.author_id FROM authors a LEFT JOIN publications
+  p ON p.publication_id=a.publication_id WHERE p.publication_id IS NULL`.
+- **pipe13 couldn't read the committed toc.json** — it joined relative
+  `split_pdf` paths to the toc's own directory, but the post-#incident
+  (2026-08-03) convention is repo-root-relative `./backfill/...` paths. It had
+  only ever run against split2-written absolute paths. Fixed (root-relative
+  first, toc-dir fallback) — and split2 itself now writes `./`-relative paths
+  instead of reintroducing absolute ones on every re-split.
+- **pipe9's remote mode had never actually worked as documented** — it scp'd
+  as `root@` with a hardcoded key while every other remote op resolves the
+  deploy user, then its `&& rm` of the root-owned `/tmp` file failed even when
+  the upload succeeded, reporting "copy failed" after a *successful* container
+  copy. Fixed to use resolve-ssh's SCP settings. If it ever reports copy failed
+  again: the DB is untouched (copy runs first), safe to rerun.
+- **Re-split churn is not signal.** PyMuPDF's save isn't byte-deterministic, so
+  re-splitting from a re-typeset input rewrites all twenty split PDFs; text-diff
+  against git (only the corrected article should differ) and `git checkout` the
+  rest rather than committing noise. The md5 comparison that matters is
+  local pipeline output ↔ OJS filesDir ↔ Harbour uploads, and those came out
+  identical.
+
+Also confirmed, not bugs: the scoped reindex leaves the old name's keywords in
+`submission_search_keyword_list` as dead dictionary entries (nothing maps to
+them — searching the old name finds nothing); Crossref's REST API shows the old
+metadata for hours after a confirmed redeposit (`dois.status=3` is the truth,
+not api.crossref.org); and the *member* records (OJS user, live WP account,
+Harbour members row) still carry the old name — accounts are member data, not
+article data, and renaming them is the member's and membership secretary's
+call.

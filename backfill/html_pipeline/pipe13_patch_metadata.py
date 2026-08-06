@@ -9,7 +9,9 @@ edit toc.json (and the authors registry — fix that FIRST or the split-step
 normaliser will revert you), rerun pipe1d–pipe5 for the issue so the JATS
 and galleys are right, then run this instead of pipe6+pipe7.
 
-What it patches:  givenName / familyName (matched by author order), title.
+What it patches:  givenName / familyName (matched by author order), title,
+and copyrightHolder (stamped from author names at publish time, so a name
+fix follows the changed names into it by string replacement).
 With --galleys it ALSO replaces each scoped article's galley files (PDF,
 Full Text HTML, JATS XML) with the regenerated pipeline outputs — needed
 whenever the correction appears in the article text itself (a byline, a
@@ -166,11 +168,14 @@ def fetch_db_state(target, submission_ids):
     out = run_sql(target, f"""
 SELECT s.submission_id, p.publication_id,
        REPLACE(REPLACE(COALESCE(t.setting_value,''), '\\t', ' '), '\\n', ' '),
+       REPLACE(REPLACE(COALESCE(ch.setting_value,''), '\\t', ' '), '\\n', ' '),
        REPLACE(REPLACE(COALESCE(ab.setting_value,''), '\\t', ' '), '\\n', ' ')
 FROM submissions s
 JOIN publications p ON p.publication_id = s.current_publication_id
 LEFT JOIN publication_settings t ON t.publication_id = p.publication_id
      AND t.setting_name='title' AND t.locale='en'
+LEFT JOIN publication_settings ch ON ch.publication_id = p.publication_id
+     AND ch.setting_name='copyrightHolder' AND ch.locale='en'
 LEFT JOIN publication_settings ab ON ab.publication_id = p.publication_id
      AND ab.setting_name='abstract' AND ab.locale='en'
 WHERE s.submission_id IN ({ids});
@@ -179,9 +184,10 @@ WHERE s.submission_id IN ({ids});
     for line in out.splitlines():
         if not line:
             continue
-        sid, pub_id, title, abstract = line.split('\t', 3)
+        sid, pub_id, title, copyright_holder, abstract = line.split('\t', 4)
         state[int(sid)] = {'publication_id': int(pub_id),
                            'title': norm(title), 'abstract': norm(abstract),
+                           'copyright_holder': copyright_holder.strip(),
                            'authors': []}
     if state:
         pub_ids = ','.join(str(v['publication_id']) for v in state.values())
@@ -337,6 +343,23 @@ def main():
                         f"AND setting_name='{field}';",
                         f"{tag}\n    {field}: '{have}' -> '{want}'"))
                     changed_here = True
+        # copyrightHolder is stamped at publish time as
+        # "<first author> (Author)" — every one of the archive's 1,422 rows
+        # follows that form — and nothing recomputes it after an author
+        # rename (found 2026-08-06: the 33.1 name change left the old name
+        # in DC.Rights). Compare against the expected form so drift heals
+        # even when the author rows were already patched in an earlier run.
+        holder = db.get('copyright_holder', '')
+        if art['contribs'] and holder:
+            expected = f"{art['contribs'][0][0]} {art['contribs'][0][1]}".strip()
+            expected = f'{expected} (Author)'
+            if holder != expected:
+                updates.append((
+                    f"UPDATE publication_settings SET setting_value='{esc(expected)}' "
+                    f"WHERE publication_id={db['publication_id']} "
+                    f"AND setting_name='copyrightHolder' AND locale='en';",
+                    f"{tag}\n    copyrightHolder: '{holder}' -> '{expected}'"))
+                changed_here = True
         if art['abstract'] and db['abstract'] and art['abstract'] != db['abstract']:
             blocked.append(f'{tag}: abstract differs — not patched by this '
                            'tool, use the reimport path if intended')

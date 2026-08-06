@@ -26,6 +26,20 @@ import argparse
 import tempfile
 import fitz  # PyMuPDF
 
+# backfill/split_pipeline/ -> backfill/ -> repo root
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def repo_relative(path):
+    """Normalise a path to ./-prefixed repo-root-relative form for toc.json.
+
+    toc.json is committed and read on more than one host; absolute paths are
+    how 36.1 got hollowed out on 2026-08-03 (import.xml generated with galley
+    paths that resolved on no host). Paths outside the repo are left alone.
+    """
+    rel = os.path.relpath(os.path.abspath(path), REPO_ROOT)
+    return path if rel.startswith('..') else './' + rel
+
 
 def _clean_for_match(text):
     """Lowercase, strip non-alphanumeric, collapse whitespace. For title matching."""
@@ -178,7 +192,7 @@ def split_pdf(toc_data, output_dir):
             article.pop('_split_warning', None)
             print(f"  ✓ {filename} ({pages}pp)", file=sys.stderr)
 
-        article['split_pdf'] = filepath
+        article['split_pdf'] = repo_relative(filepath)
         article['split_pages'] = pages
         created.append(filepath)
 
@@ -190,6 +204,7 @@ def split_pdf(toc_data, output_dir):
         print(f"WARNING: {skipped}/{total} articles have no split PDF (skipped due to bad page ranges)", file=sys.stderr)
 
     # Save updated TOC with split file paths (atomic write)
+    toc_data['source_pdf'] = repo_relative(source_pdf)
     toc_output = os.path.join(issue_dir, 'toc.json')
     tmp_fd, tmp_path = tempfile.mkstemp(dir=issue_dir, suffix='.json.tmp')
     try:

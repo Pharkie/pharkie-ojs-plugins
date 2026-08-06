@@ -138,8 +138,35 @@ flipped.)
 
 When the change is metadata plus its appearances in one article's text — an
 author name, a title typo — the full reimport (steps 2–7, with its search
-reindex and pipe8/9b/9c retinue) is the wrong tool. After fixing the registry,
-toc.json and rerunning pipe1d–pipe5 for the issue:
+reindex and pipe8/9b/9c retinue) is the wrong tool. Worked end-to-end on
+2026-08-06 for an author name change with a re-typeset issue PDF (~15 min
+once the checklist below is followed in order; issues log #42 records the
+dead ends this order avoids).
+
+**Activate the venv first** (`source .venv/bin/activate`): `split_issue.sh`
+and `pipe9_issue_galleys.sh` shell out to bare `python3`, which must be the
+venv's or fitz is missing and the run dies part-way.
+
+In order:
+
+1. **Registry first** (`backfill/private/authors.json`): make the corrected
+   name canonical and demote the old spelling to its `variants` list (§1b) —
+   otherwise the split normaliser silently reverts the toc.json fix.
+2. **toc.json**: correct the `authors` string. If the change appears in the
+   article body (a byline, a bio, a contact line — for a name change it
+   always does) and the issue was Haiku-extracted, edit those lines in the
+   article's `raw.html` and set `_manual_html` with a dated note so pipe1
+   never re-extracts over the hand edit. pipe1d issues rerun pipe1d instead.
+3. **If a re-typeset PDF arrived**: diff it (§1b), replace
+   `backfill/private/input/<vol>.<iss>.pdf`, re-split
+   (`split_issue.sh <input pdf>`). Then text-diff the splits against git —
+   only the corrected article may differ. The other 19 PDFs will still churn
+   at the byte level (PyMuPDF saves aren't deterministic): `git checkout`
+   them rather than committing noise.
+4. **pipe2→pipe6 as a block** — all of §4's rules apply (never pipe4 alone;
+   reconcile per-article ref counts before and after).
+5. **Patch OJS** — dev first when the dev stack is up, else dry-run against
+   live is the review gate:
 
 ```bash
 # Diff JATS against OJS and patch metadata + that article's galley files:
@@ -156,10 +183,35 @@ backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
     --redeposit=<the-article-doi> --confirm
 ```
 
-pipe13 dispatches a scoped reindex (one job per changed article, drained
-automatically) — no 1,400-job rebuild. It refuses structural changes (author
-count, abstract, missing submissions): those go through the reimport path.
-Harbour still needs its importer rerun afterwards (step 9).
+   pipe13 patches title, givenName/familyName, and `copyrightHolder` (the
+   "(Author)" line in DC.Rights — stamped at publish time, recomputed by
+   nothing else), and dispatches a scoped reindex — no 1,400-job rebuild.
+   It refuses structural changes (author count, abstract, missing
+   submissions): those go through the reimport path. After pipe12, `dois.status = 3`
+   means Crossref confirmed; the public REST API lags the deposit by hours,
+   so don't re-deposit just because api.crossref.org still shows the old
+   metadata the same afternoon.
+
+6. **Sweep for copies the pipeline doesn't own** (all found the hard way,
+   issues log #42): orphaned `authors` rows from pre-pipe8-era imports still
+   carry the old name (harmless to readers, but the name is still in the DB
+   — sweep `author_settings` for it and delete the orphans); the search
+   index keeps the old name's keywords in `submission_search_keyword_list`
+   after the scoped reindex unmaps them (dead dictionary entries, no
+   cleanup needed — verify `submission_search_object_keywords` no longer
+   references them).
+
+7. **Harbour** holds five more copies of the article and one of the issue
+   PDF — follow membership-platform's
+   `docs/journal-content-corrections.md` (§Author name changes for renames:
+   the author row's `source_ref` is a name-slug and must be recomputed, or
+   the next import duplicates the author and orphans the member link).
+
+8. **Member data is not article data.** OJS `users`, the live WP account,
+   and Harbour's `members` row may all still carry the old name/email —
+   renaming a person's *account* is theirs and the membership secretary's
+   call, not a side effect of a publication correction. Check, report,
+   don't touch.
 
 ## 2. Split into per-article PDFs
 
