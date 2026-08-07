@@ -624,7 +624,9 @@ def _fix_bio_contact_spacing_soup(soup):
 # break only when the typesetter left a trailing space, and a contact line set
 # flush ("Contact: user@example.com" / "https://orcid.org/...") has none — so
 # the two lines weld directly with no <br/> for _fix_bio_contact_spacing_soup
-# to replace (37.2/03, the first bio in the corpus to carry an ORCID line).
+# to replace. Bios have carried ORCID lines since 32.1 (52 across the corpus,
+# private/backfill/orcid-inventory.txt); 37.2/03 was merely the first set
+# flush against the margin, which is what exposed this.
 _WELDED_EMAIL_URL = re.compile(r'([\w.+-]+@[\w.-]+\.[A-Za-z]{2,})(https?://)')
 
 
