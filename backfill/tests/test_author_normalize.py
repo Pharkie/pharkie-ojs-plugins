@@ -239,3 +239,64 @@ class TestAuthorRegistry:
             assert len(canonical) == 2
         finally:
             os.unlink(path)
+
+
+class TestBylineSplittingLosesNobody:
+    """Splitting on '&' alone silently dropped authors from published
+    articles (found 2026-08-07). Every string below is a real byline taken
+    from a toc.json `authors_original`, and each lost someone."""
+
+    def test_comma_and_ampersand_mixed(self):
+        """34.2: Vicki Smith vanished from the trainees article this way."""
+        assert split_multiple_authors('Vicki Smith, Viv Burr & Dawn Leeming') == [
+            'Vicki Smith', 'Viv Burr', 'Dawn Leeming']
+
+    def test_word_and(self):
+        """18.2: 'Maurice Jenkinson and Martin Adams' became 'Martin Adams'."""
+        assert split_multiple_authors('Maurice Jenkinson and Martin Adams') == [
+            'Maurice Jenkinson', 'Martin Adams']
+
+    def test_all_commas(self):
+        """6.1: three of four authors were lost."""
+        assert split_multiple_authors(
+            'Sarah Young, Lucia Moja-Strasser, Freddie Strasser, Simon du Plock') == [
+            'Sarah Young', 'Lucia Moja-Strasser', 'Freddie Strasser', 'Simon du Plock']
+
+    def test_single_author_unchanged(self):
+        assert split_multiple_authors('Jun Woo Kwon') == ['Jun Woo Kwon']
+
+    def test_hyphenated_surname_survives(self):
+        assert split_multiple_authors('Mine Doğantan-Dack, Monia Brizzi') == [
+            'Mine Doğantan-Dack', 'Monia Brizzi']
+
+
+class TestRegistryRefusesUnsplitBylines:
+    """Defence in depth: even if a caller passes a whole byline, the registry
+    must not collapse it to one person."""
+
+    def _registry(self):
+        import json as _json, tempfile as _tf, os as _os
+        from backfill.split_pipeline.split4_normalize_authors import AuthorRegistry
+        fd, path = _tf.mkstemp(suffix='.json')
+        with _os.fdopen(fd, 'w') as f:
+            _json.dump({'Viv Burr': {'articles': 1, 'variants': []}}, f)
+        return AuthorRegistry(path), path
+
+    def test_unsplit_byline_is_not_matched(self):
+        import os as _os
+        reg, path = self._registry()
+        try:
+            canonical, match = reg.lookup('Vicki Smith, Viv Burr')
+            assert match == 'new'
+            assert canonical == 'Vicki Smith, Viv Burr'
+        finally:
+            _os.unlink(path)
+
+    def test_plain_name_still_matches(self):
+        import os as _os
+        reg, path = self._registry()
+        try:
+            canonical, match = reg.lookup('Viv Burr')
+            assert match == 'exact' and canonical == 'Viv Burr'
+        finally:
+            _os.unlink(path)

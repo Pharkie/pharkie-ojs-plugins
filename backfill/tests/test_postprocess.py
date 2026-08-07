@@ -38,6 +38,7 @@ from backfill.lib.postprocess import (
     _find_block_by_text,
     _fix_bio_contact_spacing_soup,
     _fix_welded_email_url_soup,
+    _strip_recorded_orcids_soup,
     _split_fused_author_bios_soup,
     _parse,
 )
@@ -581,3 +582,56 @@ class TestIsCitationLike:
     def test_too_short(self):
         """Very short text isn't classifiable."""
         assert not is_citation_like('See note 1.')
+
+
+# ===============================================================
+# _strip_recorded_orcids_soup — bio text vs structured metadata
+# ===============================================================
+
+class TestStripRecordedOrcids:
+    """Once an iD is in the toc `orcids` map it reaches the article page as a
+    linked, badged iD; leaving it in the bio prints it twice, and the bio copy
+    is unlinked plain text. Adam, 2026-08-07. Bio strings below are taken from
+    the published 37.2 and 34.2 galleys, not written for the test."""
+
+    WILLIG = {'orcids': {'Carla Willig': 'https://orcid.org/0000-0001-9804-9141'}}
+
+    def test_removes_url_after_contact_line(self):
+        soup = _parse('<p>She is committed to a non-pathologising approach. '
+                      'Contact: C.Willig@city.ac.uk https://orcid.org/0000-0001-9804-9141</p>')
+        _strip_recorded_orcids_soup(soup, self.WILLIG)
+        text = soup.get_text().strip()
+        assert text.endswith('Contact: C.Willig@city.ac.uk')
+        assert 'orcid.org' not in text
+
+    def test_removes_labelled_form_before_contact(self):
+        """34.2 prints 'ORCID: <id>' ahead of the contact line."""
+        soup = _parse('<p>Dr Vicki Smith is a Senior Lecturer. '
+                      'ORCID: 0000-0002-3398-5956 Contact: v.smith@hud.ac.uk</p>')
+        _strip_recorded_orcids_soup(soup, {'orcids': {'Vicki Smith': 'https://orcid.org/0000-0002-3398-5956'}})
+        text = ' '.join(soup.get_text().split())
+        assert text == 'Dr Vicki Smith is a Senior Lecturer. Contact: v.smith@hud.ac.uk'
+
+    def test_keeps_an_unrecorded_orcid(self):
+        """An iD the map doesn't carry is the only copy — it must survive."""
+        soup = _parse('<p>Contact: someone@example.com https://orcid.org/0000-0002-1111-2222</p>')
+        _strip_recorded_orcids_soup(soup, self.WILLIG)
+        assert '0000-0002-1111-2222' in soup.get_text()
+
+    def test_no_orcids_map_is_a_no_op(self):
+        html = '<p>Contact: a@b.com https://orcid.org/0000-0001-9804-9141</p>'
+        soup = _parse(html)
+        _strip_recorded_orcids_soup(soup, {})
+        assert '0000-0001-9804-9141' in soup.get_text()
+
+    def test_email_is_never_removed(self):
+        soup = _parse('<p>Contact: annavincentpsychotherapy@gmail.com '
+                      'https://orcid.org/0009-0005-5006-789X</p>')
+        _strip_recorded_orcids_soup(soup, {'orcids': {'Anna Vincent': 'https://orcid.org/0009-0005-5006-789X'}})
+        assert 'annavincentpsychotherapy@gmail.com' in soup.get_text()
+
+    def test_checksum_x_suffix_matches(self):
+        """An iD ending in X must match too — a plain \\d regex would miss it."""
+        soup = _parse('<p>Contact: a@b.com https://orcid.org/0009-0005-5006-789X</p>')
+        _strip_recorded_orcids_soup(soup, {'orcids': {'Anna Vincent': 'https://orcid.org/0009-0005-5006-789X'}})
+        assert 'orcid.org' not in soup.get_text()

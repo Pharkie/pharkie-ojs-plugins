@@ -646,6 +646,46 @@ def _fix_welded_email_url_soup(soup):
                 text.replace_with(fixed)
 
 
+# An iD that has been captured as structured metadata (the toc `orcids` map ->
+# JATS contrib-id -> OJS author record and Harbour journal_authors) is rendered
+# at the top of the article as a linked, badged iD. Left in the bio as well it
+# reads twice, and the bio copy is the worse one: bare text, not a link.
+# Matches "https://orcid.org/<id>", a bare "<id>", and the "ORCID:" label form
+# some issues use (34.2 prints the label BEFORE the contact line, later issues
+# print the URL after it), plus any separator stranded by the removal.
+def _orcid_text_pattern(oid):
+    return re.compile(
+        r'\s*(?:ORCID(?:\s+iD)?\s*:?\s*)?'
+        r'(?:https?://(?:www\.)?orcid\.org/)?' + re.escape(oid) + r'\.?',
+        re.I)
+
+
+def _strip_recorded_orcids_soup(soup, article):
+    """Remove ORCIDs from bio text when they are held as metadata instead.
+
+    Only iDs listed in the article's `orcids` map are removed — an iD the map
+    does not carry is the only copy there is, so it stays. The contact email
+    stays either way: nothing else publishes it.
+    """
+    orcids = (article or {}).get('orcids') or {}
+    ids = [url.rstrip('/').rsplit('/', 1)[-1] for url in orcids.values()]
+    if not ids:
+        return
+    patterns = [_orcid_text_pattern(oid) for oid in ids]
+    for text in list(soup.find_all(string=True)):
+        s = original = str(text)
+        for pat in patterns:
+            s = pat.sub('', s)
+        if s == original:
+            continue
+        # Tidy what the removal stranded: a dangling separator before a close,
+        # and doubled spaces mid-line. Keep leading/trailing single spaces so
+        # adjacent inline tags don't weld (see _fix_bio_contact_spacing_soup).
+        s = re.sub(r'[ \t]{2,}', ' ', s)
+        s = re.sub(r'\s+([.,;])', r'\1', s)
+        text.replace_with(s)
+
+
 def _split_fused_author_bios_soup(soup):
     """Give an author bio its own <p> when extraction welded it to the body.
 
@@ -1271,6 +1311,10 @@ def postprocess_article(html, article, pdf_path=None):
 
     # Fix an email welded straight to a URL where no <br/> was extracted at all
     _fix_welded_email_url_soup(soup)
+
+    # Drop bio-text ORCIDs that are now carried as structured metadata. Runs
+    # AFTER the weld repairs so the iD is a separable token by this point.
+    _strip_recorded_orcids_soup(soup, article)
 
     # Splice complete notes from PyMuPDF if Haiku dropped any.
     if pdf_path and os.path.exists(pdf_path):

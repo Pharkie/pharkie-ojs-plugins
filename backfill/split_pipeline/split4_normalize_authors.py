@@ -144,6 +144,16 @@ class AuthorRegistry:
             return None, 'empty'
 
         raw_name = raw_name.strip()
+
+        # A separator here means the caller handed over an unsplit byline, not
+        # a person. Matching it would collapse several authors into whichever
+        # single name it most resembles — which is exactly how Vicki Smith was
+        # dropped from 34.2 (see split_multiple_authors). Refuse rather than
+        # guess: 'new' keeps the string intact and visible.
+        if re.search(r'&|,|\s+and\s+', raw_name):
+            print(f"  UNSPLIT BYLINE, not matching: {raw_name!r}", file=sys.stderr)
+            return raw_name, 'new'
+
         key = normalize_key(raw_name)
 
         # Exact match (normalized)
@@ -216,11 +226,29 @@ class AuthorRegistry:
 
 
 def split_multiple_authors(author_string):
-    """Split 'Sheba Boakye-Duah & Neresia Osbourne' into individual names."""
+    """Split a byline into individual names.
+
+    Splits on '&', ',' AND ' and ' — all three appear in the corpus.
+
+    Splitting on '&' alone is how authors went missing from published
+    articles (found 2026-08-07). "Vicki Smith, Viv Burr & Dawn Leeming" split
+    into ["Vicki Smith, Viv Burr", "Dawn Leeming"], and the registry then
+    fuzzy-matched the two-name blob to the single canonical name it most
+    resembled — "Viv Burr" — so Vicki Smith vanished from the byline, the
+    article page, Crossref and every citation. Four more articles lost authors
+    the same way ("Maurice Jenkinson and Martin Adams" -> "Martin Adams";
+    "Sarah Young, Lucia Moja-Strasser, Freddie Strasser, Simon du Plock" ->
+    "Simon du Plock"), and two had a blob replaced by a DIFFERENT person
+    ("Roly Fletcher and Martin Milton" -> "Richard S Wilkes, Martin Milton").
+
+    A trailing/leading "and" inside one person's name does not occur in this
+    corpus; a comma inside one does not either (no "Smith, J." forms — the
+    bylines are written out in full).
+    """
     if not author_string:
         return []
-    parts = [a.strip() for a in author_string.split('&')]
-    return [p for p in parts if p]
+    parts = re.split(r'\s*&\s*|\s*,\s*|\s+and\s+', author_string)
+    return [p.strip() for p in parts if p.strip()]
 
 
 def process_toc(toc_path, registry):
