@@ -187,7 +187,27 @@ backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
    "(Author)" line in DC.Rights — stamped at publish time, recomputed by
    nothing else), and dispatches a scoped reindex — no 1,400-job rebuild.
    It refuses structural changes (author count, abstract, missing
-   submissions): those go through the reimport path. After pipe12, `dois.status = 3`
+   submissions): those go through the reimport path.
+
+   🛑 **The scoped reindex fails on its first run and has to be redispatched.**
+   `UpdateSubmissionSearchJob` dies with `Call to a member function
+   getContext() on null` when the worker picks it up, because there is no
+   request context on the queue. The same job succeeds when pushed back
+   through, so after every pipe13 run:
+
+   ```bash
+   php lib/pkp/tools/jobs.php failed --redispatch
+   ```
+
+   Skip it and two things follow: the article's searchable text stays on the
+   pre-correction version, and job monitoring alerts on the failures (one per
+   article patched, so a batch is a batch of alerts). Confirm it worked with a
+   site search for a phrase that exists only in the corrected text, rather than
+   trusting an empty `failed_jobs` table — redispatch empties that either way.
+   `Skipped indexation: No suitable parser for … .pdf` in the output is normal:
+   OJS indexes the HTML galley, not the PDF.
+
+   After pipe12, `dois.status = 3`
    means Crossref confirmed; the public REST API lags the deposit by hours,
    so don't re-deposit just because api.crossref.org still shows the old
    metadata the same afternoon.
