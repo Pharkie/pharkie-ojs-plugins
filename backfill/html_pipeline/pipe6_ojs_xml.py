@@ -682,6 +682,12 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
                 max_local = 90 - len(domain) - 1  # -1 for @
                 email = f'{local[:max_local]}@{domain}'
             lines.append(f'{i4}  <email>{email}</email>')
+            # Optional ORCID (native.xsd: after email/url). Without this a
+            # full reimport would silently drop an ORCID that only lived in
+            # author_settings.
+            orcid = article.get('orcids', {}).get(f'{given} {family}'.strip())
+            if orcid:
+                lines.append(f'{i4}  <orcid>{escape(orcid)}</orcid>')
             lines.append(f'{i4}</author>')
         lines.append(f'{i3}</authors>')
 

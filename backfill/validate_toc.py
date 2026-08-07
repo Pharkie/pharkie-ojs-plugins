@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -63,6 +64,24 @@ def validate_toc(toc_path: Path) -> list[str]:
                     f'{", ".join(sorted(VALID_ACCESS))} (got {access!r}); '
                     f'omit it to follow the section default'
                 )
+
+        # Per-article ORCID map: full author name (as written in "authors")
+        # -> canonical ORCID URL. Keys are checked against the authors string
+        # so a misspelt name fails here rather than silently emitting nothing.
+        if 'orcids' in article:
+            orcids = article['orcids']
+            if not isinstance(orcids, dict):
+                errors.append(f'{prefix}: "orcids" must be an object of '
+                              f'{{author name: ORCID URL}}, got {type(orcids).__name__}')
+            else:
+                for name, url in orcids.items():
+                    if name not in article.get('authors', ''):
+                        errors.append(f'{prefix}: orcids key "{name}" not found in '
+                                      f'authors "{article.get("authors", "")}"')
+                    if not isinstance(url, str) or not re.fullmatch(
+                            r'https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]', url):
+                        errors.append(f'{prefix}: orcid for "{name}" must be the full '
+                                      f'canonical URL https://orcid.org/XXXX-XXXX-XXXX-XXXX (got {url!r})')
 
         # Page range sanity
         start = article.get('pdf_page_start')

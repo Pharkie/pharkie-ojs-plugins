@@ -669,3 +669,112 @@ class TestJatsProduct:
         pub_name = root.find('.//{*}product/{*}publisher-name')
         assert pub_loc is None
         assert pub_name.text == 'Open Press'
+
+
+class TestOrcid:
+    """Per-article `orcids` map: {author name as written in "authors": URL}.
+
+    Kwon (37.2) was the first author in the corpus to carry an ORCID; going
+    forward the editors request them from all authors, so the map must flow
+    into the JATS contrib-id (harvesters, pipe13) and the native import XML
+    (a full reimport must not drop what author_settings holds)."""
+
+    ORCID = 'https://orcid.org/0009-0006-0635-9649'
+
+    def _article(self, **overrides):
+        article = {
+            'title': 'Test Article', 'authors': 'Jun Woo Kwon',
+            'section': 'Articles',
+            'journal_page_start': 249, 'journal_page_end': 258,
+            'orcids': {'Jun Woo Kwon': ORCID_URL},
+        }
+        article.update(overrides)
+        return article
+
+    def test_jats_contrib_id(self):
+        jats_str = generate_article_jats(
+            self._article(), volume=37, issue=2,
+            date_published='2026-07-01', html_path=None, doi=None)
+        root = ET.fromstring(jats_str)
+        cid = root.find('.//{*}contrib-group/{*}contrib/{*}contrib-id')
+        assert cid is not None
+        assert cid.get('contrib-id-type') == 'orcid'
+        assert cid.text == ORCID_URL
+
+    def test_jats_no_contrib_id_without_map(self):
+        jats_str = generate_article_jats(
+            self._article(orcids={}), volume=37, issue=2,
+            date_published='2026-07-01', html_path=None, doi=None)
+        root = ET.fromstring(jats_str)
+        assert root.find('.//{*}contrib-group/{*}contrib/{*}contrib-id') is None
+
+    def test_jats_name_mismatch_emits_nothing(self):
+        """A key that matches no author must not attach to a different author."""
+        jats_str = generate_article_jats(
+            self._article(orcids={'Someone Else': ORCID_URL}), volume=37, issue=2,
+            date_published='2026-07-01', html_path=None, doi=None)
+        root = ET.fromstring(jats_str)
+        assert root.find('.//{*}contrib-group/{*}contrib/{*}contrib-id') is None
+
+    def test_import_xml_orcid_element(self):
+        toc = {
+            'source_pdf': '/tmp/test.pdf', 'volume': 37, 'issue': 2,
+            'date': 'July 2026', 'page_offset': 1, 'total_pdf_pages': 100,
+            'articles': [self._article()],
+        }
+        root = ET.fromstring(generate_xml(toc))
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        author = root.find('.//ojs:author', ns)
+        orcid = author.find('ojs:orcid', ns)
+        assert orcid is not None and orcid.text == ORCID_URL
+        # native.xsd sequence: email before orcid
+        tags = [c.tag.rsplit('}', 1)[-1] for c in author]
+        assert tags.index('email') < tags.index('orcid')
+
+    def test_import_xml_no_orcid_without_map(self):
+        toc = {
+            'source_pdf': '/tmp/test.pdf', 'volume': 37, 'issue': 2,
+            'date': 'July 2026', 'page_offset': 1, 'total_pdf_pages': 100,
+            'articles': [self._article(orcids={})],
+        }
+        root = ET.fromstring(generate_xml(toc))
+        ns = {'ojs': 'http://pkp.sfu.ca'}
+        assert root.find('.//ojs:author/ojs:orcid', ns) is None
+
+
+ORCID_URL = TestOrcid.ORCID
+
+
+class TestOrcidTocValidation:
+    """validate_toc: catch a misspelt name or a non-canonical ORCID form."""
+
+    def _toc(self, orcids):
+        return {
+            'volume': 37, 'date': 'July 2026',
+            'articles': [{
+                'title': 'T', 'authors': 'Jun Woo Kwon', 'section': 'Articles',
+                'pdf_page_start': 1, 'pdf_page_end': 2, 'orcids': orcids,
+            }],
+        }
+
+    def _validate(self, orcids):
+        import json as _json
+        from backfill.validate_toc import validate_toc
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+            _json.dump(self._toc(orcids), f)
+            path = f.name
+        try:
+            return validate_toc(Path(path))
+        finally:
+            os.unlink(path)
+
+    def test_valid_orcid_passes(self):
+        assert self._validate({'Jun Woo Kwon': ORCID_URL}) == []
+
+    def test_unknown_name_fails(self):
+        errors = self._validate({'Jon Woo Kwon': ORCID_URL})
+        assert any('not found in authors' in e for e in errors)
+
+    def test_bare_id_fails(self):
+        errors = self._validate({'Jun Woo Kwon': '0009-0006-0635-9649'})
+        assert any('canonical URL' in e for e in errors)

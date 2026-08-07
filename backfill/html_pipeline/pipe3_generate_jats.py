@@ -455,9 +455,17 @@ def generate_article_jats(article: dict, volume: int, issue: int,
     authors_raw = article.get('authors', '')
     if authors_raw:
         author_pairs = split_author_name(authors_raw)
+        # Optional per-article ORCID map, keyed by the author's full name as it
+        # appears in the authors string (see validate_toc.py). Emitted as a
+        # structured <contrib-id>, which pipe13 and harvesters read — the URL
+        # in the bio text is display, this is the machine-readable copy.
+        orcids = article.get('orcids', {})
         lines.append('<contrib-group>')
         for given, family in author_pairs:
             lines.append('<contrib contrib-type="author">')
+            orcid = orcids.get(f'{given} {family}'.strip())
+            if orcid:
+                lines.append(f'<contrib-id contrib-id-type="orcid">{escape(orcid)}</contrib-id>')
             lines.append(f'<name><surname>{escape(family)}</surname>'
                          f'<given-names>{escape(given)}</given-names></name>')
             lines.append('</contrib>')

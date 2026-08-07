@@ -140,11 +140,16 @@ def load_jats(toc_path, only_index=None):
                   'articles.', file=sys.stderr)
             sys.exit(1)
         contribs = []
-        for name_el in tree.findall(
-                './/{*}contrib-group/{*}contrib/{*}name'):
+        contrib_orcids = []
+        for contrib_el in tree.findall('.//{*}contrib-group/{*}contrib'):
+            name_el = contrib_el.find('{*}name')
+            if name_el is None:
+                continue
             given = jats_text(name_el.find('{*}given-names'))
             family = jats_text(name_el.find('{*}surname'))
             contribs.append((given, family))
+            oid_el = contrib_el.find('{*}contrib-id[@contrib-id-type="orcid"]')
+            contrib_orcids.append(jats_text(oid_el) if oid_el is not None else '')
         base = jats_path[:-len('.jats.xml')]
         articles.append({
             'n': i,
@@ -153,6 +158,7 @@ def load_jats(toc_path, only_index=None):
             'title': jats_text(tree.find('.//{*}article-title')),
             'abstract': jats_text(tree.find('.//{*}abstract')),
             'contribs': contribs,
+            'contrib_orcids': contrib_orcids,
             # Local regenerated galley sources, keyed like the DB mimetypes.
             'galley_sources': {
                 'application/pdf': base + '.pdf',
@@ -193,12 +199,15 @@ WHERE s.submission_id IN ({ids});
         pub_ids = ','.join(str(v['publication_id']) for v in state.values())
         out = run_sql(target, f"""
 SELECT a.publication_id, a.author_id, a.seq,
-       COALESCE(g.setting_value,''), COALESCE(f.setting_value,'')
+       COALESCE(g.setting_value,''), COALESCE(f.setting_value,''),
+       COALESCE(o.setting_value,'')
 FROM authors a
 LEFT JOIN author_settings g ON g.author_id=a.author_id
      AND g.setting_name='givenName'
 LEFT JOIN author_settings f ON f.author_id=a.author_id
      AND f.setting_name='familyName'
+LEFT JOIN author_settings o ON o.author_id=a.author_id
+     AND o.setting_name='orcid'
 WHERE a.publication_id IN ({pub_ids})
 ORDER BY a.publication_id, a.seq;
 """)
@@ -206,10 +215,10 @@ ORDER BY a.publication_id, a.seq;
         for line in out.splitlines():
             if not line:
                 continue
-            pub_id, author_id, _seq, given, family = line.split('\t', 4)
+            pub_id, author_id, _seq, given, family, orcid = line.split('\t', 5)
             by_pub[int(pub_id)]['authors'].append(
                 {'author_id': int(author_id), 'given': given.strip(),
-                 'family': family.strip()})
+                 'family': family.strip(), 'orcid': orcid.strip()})
     return state
 
 
@@ -343,6 +352,17 @@ def main():
                         f"AND setting_name='{field}';",
                         f"{tag}\n    {field}: '{have}' -> '{want}'"))
                     changed_here = True
+        # ORCIDs flow one way, JATS -> DB, and only when the JATS carries one:
+        # an orcid row usually doesn't exist yet (upsert, not UPDATE), and a
+        # JATS with no contrib-id must not strip an iD already in OJS.
+        for want_orcid, row in zip(art.get('contrib_orcids', []), db['authors']):
+            if want_orcid and want_orcid != row['orcid']:
+                updates.append((
+                    f"INSERT INTO author_settings (author_id, locale, setting_name, setting_value) "
+                    f"VALUES ({row['author_id']}, '', 'orcid', '{esc(want_orcid)}') "
+                    f"ON DUPLICATE KEY UPDATE setting_value='{esc(want_orcid)}';",
+                    f"{tag}\n    orcid: '{row['orcid']}' -> '{want_orcid}'"))
+                changed_here = True
         # copyrightHolder is stamped at publish time as
         # "<first author> (Author)" — every one of the archive's 1,422 rows
         # follows that form — and nothing recomputes it after an author
