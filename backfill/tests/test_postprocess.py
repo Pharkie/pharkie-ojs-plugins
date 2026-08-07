@@ -37,6 +37,7 @@ from backfill.lib.postprocess import (
     _title_in_text,
     _find_block_by_text,
     _fix_bio_contact_spacing_soup,
+    _fix_welded_email_url_soup,
     _split_fused_author_bios_soup,
     _parse,
 )
@@ -400,6 +401,42 @@ class TestFixBioContactSpacing:
         text = soup.get_text()
         assert 'SB2967@live.mdx.ac.uk. https://orcid.org/' in text
         assert soup.find('br') is None  # <br> should be replaced
+
+
+# ===============================================================
+# _fix_welded_email_url_soup — email welded to URL with no <br/> at all
+# ===============================================================
+
+class TestFixWeldedEmailUrl:
+    """pipe1d records a line break only when the typesetter left a trailing
+    space; a flush-set contact line welds straight into the ORCID URL below it
+    with no <br/> for the rule above to replace. The text is taken verbatim
+    from backfill/private/output/37.2/03-the-time-of-exercise-....raw.html
+    (the first bio in the corpus to carry an ORCID line), not written for
+    the test."""
+
+    def test_separates_welded_email_and_orcid(self):
+        soup = _parse('<p><strong>Jun Woo Kwon</strong> studies exercise and '
+                      'sport at Seoul National University. '
+                      'Contact: bichoncontin@gmail.comhttps://orcid.org/0009-0006-0635-9649</p>')
+        _fix_welded_email_url_soup(soup)
+        text = soup.get_text()
+        assert 'bichoncontin@gmail.com. https://orcid.org/0009-0006-0635-9649' in text
+        assert 'gmail.comhttps://' not in text
+
+    def test_leaves_prose_paragraphs_alone(self):
+        """No contact details in the paragraph — no rewrite, even with a URL."""
+        html = '<p>See the report at example.comhttps is not a weld here.</p>'
+        soup = _parse(html)
+        _fix_welded_email_url_soup(soup)
+        assert soup.get_text() == 'See the report at example.comhttps is not a weld here.'
+
+    def test_already_separated_contact_line_unchanged(self):
+        html = ('<p>Contact: user@example.com. https://orcid.org/0009-0007-1502-7192</p>')
+        soup = _parse(html)
+        _fix_welded_email_url_soup(soup)
+        assert 'user@example.com. https://orcid.org/' in soup.get_text()
+        assert 'com.. ' not in soup.get_text()
 
 
 # ===============================================================

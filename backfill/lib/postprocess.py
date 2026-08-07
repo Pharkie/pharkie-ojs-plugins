@@ -620,6 +620,30 @@ def _fix_bio_contact_spacing_soup(soup):
             br.replace_with('' if spaced else ' ')
 
 
+# The no-tag variant of the email<br/>URL case above: pipe1d records a line
+# break only when the typesetter left a trailing space, and a contact line set
+# flush ("Contact: user@example.com" / "https://orcid.org/...") has none — so
+# the two lines weld directly with no <br/> for _fix_bio_contact_spacing_soup
+# to replace (37.2/03, the first bio in the corpus to carry an ORCID line).
+_WELDED_EMAIL_URL = re.compile(r'([\w.+-]+@[\w.-]+\.[A-Za-z]{2,})(https?://)')
+
+
+def _fix_welded_email_url_soup(soup):
+    """Separate an email welded directly to a following URL in a contact line.
+
+    Same separator as the <br/> rule: an email and a URL are two units on one
+    contact line, not a sentence boundary — ". " is what reads correctly.
+    Confined to paragraphs carrying contact details, like the rule above.
+    """
+    for para in soup.find_all('p'):
+        if not _FUSED_BIO_CONTACT.search(para.get_text()):
+            continue
+        for text in para.find_all(string=True):
+            fixed = _WELDED_EMAIL_URL.sub(r'\1. \2', str(text))
+            if fixed != str(text):
+                text.replace_with(fixed)
+
+
 def _split_fused_author_bios_soup(soup):
     """Give an author bio its own <p> when extraction welded it to the body.
 
@@ -1242,6 +1266,9 @@ def postprocess_article(html, article, pdf_path=None):
 
     # Fix contact detail spacing (a <br/> inside a bio must not weld two words)
     _fix_bio_contact_spacing_soup(soup)
+
+    # Fix an email welded straight to a URL where no <br/> was extracted at all
+    _fix_welded_email_url_soup(soup)
 
     # Splice complete notes from PyMuPDF if Haiku dropped any.
     if pdf_path and os.path.exists(pdf_path):
