@@ -38,6 +38,34 @@ from lib.citations import (
 
 OUTPUT_DIR = Path(__file__).parent.parent / "private" / "output"
 
+# Proportion of lines that must look like references before a multi-line item is
+# treated as a collapsed reference list. The corpus separates cleanly: genuine
+# lists score 72–100%, while the non-reference blocks that share the heading
+# (a letter's address in 12.1, a block quotation and its source) score 20–50%.
+COLLAPSED_REF_CITATION_RATIO = 0.65
+
+
+def split_collapsed_references(item):
+    """Split one item that is really several references run together.
+
+    Some authors set their reference list as a single paragraph with <br>
+    between entries rather than one paragraph per reference. By the time it
+    reaches here those breaks are newlines inside a single item, so the whole
+    list becomes one citation: "The He - art of Being" (7.2) had all 18
+    references as one, "Sex and Circuses" (22.2) all 25.
+
+    Only split when the lines actually read as references. 12.1 carries a
+    letter's address block — "The Editors / The Journal ... / Regents College"
+    — under the same heading, and splitting that would invent seven citations.
+    """
+    lines = [line.strip() for line in item.split('\n') if line.strip()]
+    if len(lines) < 2:
+        return [item]
+    citation_like = sum(1 for line in lines if is_citation_like(line))
+    if citation_like < len(lines) * COLLAPSED_REF_CITATION_RATIO:
+        return [item]
+    return lines
+
 
 def _vol_sort_key(path):
     """Sort key for toc.json paths by volume.issue number."""
@@ -167,10 +195,10 @@ def extract_from_jats(jats_path: Path) -> dict:
                 if has_separate_references or not is_citation_like(item):
                     note_items.append(item)
                 else:
-                    citations.append(item)
+                    citations.extend(split_collapsed_references(item))
                 continue
 
-            citations.append(item)
+            citations.extend(split_collapsed_references(item))
 
     # Flush final bio section group
     if bio_section_parts:
