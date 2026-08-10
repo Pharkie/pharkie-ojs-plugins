@@ -163,6 +163,20 @@ def load_all_jats_ref_dois(vol_dirs):
     return all_refs
 
 
+def scoped_publication_ids(jats_refs, pub_lookup):
+    """Publication ids belonging to the issues represented in `jats_refs`.
+
+    Used to scope the crossref::doi wipe. A full run yields every published
+    article, so its behaviour is unchanged; a --issue run yields only that
+    issue's, which is the whole point — see the note at the DELETE.
+    """
+    scope = {(ref['volume'], ref['issue']) for ref in jats_refs}
+    return sorted({
+        pub_id for (_title, volume, issue), pub_id in pub_lookup.items()
+        if (volume, issue) in scope
+    })
+
+
 def fetch_all_citations(target):
     """Fetch all citations from OJS in one query.
 
@@ -320,10 +334,32 @@ def main():
         print(f'  {vol}: {matched_vols[vol]}')
 
     # Step 4: Clear old DOIs and bulk INSERT fresh
-    # Old rows accumulate from previous imports/runs — wipe and rewrite.
-    delete_sql = "DELETE FROM citation_settings WHERE setting_name = 'crossref::doi';"
+    #
+    # Old rows accumulate from previous imports/runs, so the issues being
+    # rewritten are wiped first. The wipe is scoped to exactly those issues.
+    #
+    # It used to be unconditional — `DELETE FROM citation_settings WHERE
+    # setting_name = 'crossref::doi'` — while --issue scoped only the INSERT. So
+    # `pipe9b --target live --issue 37.2 --confirm` deleted every reference DOI
+    # in the journal and wrote back only that issue's: 6,945 rows to 146, live,
+    # reporting "Done. 146 DOIs written" (2026-08-10). A full run still puts
+    # every issue in scope, so its behaviour is unchanged.
+    scoped_pub_ids = scoped_publication_ids(jats_refs, pub_lookup)
+    scope = {(ref['volume'], ref['issue']) for ref in jats_refs}
+    if not scoped_pub_ids:
+        print('ERROR: no publications matched the loaded issues, so the wipe '
+              'cannot be scoped. Refusing to delete anything.', file=sys.stderr)
+        sys.exit(1)
+
+    delete_sql = (
+        "DELETE cs FROM citation_settings cs "
+        "JOIN citations c ON c.citation_id = cs.citation_id "
+        f"WHERE cs.setting_name = '{SETTING_NAME}' "
+        f"AND c.publication_id IN ({','.join(str(p) for p in scoped_pub_ids)});"
+    )
+    print(f'Scope: {len(scope)} issue(s), {len(scoped_pub_ids)} articles')
     if not args.dry_run:
-        print(f'Clearing old crossref::doi rows...')
+        print('Clearing old crossref::doi rows for those issues...')
         run_sql(args.target, delete_sql)
 
     bulk_sql = (
