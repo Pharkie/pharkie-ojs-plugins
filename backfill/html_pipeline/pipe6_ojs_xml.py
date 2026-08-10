@@ -32,6 +32,9 @@ try:
 except ImportError:
     fitz = None
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+from backfill.lib.doi_validate import check_volume_dir  # noqa: E402
+
 
 # Section config: ref, title, abbreviation, access_status, seq
 SECTIONS = {
@@ -884,6 +887,10 @@ def main():
                         help='Skip PDF embedding (much faster, for testing XML structure)')
     parser.add_argument('--no-issue-galley', action='store_true',
                         help='Skip whole-issue PDF galley (article galleys still included)')
+    parser.add_argument('--allow-bad-dois', action='store_true',
+                        help='Import despite malformed DOIs or DOI links that break '
+                             'when the page is read as text. Last resort — the fault '
+                             'reaches Crossref and readers.')
     args = parser.parse_args()
 
     with open(args.toc_json) as f:
@@ -972,6 +979,27 @@ def main():
     except (ET.ParseError, ValueError) as e:
         print(f"ERROR: XML validation failed: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # DOI guard — also an ERROR, for the same reason as the galley check above.
+    #
+    # A malformed DOI imports cleanly and looks fine on the page; it only shows
+    # up months later in Crossref's resolution report, by which time it has been
+    # deposited and cited. Live examples this catches: two DOIs concatenated by
+    # greedy extraction (7.2, 10.2), an OCR "×" for "x" and a zero-width space
+    # (34.2), a web address behind the DOI resolver (35.2), and DOI links whose
+    # markup runs into the next word so any text extractor mangles them (37.2).
+    vol_dir = os.path.dirname(args.toc_json)
+    doi_messages = check_volume_dir(vol_dir)
+    if doi_messages:
+        print(f'ERROR: DOI check failed — {len(doi_messages)} problem(s):',
+              file=sys.stderr)
+        for message in doi_messages:
+            print(f'  - {message}', file=sys.stderr)
+        if not args.allow_bad_dois:
+            print('Fix the source (raw.html / toc.json) and rerun, or pass '
+                  '--allow-bad-dois to import anyway.', file=sys.stderr)
+            sys.exit(1)
+        print('Continuing anyway: --allow-bad-dois was passed.', file=sys.stderr)
 
     output_path = args.output or os.path.join(os.path.dirname(args.toc_json), 'import.xml')
     with open(output_path, 'w', encoding='utf-8') as f:

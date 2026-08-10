@@ -321,6 +321,25 @@ for a in toc['articles']:
 EOF
 ```
 
+**`pipe6` blocks on bad DOIs.** It refuses to write `import.xml` if any DOI is
+malformed, or if a DOI link's markup runs into the following word. Both faults
+import cleanly and look right on the page — they only surface months later in
+Crossref's monthly resolution report, once the DOI has been deposited and cited.
+Run the check on its own at any point:
+
+```bash
+python3 backfill/lib/doi_validate.py backfill/private/output/<vol>.<iss>
+```
+
+Fix the source (`raw.html`, or `toc.json` for a `_manual_html` article) and rerun
+pipe2→pipe6. `--allow-bad-dois` overrides the block and should stay unused: the
+fault reaches Crossref and readers. What it catches, all of it live at some
+point: two DOIs concatenated by greedy extraction (7.2, 10.2), an OCR `×` for
+`x` and a zero-width space (34.2), a web address behind the DOI resolver (35.2),
+and — the one that generates the report entries — a DOI link with no whitespace
+after `</a>`, so anything reading the page as text requests the DOI with the
+next word stuck to it (37.2, the Kočiūnas obituary).
+
 ## 5. Import to dev and check it
 
 > **Nothing else may be touching the box.** It is 2 vCPUs and 3.8 GB running

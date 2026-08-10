@@ -31,14 +31,65 @@ FIXTURES_DIR = Path(__file__).parent / 'fixtures'
     # No DOI
     ('Smith (2020). Title. London: Publisher.', None),
     ('Kierkegaard, S. (1849). The Sickness Unto Death.', None),
-    # Our own DOI prefix is now returned (articles deposited to Crossref)
-    ('Article. 10.65828/abc123', '10.65828/abc123'),
-    ('Article. doi:10.65828/xyz789', '10.65828/xyz789'),
+    # Our own DOI prefix is now returned (articles deposited to Crossref).
+    # Suffixes are 8 alphanumerics — every one of the 1,496 we have registered.
+    ('Article. 10.65828/c8ecrh72', '10.65828/c8ecrh72'),
+    ('Article. doi:10.65828/cjf3pr23', '10.65828/cjf3pr23'),
     # Mixed: returns first DOI found (our prefix appears first)
-    ('Article 10.65828/own. See also 10.1234/external.', '10.65828/own'),
+    ('Article 10.65828/cee5p953. See also 10.1234/external.', '10.65828/cee5p953'),
 ])
 def test_has_existing_doi(text, expected):
     assert has_existing_doi(text) == expected
+
+
+# ---------- clean_doi: regressions from the Crossref resolution reports ----------
+# Each case below is a real failed resolution against prefix 10.65828 (or a real
+# corrupt value found in citation_settings), traced back to greedy extraction.
+
+@pytest.mark.parametrize('raw, expected', [
+    # Bracketed or escaped citations — the closing character was swallowed.
+    ('10.65828/324f6976]', '10.65828/324f6976'),          # 2026-07 report, %5D
+    ('10.65828/djt90z93\\', '10.65828/djt90z93'),         # 2026-07 report, %5C
+    ('10.65828/cee5p953/', '10.65828/cee5p953'),          # 2026-07 report
+    ('10.65828/4dcx0d67.', '10.65828/4dcx0d67'),          # 2026-05 report
+    ('[10.65828/c8ecrh72]', '10.65828/c8ecrh72'),
+    # The next reference's prefix ran on. Rejected rather than repaired: a
+    # plausible-but-wrong DOI in published metadata is worse than none.
+    # suggest_own_doi() offers the likely value for guard messages.
+    ('10.65828/cjf3pr2310.65828', None),                  # 2026-07 report
+    # Two DOIs concatenated: the leftover prefix is not a DOI, so reject.
+    ('10.15697/10.5072/fk20p1509b', None),                # live in 7.2 and 10.2
+    # A following word ran on — invisible to shape checks, caught by our
+    # own-prefix suffix rule.
+    ('10.65828/c8ecrh72LINKS', None),                     # 2026-07 report
+    ('10.65828/nnfvfq11Kočiūnas,', None),                 # live in 37.2
+    # OCR and copy/paste damage.
+    ('10.2466/17.04.PR0.113×17z0', '10.2466/17.04.PR0.113x17z0'),  # live in 34.2
+    ('10.1177/18344909211057​657', '10.1177/18344909211057657'),
+    # Not DOIs at all.
+    ('https://www.journal-psychoanalysis.eu/articles/x/', None),  # live in 35.2
+    ('', None),
+    (None, None),
+    # Wiley DOIs legitimately contain <, > and # — must survive untouched.
+    ('10.1002/(sici)1097-4679(199912)55:12<1481::aid-jclp6>3.0.co;2-#',
+     '10.1002/(sici)1097-4679(199912)55:12<1481::aid-jclp6>3.0.co;2-#'),
+])
+def test_clean_doi(raw, expected):
+    from backfill.lib.crossref import clean_doi
+    assert clean_doi(raw) == expected
+
+
+@pytest.mark.parametrize('doi, expected', [
+    ('10.65828/c8ecrh72', True),
+    ('10.65828/ea.34.1.001', True),      # Harbour's readable scheme
+    ('10.65828/ea.34.1', True),          # issue-level DOI
+    ('10.65828/c8ecrh72LINKS', False),   # run-on
+    ('10.65828/cjf3pr2310.65828', False),
+    ('10.1234/notours', False),          # different prefix
+])
+def test_is_valid_own_doi(doi, expected):
+    from backfill.lib.crossref import is_valid_own_doi
+    assert is_valid_own_doi(doi) is expected
 
 
 # ---------- _normalise_title ----------
@@ -362,3 +413,14 @@ def test_fixture_response(crossref_response):
     tier, sim, details = score_match(items[0], ref_text)
     assert tier in (TIER_MATCHED, TIER_NO_MATCH)
     assert 'matched_doi' in details
+
+
+@pytest.mark.parametrize('doi, expected', [
+    ('10.65828/cjf3pr2310.65828', '10.65828/cjf3pr23'),
+    ('10.65828/c8ecrh72LINKS', '10.65828/c8ecrh72'),
+    ('10.65828/c8ecrh72', None),      # already correct — nothing to suggest
+    ('10.1234/notours', None),        # not our prefix
+])
+def test_suggest_own_doi(doi, expected):
+    from backfill.lib.crossref import suggest_own_doi
+    assert suggest_own_doi(doi) == expected

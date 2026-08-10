@@ -14,8 +14,105 @@ import requests
 # Journal's own DOI prefix — used to identify self-citations
 OWN_DOI_PREFIX = '10.65828/'
 
-# Regex to detect DOIs already present in reference text
+# Regex to detect DOIs already present in reference text. Deliberately greedy —
+# a DOI's suffix can contain almost any printable character, so the candidate is
+# taken up to whitespace and then cleaned by clean_doi().
 DOI_RE = re.compile(r'10\.\d{4,}/\S+')
+
+# A DOI is a 10.NNNN prefix and a non-empty suffix of printable, space-free
+# characters. Wiley DOIs legitimately contain <, > and #, so the suffix cannot be
+# restricted to an alphanumeric set without losing real DOIs.
+DOI_SHAPE_RE = re.compile(r'^10\.\d{4,9}/[!-~]+$')
+
+# Our own suffixes are exactly 8 alphanumerics (OJS) or ea.{vol}.{num}[.{seq}]
+# (Harbour). Anything else under our prefix is a run-on, not a DOI we minted.
+OWN_DOI_SUFFIX_RE = re.compile(r'^(?:[a-z0-9]{8}|ea\.\d+\.\d+(?:\.\d+)?)$', re.I)
+
+# A second prefix *followed by a slash* means two DOIs ran together, as in
+# "10.15697/10.5072/fk20p1509b". The slash is essential: real suffixes routinely
+# end in things like ".44.10.1285" (volume.issue.page) or contain a year such as
+# ".2010.", and treating those as a second DOI truncates ~30 valid DOIs.
+# A trailing prefix with no slash ("10.65828/CJF3PR2310.65828") is instead caught
+# by the own-prefix suffix rule, which knows what we actually mint.
+_EMBEDDED_PREFIX_RE = re.compile(r'(?<=.)10\.\d{4,9}/')
+
+# Zero-width and soft characters survive copy/paste and OCR but are never part of
+# a DOI. Seen live: U+200B inside a Journal of Pacific Rim Psychology DOI.
+_INVISIBLE = dict.fromkeys(map(ord, '​‌‍⁠﻿­'), None)
+
+# Typographic look-alikes that OCR and typesetting substitute for ASCII. Seen
+# live: U+00D7 for "x" in a Psychological Reports DOI.
+_LOOKALIKE = {
+    0x00d7: 'x',   # × multiplication sign
+    0x2013: '-',   # en dash
+    0x2014: '-',   # em dash
+    0x2010: '-',   # hyphen
+    0x2011: '-',   # non-breaking hyphen
+    0x00a0: ' ',   # non-breaking space
+}
+
+# Characters that may appear inside a DOI but never legitimately end one.
+_TRAILING_JUNK = '.,;:)]}>"\'/\\ \t'
+_LEADING_JUNK = '([{<"\''
+
+
+def is_valid_doi(doi):
+    """True if `doi` is shaped like a DOI (10.NNNN prefix, printable suffix)."""
+    return bool(doi) and bool(DOI_SHAPE_RE.match(doi))
+
+
+def is_valid_own_doi(doi):
+    """True if `doi` is one of ours AND matches a suffix pattern we actually mint.
+
+    Catches the run-on case that shape alone cannot: "10.65828/C8ECRH72LINKS"
+    is well-formed but is our DOI with the following word stuck to it.
+    """
+    if not is_valid_doi(doi) or not doi.lower().startswith(OWN_DOI_PREFIX):
+        return False
+    return bool(OWN_DOI_SUFFIX_RE.match(doi[len(OWN_DOI_PREFIX):]))
+
+
+def suggest_own_doi(doi):
+    """Best guess at the DOI a run-on under our own prefix was meant to be.
+
+    Every one of the 1,496 suffixes we have registered is exactly 8
+    alphanumerics, so the first 8 of an over-long suffix are almost certainly
+    the intended DOI. Advisory only — used in guard messages so a human can see
+    the likely fix, never written back into metadata, because a plausible but
+    wrong DOI in published data is worse than no DOI at all.
+    """
+    if not doi or not doi.lower().startswith(OWN_DOI_PREFIX):
+        return None
+    match = re.match(r'[a-z0-9]{8}', doi[len(OWN_DOI_PREFIX):], re.I)
+    if not match:
+        return None
+    candidate = OWN_DOI_PREFIX + match.group()
+    return candidate if candidate.lower() != doi.lower() else None
+
+
+def clean_doi(raw):
+    """Normalise a DOI lifted out of free text; return None if it isn't one.
+
+    Reference text hands us DOIs that have picked up their surroundings: a
+    closing bracket, a trailing full stop, the next reference's prefix, an OCR
+    look-alike, an invisible character. Strip what cannot belong before the DOI
+    is stored, displayed or deposited.
+    """
+    if not raw:
+        return None
+    doi = raw.translate(_INVISIBLE).translate(_LOOKALIKE).strip()
+    # Wrapping characters first: a leading "[" would otherwise make the DOI's own
+    # prefix look like an embedded second one.
+    doi = doi.lstrip(_LEADING_JUNK).rstrip(_TRAILING_JUNK)
+    match = _EMBEDDED_PREFIX_RE.search(doi)
+    if match:
+        doi = doi[:match.start()].rstrip(_TRAILING_JUNK)
+    if not is_valid_doi(doi):
+        return None
+    # Our own DOIs have a known shape, so a run-on is detectable and fatal.
+    if doi.lower().startswith(OWN_DOI_PREFIX) and not is_valid_own_doi(doi):
+        return None
+    return doi
 
 CROSSREF_API_URL = 'https://api.crossref.org/works'
 
@@ -68,10 +165,9 @@ def has_existing_doi(ref_text):
     Returns the DOI string if found, or None.
     """
     for match in DOI_RE.finditer(ref_text):
-        doi = match.group()
-        # Strip trailing punctuation that's not part of the DOI
-        doi = doi.rstrip('.,;:)')
-        return doi
+        doi = clean_doi(match.group())
+        if doi:
+            return doi
     return None
 
 
