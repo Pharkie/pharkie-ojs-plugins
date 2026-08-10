@@ -92,9 +92,39 @@ def jats_to_html(jats_path: Path) -> str | None:
         _render_provenance(back, soup)
         _render_back_matter(back, soup)
 
+    _separate_blocks(soup)
+
     # decode_contents() not prettify() — prettify() inserts newlines inside
     # inline tags (<em>, <strong>) which browsers collapse to visible spaces.
     return soup.decode_contents()
+
+
+_BLOCK_TAGS = {
+    'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+    'table', 'thead', 'tbody', 'tr', 'td', 'th', 'blockquote', 'pre',
+    'figure', 'figcaption', 'section', 'hr',
+}
+
+
+def _separate_blocks(soup):
+    """Put a newline after every block-level element.
+
+    decode_contents() writes siblings with nothing between them, so a paragraph
+    ending in a link is emitted as `</a></p><p>Next word`. Rendered HTML looks
+    right, but anything reading the page as text — a crawler, a copy/paste, a
+    PDF converter — sees no word boundary and reads the link straight into the
+    following word.
+
+    That is how `10.65828/nnfvfq11Kočiūnas,` reached Crossref's failed-resolution
+    report from the Kočiūnas obituary in 37.2: the source HTML had blank lines
+    between the paragraphs, and this stage removed them. A newline is invisible
+    in rendered HTML and restores the boundary.
+
+    Block elements only. prettify() would do this too, but it also breaks inside
+    <em>/<strong>, which browsers render as stray spaces.
+    """
+    for element in soup.find_all(lambda tag: tag.name in _BLOCK_TAGS):
+        element.insert_after('\n')
 
 
 def _convert_element(et_el, parent, soup, sec_depth=0):
