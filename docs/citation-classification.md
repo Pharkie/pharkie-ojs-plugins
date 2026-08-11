@@ -63,6 +63,23 @@ Matches: `^This (article|paper|chapter|essay|lecture|talk) (is|was) ...`
 
 **Rule 4 detail** (most complex): A numbered item like "4 Binswanger, L. (1968)..." is a legitimate reference (number prefix + author pattern). But "8 Freud maintains that this view..." is commentary (number prefix + prose). The test: after stripping the number, does the text start with an author pattern (Surname, Initial)?
 
+**Rule 10 and ORCID — an ORCID iD disappearing from a bio is correct.** Author
+bios in the source often end with the author's ORCID URL. Rule 10 classifies
+that URL as contact info, so it is pulled out of the bio prose and does not
+appear in the generated galley. That is deliberate: the iD belongs in structured
+metadata, not repeated in a paragraph. Its durable home is the `orcids` map in
+`toc.json`, which `pipe3_generate_jats.py` writes as
+`<contrib-id contrib-id-type="orcid">`, from where it reaches the article page,
+the JSON-LD, and the Crossref deposit.
+
+The consequence to know: **an ORCID written straight into a generated galley or
+post.html does not survive.** The 2026-08 ORCID backfill added 51 iDs that way
+and they read correctly until the next pipeline run stripped them again, which
+looked alarmingly like data loss during the 12.1 work on 2026-08-10 (43 galleys
+lost an `orcid.org` line at once). Nothing was lost — the structured iDs were
+intact throughout. If an iD needs adding, put it in `toc.json`'s `orcids` map and
+rerun, never into the output.
+
 ## Reference rules (`is_reference`) — checked second as positive match
 
 ALL of these must pass:
