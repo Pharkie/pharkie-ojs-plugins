@@ -1194,6 +1194,18 @@ def _find_book_publication_details(html, book_title, search_start=0,
     return None, None
 
 
+# A review's publication details are the header plus a line or two of imprint —
+# "London: Routledge, 1998. 307 pp. £16.00." — not an unbounded run. The walk
+# below used to continue through every following sibling that matched
+# _PUB_MARKERS_RE, and that pattern hits any 4-digit year, "London", "Oxford",
+# "£" — which review prose is full of. So it strode through the whole body and
+# past the NEXT review's header, leaving nothing to cut at: on 6.1 it reached
+# offset 7044 of 7954. Bounding it by both count and length keeps it on the
+# imprint lines it was written for.
+_MAX_PUB_DETAIL_BLOCKS = 3
+_MAX_PUB_DETAIL_CHARS = 300
+
+
 def _end_of_pub_details(html, start, pub_end):
     """Find the end of a book review's publication details block.
 
@@ -1209,12 +1221,19 @@ def _end_of_pub_details(html, start, pub_end):
     skip = pub_end
     if heading:
         sib = heading.find_next_sibling(list(BLOCK_TAGS))
-        while sib and _PUB_MARKERS_RE.search(_el_text(sib)):
+        steps = 0
+        while (
+            sib
+            and steps < _MAX_PUB_DETAIL_BLOCKS
+            and len(_el_text(sib)) <= _MAX_PUB_DETAIL_CHARS
+            and _PUB_MARKERS_RE.search(_el_text(sib))
+        ):
             sib_str = str(sib)
             pos = html.find(sib_str, start)
             if pos >= 0:
                 skip = max(skip, pos + len(sib_str))
             sib = sib.find_next_sibling(list(BLOCK_TAGS))
+            steps += 1
     return skip
 
 
