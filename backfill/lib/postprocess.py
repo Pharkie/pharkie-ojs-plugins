@@ -501,11 +501,26 @@ def _squash(text):
     return ' '.join(re.sub(r'[^a-z0-9]', ' ', text).split())
 
 
+def _squash_tight(text):
+    """Reduce to letters and digits only — no spaces, no punctuation.
+
+    Needed because the two sides disagree on what punctuation becomes. _clean
+    deletes it ("R.D.Laing" -> "rdlaing", "Nietzsche's" -> "nietzsches") while a
+    space-preserving squash would give "r d laing" and "nietzsche s". Dropping
+    separators entirely makes the comparison agree either way, which is what
+    lets a toc title match the header as it was actually printed.
+    """
+    return re.sub(r'[^a-z0-9]', '', text.lower())
+
+
 def _starts_with_title(text, title):
     """True if `text` opens with `title`, ignoring punctuation and any bullet."""
-    body = _squash(_REVIEW_BULLET_RE.sub('', text))
-    want = _squash(title)
-    if len(want) < 12 or len(body) < 12:
+    body = _squash_tight(_REVIEW_BULLET_RE.sub('', text))
+    want = _squash_tight(title)
+    # 10 characters of letters and digits is roughly three words — short enough
+    # to admit "R.D.Laing: A Biography", long enough not to match on a stray
+    # phrase.
+    if len(want) < 10 or len(body) < 10:
         return False
     return body.startswith(want[:min(len(want), len(body))])
 
