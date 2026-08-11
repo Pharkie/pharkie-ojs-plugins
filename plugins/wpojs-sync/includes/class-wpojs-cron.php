@@ -93,6 +93,7 @@ class WPOJS_Cron {
 		$active_set = array_flip( $active_members );
 		$page_size  = 500;
 		$offset     = 0;
+		$stale      = array();
 
 		do {
 			$synced_users = $wpdb->get_col( $wpdb->prepare(
@@ -104,18 +105,24 @@ class WPOJS_Cron {
 			foreach ( $synced_users as $uid ) {
 				$uid = (int) $uid;
 				if ( ! isset( $active_set[ $uid ] ) ) {
-					// This user was synced but is no longer active -- schedule expire.
-					$args = array( array( 'wp_user_id' => $uid ) );
-					if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
-						as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
-						$this->logger->log( $uid, '', 'reconcile_expire', 'queued', 0, 'Stale access: synced user no longer active member' );
-						$expired++;
-					}
+					$stale[] = $uid;
 				}
 			}
 
 			$offset += $page_size;
 		} while ( count( $synced_users ) === $page_size );
+
+		// Only expire the ones OJS still lets in. Everyone keeps their
+		// `_wpojs_user_id` after lapsing, so without this the same people are
+		// re-expired every day against a subscription that is already expired.
+		foreach ( $this->sync->filter_active_on_ojs( $stale ) as $uid ) {
+			$args = array( array( 'wp_user_id' => $uid ) );
+			if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
+				as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
+				$this->logger->log( $uid, '', 'reconcile_expire', 'queued', 0, 'Stale access: synced user no longer active member' );
+				$expired++;
+			}
+		}
 
 		$this->logger->log(
 			0,

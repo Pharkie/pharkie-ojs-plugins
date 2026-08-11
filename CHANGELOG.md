@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **Members who never buy anything could not reach the journal.** Access was resolved from WooCommerce Subscriptions and WP roles only, so the six life members — an active `LIFE MEMBER` plan, no end date, no subscription, and no role saying so (WC Memberships' Role Handler add-on is off on live) — had no OJS account at all. Eight active members were affected. The resolver now has a third path, WooCommerce Memberships plans, with its own lifecycle hooks; a plan with no end date produces a non-expiring OJS subscription. New setting: Settings → OJS Sync → *Access Without a Purchase* → Membership Plans (`wpojs_member_plans`); a plan grants nothing until it is ticked.
 - Unticking the last WordPress role in the settings no longer silently keeps the old value (checkbox groups submit nothing when empty).
+- **Reconciliation re-expired the same lapsed members every day, for ever.** `_wpojs_user_id` stays on a WP user after they lapse, so the stale-access check kept re-detecting them and re-expiring an already-expired OJS subscription — 25 no-op calls a day on live, 713 in a month, burying the real expiries in the log. It now asks OJS whether the person still has access before queueing an expire, the same way the missing-access half already does. The rule is shared between the cron and the CLI (`WPOJS_Sync::filter_active_on_ojs`) so the two reconciliations can't disagree, and it fails open on an API error.
 
 ## [v1.3.0](https://github.com/Pharkie/wp-ojs-sync/releases/tag/v1.3.0) — 2026-03-08
 

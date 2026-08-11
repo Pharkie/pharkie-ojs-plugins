@@ -423,19 +423,30 @@ class WPOJS_CLI {
 		);
 		$active_set = array_flip( $members );
 		$expired    = 0;
+		$stale      = array();
 
 		foreach ( $synced_users as $uid ) {
 			$uid = (int) $uid;
 			if ( ! isset( $active_set[ $uid ] ) ) {
-				$as_args = array( array( 'wp_user_id' => $uid ) );
-				if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $as_args, 'wpojs-sync' ) ) {
-					as_schedule_single_action( time(), 'wpojs_sync_expire', $as_args, 'wpojs-sync' );
-				}
-				$expired++;
-				$user = get_userdata( $uid );
-				$email = $user ? $user->user_email : "user #$uid";
-				WP_CLI::log( sprintf( '  Queued expire for %s (no longer active member)', $email ) );
+				$stale[] = $uid;
 			}
+		}
+
+		// Same rule as the cron (WPOJS_Sync::filter_active_on_ojs, shared so the
+		// two reconciliations can't disagree): expire only those OJS still lets
+		// in, or every lapsed member is re-expired on every run.
+		$still_in = $this->sync->filter_active_on_ojs( $stale );
+		WP_CLI::log( sprintf( '  %d synced users are no longer members; %d still have OJS access.', count( $stale ), count( $still_in ) ) );
+
+		foreach ( $still_in as $uid ) {
+			$as_args = array( array( 'wp_user_id' => $uid ) );
+			if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $as_args, 'wpojs-sync' ) ) {
+				as_schedule_single_action( time(), 'wpojs_sync_expire', $as_args, 'wpojs-sync' );
+			}
+			$expired++;
+			$user = get_userdata( $uid );
+			$email = $user ? $user->user_email : "user #$uid";
+			WP_CLI::log( sprintf( '  Queued expire for %s (no longer active member)', $email ) );
 		}
 
 		WP_CLI::log( '' );

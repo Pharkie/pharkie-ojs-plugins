@@ -318,6 +318,54 @@ class WPOJS_Sync {
 	}
 
 	/**
+	 * Of these WP users, which ones does OJS still grant active access to?
+	 *
+	 * Used by the reconciliation's stale-access check, which would otherwise
+	 * fire an expire at everyone who ever synced and is no longer a member —
+	 * every day, for ever, because `_wpojs_user_id` stays on the user after
+	 * they lapse. That was 25 no-op calls a day on live (each a 200 re-setting
+	 * an already-expired subscription to expired), and it buried the real
+	 * expiries in the log.
+	 *
+	 * Shared by the cron and the CLI so the two reconciliations can't disagree
+	 * about who needs expiring.
+	 *
+	 * Fails OPEN: if the status call errors we return the user as still active,
+	 * so a transient API failure delays nothing — worst case we make the same
+	 * harmless no-op call this is meant to remove.
+	 *
+	 * @param array $wp_user_ids
+	 * @return array The subset OJS still shows as active, as WP user IDs.
+	 */
+	public function filter_active_on_ojs( $wp_user_ids ) {
+		$by_email = array();
+		foreach ( $wp_user_ids as $uid ) {
+			$user = get_userdata( (int) $uid );
+			if ( $user && $user->user_email ) {
+				$by_email[ strtolower( $user->user_email ) ] = (int) $uid;
+			}
+		}
+
+		if ( empty( $by_email ) ) {
+			return array();
+		}
+
+		$active = array();
+		foreach ( array_chunk( array_keys( $by_email ), 100 ) as $chunk ) {
+			$result   = $this->api->get_subscription_status_batch( $chunk );
+			$statuses = $result['success'] && isset( $result['body']['results'] ) ? $result['body']['results'] : null;
+
+			foreach ( $chunk as $email ) {
+				if ( $statuses === null || ! empty( $statuses[ $email ]['active'] ) ) {
+					$active[] = $by_email[ $email ];
+				}
+			}
+		}
+
+		return $active;
+	}
+
+	/**
 	 * Resolve OJS userId: check usermeta first, fall back to API lookup.
 	 *
 	 * @param int    $wp_user_id

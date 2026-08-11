@@ -427,6 +427,27 @@ export function getMemberPlans(): number[] {
 }
 
 /**
+ * Count Action Scheduler actions for ONE user, matching a hook and status.
+ * The global count is useless on the rig, where a reconciliation queues work
+ * for the whole member population.
+ */
+export function countQueuedActionsForUser(
+  hook: string,
+  wpUserId: number,
+  status: 'pending' | 'complete' | 'failed' = 'pending',
+): number {
+  const php = `
+    global $wpdb;
+    $table = $wpdb->prefix . 'actionscheduler_actions';
+    echo (int) $wpdb->get_var($wpdb->prepare(
+      "SELECT COUNT(*) FROM {$table} WHERE hook = %s AND status = %s AND args LIKE %s",
+      '${hook}', '${status}', '%"wp_user_id":${wpUserId}%'
+    ));
+  `;
+  return parseInt(wpEval(php), 10);
+}
+
+/**
  * Count Action Scheduler actions matching a hook and status.
  */
 export function getActionSchedulerCount(
