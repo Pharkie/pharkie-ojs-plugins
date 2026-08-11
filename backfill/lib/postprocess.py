@@ -477,9 +477,47 @@ def _strip_keywords_soup(soup):
             return
 
 
-def _strip_end_bleed_soup(soup, next_title):
+# How far into an article the closing stretch begins, as a fraction of its
+# block elements. A real bleed sits in the tail; an article discussing another
+# book mentions it anywhere.
+_BLEED_TAIL_FRACTION = 0.4
+
+# Leading marks that introduce a book review's bibliographic header. Both star
+# characters occur in the corpus.
+_REVIEW_BULLET_RE = re.compile(r'^\s*[\*★☆●•]\s*')
+
+
+def _squash(text):
+    """Lowercase, drop punctuation, collapse spaces — for tolerant comparison.
+
+    Titles in toc.json and in the printed header disagree on punctuation often
+    enough to matter: "Levinas: An Introduction" against "Levinas. An
+    Introduction", "Living & Relating: ..." against "Living & Relating; ...".
+    """
+    # Apostrophes are dropped rather than spaced, so this agrees with _clean:
+    # "Nietzsche's" has to squash to "nietzsches", not "nietzsche s", or a title
+    # carrying a possessive never matches the printed header.
+    text = text.lower().replace("'", '').replace('’', '')
+    return ' '.join(re.sub(r'[^a-z0-9]', ' ', text).split())
+
+
+def _starts_with_title(text, title):
+    """True if `text` opens with `title`, ignoring punctuation and any bullet."""
+    body = _squash(_REVIEW_BULLET_RE.sub('', text))
+    want = _squash(title)
+    if len(want) < 12 or len(body) < 12:
+        return False
+    return body.startswith(want[:min(len(want), len(body))])
+
+
+def _strip_end_bleed_soup(soup, next_title, own_title=''):
     """Remove content from the next article at the end."""
     if not next_title:
+        return
+    # Adjacent articles sharing a title (a book reviewed twice, or a two-part
+    # piece) give no usable signal — the match would land on this article's own
+    # opening. 18.2 "Zone of the Interior" is the case in point.
+    if own_title and _squash(own_title) == _squash(next_title):
         return
     # Find last back-matter heading
     last_backmatter = None
@@ -521,12 +559,31 @@ def _strip_end_bleed_soup(soup, next_title):
                 # the reference section
                 search_els.append(el)
     else:
-        # No backmatter heading: only match in headings to avoid false
-        # positives in body text that merely mentions the next title
-        search_els = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        # No backmatter heading. Headings alone used to be the only thing
+        # searched here, to avoid truncating an article that merely mentions
+        # the next one. But short book reviews usually have no reference
+        # section and the next review simply begins in a <p>, so nothing ever
+        # matched and the bleed stayed: 53 articles across 19 volumes carried
+        # the following review's opening (2026-08-10 survey).
+        #
+        # So paragraphs in the closing stretch are searched too, under a
+        # stricter test — they must *start* with the next title, not merely
+        # contain it. Measured over the whole corpus against the articles whose
+        # committed output had been hand-trimmed, that finds 51 of 55 real
+        # bleeds with one wrong match; matching anywhere in a paragraph instead
+        # collapses precision to 4%, because "... by <Author>" is everywhere.
+        blocks = soup.find_all(list(BLOCK_TAGS))
+        tail_from = int(len(blocks) * _BLEED_TAIL_FRACTION)
+        search_els = [el for el in blocks if el.name in HEADING_TAGS]
+        search_els += [el for i, el in enumerate(blocks)
+                       if i >= tail_from and el.name not in HEADING_TAGS]
 
     for el in search_els:
-        if rx.search(_el_clean_text(el)):
+        if el.name in HEADING_TAGS or last_backmatter:
+            matched = bool(rx.search(_el_clean_text(el)))
+        else:
+            matched = _starts_with_title(_el_clean_text(el), next_title)
+        if matched:
             # Walk up to find the top-level container (e.g. a <div> wrapping
             # the next article's content) so we remove the whole block, not
             # just the heading inside it.
@@ -1041,7 +1098,8 @@ def strip_end_bleed(html, next_title):
 # ---------------------------------------------------------------
 
 def _find_book_publication_details(html, book_title, search_start=0,
-                                   require_heading=False):
+                                   require_heading=False,
+                                   allow_para_start=True):
     """Find where a book review's publication details start.
 
     Looks for the book title in a block that also contains publication
@@ -1078,11 +1136,22 @@ def _find_book_publication_details(html, book_title, search_start=0,
         # reference citations like "Sigal (2005). Zone of the Interior.
         # Pomona." from being mistaken for the next review's header.
         if require_heading and not is_heading:
-            # Check if the preceding heading contains the title
-            prev_heading = el.find_previous_sibling(list(HEADING_TAGS))
-            if not prev_heading or not any(
-                    rx.search(_el_clean_text(prev_heading)) for rx in rx_parts):
-                continue
+            # A paragraph that *opens* with the title is the next review's
+            # header; one that merely contains it is a citation, which is what
+            # this guard was protecting against ("Sigal (2005). Zone of the
+            # Interior. Pomona." begins with the author, not the title).
+            #
+            # Requiring a heading outright was too strict: most reviews open in
+            # a <p>, so no cut point was ever found and the review kept the
+            # following one's opening. 51 book reviews across 19 volumes were
+            # carrying it (2026-08-10 survey).
+            if not (allow_para_start
+                    and any(_starts_with_title(block_text, part) for part in book_parts)):
+                # Check if the preceding heading contains the title
+                prev_heading = el.find_previous_sibling(list(HEADING_TAGS))
+                if not prev_heading or not any(
+                        rx.search(_el_clean_text(prev_heading)) for rx in rx_parts):
+                    continue
         has_pub = bool(_PUB_MARKERS_RE.search(raw_block))
         is_short_heading = len(block_text.split()) <= 10
         # For headings, also check the next sibling for pub markers
@@ -1160,9 +1229,17 @@ def extract_book_review(html, book_title, next_book_title=None,
         # inline mentions of the same title in body text don't match as
         # the "next review" start (e.g. multiple reviews of the same book).
         next_search = _end_of_pub_details(html, start, pub_end)
+        # When the next entry carries the same title (a book reviewed more than
+        # once — 18.2 has three of "Zone of the Interior"), a paragraph opening
+        # with that title is far more likely to be this review's own prose
+        # ("Zone of the Interior is as much about Sigal's own life...") than the
+        # next review's header. Fall back to headings only, which is what the
+        # original guard did and what the same-title fixture expects.
+        same_title = _squash(_strip_toc_prefixes(next_book_title)) == _squash(
+            _strip_toc_prefixes(book_title))
         next_start, _ = _find_book_publication_details(
             html, next_book_title, search_start=next_search,
-            require_heading=True)
+            require_heading=True, allow_para_start=not same_title)
         if next_start is not None:
             review_end = next_start
 
@@ -1203,7 +1280,7 @@ def postprocess_editorial(html, article):
     _strip_start_bleed_soup(soup, article.get('title', ''))
     _strip_title_soup(soup, article.get('title', ''))
     _strip_authors_soup(soup, article.get('authors', ''))
-    _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+    _strip_end_bleed_soup(soup, article.get('_next_title', ''), article.get('title', ''))
     return _serialize(soup)
 
 
@@ -1292,7 +1369,7 @@ def postprocess_article(html, article, pdf_path=None):
         _strip_subtitle_soup(soup, article.get('subtitle', ''))
 
     # End-bleed stripping applies to ALL section types
-    _strip_end_bleed_soup(soup, article.get('_next_title', ''))
+    _strip_end_bleed_soup(soup, article.get('_next_title', ''), article.get('title', ''))
 
     # Strip footnote superscripts from headings
     _strip_heading_sups_soup(soup)
