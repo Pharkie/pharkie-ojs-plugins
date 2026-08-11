@@ -1,12 +1,12 @@
 # Architecture
 
-WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscriptions; OJS hosts a journal behind a paywall. Goal: members get access automatically, non-members can still buy content.
+WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscriptions and WooCommerce Memberships; OJS hosts a journal behind a paywall. Goal: members get access automatically, non-members can still buy content.
 
 ## How it works: Push-sync
 
 A plugin on each side. The OJS plugin exposes REST endpoints for user and subscription CRUD (OJS has no native subscription API). The WP plugin calls those endpoints.
 
-1. **Initial bulk sync:** WP-CLI command reads all active WooCommerce Subscriptions, creates OJS user accounts (with WP password hashes) and subscription records via the OJS plugin endpoints. Members can immediately log into OJS with their existing WP password — no separate "set your password" step needed. OJS custom hasher verifies WP hashes at login and lazy-rehashes to native bcrypt.
+1. **Initial bulk sync:** WP-CLI command reads all active members — WooCommerce Subscriptions, ticked WooCommerce Memberships plans, and manual roles — creates OJS user accounts (with WP password hashes) and subscription records via the OJS plugin endpoints. Members can immediately log into OJS with their existing WP password — no separate "set your password" step needed. OJS custom hasher verifies WP hashes at login and lazy-rehashes to native bcrypt.
 2. **Ongoing sync (after launch):** WP plugin hooks into WooCommerce Subscription lifecycle events (active, expired, cancelled, on-hold) and pushes changes to OJS automatically via an async queue.
 
 See [`docs/discovery.md`](docs/discovery.md) for the decision trail: what approaches were evaluated and why most were eliminated.
@@ -90,7 +90,7 @@ sudo docker exec pharkie-ojs-plugins-ojs-1 bash -c "rm -f /var/www/html/cache/t_
 
 **Ultimate Member + WooCommerce + WooCommerce Subscriptions.** UM handles registration/profiles/roles. WCS handles billing. Membership = WP role.
 
-Primary integration: hook into **WooCommerce Subscriptions** status events (`woocommerce_subscription_status_active`, `_expired`, `_cancelled`, `_on-hold`). All sync calls are async (queued via Action Scheduler, not inline). Daily reconciliation catches any drift. See [`docs/wp-integration.md`](docs/wp-integration.md) for WCS hook details.
+Primary integration: hook into **WooCommerce Subscriptions** status events (`woocommerce_subscription_status_active`, `_expired`, `_cancelled`, `_on-hold`) and **WooCommerce Memberships** lifecycle events (`wc_memberships_user_membership_created` / `_saved` / `_status_changed` / `_deleted`) — a membership can exist with no subscription behind it, which is exactly how life and honorary members are held. All sync calls are async (queued via Action Scheduler, not inline). Daily reconciliation catches any drift. See [`docs/wp-integration.md`](docs/wp-integration.md) for hook details.
 
 ## Key documentation
 

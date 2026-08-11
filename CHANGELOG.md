@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Bug fixes
+
+- **Members who never buy anything could not reach the journal.** Access was resolved from WooCommerce Subscriptions and WP roles only, so the six life members — an active `LIFE MEMBER` plan, no end date, no subscription, and no role saying so (WC Memberships' Role Handler add-on is off on live) — had no OJS account at all. Eight active members were affected. The resolver now has a third path, WooCommerce Memberships plans, with its own lifecycle hooks; a plan with no end date produces a non-expiring OJS subscription. New setting: Settings → OJS Sync → *Access Without a Purchase* → Membership Plans (`wpojs_member_plans`); a plan grants nothing until it is ticked.
+- Unticking the last WordPress role in the settings no longer silently keeps the old value (checkbox groups submit nothing when empty).
+
 ## [v1.3.0](https://github.com/Pharkie/wp-ojs-sync/releases/tag/v1.3.0) — 2026-03-08
 
 ### Features

@@ -35,6 +35,19 @@ class WPOJS_Hooks {
 		// Deferred expiry check — runs 5s after an inactive event to avoid race conditions.
 		add_action( 'wpojs_check_and_expire', array( $this, 'on_check_and_expire' ) );
 
+		// WooCommerce Memberships lifecycle events. Life and honorary members
+		// hold a membership plan and no subscription, so no WCS event above
+		// ever fires for them — without these hooks the only thing that would
+		// ever pick them up is the daily reconciliation.
+		// `_created` fires when a membership is granted programmatically (an
+		// order, an importer, WP-CLI); `_saved` when one is created or edited
+		// in wp-admin. They are deliberately mutually exclusive in the plugin,
+		// so both are needed. Same argument shape.
+		add_action( 'wc_memberships_user_membership_created', array( $this, 'on_membership_saved' ), 10, 2 );
+		add_action( 'wc_memberships_user_membership_saved', array( $this, 'on_membership_saved' ), 10, 2 );
+		add_action( 'wc_memberships_user_membership_status_changed', array( $this, 'on_membership_status_changed' ), 10, 3 );
+		add_action( 'wc_memberships_user_membership_deleted', array( $this, 'on_membership_deleted' ) );
+
 		// WP profile update (email + password change detection).
 		add_action( 'profile_update', array( $this, 'on_profile_update' ), 10, 3 );
 
@@ -102,11 +115,7 @@ class WPOJS_Hooks {
 		}
 
 		// Safety net: deferred re-check after 5s catches simultaneous-expiry race.
-		$hook = 'wpojs_check_and_expire';
-		$args = array( $wp_user_id );
-		if ( ! as_has_scheduled_action( $hook, $args, 'wpojs-sync' ) ) {
-			as_schedule_single_action( time() + 5, $hook, $args, 'wpojs-sync' );
-		}
+		$this->schedule_deferred_expiry_check( $wp_user_id );
 	}
 
 	/**
@@ -129,6 +138,110 @@ class WPOJS_Hooks {
 		if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
 			as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
 		}
+	}
+
+	/**
+	 * A user membership was created or edited (WooCommerce Memberships).
+	 *
+	 * Signature per woocommerce-memberships 1.27.5:
+	 * `do_action( 'wc_memberships_user_membership_saved', $plan, [ 'user_id',
+	 * 'user_membership_id', 'is_update' ] )` — the plan can be false in some
+	 * admin contexts, so the user id in $args is what we key on.
+	 *
+	 * @param mixed $plan WC_Memberships_Membership_Plan|false
+	 * @param array $args { user_id: int, user_membership_id: int, is_update: bool }
+	 */
+	public function on_membership_saved( $plan, $args = array() ) {
+		$wp_user_id = is_array( $args ) && isset( $args['user_id'] ) ? (int) $args['user_id'] : 0;
+		$this->sync_membership_holder( $wp_user_id );
+	}
+
+	/**
+	 * A user membership changed status (activated, cancelled, expired, paused).
+	 *
+	 * Fires from `transition_post_status`, so the new status is already saved
+	 * by the time we re-resolve — no exclusion argument needed, unlike the WCS
+	 * path.
+	 *
+	 * @param object $user_membership WC_Memberships_User_Membership
+	 * @param string $old_status Status without the wcm- prefix.
+	 * @param string $new_status Status without the wcm- prefix.
+	 */
+	public function on_membership_status_changed( $user_membership, $old_status = '', $new_status = '' ) {
+		$this->sync_membership_holder( $this->membership_user_id( $user_membership ) );
+	}
+
+	/**
+	 * A user membership is being deleted.
+	 *
+	 * The hook fires BEFORE the post row goes ("Fires before a user membership
+	 * is deleted"), so an inline re-check would still see the membership.
+	 * Hand it to the deferred check, which runs once everything has settled.
+	 *
+	 * @param object $user_membership WC_Memberships_User_Membership
+	 */
+	public function on_membership_deleted( $user_membership ) {
+		$wp_user_id = $this->membership_user_id( $user_membership );
+		if ( ! $wp_user_id ) {
+			return;
+		}
+		$this->schedule_deferred_expiry_check( $wp_user_id );
+	}
+
+	/**
+	 * Bring a membership holder's OJS access in line with what they now hold.
+	 *
+	 * Unlike the WCS hooks there is no separate activate/expire event to hook —
+	 * one status-change event covers both directions — so the decision is made
+	 * here from the resolver.
+	 *
+	 * @param int $wp_user_id
+	 */
+	private function sync_membership_holder( $wp_user_id ) {
+		$wp_user_id = (int) $wp_user_id;
+		if ( ! $wp_user_id || ! get_userdata( $wp_user_id ) ) {
+			return;
+		}
+
+		if ( $this->resolver->is_active_member( $wp_user_id ) ) {
+			$args = array( array( 'wp_user_id' => $wp_user_id ) );
+			if ( ! as_has_scheduled_action( 'wpojs_sync_activate', $args, 'wpojs-sync' ) ) {
+				as_schedule_single_action( time(), 'wpojs_sync_activate', $args, 'wpojs-sync' );
+			}
+			return;
+		}
+
+		$args = array( array( 'wp_user_id' => $wp_user_id ) );
+		if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
+			as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
+		}
+		$this->schedule_deferred_expiry_check( $wp_user_id );
+	}
+
+	/**
+	 * Schedule the 5-second safety-net re-check (shared with the WCS path).
+	 *
+	 * @param int $wp_user_id
+	 */
+	private function schedule_deferred_expiry_check( $wp_user_id ) {
+		$hook = 'wpojs_check_and_expire';
+		$args = array( (int) $wp_user_id );
+		if ( ! as_has_scheduled_action( $hook, $args, 'wpojs-sync' ) ) {
+			as_schedule_single_action( time() + 5, $hook, $args, 'wpojs-sync' );
+		}
+	}
+
+	/**
+	 * User id behind a WC_Memberships_User_Membership, defensively.
+	 *
+	 * @param mixed $user_membership
+	 * @return int 0 if it can't be read.
+	 */
+	private function membership_user_id( $user_membership ) {
+		if ( is_object( $user_membership ) && method_exists( $user_membership, 'get_user_id' ) ) {
+			return (int) $user_membership->get_user_id();
+		}
+		return 0;
 	}
 
 	/**

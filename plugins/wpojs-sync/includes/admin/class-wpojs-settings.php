@@ -61,6 +61,9 @@ class WPOJS_Settings {
         register_setting( 'wpojs_settings', 'wpojs_manual_roles', array(
             'sanitize_callback' => array( $this, 'sanitize_roles' ),
         ) );
+        register_setting( 'wpojs_settings', 'wpojs_member_plans', array(
+            'sanitize_callback' => array( $this, 'sanitize_plans' ),
+        ) );
         register_setting( 'wpojs_settings', 'wpojs_journal_name', array(
             'sanitize_callback' => 'sanitize_text_field',
         ) );
@@ -113,12 +116,20 @@ class WPOJS_Settings {
             'wpojs_product_access'
         );
 
-        // --- Section: Role-Based Access ---
+        // --- Section: Access Without a Purchase (membership plans + roles) ---
         add_settings_section(
             'wpojs_role_access',
-            'WordPress Role-Based Access',
+            'Access Without a Purchase',
             array( $this, 'render_role_access_intro' ),
             'wpojs-sync'
+        );
+
+        add_settings_field(
+            'wpojs_member_plans',
+            'Membership Plans',
+            array( $this, 'render_member_plans_field' ),
+            'wpojs-sync',
+            'wpojs_role_access'
         );
 
         add_settings_field(
@@ -156,7 +167,7 @@ class WPOJS_Settings {
     }
 
     public function render_role_access_intro() {
-        echo '<p>Members with certain WordPress roles can get OJS access without purchasing a product. Useful for committee members, life members, or other honorary access. All ticked roles receive the same OJS type. Changes take effect at the next daily reconciliation or individual sync event.</p>';
+        echo '<p>Some members never buy a subscription — life members, honorary members, the committee. They hold a WooCommerce Memberships plan, a WordPress role, or both. Tick whichever grants OJS access here; all ticked plans and roles receive the same OJS type. A membership with no end date (a life membership) produces a non-expiring OJS subscription.</p>';
     }
 
     public function sanitize_ojs_url( $value ) {
@@ -190,7 +201,16 @@ class WPOJS_Settings {
         if ( ! is_array( $value ) ) {
             return array();
         }
-        return array_map( 'sanitize_text_field', $value );
+        // The empty hidden input that makes "untick everything" saveable comes
+        // through as ''; drop it.
+        return array_values( array_filter( array_map( 'sanitize_text_field', $value ) ) );
+    }
+
+    public function sanitize_plans( $value ) {
+        if ( ! is_array( $value ) ) {
+            return array();
+        }
+        return array_values( array_filter( array_map( 'absint', $value ) ) );
     }
 
     // -------------------------------------------------------------------------
@@ -339,12 +359,55 @@ class WPOJS_Settings {
         $ojs_types = $this->get_ojs_type_names();
 
         $this->render_ojs_type_select( 'wpojs_default_type_id', $value, $ojs_types );
-        echo '<p class="description">The OJS subscription type assigned to all members with the roles ticked above.</p>';
+        echo '<p class="description">The OJS subscription type assigned to members granted access by a plan or role above. Also the fallback for a WooCommerce product with no mapping of its own.</p>';
+    }
+
+    public function render_member_plans_field() {
+        $selected = get_option( 'wpojs_member_plans', array() );
+        $selected = is_array( $selected ) ? array_map( 'intval', $selected ) : array();
+
+        // Always submit the key, so unticking the last box actually clears it.
+        echo '<input type="hidden" name="wpojs_member_plans[]" value="" />';
+
+        if ( ! post_type_exists( 'wc_membership_plan' ) ) {
+            echo '<p class="description">WooCommerce Memberships is not active, so there are no plans to list.</p>';
+            return;
+        }
+
+        $plans = get_posts( array(
+            'post_type'        => 'wc_membership_plan',
+            'post_status'      => array( 'publish', 'private', 'draft' ),
+            'numberposts'      => -1,
+            'orderby'          => 'title',
+            'order'            => 'ASC',
+            'suppress_filters' => false,
+        ) );
+
+        if ( empty( $plans ) ) {
+            echo '<p class="description">No membership plans found.</p>';
+            return;
+        }
+
+        echo '<fieldset>';
+        foreach ( $plans as $plan ) {
+            printf(
+                '<label style="display:block;margin-bottom:3px;"><input type="checkbox" name="wpojs_member_plans[]" value="%d" %s /> %s</label>',
+                (int) $plan->ID,
+                checked( in_array( (int) $plan->ID, $selected, true ), true, false ),
+                esc_html( $plan->post_title )
+            );
+        }
+        echo '</fieldset>';
+        echo '<p class="description">Ticked plans grant OJS access on their own — no subscription needed.</p>';
     }
 
     public function render_manual_roles_field() {
         $selected  = get_option( 'wpojs_manual_roles', array() );
+        $selected  = is_array( $selected ) ? $selected : array();
         $all_roles = wp_roles()->get_names();
+
+        // Always submit the key, so unticking the last box actually clears it.
+        echo '<input type="hidden" name="wpojs_manual_roles[]" value="" />';
 
         // Standard WP/WooCommerce roles — shown separately so the list isn't overwhelming.
         $standard_roles = array(

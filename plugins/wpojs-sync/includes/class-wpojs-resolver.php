@@ -9,37 +9,37 @@ class WPOJS_Resolver {
     /**
      * Resolve what OJS subscription data a WP user should have.
      *
-     * Checks all active WCS subscriptions + manual member roles.
-     * Returns null if user is not an active member.
+     * Three paths grant access: an active WooCommerce Subscription, an active
+     * WooCommerce Memberships plan, or a manual member role. Returns null if
+     * the user is not an active member by any of them.
      *
      * @param int $wp_user_id
      * @return array|null ['type_id' => int, 'date_start' => string, 'date_end' => string|null]
      */
     public function resolve_subscription_data( $wp_user_id ) {
-        $wcs_data    = $this->resolve_from_wcs( $wp_user_id );
-        $manual_data = $this->resolve_from_manual_roles( $wp_user_id );
+        // Priority order: a WCS subscription is the most specific source (its
+        // product can map to a particular OJS type), then a membership plan,
+        // then a manual role. The first one present supplies the type and the
+        // dates; any of them being non-expiring makes the whole grant
+        // non-expiring, which is what a life membership is.
+        $candidates = array_values( array_filter( array(
+            $this->resolve_from_wcs( $wp_user_id ),
+            $this->resolve_from_memberships( $wp_user_id ),
+            $this->resolve_from_manual_roles( $wp_user_id ),
+        ) ) );
 
-        // Not a member via either path.
-        if ( ! $wcs_data && ! $manual_data ) {
+        if ( empty( $candidates ) ) {
             return null;
         }
 
-        // Manual role only (no WCS subscription).
-        if ( ! $wcs_data && $manual_data ) {
-            return $manual_data;
+        $data = array_shift( $candidates );
+        foreach ( $candidates as $other ) {
+            if ( $other['date_end'] === null ) {
+                $data['date_end'] = null;
+            }
         }
 
-        // WCS subscription only (no manual role).
-        if ( $wcs_data && ! $manual_data ) {
-            return $wcs_data;
-        }
-
-        // Both: use WCS data but if manual role is non-expiring, override date_end to null.
-        if ( $manual_data['date_end'] === null ) {
-            $wcs_data['date_end'] = null;
-        }
-
-        return $wcs_data;
+        return $data;
     }
 
     /**
@@ -122,6 +122,83 @@ class WPOJS_Resolver {
     }
 
     /**
+     * Resolve subscription data from WooCommerce Memberships plans.
+     *
+     * The plan is the only record of the members who never buy anything: a life
+     * member holds an active `LIFE MEMBER` membership with no end date and no
+     * subscription at all, so nothing on the WCS path ever sees them. Honorary
+     * and committee grants work the same way.
+     *
+     * Queried directly rather than through `wc_memberships_get_user_memberships()`
+     * because the reconciliation runs in cron/CLI contexts, and because the
+     * member is the post_author of a `wc_user_membership` post — the same shape
+     * the batch query in get_all_active_members() needs.
+     *
+     * @return array|null
+     */
+    private function resolve_from_memberships( $wp_user_id ) {
+        $plan_ids = $this->get_member_plans();
+        if ( empty( $plan_ids ) ) {
+            return null;
+        }
+
+        global $wpdb;
+
+        $statuses      = $this->active_membership_post_statuses();
+        $status_places = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+        $plan_places   = implode( ',', array_fill( 0, count( $plan_ids ), '%d' ) );
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT sd.meta_value AS start_date, ed.meta_value AS end_date
+                FROM {$wpdb->posts} um
+                LEFT JOIN {$wpdb->postmeta} sd ON sd.post_id = um.ID AND sd.meta_key = '_start_date'
+                LEFT JOIN {$wpdb->postmeta} ed ON ed.post_id = um.ID AND ed.meta_key = '_end_date'
+                WHERE um.post_type = 'wc_user_membership'
+                AND um.post_author = %d
+                AND um.post_status IN ($status_places)
+                AND um.post_parent IN ($plan_places)",
+                array_merge( array( (int) $wp_user_id ), $statuses, $plan_ids )
+            ),
+            ARRAY_A
+        );
+
+        if ( empty( $rows ) ) {
+            return null;
+        }
+
+        $default_type   = (int) get_option( 'wpojs_default_type_id', 0 );
+        $non_expiring   = false;
+        $latest_end     = '';
+        $earliest_start = null;
+
+        foreach ( $rows as $row ) {
+            // No end date = unlimited membership (life members). Unlimited wins
+            // over any dated membership the same person also holds.
+            $end = isset( $row['end_date'] ) ? trim( (string) $row['end_date'] ) : '';
+            if ( $end === '' || $end === '0' || strpos( $end, '0000-00-00' ) === 0 ) {
+                $non_expiring = true;
+            } elseif ( ! $non_expiring && ( $latest_end === '' || $end > $latest_end ) ) {
+                $latest_end = $end;
+            }
+
+            $start = isset( $row['start_date'] ) ? trim( (string) $row['start_date'] ) : '';
+            if ( $start !== '' && ( $earliest_start === null || $start < $earliest_start ) ) {
+                $earliest_start = $start;
+            }
+        }
+
+        // Dates are stored as 'Y-m-d H:i:s' UTC; OJS wants Y-m-d.
+        $date_end = $non_expiring ? null : substr( $latest_end, 0, 10 );
+
+        return array(
+            'type_id'    => $default_type,
+            'date_start' => $earliest_start ? gmdate( 'Y-m-d', strtotime( $earliest_start ) ) : gmdate( 'Y-m-d' ),
+            'date_end'   => $date_end,
+        );
+    }
+
+    /**
      * Resolve subscription data from manual member roles.
      * Manual roles are always non-expiring.
      *
@@ -187,6 +264,31 @@ class WPOJS_Resolver {
             $user_ids = array_map( 'intval', $wcs_ids );
         }
 
+        // WooCommerce Memberships plan holders. Life and honorary members live
+        // here and nowhere else — most of them have no subscription at all, so
+        // the query above never returns them.
+        $plan_ids = $this->get_member_plans();
+        if ( ! empty( $plan_ids ) ) {
+            $statuses      = $this->active_membership_post_statuses();
+            $status_places = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+            $plan_places   = implode( ',', array_fill( 0, count( $plan_ids ), '%d' ) );
+
+            $plan_member_ids = $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT DISTINCT um.post_author
+                    FROM {$wpdb->posts} um
+                    WHERE um.post_type = 'wc_user_membership'
+                    AND um.post_author > 0
+                    AND um.post_status IN ($status_places)
+                    AND um.post_parent IN ($plan_places)",
+                    array_merge( $statuses, $plan_ids )
+                )
+            );
+            if ( $plan_member_ids ) {
+                $user_ids = array_merge( $user_ids, array_map( 'intval', $plan_member_ids ) );
+            }
+        }
+
         // Manual role members.
         $manual_roles = $this->get_manual_member_roles();
         if ( ! empty( $manual_roles ) ) {
@@ -224,6 +326,13 @@ class WPOJS_Resolver {
             }
         }
 
+        // Check WooCommerce Memberships plans. No exclusion argument is needed:
+        // the membership hooks fire on `transition_post_status`, by which point
+        // the new status is already in the posts table.
+        if ( $this->resolve_from_memberships( $wp_user_id ) !== null ) {
+            return true;
+        }
+
         // Check manual roles.
         $manual_roles = $this->get_manual_member_roles();
         if ( ! empty( $manual_roles ) ) {
@@ -242,7 +351,57 @@ class WPOJS_Resolver {
      * @return array Array of WP role slugs.
      */
     private function get_manual_member_roles() {
-        return get_option( 'wpojs_manual_roles', array() );
+        $roles = get_option( 'wpojs_manual_roles', array() );
+        return is_array( $roles ) ? array_values( array_filter( $roles ) ) : array();
+    }
+
+    /**
+     * Get configured WooCommerce Memberships plans that grant OJS access.
+     *
+     * @return array Array of plan post IDs.
+     */
+    private function get_member_plans() {
+        $plans = get_option( 'wpojs_member_plans', array() );
+        if ( ! is_array( $plans ) ) {
+            return array();
+        }
+        return array_values( array_filter( array_map( 'intval', $plans ) ) );
+    }
+
+    /**
+     * The `wc_user_membership` post statuses that grant access.
+     *
+     * Mirrors WooCommerce Memberships' own definition —
+     * `WC_Memberships_User_Memberships::get_active_access_membership_statuses()`
+     * (active, complimentary, free_trial, pending; "pending" is *Pending
+     * Cancellation*, which keeps access until the end date). Asked of the
+     * plugin when it is loaded so a site filter is honoured, with the literal
+     * list from woocommerce-memberships 1.27.5 as the fallback.
+     *
+     * @return array Array of prefixed post statuses (wcm-active, ...).
+     */
+    private function active_membership_post_statuses() {
+        $statuses = array( 'active', 'complimentary', 'free_trial', 'pending' );
+
+        if ( function_exists( 'wc_memberships' ) ) {
+            $memberships = wc_memberships();
+            if ( $memberships && method_exists( $memberships, 'get_user_memberships_instance' ) ) {
+                $user_memberships = $memberships->get_user_memberships_instance();
+                if ( $user_memberships && method_exists( $user_memberships, 'get_active_access_membership_statuses' ) ) {
+                    $from_plugin = $user_memberships->get_active_access_membership_statuses();
+                    if ( is_array( $from_plugin ) && ! empty( $from_plugin ) ) {
+                        $statuses = $from_plugin;
+                    }
+                }
+            }
+        }
+
+        $prefixed = array();
+        foreach ( $statuses as $status ) {
+            // The plugin returns unprefixed slugs; they are stored prefixed.
+            $prefixed[] = strpos( $status, 'wcm-' ) === 0 ? $status : 'wcm-' . $status;
+        }
+        return $prefixed;
     }
 
     /**

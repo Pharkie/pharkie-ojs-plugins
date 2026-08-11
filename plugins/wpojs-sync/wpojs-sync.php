@@ -1,23 +1,23 @@
 <?php
 /**
  * Plugin Name: WP OJS Sync
- * Description: Syncs WooCommerce Subscription membership data to OJS journal access.
- * Version: 1.3.0
+ * Description: Syncs WooCommerce Subscriptions and WooCommerce Memberships data to OJS journal access.
+ * Version: 1.4.0
  * Author: Adam Knowles
  * Author URI: https://github.com/adamknowles
  * Requires PHP: 7.4
  * Requires at least: 5.6
  *
- * Hooks into WooCommerce Subscriptions lifecycle events and processes
- * sync operations asynchronously via Action Scheduler against the OJS
- * REST API (wpojs-subscription-api OJS plugin).
+ * Hooks into WooCommerce Subscriptions and WooCommerce Memberships
+ * lifecycle events and processes sync operations asynchronously via Action
+ * Scheduler against the OJS REST API (wpojs-subscription-api OJS plugin).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPOJS_VERSION', '1.3.0' );
+define( 'WPOJS_VERSION', '1.4.0' );
 define( 'WPOJS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPOJS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPOJS_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );

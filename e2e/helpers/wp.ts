@@ -356,6 +356,77 @@ export function setOjsSetting(url: string): void {
 }
 
 /**
+ * Create a WooCommerce Memberships plan. Returns the plan post ID.
+ * Plans are `wc_membership_plan` posts; a user membership hangs off one as its
+ * post_parent.
+ */
+export function createMembershipPlan(name: string): number {
+  const php = `
+    $id = wp_insert_post([
+      'post_type' => 'wc_membership_plan',
+      'post_title' => '${name}',
+      'post_status' => 'publish',
+    ], true);
+    if (is_wp_error($id)) { echo 'ERROR:' . $id->get_error_message(); exit(1); }
+    echo $id;
+  `;
+  const out = wpEval(php);
+  if (out.startsWith('ERROR:')) throw new Error(`Failed to create membership plan: ${out}`);
+  return parseInt(out, 10);
+}
+
+/**
+ * Grant a user a membership on a plan, through WooCommerce Memberships' own
+ * API so the real lifecycle hooks fire. `endDate` omitted = unlimited, which is
+ * what a life membership looks like.
+ *
+ * The end date is set straight after creation, before the queue is processed —
+ * the activate action re-resolves at processing time, so it sees it.
+ *
+ * Returns the user membership post ID.
+ */
+export function createUserMembership(
+  userId: number,
+  planId: number,
+  opts: { endDate?: string } = {},
+): number {
+  const { endDate = '' } = opts;
+  const php = `
+    $m = wc_memberships_create_user_membership([ 'plan_id' => ${planId}, 'user_id' => ${userId} ]);
+    if (is_wp_error($m)) { echo 'ERROR:' . $m->get_error_message(); exit(1); }
+    ${endDate ? `$m->set_end_date('${endDate}');` : ''}
+    echo $m->get_id();
+  `;
+  const out = wpEval(php);
+  if (out.startsWith('ERROR:')) throw new Error(`Failed to create user membership: ${out}`);
+  return parseInt(out, 10);
+}
+
+/**
+ * Change a user membership's status (active, cancelled, expired, paused...).
+ * Goes through the plugin so the status-changed hook fires.
+ */
+export function setUserMembershipStatus(membershipId: number, status: string): void {
+  wpEval(`wc_memberships_get_user_membership(${membershipId})->update_status('${status}');`);
+}
+
+/**
+ * Set the membership plans that grant OJS access (the `wpojs_member_plans`
+ * setting). Pass [] to clear.
+ */
+export function setMemberPlans(planIds: number[]): void {
+  wpEval(`update_option('wpojs_member_plans', [${planIds.join(',')}]);`);
+}
+
+/**
+ * Read the membership plans that currently grant OJS access.
+ */
+export function getMemberPlans(): number[] {
+  const out = wpEval(`echo implode(',', (array) get_option('wpojs_member_plans', []));`).trim();
+  return out ? out.split(',').map((id) => parseInt(id, 10)) : [];
+}
+
+/**
  * Count Action Scheduler actions matching a hook and status.
  */
 export function getActionSchedulerCount(

@@ -12,7 +12,7 @@ Located at **OJS Sync > Settings** in WP admin. Requires `manage_options` capabi
 
 **Product-Based Access** — maps WooCommerce subscription product IDs to OJS subscription type IDs. OJS types loaded dynamically from the API.
 
-**Role-Based Access** — WP roles that grant OJS access without a purchase (e.g. committee members, life members).
+**Access Without a Purchase** — the WooCommerce Memberships plans and WP roles that grant OJS access on their own (life members, honorary members, the committee), and the one OJS type they all receive.
 
 **Display** — journal name shown in the My Account widget.
 
@@ -30,8 +30,9 @@ Located at **OJS Sync > Settings** in WP admin. Requires `manage_options` capabi
 |---|---|---|
 | OJS Base URL | `wpojs_url` | Full URL including journal path, e.g. `https://journal.example.org/index.php/t1`. Must be HTTPS. |
 | WC Product to OJS Type mapping | `wpojs_type_mapping` | Maps WooCommerce subscription product IDs to OJS subscription type IDs. Multiple mappings supported. OJS types are loaded dynamically from the OJS API. |
-| WordPress Roles | `wpojs_manual_roles` | WP roles that grant OJS access without a WooCommerce purchase (e.g. committee members, life members). Roles are listed in two groups: custom/membership roles and standard WordPress roles. |
-| OJS Type | `wpojs_default_type_id` | The OJS subscription type assigned to all role-based members. Also used as fallback when no product-specific type mapping is found. |
+| Membership Plans | `wpojs_member_plans` | WooCommerce Memberships plans that grant OJS access on their own. **This is how life members get in** — they hold an active plan with no end date and no subscription, so nothing else sees them. A plan with no end date produces a non-expiring OJS subscription. Untick everything to switch the path off. |
+| WordPress Roles | `wpojs_manual_roles` | WP roles that grant OJS access without a WooCommerce purchase (e.g. committee members). Roles are listed in two groups: custom/membership roles and standard WordPress roles. Note that WC Memberships' Role Handler add-on is deactivated on live, so a membership does **not** imply a role — tick the plan, not the role. |
+| OJS Type | `wpojs_default_type_id` | The OJS subscription type assigned to every member granted access by a plan or a role. Also used as fallback when no product-specific type mapping is found. |
 | Journal Name | `wpojs_journal_name` | Shown in the My Account dashboard widget (e.g. "Journal of Example Studies"). |
 
 > **This is your main monitoring tool.** Check the sync log regularly -- if things are working, you'll see a stream of green "success" entries. Red entries need attention.

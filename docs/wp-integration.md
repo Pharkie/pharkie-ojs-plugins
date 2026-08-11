@@ -43,7 +43,23 @@ Member signs up and pays
 
 ### Why this matters for the OJS sync
 
-The sync only uses **WC Subscriptions**. It fires status events (`active`, `expired`, `cancelled`, `on-hold`) that indicate whether someone should have journal access. Everything downstream (Memberships assigning roles, UM rendering profiles) is irrelevant to the sync.
+The sync uses **WC Subscriptions** and **WC Memberships**. Subscriptions fire status events (`active`, `expired`, `cancelled`, `on-hold`) that indicate whether someone should have journal access, and cover everyone who pays. Memberships cover everyone who doesn't.
+
+**🛑 The chain above is not always a chain.** It reads as if a membership always sits downstream of a subscription, and that assumption was wired into the sync until 2026-08-11: it watched WCS only. But a membership can exist with no subscription behind it at all, and for the SEA's oldest and most senior members that is the normal case:
+
+| | |
+|---|---|
+| Life members | active `LIFE MEMBER (no directory listing) free access`, **no end date**, **no subscription** — 6 people |
+| Honorary / committee grants | active `EXCO MEMBER …` assigned by hand |
+| Anyone the office comps | an active plan while the subscription is cancelled or expired |
+
+On the live site that was **8 active members with no subscription**, none of whom had ever reached OJS. Two of them (Ernesto Spinelli and Mike Harding) reported they could not read the journal; the sync log shows them resetting their WP password over and over, each attempt logging "User not found on OJS — nothing to update".
+
+The WP role is not a usable fallback either. WC Memberships *can* assign a role on activation, but the **Role Handler add-on is deactivated on live**, so it doesn't: of the six life members, two are plain `customer`, three are `um_custom_role_1`, one is `um_custom_role_7`. Nothing about the role says "life member".
+
+So the sync resolves access from three sources, in priority order — a WCS subscription (its product can map to a specific OJS type), a WC Memberships plan, then a manual WP role. The first one present sets the type and dates; **if any of them is non-expiring the whole grant is non-expiring**, which is what a life membership is. Which plans and roles count is configured under Settings → OJS Sync → *Access Without a Purchase*; a plan grants nothing until it is ticked.
+
+Ultimate Member remains irrelevant to the sync — it renders profiles and drives the directories, nothing to do with journal access.
 
 ### Why this is fragile
 
@@ -64,7 +80,7 @@ Six plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with in
 
 ## Hooks used for OJS sync
 
-**WooCommerce Subscriptions hooks only.** These fire on subscription lifecycle events and are the sole trigger for OJS sync. UM role change hooks were considered as a secondary safety net but dropped — they double-fire alongside WCS hooks, fire for unrelated role changes, and add complexity. The daily reconciliation job catches any edge cases WCS hooks miss (e.g. admin manual role changes).
+**WooCommerce Subscriptions and WooCommerce Memberships lifecycle hooks.** UM role change hooks were considered as a secondary safety net but dropped — they double-fire alongside WCS hooks, fire for unrelated role changes, and add complexity. The daily reconciliation job catches any edge cases the hooks miss (e.g. admin manual role changes).
 
 ```php
 // Subscription activated (new signup or reactivation)
@@ -82,6 +98,25 @@ add_action('woocommerce_subscription_status_cancelled', 'wpojs_queue_expire');
 // Subscription on hold (e.g. payment failed)
 // → Queue: expire OJS subscription (immediate, no grace period)
 add_action('woocommerce_subscription_status_on-hold', 'wpojs_queue_expire');
+```
+
+```php
+// Membership granted programmatically (an order, an importer, WP-CLI) or
+// saved in wp-admin. Deliberately mutually exclusive in WC Memberships, so
+// both are needed. Args: ($plan|false, ['user_id', 'user_membership_id', 'is_update'])
+// → Queue: activate or expire, from what the member now holds
+add_action('wc_memberships_user_membership_created', 'wpojs_sync_membership_holder', 10, 2);
+add_action('wc_memberships_user_membership_saved',   'wpojs_sync_membership_holder', 10, 2);
+
+// Membership status change (activated, cancelled, expired, paused).
+// Fires from transition_post_status, so the new status is already saved —
+// no exclusion argument needed, unlike the WCS path.
+// Args: ($user_membership, $old_status, $new_status) — statuses have no wcm- prefix
+add_action('wc_memberships_user_membership_status_changed', 'wpojs_sync_membership_holder', 10, 3);
+
+// Membership deleted. Fires BEFORE the post row goes, so an inline re-check
+// would still see it → hand to the deferred 5s check instead.
+add_action('wc_memberships_user_membership_deleted', 'wpojs_queue_deferred_expiry_check');
 ```
 
 **Important: all hooks queue a sync intent, they do not make inline HTTP calls.** Action Scheduler handles the actual OJS API calls asynchronously. This prevents OJS downtime from blocking WP checkout.
