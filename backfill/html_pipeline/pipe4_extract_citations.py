@@ -563,6 +563,12 @@ def write_back_matter_to_jats(jats_path: Path, extracted: dict,
 
     # Write provenance
     prov = extracted['provenance'] if extracted['provenance'] else existing_prov
+    # The same paragraph can be collected twice — once by the body-wide scan and
+    # again as an item of a trailing section — and the join below then writes the
+    # sentence out twice ("A version of this paper was given at... A version of
+    # this paper was given at..."). Seen in 12.1 "Practising Phenomenology".
+    # Genuinely distinct provenance notes are kept and still joined.
+    prov = list(dict.fromkeys(prov))
     if prov:
         prov_text = prov[0]
         if len(prov) > 1:
