@@ -342,9 +342,12 @@ next word stuck to it (37.2, the Kočiūnas obituary).
 
 ## 5. Import to dev and check it
 
-> **Nothing else may be touching the box.** It is 2 vCPUs and 3.8 GB running
-> thirteen containers. An import running alongside a CI deploy exhausted it and
-> took every site down, sshd included (issues log #39). Before you start:
+> **Nothing else may be touching the box.** It is 2 vCPUs and 3.8 GB, plus a 3 GB
+> swapfile added 2026-08-04, running thirteen containers. An import running
+> alongside a CI deploy exhausted it and took every site down, sshd included
+> (issues log #39). **The swapfile did not repeal this rule** — it stopped the
+> hard freezes, but the constraint that bit was CPU: both vCPUs pinned at 200%
+> with near-zero disk I/O, which no amount of swap helps. Before you start:
 > `gh run list --limit 1` in both repos, and don't push while an import runs.
 
 

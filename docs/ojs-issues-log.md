@@ -623,6 +623,11 @@ The box is **2 vCPUs / 3.8 GB** running thirteen containers (OJS + MariaDB, WP +
 MariaDB, Harbour + Postgres, Outline + Postgres + Redis, Umami + Postgres,
 Caddy, Adminer). It has no headroom for two builds' worth of work.
 
+*(Since this incident, a 3 GB swapfile was added — 2026-08-04, fstab-persisted,
+swappiness 10 — and it ended the hard freezes. It does not change the conclusion
+above: what pinned the box here was CPU, both vCPUs at 200% with near-zero disk
+I/O, and swap does not buy CPU.)*
+
 - **Recovery:** confirmed via `hcloud server metrics` that CPU was flat and disk
   I/O ~0, so nothing was mid-write, then `hcloud server reboot` (graceful ACPI,
   *not* `reset` — a hard power cycle with MariaDB and Postgres running is how a
