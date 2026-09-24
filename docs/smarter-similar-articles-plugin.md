@@ -8,7 +8,7 @@ The stock plugin finds related articles by looking for keyword overlap between t
 
 For any OJS journal, this plugin is better on three axes:
 
-1. **Faster.** Similarity is computed once offline on a schedule (usually nightly) and cached. The article page just looks up the pre-computed neighbours, so load time stays constant regardless of how big the journal grows.
+1. **Faster.** Similarity is computed once offline on a schedule (weekly here, plus a manual run after an issue is published) and cached. The article page just looks up the pre-computed neighbours, so load time stays constant regardless of how big the journal grows.
 2. **Smarter.** The stock plugin only sees exact word overlap. This one combines two signals: shared terminology (catches proper nouns, rare keywords, specific phrases) and how closely two articles match in meaning (catches papers about the same concept even when the vocabulary differs). The sidebar finds conceptually close papers, not just ones that happen to share common words.
 3. **Tunable.** Score thresholds, blend weights, section rules, and the underlying AI model are all constants in a single Python file. You can trade precision for breadth, retune for your corpus, or swap the model without touching live.
 
@@ -79,7 +79,7 @@ Enable it in OJS admin: **Website > Plugins > Generic > Smarter Similar Articles
 
 `scripts/ojs/build_smarter_similar_articles.py` connects to the OJS database, reads every published submission's title + abstract + curated keywords + section, computes both TF-IDF and embedding similarity, blends them as `0.4 × TF-IDF + 0.6 × embedding`, takes the top 5 neighbours, and writes the result to `smarter_similar_articles`.
 
-Runtime on ~1400 submissions: ~2.5 min (TF-IDF ~1s, embedding compute ~115s on CPU, model load ~20s on first run). Subsequent runs with the model cached to `~/.cache/huggingface`: same — the model is loaded into memory each run, there's no persistent server. If you run nightly this is fine; if you run on every article publish, consider either a long-lived worker or switching `EMBED_MODEL` to MiniLM-L6-v2 for faster inference.
+Runtime on ~1400 submissions: ~2.5 min (TF-IDF ~1s, embedding compute ~115s on CPU, model load ~20s on first run). Subsequent runs with the model cached to `~/.cache/huggingface`: same — the model is loaded into memory each run, there's no persistent server. On a schedule this is fine; if you run on every article publish, consider either a long-lived worker or switching `EMBED_MODEL` to MiniLM-L6-v2 for faster inference.
 
 ### Configure targets
 
@@ -122,9 +122,11 @@ sudo python3 scripts/ojs/build_smarter_similar_articles.py --dry-run
 
 A full rebuild on ~1400 submissions takes ~2 s (TF-IDF) + ~2 min (embedding compute, dominated by model load). Scales linearly; `numpy` handles a few-thousand-document similarity matrix in memory without issue.
 
-### Schedule nightly rebuild
+### Schedule the rebuild
 
-Put it in cron or a CI scheduled workflow. Below is a complete, copy-pasteable GitHub Actions workflow that mirrors what this repo runs against its own production (adapted here with generic names — substitute your host, user, and paths).
+Put it in cron or a CI scheduled workflow. This journal rebuilds **weekly**, Mondays 04:15 UTC, and by hand (`workflow_dispatch`) after an issue is published. Similarities change only when articles do, and a run costs about 7 Actions minutes. Nightly works just as well if minutes are no concern; if you change the interval, change the staleness limits in `monitor-deep.sh` to match (see [Monitoring](#monitoring)).
+
+Below is a complete, copy-pasteable GitHub Actions workflow that mirrors what this repo runs against its own production (adapted here with generic names — substitute your host, user, and paths).
 
 **`.github/workflows/rebuild-smarter-similar-articles.yml`** (in your deployment-ops repo — does NOT need to live alongside the plugin code; it just needs to `checkout` this public repo for the builder script):
 
@@ -133,7 +135,7 @@ name: Rebuild smarter_similar_articles cache
 
 on:
   schedule:
-    - cron: '15 4 * * *'   # 04:15 UTC
+    - cron: '15 4 * * 1'   # Mondays 04:15 UTC
   workflow_dispatch:
 
 jobs:
@@ -264,8 +266,8 @@ The render path handles missing submission IDs gracefully (silently drops them),
 
 `scripts/monitoring/monitor-deep.sh` runs these checks (added for this plugin):
 
-- **Cache coverage**: `SELECT COUNT(DISTINCT submission_id) FROM smarter_similar_articles` vs published submissions. Fails if <50%, warns if <80%. A healthy state is ~93-95% (some articles legitimately have no match above `MIN_SCORE`).
-- **Cache staleness**: oldest `computed_at` in the table. Fails if >7 days, warns if >48h. Catches silent failure of the nightly rebuild.
+- **Cache coverage**: `SELECT COUNT(DISTINCT submission_id) FROM smarter_similar_articles` vs published submissions. Fails if <85%, warns if <93%. A healthy state is ~93-95% (some articles legitimately have no match above `MIN_SCORE`).
+- **Cache staleness**: oldest `computed_at` in the table. Warns above 150 hours, fails above 174 hours: the weekly rebuild (168 h) plus a day's grace. The daily check reads about 2 h on a Monday and 146 h on a Sunday, so one missed Monday run warns and it fails the day after. Catches silent failure of the weekly rebuild.
 
 Both checks skip silently on targets that don't have the `smarter_similar_articles` table (i.e. the plugin isn't installed there).
 
@@ -280,7 +282,7 @@ Both checks skip silently on targets that don't have the `smarter_similar_articl
 
 **Sidebar absent on a specific article.**
 
-Expected on ~6% of articles at the default `MIN_SCORE=0.30`: if the article has no neighbour scoring above the hybrid floor, it has no sidebar. The plugin deliberately renders nothing rather than showing filler. Lower `MIN_SCORE` if you'd rather see weaker matches.
+Expected on ~6% of articles at the default `MIN_SCORE=0.40`: if the article has no neighbour scoring above the hybrid floor, it has no sidebar. The plugin deliberately renders nothing rather than showing filler. Lower `MIN_SCORE` if you'd rather see weaker matches.
 
 **Neighbours look unrelated.**
 
@@ -300,11 +302,11 @@ Raise `KEYWORD_WEIGHT` / `TITLE_WEIGHT` if proper-noun matches should carry more
 |  | Stock `recommendBySimilarity` | `smarterSimilarArticles` (this plugin) |
 |---|---|---|
 | Where similarity is computed | On every article view, in SQL | Once, in Python, offline |
-| Algorithm | Raw term presence across submission_search_objects + title LIKE + author LIKE | Hybrid: 0.4 × TF-IDF cosine + 0.6 × MiniLM embedding cosine |
-| Semantic matching | No — lexical tokens only | Partial — MiniLM handles cases where two papers use different words for the same concept |
+| Algorithm | Raw term presence across submission_search_objects + title LIKE + author LIKE | Hybrid: 0.4 × TF-IDF cosine + 0.6 × bge-base embedding cosine |
+| Semantic matching | No — lexical tokens only | Partial — the embedding model handles cases where two papers use different words for the same concept |
 | Query at render time | Multi-JOIN + LIKE `%...%` full-table scans | Primary-key lookup against `smarter_similar_articles` |
 | Corpus-skew behaviour | Collapses (60-2000s per query) | Unaffected — TF-IDF's `max_df` filters global tokens; embedding scores don't depend on corpus skew |
-| Freshness on publish | Immediate | Up to nightly-rebuild interval (typically 24h) |
+| Freshness on publish | Immediate | Up to the rebuild interval (a week here), unless rebuilt by hand after publishing |
 | Plugin settings UI | Yes (number of recommendations) | No — tune via `build_smarter_similar_articles.py` constants |
 | Dependencies on build host | None (everything runs in OJS container) | Python + `scikit-learn` + `sentence-transformers` (~1 GB torch) |
 | Dependencies on OJS server | Core OJS | Core OJS only — build host can be anywhere with DB access |
