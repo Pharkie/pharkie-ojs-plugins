@@ -422,6 +422,9 @@ with the new-issue differences:
 8. `pipe9c_content_filtered.py --target live --confirm`
 9. `scripts/monitoring/maintenance-window.sh --resume`, then
    `scripts/monitoring/content-check.sh --host=sea-live`.
+10. Rebuild the related-articles cache, or the new articles have no "Related
+    articles" sidebar until the weekly run next Monday:
+    `gh workflow run rebuild-smarter-similar-articles.yml -R Pharkie/sea-ojs-private`
 
 ## 8. Deposit the DOIs at Crossref
 

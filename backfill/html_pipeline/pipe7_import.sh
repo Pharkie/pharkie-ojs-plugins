@@ -157,8 +157,8 @@ if [ "$CLEAN" = "1" ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; th
   echo
   # NB: smarterSimilarArticles cache cleanup happens AFTER successful reimport
   # (further down) — not here. If the reimport crashes mid-way, readers
-  # on live still get the previous day's sidebar (stale but not blank)
-  # rather than blank until the next nightly rebuild.
+  # on live still get the previous sidebar (stale but not blank)
+  # rather than blank until the next scheduled rebuild.
 fi
 
 FAILED=0
@@ -374,7 +374,7 @@ fi
 # --- Clear smarterSimilarArticles cache after successful --wipe-articles reimport ---
 # Done AFTER the import succeeds, not before: if reimport crashes mid-way,
 # readers still get the previous (slightly stale) cache rather than blank
-# sidebars until the next nightly rebuild fixes it.
+# sidebars until the next scheduled rebuild fixes it.
 # Table may not exist (installs without the smarterSimilarArticles plugin) — ignore
 # "no such table" errors.
 if [ "$CLEAN" = "1" ] && [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ] && [ -n "$OJS_DB_PASSWORD" ]; then

@@ -287,7 +287,7 @@ fi
 
 # smarter_similar_articles cache (written by scripts/ojs/build_smarter_similar_articles.py).
 # Two health checks: coverage (build actually wrote rows) and staleness
-# (nightly rebuild is running). Skipped silently if the table doesn't exist
+# (scheduled rebuild is running). Skipped silently if the table doesn't exist
 # yet (i.e. smarterSimilarArticles plugin hasn't been installed on this target).
 SIMILAR_EXISTS=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SHOW TABLES LIKE \\\"smarter_similar_articles\\\"\"'" 2>/dev/null | tr -d '[:space:]')
 if [ -n "$SIMILAR_EXISTS" ]; then
@@ -298,7 +298,7 @@ if [ -n "$SIMILAR_EXISTS" ]; then
     # Healthy state is ~93-95% (remaining ~5% legitimately have no match
     # above MIN_SCORE — editorials, tribute pieces, outliers). Tightened from
     # the initial 50/80 to catch real-world failures earlier: 93% warn catches
-    # a single missed nightly on a typical day; 85% fail catches genuine
+    # a single missed rebuild on a typical day; 85% fail catches genuine
     # rebuild failure before readers notice.
     if [ "$SIMILAR_PCT" -lt 85 ]; then
       fail "smarter_similar_articles cache low: $SIMILAR_CACHED/$PUBLISHED articles (${SIMILAR_PCT}%)" \
@@ -309,16 +309,16 @@ if [ -n "$SIMILAR_EXISTS" ]; then
       pass "smarter_similar_articles cache: $SIMILAR_CACHED/$PUBLISHED articles (${SIMILAR_PCT}%)"
     fi
   fi
-  # Staleness: oldest computed_at across all rows. Nightly rebuild runs at
-  # 04:15 UTC, so a typical morning deep-check reads an age of ~2h. Thresholds
-  # tightened — one missed nightly (24-48h old) warns; two missed (>48h) fails.
-  # Catches silent rebuild failures within one day, not seven.
+  # Staleness: oldest computed_at across all rows. The rebuild is weekly
+  # (Mondays 04:15 UTC, sea-ojs-private), so this 06:30 check reads ~2h on a
+  # Monday and ~146h on a Sunday. Limits are 168h plus a day's grace: one
+  # missed Monday run warns, and it fails the day after.
   SIMILAR_AGE_H=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT IFNULL(TIMESTAMPDIFF(HOUR, MIN(computed_at), NOW()), -1) FROM smarter_similar_articles\"'" 2>/dev/null | tr -d '[:space:]')
   if [ -n "$SIMILAR_AGE_H" ] && [ "$SIMILAR_AGE_H" -ge 0 ] 2>/dev/null; then
-    if [ "$SIMILAR_AGE_H" -gt 48 ]; then
-      fail "smarter_similar_articles cache is ${SIMILAR_AGE_H}h old (>48h — nightly rebuild failing)"
-    elif [ "$SIMILAR_AGE_H" -gt 28 ]; then
-      warn "smarter_similar_articles cache is ${SIMILAR_AGE_H}h old (>28h — one missed nightly)"
+    if [ "$SIMILAR_AGE_H" -gt 174 ]; then   # weekly (168h) + a day's grace
+      fail "smarter_similar_articles cache is ${SIMILAR_AGE_H}h old (>174h — weekly rebuild failing)"
+    elif [ "$SIMILAR_AGE_H" -gt 150 ]; then # past Sunday's ~146h: Monday's run missed
+      warn "smarter_similar_articles cache is ${SIMILAR_AGE_H}h old (>150h — one missed weekly rebuild)"
     else
       pass "smarter_similar_articles cache age: ${SIMILAR_AGE_H}h"
     fi

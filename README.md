@@ -44,7 +44,7 @@ Drop-in replacement for the stock [Similar Articles](https://github.com/pkp/ojs/
 
 - Hybrid scoring: TF-IDF (sklearn, auto-drops corpus-wide tokens) + sentence embeddings (`bge-base-en-v1.5`, catches semantic neighbours that share no lexical tokens)
 - Render-only PHP plugin; all analysis happens offline via a Python builder (`scripts/ojs/build_smarter_similar_articles.py`)
-- Cache refresh via nightly scheduled GitHub Actions workflow (or whatever scheduler you prefer)
+- Cache refresh via a scheduled GitHub Actions workflow (weekly here, plus a manual run after an issue is published) or whatever scheduler you prefer
 - Book-review section isolation, duplicate-import filter, score band for silencing weak matches
 - Render-time cost: reduced from a heavy live SQL join taking many seconds to a single indexed SELECT, sub-millisecond
 

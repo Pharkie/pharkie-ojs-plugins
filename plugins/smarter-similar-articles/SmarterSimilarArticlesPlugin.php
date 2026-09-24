@@ -62,7 +62,8 @@ class SmarterSimilarArticlesPlugin extends GenericPlugin
      *
      * Renders nothing on cache miss — preferred over a live-query fallback
      * because the whole point of this plugin is to eliminate live queries.
-     * The nightly rebuild and Publication::publish hook keep the cache warm.
+     * The weekly rebuild, and a manual run after an issue is published, keep
+     * the cache warm. Nothing recomputes it on publish.
      */
     public function renderFooter(string $hookName, array $params): bool
     {
