@@ -36,6 +36,26 @@ define('WPOJS_API_KEY', 'your-shared-secret-here');
 
 The key must match the `WPOJS_API_KEY_SECRET` environment variable on the OJS server. See the [OJS plugin guide](wpojs-subscription-api-plugin.md) for server-side configuration.
 
+### Fence
+
+`WPOJS_FENCE_EMAIL_PATTERN` (a PCRE) limits which OJS accounts this install may **write** to. When it is defined, every write — find-or-create, subscription, expire, email change, password change, delete — is refused unless the account's email matches. Reads (ping, lookups, the reconciliation's status checks) are unaffected.
+
+```php
+define('WPOJS_FENCE_EMAIL_PATTERN', '/^[^@\s]+@test\.invalid\z/i');
+```
+
+It exists for the WordPress test rig on the box (`wp-staging`), which is wired to the **live** journal and holds a March copy of real members, each linked to their real journal account. Without it, any change made to a member on the rig — a lapse, an email edit, a deletion, an overdue cron — reaches that member's live account within a day. The rig's `wordpress/config/environments/staging.php` sets the pattern above, hard-coded so no env var can lift it. `.invalid` is a reserved TLD, so no real member can be inside it; the deep monitor's `monitor-<epoch>@test.invalid` and the smoke test's `smoke-test-<epoch>@test.invalid` are. **Never define it on the real WordPress.**
+
+How it holds:
+
+- It is enforced in `WPOJS_API_Client`, the only code that talks to OJS, so a code path that forgets to check is refused rather than let through.
+- An id-keyed write (everything except find-or-create) needs OJS itself to have said, in the same process, that the id belongs to a matching email. The WordPress side is not trusted for that: a rig user's email can be edited to a test address while its cached `_wpojs_user_id` still points at a real member.
+- A defined but empty or invalid pattern admits nothing.
+- The sync handlers check first and log a refusal as status `fenced` in the sync log — no retry, no admin alert. Reconciliation still checks every member against OJS but queues nothing outside the fence, and reports how many changes it withheld.
+- `wp ojs-sync fence` proves it: it attempts every write against an account outside the fence with all HTTP blocked, checks that a real linked account cannot be vouched for, and fails if anything got as far as a request. The deep monitor runs it daily.
+
+Tests: `php plugins/wpojs-sync/tests/fence-test.php` (no WordPress or PHPUnit needed).
+
 ## Sub-docs
 
 The sync story spans WordPress admin, WP-CLI, deployment, and the OJS API — split by aspect:

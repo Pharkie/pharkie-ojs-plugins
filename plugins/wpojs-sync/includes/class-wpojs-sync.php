@@ -57,6 +57,10 @@ class WPOJS_Sync {
 		}
 
 		$email      = strtolower( $user->user_email );
+		if ( ! $this->fence_permits( $wp_user_id, $email, 'activate' ) ) {
+			return;
+		}
+
 		// Step 1: Resolve subscription data BEFORE creating OJS user.
 		// Avoids orphaned OJS accounts when type mapping is misconfigured.
 		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );
@@ -144,6 +148,10 @@ class WPOJS_Sync {
 			return;
 		}
 
+		if ( ! $this->fence_permits( $wp_user_id, $email, 'expire', $ojs_user_id ) ) {
+			return;
+		}
+
 		$result = $this->api->expire_subscription_by_user( $ojs_user_id );
 
 		// 404 = no subscription to expire -- that's fine.
@@ -196,6 +204,12 @@ class WPOJS_Sync {
 		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $old_email );
 		if ( ! $ojs_user_id ) {
 			$this->logger->log( $wp_user_id, $old_email, 'email_change', 'success', 0, 'User not found on OJS -- nothing to update', 1, $this->api->get_last_request_id() );
+			return;
+		}
+
+		// Both ends: the account being renamed, and the address it would get.
+		if ( ! $this->fence_permits( $wp_user_id, $old_email, 'email_change', $ojs_user_id )
+			|| ! $this->fence_permits( $wp_user_id, $new_email, 'email_change' ) ) {
 			return;
 		}
 
@@ -256,6 +270,12 @@ class WPOJS_Sync {
 			return;
 		}
 
+		if ( ! $this->fence_permits( $wp_user_id, $email, 'delete_user', $ojs_user_id ) ) {
+			// The WP user is already gone: its log entries are still erased.
+			$this->logger->anonymize_user_logs( $wp_user_id, $email );
+			return;
+		}
+
 		$result = $this->api->delete_user( $ojs_user_id );
 
 		if ( ! $result['success'] ) {
@@ -301,6 +321,10 @@ class WPOJS_Sync {
 		$ojs_user_id = $this->resolve_ojs_user_id( $wp_user_id, $email );
 		if ( ! $ojs_user_id ) {
 			$this->logger->log( $wp_user_id, $email, 'password_change', 'success', 0, 'User not found on OJS -- nothing to update', 1, $this->api->get_last_request_id() );
+			return;
+		}
+
+		if ( ! $this->fence_permits( $wp_user_id, $email, 'password_change', $ojs_user_id ) ) {
 			return;
 		}
 
@@ -363,6 +387,35 @@ class WPOJS_Sync {
 		}
 
 		return $active;
+	}
+
+	/**
+	 * On a fenced install (WPOJS_FENCE_EMAIL_PATTERN), may this write go ahead?
+	 *
+	 * Refuses and logs a write to an account outside the fence, so it shows in
+	 * the sync log as 'fenced' instead of reaching OJS. With $ojs_user_id, OJS
+	 * must also confirm that account is this email (WPOJS_API_Client::vouch()).
+	 * The client refuses such writes anyway; this is what makes the refusal
+	 * quiet (no retry, no admin alert) and visible. True, with no HTTP, on an
+	 * unfenced install.
+	 *
+	 * @param int    $wp_user_id
+	 * @param string $email
+	 * @param string $action      Log action name.
+	 * @param int    $ojs_user_id Target account, for id-keyed writes.
+	 * @return bool
+	 */
+	private function fence_permits( $wp_user_id, $email, $action, $ojs_user_id = 0 ) {
+		if ( ! $this->api->is_fenced() ) {
+			return true;
+		}
+		$ok = $ojs_user_id
+			? $this->api->vouch( $ojs_user_id, $email )
+			: $this->api->fence_admits_email( $email );
+		if ( ! $ok ) {
+			$this->logger->log( $wp_user_id, $email, $action, 'fenced', 0, 'Outside WPOJS_FENCE_EMAIL_PATTERN -- not sent to OJS', 1, '' );
+		}
+		return $ok;
 	}
 
 	/**
@@ -448,6 +501,15 @@ class WPOJS_Sync {
 		$user = get_userdata( $wp_user_id );
 		if ( ! $user ) {
 			return array( 'success' => false, 'code' => 0, 'message' => 'WP user not found.' );
+		}
+
+		if ( ! $this->api->fence_admits_email( strtolower( $user->user_email ) ) ) {
+			return array(
+				'success' => false,
+				'code'    => 0,
+				'fenced'  => true,
+				'message' => 'Fenced: outside WPOJS_FENCE_EMAIL_PATTERN, so not sent to OJS.',
+			);
 		}
 
 		$sub_data = $this->resolver->resolve_subscription_data( $wp_user_id );

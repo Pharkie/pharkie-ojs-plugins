@@ -50,6 +50,7 @@ class WPOJS_Cron {
 		$queued  = 0;
 		$expired = 0;
 		$errors  = 0;
+		$fenced  = 0; // Drift found outside the fence: checked, never queued.
 
 		// Build email→user_id map for all active members.
 		$email_to_user_id = array();
@@ -77,6 +78,10 @@ class WPOJS_Cron {
 				$has_active = isset( $statuses[ $email ]['active'] ) && $statuses[ $email ]['active'];
 
 				if ( ! $has_active ) {
+					if ( ! $this->api->fence_admits_email( $email ) ) {
+						$fenced++;
+						continue;
+					}
 					$args = array( array( 'wp_user_id' => $wp_user_id ) );
 					if ( ! as_has_scheduled_action( 'wpojs_sync_activate', $args, 'wpojs-sync' ) ) {
 						as_schedule_single_action( time(), 'wpojs_sync_activate', $args, 'wpojs-sync' );
@@ -116,6 +121,11 @@ class WPOJS_Cron {
 		// `_wpojs_user_id` after lapsing, so without this the same people are
 		// re-expired every day against a subscription that is already expired.
 		foreach ( $this->sync->filter_active_on_ojs( $stale ) as $uid ) {
+			$user = get_userdata( $uid );
+			if ( ! $this->api->fence_admits_email( $user ? $user->user_email : '' ) ) {
+				$fenced++;
+				continue;
+			}
 			$args = array( array( 'wp_user_id' => $uid ) );
 			if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $args, 'wpojs-sync' ) ) {
 				as_schedule_single_action( time(), 'wpojs_sync_expire', $args, 'wpojs-sync' );
@@ -136,7 +146,7 @@ class WPOJS_Cron {
 				$queued,
 				$expired,
 				$errors
-			)
+			) . ( $this->api->is_fenced() ? sprintf( ', %d withheld by the fence', $fenced ) : '' )
 		);
 
 		if ( $errors > 0 ) {

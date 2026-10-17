@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **Fence: an install can be limited to writing only test accounts on OJS** (`WPOJS_FENCE_EMAIL_PATTERN`). The WordPress test rig's sync talks to the live journal and holds a March copy of 684 real members linked to their live journal accounts; the daily deep monitor reconciles all of them, so a lapse or edit on the rig could have changed a real member's journal access. The rig is now fenced to `@test.invalid` addresses: reads and the monitor's own round-trip are unaffected, every other write is refused in the API client before a request is made, and `wp ojs-sync fence` proves it (run daily by the deep monitor). Unfenced installs behave exactly as before. See `docs/wpojs-sync-plugin.md#fence`.
+
 ### Bug fixes
 
 - **Members who never buy anything could not reach the journal.** Access was resolved from WooCommerce Subscriptions and WP roles only, so the six life members — an active `LIFE MEMBER` plan, no end date, no subscription, and no role saying so (WC Memberships' Role Handler add-on is off on live) — had no OJS account at all. Eight active members were affected. The resolver now has a third path, WooCommerce Memberships plans, with its own lifecycle hooks; a plan with no end date produces a non-expiring OJS subscription. New setting: Settings → OJS Sync → *Access Without a Purchase* → Membership Plans (`wpojs_member_plans`); a plan grants nothing until it is ticked.

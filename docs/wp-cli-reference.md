@@ -80,6 +80,7 @@ Displays:
 - Members synced to OJS count
 - Failures in last 24 hours
 - Cron schedule (next reconciliation, daily digest, log cleanup)
+- Whether writes to OJS are [fenced](wpojs-sync-plugin.md#fence), first line
 
 </td><td width="45%">
 
@@ -97,10 +98,20 @@ Run reconciliation on demand (same logic as the daily cron).
 wp ojs-sync reconcile
 ```
 
-Batch-queries OJS for subscription status of all active WP members, queues activate/expire actions for any drift found.
+Batch-queries OJS for subscription status of all active WP members, queues activate/expire actions for any drift found. On a [fenced](wpojs-sync-plugin.md#fence) install it queues nothing outside the fence and prints how many changes it withheld.
 
 </td><td width="45%">
 
 <img src="images/cli-reconcile.png" alt="Terminal output of wp ojs-sync reconcile showing drift detection and queued actions">
 
 </td></tr></table>
+
+## fence
+
+Shows whether this install's writes to OJS are [fenced](wpojs-sync-plugin.md#fence), and proves the fence holds.
+
+```bash
+wp ojs-sync fence
+```
+
+Unfenced (the real WordPress): prints `Fence: OFF` and does nothing else. Fenced (the test rig): attempts every write the plugin can make against an account outside the fence, with all outbound HTTP blocked while it does, checks that a real linked account cannot be vouched for, and counts the linked journal accounts outside the fence. Ends `Success: Fence holds: …` or fails with `Fence LEAKS: …`. Nothing can reach OJS either way. The deep monitor runs it daily (`monitor-deep.sh`, D4).
