@@ -39,6 +39,16 @@ They are kept anyway, and should be, because the integration they test is still
 in production: the live WP on Krystal runs the sync until Harbour cut-over.
 Deleting the rig would leave that with nowhere to rehearse.
 
+**Its sync is fenced (2026-10-17).** The rig's wpojs-sync talks to the LIVE
+journal — `http://ojs:80` is the public journal's own container — and its 684
+members are a March copy of real people, each linked to their live journal
+account. So `wordpress/config/environments/staging.php` defines
+`WPOJS_FENCE_EMAIL_PATTERN`: the rig may write to the journal only for
+`@test.invalid` accounts (the deep monitor's and the smoke test's). Reads are
+unaffected. It applies whenever `WP_ENV=staging`. `wp ojs-sync fence` proves it holds; the deep monitor runs it daily.
+Never lift it to test something — make a `…@test.invalid` user instead. See
+[`docs/wpojs-sync-plugin.md#fence`](docs/wpojs-sync-plugin.md#fence).
+
 So: keep it working, don't invest in it, and don't confuse it with live.
 **Live WordPress is on Krystal, reached as `sea-wp-live`** — never the box. Once
 cut-over completes and the sync is retired, the rig and its smoke-test sections

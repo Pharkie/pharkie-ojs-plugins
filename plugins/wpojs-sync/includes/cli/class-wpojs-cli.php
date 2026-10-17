@@ -38,6 +38,7 @@ class WPOJS_CLI {
 		WP_CLI::add_command( 'ojs-sync reconcile', array( $instance, 'reconcile' ) );
 		WP_CLI::add_command( 'ojs-sync status', array( $instance, 'status' ) );
 		WP_CLI::add_command( 'ojs-sync test-connection', array( $instance, 'test_connection' ) );
+		WP_CLI::add_command( 'ojs-sync fence', array( $instance, 'fence' ) );
 	}
 
 	/**
@@ -240,7 +241,7 @@ class WPOJS_CLI {
 					WP_CLI::log( '  ' . $result['message'] );
 				}
 			} else {
-				if ( strpos( $result['message'], 'not an active member' ) !== false ) {
+				if ( ! empty( $result['fenced'] ) || strpos( $result['message'], 'not an active member' ) !== false ) {
 					$skipped++;
 				} else {
 					$failed++;
@@ -362,6 +363,7 @@ class WPOJS_CLI {
 		$queued  = 0;
 		$errors  = 0;
 		$ok      = 0;
+		$fenced  = 0; // Drift found outside the fence: checked, never queued.
 
 		// Build email→user_id map.
 		$email_to_user_id = array();
@@ -396,7 +398,9 @@ class WPOJS_CLI {
 				$wp_user_id = $email_to_user_id[ $email ];
 				$has_active = isset( $statuses[ $email ]['active'] ) && $statuses[ $email ]['active'];
 
-				if ( ! $has_active ) {
+				if ( ! $has_active && ! $this->api->fence_admits_email( $email ) ) {
+					$fenced++;
+				} elseif ( ! $has_active ) {
 					$as_args = array( array( 'wp_user_id' => $wp_user_id ) );
 					if ( ! as_has_scheduled_action( 'wpojs_sync_activate', $as_args, 'wpojs-sync' ) ) {
 						as_schedule_single_action( time(), 'wpojs_sync_activate', $as_args, 'wpojs-sync' );
@@ -439,12 +443,16 @@ class WPOJS_CLI {
 		WP_CLI::log( sprintf( '  %d synced users are no longer members; %d still have OJS access.', count( $stale ), count( $still_in ) ) );
 
 		foreach ( $still_in as $uid ) {
+			$user = get_userdata( $uid );
+			if ( ! $this->api->fence_admits_email( $user ? $user->user_email : '' ) ) {
+				$fenced++;
+				continue;
+			}
 			$as_args = array( array( 'wp_user_id' => $uid ) );
 			if ( ! as_has_scheduled_action( 'wpojs_sync_expire', $as_args, 'wpojs-sync' ) ) {
 				as_schedule_single_action( time(), 'wpojs_sync_expire', $as_args, 'wpojs-sync' );
 			}
 			$expired++;
-			$user = get_userdata( $uid );
 			$email = $user ? $user->user_email : "user #$uid";
 			WP_CLI::log( sprintf( '  Queued expire for %s (no longer active member)', $email ) );
 		}
@@ -452,6 +460,9 @@ class WPOJS_CLI {
 		WP_CLI::log( '' );
 		WP_CLI::log( sprintf( 'Missing access: %d OK, %d queued for sync, %d API errors.', $ok, $queued, $errors ) );
 		WP_CLI::log( sprintf( 'Stale access:   %d queued for expiration.', $expired ) );
+		if ( $this->api->is_fenced() ) {
+			WP_CLI::log( sprintf( 'Fence:          %d change(s) withheld (outside WPOJS_FENCE_EMAIL_PATTERN).', $fenced ) );
+		}
 
 		if ( $queued > 0 || $expired > 0 ) {
 			WP_CLI::log( 'Queued actions will be processed by Action Scheduler automatically.' );
@@ -471,6 +482,11 @@ class WPOJS_CLI {
 	 * @param array $assoc_args
 	 */
 	public function status( $args, $assoc_args ) {
+		WP_CLI::log( $this->api->is_fenced()
+			? 'Fence: ON -- writes to OJS only for emails matching ' . WPOJS_FENCE_EMAIL_PATTERN
+			: 'Fence: OFF -- writes to OJS for every member' );
+		WP_CLI::log( '' );
+
 		// Action Scheduler stats.
 		WP_CLI::log( 'Action Scheduler Queue (wpojs-sync)' );
 		WP_CLI::log( '======================================' );
@@ -507,6 +523,121 @@ class WPOJS_CLI {
 		WP_CLI::log( sprintf( 'Reconciliation: %s', $cron['reconcile'] ? gmdate( 'Y-m-d H:i:s', $cron['reconcile'] ) : 'Not scheduled' ) );
 		WP_CLI::log( sprintf( 'Daily digest:   %s', $cron['digest'] ? gmdate( 'Y-m-d H:i:s', $cron['digest'] ) : 'Not scheduled' ) );
 		WP_CLI::log( sprintf( 'Log cleanup:    %s', $cron['log_cleanup'] ? gmdate( 'Y-m-d H:i:s', $cron['log_cleanup'] ) : 'Not scheduled' ) );
+	}
+
+	/**
+	 * Show whether writes to OJS are fenced, and prove the fence holds.
+	 *
+	 * On a fenced install (WPOJS_FENCE_EMAIL_PATTERN) this:
+	 *  - attempts every write the plugin can make, aimed outside the fence,
+	 *    and fails if any of them got as far as a request;
+	 *  - asks for a real linked account to be vouched for twice, with the
+	 *    member's own email and with a test address (the cached-id case: a
+	 *    rig user edited to a test address while still linked to a real
+	 *    account), and fails if either is;
+	 *  - counts the users here linked to a journal account outside the fence.
+	 * It cannot change anything on OJS: every request except a GET is blocked
+	 * while it runs, and the write probes target account id 0 and a reserved
+	 * .invalid address, which OJS would reject anyway. The GETs are the user
+	 * lookups vouching makes.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp ojs-sync fence
+	 *
+	 * @param array $args
+	 * @param array $assoc_args
+	 */
+	public function fence( $args, $assoc_args ) {
+		if ( ! $this->api->is_fenced() ) {
+			WP_CLI::log( 'Fence: OFF -- this install writes to OJS for every member.' );
+			return;
+		}
+		WP_CLI::log( 'Fence: ON -- writes to OJS only for emails matching ' . WPOJS_FENCE_EMAIL_PATTERN );
+
+		$probe_email = 'fence-probe@example.invalid';
+		if ( $this->api->fence_admits_email( $probe_email ) ) {
+			WP_CLI::error( "The fence admits $probe_email, so it cannot be probed. Narrow WPOJS_FENCE_EMAIL_PATTERN." );
+		}
+
+		$linked  = get_users( array(
+			'meta_key' => '_wpojs_user_id',
+			'fields'   => array( 'ID', 'user_email' ),
+		) );
+		$outside = array();
+		foreach ( $linked as $user ) {
+			if ( ! $this->api->fence_admits_email( $user->user_email ) ) {
+				$outside[] = $user;
+			}
+		}
+
+		$sent    = array();
+		$blocker = function ( $pre, $parsed_args, $url ) use ( &$sent ) {
+			$method = isset( $parsed_args['method'] ) ? strtoupper( $parsed_args['method'] ) : 'GET';
+			if ( $method === 'GET' ) {
+				return $pre; // Reads go through: vouching looks the account up.
+			}
+			$sent[] = $method . ' ' . $url;
+			return new WP_Error( 'wpojs_fence_probe', 'Blocked by wp ojs-sync fence' );
+		};
+		add_filter( 'pre_http_request', $blocker, PHP_INT_MAX, 3 );
+
+		$api    = $this->api;
+		$probes = array(
+			'find-or-create'  => function () use ( $api, $probe_email ) { return $api->find_or_create_user( $probe_email, 'Fence', 'Probe' ); },
+			'subscription'    => function () use ( $api ) { return $api->create_subscription( 0, 1, gmdate( 'Y-m-d' ) ); },
+			'expire'          => function () use ( $api ) { return $api->expire_subscription_by_user( 0 ); },
+			'email change'    => function () use ( $api, $probe_email ) { return $api->update_user_email( 0, $probe_email ); },
+			'password change' => function () use ( $api ) { return $api->update_user_password( 0, 'fence-probe' ); },
+			'delete'          => function () use ( $api ) { return $api->delete_user( 0 ); },
+		);
+		$leaks = array();
+		foreach ( $probes as $name => $probe ) {
+			$before = count( $sent );
+			$result = $probe();
+			$held   = ! empty( $result['fenced'] ) && count( $sent ) === $before;
+			WP_CLI::log( sprintf( '  %-16s %s', $name, $held ? 'refused, not sent' : 'NOT REFUSED' ) );
+			if ( ! $held ) {
+				$leaks[] = $name;
+			}
+		}
+
+		// The gate for every id-keyed write: a real member's account id must
+		// not be vouched for, with their own email or with a test address
+		// that OJS does not have on that account. The second makes vouch()
+		// ask OJS, so it fails if vouching ever trusts the WordPress side.
+		if ( $outside ) {
+			$real_id = (int) get_user_meta( $outside[0]->ID, '_wpojs_user_id', true );
+			$checks  = array(
+				'real account'   => $outside[0]->user_email,
+				'stale cached id' => 'fence-probe@test.invalid',
+			);
+			foreach ( $checks as $name => $email ) {
+				$vouched = $this->api->vouch( $real_id, $email );
+				WP_CLI::log( sprintf( '  %-16s %s', $name, $vouched ? 'VOUCHED FOR' : 'cannot be vouched for' ) );
+				if ( $vouched ) {
+					$leaks[] = "$name vouched for";
+				}
+			}
+		} else {
+			WP_CLI::log( sprintf( '  %-16s %s', 'real account', 'none linked here' ) );
+		}
+
+		remove_filter( 'pre_http_request', $blocker, PHP_INT_MAX );
+
+		if ( $sent ) {
+			$leaks[] = 'requests attempted: ' . implode( ', ', $sent );
+		}
+		if ( $leaks ) {
+			WP_CLI::error( 'Fence LEAKS: ' . implode( '; ', $leaks ) );
+		}
+		WP_CLI::success( sprintf(
+			'Fence holds: %d of %d writes refused before any request; %d of %d linked journal accounts are outside the fence.',
+			count( $probes ),
+			count( $probes ),
+			count( $outside ),
+			count( $linked )
+		) );
 	}
 
 	/**

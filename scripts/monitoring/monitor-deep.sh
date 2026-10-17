@@ -338,6 +338,20 @@ else
   fail "Reconciliation failed" "$(echo "${RECON_OUTPUT:-<empty>}" | tail -3)"
 fi
 
+# The WordPress this script drives is the test rig, and its sync writes to the
+# LIVE journal, for a copy of real members linked to their real journal
+# accounts. It is fenced (WPOJS_FENCE_EMAIL_PATTERN in the rig's staging.php)
+# so that only test accounts like D1's can be written to. D1 above proves the
+# fence still lets the monitor's own user through; this proves it stops
+# everyone else. It cannot change anything on OJS: it blocks every request
+# but the user lookups (GETs) while it runs.
+FENCE_OUTPUT=$(wp_cli "ojs-sync fence" 2>&1) || FENCE_OUTPUT="${FENCE_OUTPUT:-<empty>}"
+if echo "$FENCE_OUTPUT" | grep -q "Fence holds"; then
+  pass "Rig sync fenced: $(echo "$FENCE_OUTPUT" | grep -o '[0-9]* of [0-9]* linked journal accounts are outside the fence')"
+else
+  fail "Rig sync NOT fenced: it can change real members' live journal accounts" "$(echo "$FENCE_OUTPUT" | tail -3)"
+fi
+
 # ============================================================
 # D5. DATABASE SIZES
 # ============================================================

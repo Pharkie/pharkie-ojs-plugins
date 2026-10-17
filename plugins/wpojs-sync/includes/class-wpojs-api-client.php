@@ -4,12 +4,36 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+/**
+ * The only code in this plugin that talks to OJS.
+ *
+ * FENCE. When WPOJS_FENCE_EMAIL_PATTERN is defined, this install may write to
+ * OJS only for accounts whose email matches it. Reads (ping, lookups, status
+ * checks) are unaffected. It exists for the WordPress test rig, which is wired
+ * to the LIVE journal and holds a months-old copy of real members linked to
+ * their real journal account ids: without it, any change made to a member on
+ * the rig reaches that member's live account. Define it there, never on the
+ * real WordPress.
+ *
+ * Enforced here rather than in the callers so that a code path which forgets
+ * is refused, not let through:
+ *  - email-keyed writes (find-or-create, the new address of an email change)
+ *    are refused unless the email matches;
+ *  - id-keyed writes are refused unless OJS itself, in this process, has said
+ *    that id belongs to a matching email (see vouch()). The WordPress side is
+ *    not trusted for that: a rig user's email can be edited to match while its
+ *    cached `_wpojs_user_id` still points at a real member.
+ * A defined but empty or invalid pattern admits nothing.
+ */
 class WPOJS_API_Client {
 
     private $base_url;
     private $api_key;
     private $timeout;
     private $last_request_id = '';
+
+    /** @var array OJS user ids OJS has confirmed are inside the fence, as id => true. */
+    private $vouched = array();
 
     public function __construct() {
         $this->base_url = untrailingslashit( get_option( 'wpojs_url', '' ) );
@@ -42,7 +66,11 @@ class WPOJS_API_Client {
      * Find user by email. Returns ['success' => true, 'body' => ['found' => bool, ...]].
      */
     public function find_user( $email ) {
-        return $this->get( '/wpojs/users', array( 'email' => $email ) );
+        $result = $this->get( '/wpojs/users', array( 'email' => $email ) );
+        if ( $result['success'] && ! empty( $result['body']['found'] ) && isset( $result['body']['userId'], $result['body']['email'] ) ) {
+            $this->note_ojs_account( $result['body']['userId'], $result['body']['email'] );
+        }
+        return $result;
     }
 
     /**
@@ -55,6 +83,9 @@ class WPOJS_API_Client {
      * @param string|null $username      Optional WP username to use on OJS.
      */
     public function find_or_create_user( $email, $first_name, $last_name, $password_hash = null, $username = null ) {
+        if ( ! $this->fence_admits_email( $email ) ) {
+            return $this->fence_refusal( 'find-or-create' );
+        }
         $body = array(
             'email'    => $email,
             'firstName' => $first_name,
@@ -66,13 +97,23 @@ class WPOJS_API_Client {
         if ( $username !== null ) {
             $body['username'] = $username;
         }
-        return $this->post( '/wpojs/users/find-or-create', $body );
+        $result = $this->post( '/wpojs/users/find-or-create', $body );
+        // It returns an id but not whose it is. Vouch only as OJS's own
+        // lookup reports it, so the id is never taken on trust: a later
+        // write to it is refused unless the two agree.
+        if ( $result['success'] && $this->is_fenced() ) {
+            $this->find_user( $email );
+        }
+        return $result;
     }
 
     /**
      * Update a user's email address. Returns 409 if new email already in use.
      */
     public function update_user_email( $user_id, $new_email ) {
+        if ( ! $this->fence_admits_id( $user_id ) || ! $this->fence_admits_email( $new_email ) ) {
+            return $this->fence_refusal( 'email change' );
+        }
         return $this->request( 'PUT', '/wpojs/users/' . absint( $user_id ) . '/email', array(
             'newEmail' => $new_email,
         ) );
@@ -82,6 +123,9 @@ class WPOJS_API_Client {
      * Update a user's password hash on OJS.
      */
     public function update_user_password( $user_id, $password_hash ) {
+        if ( ! $this->fence_admits_id( $user_id ) ) {
+            return $this->fence_refusal( 'password change' );
+        }
         return $this->request( 'PUT', '/wpojs/users/' . absint( $user_id ) . '/password', array(
             'passwordHash' => $password_hash,
         ) );
@@ -91,13 +135,24 @@ class WPOJS_API_Client {
      * Delete (anonymise) a user. GDPR erasure.
      */
     public function delete_user( $user_id ) {
-        return $this->request( 'DELETE', '/wpojs/users/' . absint( $user_id ) );
+        if ( ! $this->fence_admits_id( $user_id ) ) {
+            return $this->fence_refusal( 'delete' );
+        }
+        $result = $this->request( 'DELETE', '/wpojs/users/' . absint( $user_id ) );
+        if ( $result['success'] ) {
+            // Anonymised: the account no longer carries the email we vouched for.
+            unset( $this->vouched[ absint( $user_id ) ] );
+        }
+        return $result;
     }
 
     /**
      * Create or renew a subscription. Idempotent upsert.
      */
     public function create_subscription( $user_id, $type_id, $date_start, $date_end = null ) {
+        if ( ! $this->fence_admits_id( $user_id ) ) {
+            return $this->fence_refusal( 'subscription' );
+        }
         $body = array(
             'userId'    => absint( $user_id ),
             'typeId'    => absint( $type_id ),
@@ -115,6 +170,9 @@ class WPOJS_API_Client {
      * Expire subscription by user ID. 404 if no subscription found.
      */
     public function expire_subscription_by_user( $user_id ) {
+        if ( ! $this->fence_admits_id( $user_id ) ) {
+            return $this->fence_refusal( 'expire' );
+        }
         return $this->request( 'PUT', '/wpojs/subscriptions/expire-by-user/' . absint( $user_id ) );
     }
 
@@ -189,6 +247,85 @@ class WPOJS_API_Client {
         return array(
             'ok'      => true,
             'message' => 'Connection successful. OJS is reachable, authenticated, and compatible.',
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Fence (see the class docblock)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Is this install fenced?
+     */
+    public function is_fenced() {
+        return defined( 'WPOJS_FENCE_EMAIL_PATTERN' );
+    }
+
+    /**
+     * May this install write to the OJS account with this email?
+     * Always true on an unfenced install.
+     */
+    public function fence_admits_email( $email ) {
+        if ( ! $this->is_fenced() ) {
+            return true;
+        }
+        $pattern = (string) WPOJS_FENCE_EMAIL_PATTERN;
+        if ( $pattern === '' || ! is_string( $email ) || $email === '' ) {
+            return false;
+        }
+        // An invalid pattern returns false (and warns): nothing is admitted.
+        return preg_match( $pattern, $email ) === 1;
+    }
+
+    /**
+     * Ask OJS whether this account id belongs to this email, and the email is
+     * inside the fence. Id-keyed writes are refused until this returns true.
+     * Always true, with no HTTP, on an unfenced install.
+     *
+     * @param int    $ojs_user_id
+     * @param string $email The email the caller believes the account has.
+     * @return bool
+     */
+    public function vouch( $ojs_user_id, $email ) {
+        if ( ! $this->is_fenced() ) {
+            return true;
+        }
+        $ojs_user_id = absint( $ojs_user_id );
+        if ( ! $ojs_user_id ) {
+            return false;
+        }
+        if ( ! isset( $this->vouched[ $ojs_user_id ] ) && $this->fence_admits_email( $email ) ) {
+            $this->find_user( $email ); // Records the id if OJS confirms it.
+        }
+        return isset( $this->vouched[ $ojs_user_id ] );
+    }
+
+    private function fence_admits_id( $ojs_user_id ) {
+        return ! $this->is_fenced() || isset( $this->vouched[ absint( $ojs_user_id ) ] );
+    }
+
+    /**
+     * Record what OJS says an account's email is. Only an email inside the
+     * fence earns its id a place in $vouched.
+     */
+    private function note_ojs_account( $ojs_user_id, $email ) {
+        if ( $this->is_fenced() && absint( $ojs_user_id ) && $this->fence_admits_email( $email ) ) {
+            $this->vouched[ absint( $ojs_user_id ) ] = true;
+        }
+    }
+
+    /**
+     * The result a refused write returns. No request is made. 403 so that a
+     * caller which does not look for 'fenced' treats it as permanent, never
+     * as something to retry.
+     */
+    private function fence_refusal( $what ) {
+        return array(
+            'success' => false,
+            'code'    => 403,
+            'body'    => array(),
+            'error'   => 'Fenced: ' . $what . ' for an account outside WPOJS_FENCE_EMAIL_PATTERN was not sent to OJS',
+            'fenced'  => true,
         );
     }
 
