@@ -506,7 +506,7 @@ class WPOJS_Sync {
 		if ( ! $this->api->fence_admits_email( strtolower( $user->user_email ) ) ) {
 			return array(
 				'success' => false,
-				'code'    => 0,
+				'code'    => 403, // Not 0: bulk sync would back off 5s per member.
 				'fenced'  => true,
 				'message' => 'Fenced: outside WPOJS_FENCE_EMAIL_PATTERN, so not sent to OJS.',
 			);

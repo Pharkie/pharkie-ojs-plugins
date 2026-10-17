@@ -67,9 +67,12 @@ function remove_filter( $hook, $cb, $priority = 10 ) {
 }
 
 function get_option( $name, $default = false ) {
-	$options = array( 'wpojs_url' => 'http://ojs/index.php/ea', 'admin_email' => 'admin@example.org' );
+	$options = array( 'wpojs_url' => 'http://ojs/index.php/ea', 'admin_email' => 'admin@example.org', 'wpojs_default_type_id' => 1 );
 	return $options[ $name ] ?? $default;
 }
+function get_transient( $k ) { return false; }
+function set_transient( $k, $v, $t = 0 ) { return true; }
+function delete_transient( $k ) { return true; }
 function untrailingslashit( $s ) { return rtrim( $s, '/\\' ); }
 function absint( $n ) { return abs( (int) $n ); }
 function wp_json_encode( $data ) { return json_encode( $data ); }
@@ -147,7 +150,11 @@ class WP_CLI {
 	public static function warning( $m ) { self::$out[] = 'Warning: ' . $m; }
 	public static function error( $m ) { self::$out[] = 'Error: ' . $m; throw new WP_CLI_Error( $m ); }
 	public static function add_command( $name, $cb ) {}
+	public static function confirm( $m ) {}
 }
+class Fake_Progress { public function tick() {} public function finish() {} }
+eval( 'namespace WP_CLI\Utils; function make_progress_bar( $m, $c ) { return new \Fake_Progress(); }' );
+function cli_out() { return implode( "\n", WP_CLI::$out ); }
 
 // =============================================================================
 // Fake OJS: the wpojs API, recording every request.
@@ -178,6 +185,9 @@ function fake_ojs( $method, $url, $body ) {
 		$id  = ojs_id_for( $query['email'] );
 		$out = $id ? array( 'found' => true, 'userId' => $id, 'email' => $ojs['users'][ $id ] ) : array( 'found' => false );
 	} elseif ( $method === 'POST' && $path === '/wpojs/users/find-or-create' ) {
+		if ( isset( $ojs['find_or_create_returns'] ) ) {
+			return array( 'response' => array( 'code' => 200 ), 'body' => json_encode( array( 'userId' => $ojs['find_or_create_returns'], 'created' => false ) ), 'headers' => array() );
+		}
 		$id      = ojs_id_for( $body['email'] );
 		$created = ! $id;
 		if ( $created ) {
@@ -249,6 +259,25 @@ class Leaky_Client extends WPOJS_API_Client {
 	public function expire_subscription_by_user( $user_id ) {
 		$r = wp_remote_request( 'http://ojs/index.php/ea/api/v1/wpojs/subscriptions/expire-by-user/' . absint( $user_id ), array( 'method' => 'PUT' ) );
 		return is_wp_error( $r ) ? array( 'success' => false, 'code' => 0, 'error' => $r->get_error_message() ) : array( 'success' => true, 'code' => 200 );
+	}
+}
+
+/** A regression: vouching that trusts the WordPress side instead of asking OJS. */
+class Trusting_Client extends WPOJS_API_Client {
+	public function vouch( $ojs_user_id, $email ) { return $this->fence_admits_email( $email ); }
+}
+
+function cli_for( $api = null ) {
+	list( $api, $sync, $logger, $resolver ) = make( $api );
+	WP_CLI::$out = array();
+	return array( new WPOJS_CLI( $sync, $resolver, $api, $logger, new WPOJS_Stats( $resolver, $logger ) ), $resolver, $logger );
+}
+function run_cli( $fn ) {
+	try {
+		$fn();
+		return null;
+	} catch ( WP_CLI_Error $e ) {
+		return $e->getMessage();
 	}
 }
 
@@ -361,6 +390,15 @@ if ( $mode === 'fenced' ) {
 	$fresh = new WPOJS_API_Client();
 	check( ! empty( $fresh->expire_subscription_by_user( $id )['fenced'] ), 'vouches do not outlive the client: a new one must ask OJS again' );
 
+	// If find-or-create ever answered with someone else's account (say, a
+	// username match), the id is not taken on trust.
+	reset_wp();
+	$GLOBALS['ojs']['find_or_create_returns'] = 42;
+	$api    = new WPOJS_API_Client();
+	$result = $api->find_or_create_user( 'monitor-2@test.invalid', 'Monitor', 'Test' );
+	check( ! empty( $api->create_subscription( $result['body']['userId'], 1, '2026-01-01' )['fenced'] ), 'an id find-or-create returns for another account is refused' );
+	same( array( 'POST /wpojs/users/find-or-create' ), writes(), '...and only the find-or-create was sent' );
+
 	// --- Sync handlers: real members ------------------------------------------
 	reset_wp();
 	list( $api, $sync, $logger ) = make();
@@ -378,6 +416,13 @@ if ( $mode === 'fenced' ) {
 	}
 	same( array( 'fenced' ), $logger->statuses_for( 12, 'expire' ), 'expire via a stale cached id is logged as fenced' );
 	same( array(), $GLOBALS['mail'], 'fenced refusals send no admin alert' );
+
+	clear_requests();
+	$GLOBALS['wp_users'][11]->user_email = 'someone@example.org'; // a test account renamed to a real address
+	$sync->handle_email_change( array( 'wp_user_id' => 11, 'old_email' => 'monitor-9@test.invalid', 'new_email' => 'someone@example.org' ) );
+	$GLOBALS['wp_users'][11]->user_email = 'monitor-9@test.invalid';
+	same( array(), writes(), 'a test account is not renamed to a real address' );
+	same( array( 'fenced' ), $logger->statuses_for( 11, 'email_change' ), '...and that is logged as fenced, not as a failure' );
 
 	$r = $sync->sync_user( 10 );
 	check( ! empty( $r['fenced'] ) && ! $r['success'], 'CLI sync of a real member is refused' );
@@ -416,35 +461,52 @@ if ( $mode === 'fenced' ) {
 	$summary = end( $logger->rows )['response_body'];
 	check( strpos( $summary, '2 withheld by the fence' ) !== false, 'reconcile reports what the fence withheld: ' . $summary );
 
+	// The CLI reconcile is the one the deep monitor runs daily.
+	reset_wp();
+	list( $cli, $resolver ) = cli_for();
+	$resolver->active = array( 10, 14 );
+	$error = run_cli( function () use ( $cli ) { $cli->reconcile( array(), array() ); } );
+	same( null, $error, 'CLI reconcile completes' );
+	same(
+		array( array( 'wpojs_sync_activate', array( array( 'wp_user_id' => 14 ) ) ), array( 'wpojs_sync_expire', array( array( 'wp_user_id' => 16 ) ) ) ),
+		$GLOBALS['as'],
+		'CLI reconcile queues test accounts only'
+	);
+	same( array(), writes(), 'CLI reconcile itself writes nothing' );
+	check( strpos( cli_out(), 'Fence:          2 change(s) withheld' ) !== false, 'CLI reconcile reports what the fence withheld' );
+	check( strpos( cli_out(), 'Success: Reconciliation complete.' ) !== false, 'CLI reconcile still ends as the monitor expects' );
+
+	reset_wp();
+	list( $cli, $resolver ) = cli_for();
+	$resolver->active = array( 10, 13 );
+	run_cli( function () use ( $cli ) { $cli->sync( array(), array( 'bulk' => true, 'yes' => true ) ); } );
+	check( strpos( cli_out(), 'Results: 1 synced, 1 skipped, 0 failed out of 2 total.' ) !== false, "bulk sync counts a fenced member as skipped:\n" . cli_out() );
+	same( array( 'POST /wpojs/users/find-or-create', 'POST /wpojs/subscriptions' ), writes(), '...and sends only the test account' );
+
 	// --- wp ojs-sync fence ----------------------------------------------------
 	reset_wp();
-	list( $api, $sync, $logger, $resolver ) = make();
-	$cli         = new WPOJS_CLI( $sync, $resolver, $api, $logger, new WPOJS_Stats( $resolver, $logger ) );
-	WP_CLI::$out = array();
-	try {
-		$cli->fence( array(), array() );
-	} catch ( WP_CLI_Error $e ) {
-		// Recorded in WP_CLI::$out; the check below fails on it.
-	}
-	$out = implode( "\n", WP_CLI::$out );
+	list( $cli ) = cli_for();
+	run_cli( function () use ( $cli ) { $cli->fence( array(), array() ); } );
+	$out = cli_out();
 	check( strpos( $out, 'Success: Fence holds: 6 of 6 writes refused before any request; 2 of 5 linked journal accounts are outside the fence.' ) !== false, "fence command passes:\n$out" );
-	check( strpos( $out, 'cannot be vouched for' ) !== false, 'fence command checks a real linked account' );
-	same( array(), requests(), 'the fence command sends nothing to OJS' );
+	check( strpos( $out, 'real account     cannot be vouched for' ) !== false, 'fence command checks a real account with its own email' );
+	check( strpos( $out, 'stale cached id  cannot be vouched for' ) !== false, 'fence command checks a real account with a test address' );
+	same( array(), writes(), 'the fence command changes nothing on OJS' );
+	same( array( 'GET /wpojs/users' ), requests(), '...its only request is the lookup that vouching makes' );
 	same( array(), $GLOBALS['filters']['pre_http_request'] ?? array(), 'the fence command removes its HTTP block' );
 
 	// It catches a write that forgets the fence, and still blocks it.
 	reset_wp();
-	list( $api, $sync, $logger, $resolver ) = make( new Leaky_Client() );
-	$cli         = new WPOJS_CLI( $sync, $resolver, $api, $logger, new WPOJS_Stats( $resolver, $logger ) );
-	WP_CLI::$out = array();
-	$error       = null;
-	try {
-		$cli->fence( array(), array() );
-	} catch ( WP_CLI_Error $e ) {
-		$error = $e->getMessage();
-	}
+	list( $cli ) = cli_for( new Leaky_Client() );
+	$error = run_cli( function () use ( $cli ) { $cli->fence( array(), array() ); } );
 	check( $error !== null && strpos( $error, 'Fence LEAKS' ) !== false && strpos( $error, 'expire' ) !== false, 'fence command fails on a leaking write: ' . json_encode( $error ) );
-	same( array(), requests(), '...and the leaking write never reached OJS' );
+	same( array(), writes(), '...and the leaking write never reached OJS' );
+
+	// It catches vouching that trusts WordPress (the daily check, not just this file).
+	reset_wp();
+	list( $cli ) = cli_for( new Trusting_Client() );
+	$error = run_cli( function () use ( $cli ) { $cli->fence( array(), array() ); } );
+	check( $error !== null && strpos( $error, 'stale cached id vouched for' ) !== false, 'fence command fails when vouching trusts WordPress: ' . json_encode( $error ) );
 }
 
 if ( $mode === 'unfenced' ) {

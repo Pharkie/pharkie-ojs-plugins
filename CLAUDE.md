@@ -45,7 +45,7 @@ members are a March copy of real people, each linked to their live journal
 account. So `wordpress/config/environments/staging.php` defines
 `WPOJS_FENCE_EMAIL_PATTERN`: the rig may write to the journal only for
 `@test.invalid` accounts (the deep monitor's and the smoke test's). Reads are
-unaffected. `wp ojs-sync fence` proves it holds; the deep monitor runs it daily.
+unaffected. It applies whenever `WP_ENV=staging`. `wp ojs-sync fence` proves it holds; the deep monitor runs it daily.
 Never lift it to test something — make a `…@test.invalid` user instead. See
 [`docs/wpojs-sync-plugin.md#fence`](docs/wpojs-sync-plugin.md#fence).
 

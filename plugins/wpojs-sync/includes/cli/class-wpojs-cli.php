@@ -528,14 +528,18 @@ class WPOJS_CLI {
 	/**
 	 * Show whether writes to OJS are fenced, and prove the fence holds.
 	 *
-	 * On a fenced install (WPOJS_FENCE_EMAIL_PATTERN) this attempts every write
-	 * the plugin can make, aimed outside the fence, and fails if any of them
-	 * got as far as a request. It cannot reach OJS either way: all outbound
-	 * HTTP is blocked while the probes run, and they target account id 0 and a
-	 * reserved .invalid address, which OJS would reject anyway. It then checks
-	 * that a real linked account cannot be vouched for, and counts the users
-	 * here linked to a journal account outside the fence: the accounts this
-	 * install cannot change.
+	 * On a fenced install (WPOJS_FENCE_EMAIL_PATTERN) this:
+	 *  - attempts every write the plugin can make, aimed outside the fence,
+	 *    and fails if any of them got as far as a request;
+	 *  - asks for a real linked account to be vouched for twice, with the
+	 *    member's own email and with a test address (the cached-id case: a
+	 *    rig user edited to a test address while still linked to a real
+	 *    account), and fails if either is;
+	 *  - counts the users here linked to a journal account outside the fence.
+	 * It cannot change anything on OJS: every request except a GET is blocked
+	 * while it runs, and the write probes target account id 0 and a reserved
+	 * .invalid address, which OJS would reject anyway. The GETs are the user
+	 * lookups vouching makes.
 	 *
 	 * ## EXAMPLES
 	 *
@@ -569,7 +573,11 @@ class WPOJS_CLI {
 
 		$sent    = array();
 		$blocker = function ( $pre, $parsed_args, $url ) use ( &$sent ) {
-			$sent[] = ( isset( $parsed_args['method'] ) ? $parsed_args['method'] : 'GET' ) . ' ' . $url;
+			$method = isset( $parsed_args['method'] ) ? strtoupper( $parsed_args['method'] ) : 'GET';
+			if ( $method === 'GET' ) {
+				return $pre; // Reads go through: vouching looks the account up.
+			}
+			$sent[] = $method . ' ' . $url;
 			return new WP_Error( 'wpojs_fence_probe', 'Blocked by wp ojs-sync fence' );
 		};
 		add_filter( 'pre_http_request', $blocker, PHP_INT_MAX, 3 );
@@ -594,15 +602,25 @@ class WPOJS_CLI {
 			}
 		}
 
-		// The gate for every id-keyed write: a real member's account id, with
-		// that member's own email, must not be vouched for.
-		$real_vouched = $outside && $this->api->vouch(
-			(int) get_user_meta( $outside[0]->ID, '_wpojs_user_id', true ),
-			$outside[0]->user_email
-		);
-		WP_CLI::log( sprintf( '  %-16s %s', 'real account', $outside ? ( $real_vouched ? 'VOUCHED FOR' : 'cannot be vouched for' ) : 'none linked here' ) );
-		if ( $real_vouched ) {
-			$leaks[] = 'real account vouched for';
+		// The gate for every id-keyed write: a real member's account id must
+		// not be vouched for, with their own email or with a test address
+		// that OJS does not have on that account. The second makes vouch()
+		// ask OJS, so it fails if vouching ever trusts the WordPress side.
+		if ( $outside ) {
+			$real_id = (int) get_user_meta( $outside[0]->ID, '_wpojs_user_id', true );
+			$checks  = array(
+				'real account'   => $outside[0]->user_email,
+				'stale cached id' => 'fence-probe@test.invalid',
+			);
+			foreach ( $checks as $name => $email ) {
+				$vouched = $this->api->vouch( $real_id, $email );
+				WP_CLI::log( sprintf( '  %-16s %s', $name, $vouched ? 'VOUCHED FOR' : 'cannot be vouched for' ) );
+				if ( $vouched ) {
+					$leaks[] = "$name vouched for";
+				}
+			}
+		} else {
+			WP_CLI::log( sprintf( '  %-16s %s', 'real account', 'none linked here' ) );
 		}
 
 		remove_filter( 'pre_http_request', $blocker, PHP_INT_MAX );

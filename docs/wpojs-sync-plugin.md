@@ -44,15 +44,16 @@ The key must match the `WPOJS_API_KEY_SECRET` environment variable on the OJS se
 define('WPOJS_FENCE_EMAIL_PATTERN', '/^[^@\s]+@test\.invalid\z/i');
 ```
 
-It exists for the WordPress test rig on the box (`wp-staging`), which is wired to the **live** journal and holds a March copy of real members, each linked to their real journal account. Without it, any change made to a member on the rig — a lapse, an email edit, a deletion, an overdue cron — reaches that member's live account within a day. The rig's `wordpress/config/environments/staging.php` sets the pattern above, hard-coded so no env var can lift it. `.invalid` is a reserved TLD, so no real member can be inside it; the deep monitor's `monitor-<epoch>@test.invalid` and the smoke test's `smoke-test-<epoch>@test.invalid` are. **Never define it on the real WordPress.**
+It exists for the WordPress test rig on the box (`wp-staging`), which is wired to the **live** journal and holds a March copy of real members, each linked to their real journal account. Without it, any change made to a member on the rig — a lapse, an email edit, a deletion, an overdue cron — reaches that member's live account within a day. The rig's `wordpress/config/environments/staging.php` sets the pattern above, hard-coded rather than read from the environment (it applies whenever `WP_ENV=staging`, which `docker-compose.staging.yml` pins). `.invalid` is a reserved TLD, so no real member can be inside it; the deep monitor's `monitor-<epoch>@test.invalid` and the smoke test's `smoke-test-<epoch>@test.invalid` are. **Never define it on the real WordPress.**
 
 How it holds:
 
 - It is enforced in `WPOJS_API_Client`, the only code that talks to OJS, so a code path that forgets to check is refused rather than let through.
-- An id-keyed write (everything except find-or-create) needs OJS itself to have said, in the same process, that the id belongs to a matching email. The WordPress side is not trusted for that: a rig user's email can be edited to a test address while its cached `_wpojs_user_id` still points at a real member.
+- An id-keyed write (everything except find-or-create) needs OJS itself to have said, in the same process, that the id belongs to a matching email — from its user lookup, never from what find-or-create returned or what WordPress has cached. The WordPress side is not trusted for that: a rig user's email can be edited to a test address while its cached `_wpojs_user_id` still points at a real member.
 - A defined but empty or invalid pattern admits nothing.
 - The sync handlers check first and log a refusal as status `fenced` in the sync log — no retry, no admin alert. Reconciliation still checks every member against OJS but queues nothing outside the fence, and reports how many changes it withheld.
-- `wp ojs-sync fence` proves it: it attempts every write against an account outside the fence with all HTTP blocked, checks that a real linked account cannot be vouched for, and fails if anything got as far as a request. The deep monitor runs it daily.
+- `wp ojs-sync fence` proves it: it attempts every write against an account outside the fence with every request except a GET blocked, checks that a real linked account cannot be vouched for (with its own email, and with a test address), and fails if anything got as far as a write. The deep monitor runs it daily.
+- Known, accepted: vouching checks the email WordPress believes the account has. Two rare cases on **test** accounts are therefore refused (logged `fenced`) when they would have been allowed: an email changed twice before the first change synced, and a delete retried after OJS had already anonymised the account. Neither touches a real member.
 
 Tests: `php plugins/wpojs-sync/tests/fence-test.php` (no WordPress or PHPUnit needed).
 

@@ -98,10 +98,11 @@ class WPOJS_API_Client {
             $body['username'] = $username;
         }
         $result = $this->post( '/wpojs/users/find-or-create', $body );
-        // Find-or-create is keyed on the email, so the id it returns is that
-        // email's account.
-        if ( $result['success'] && isset( $result['body']['userId'] ) ) {
-            $this->note_ojs_account( $result['body']['userId'], $email );
+        // It returns an id but not whose it is. Vouch only as OJS's own
+        // lookup reports it, so the id is never taken on trust: a later
+        // write to it is refused unless the two agree.
+        if ( $result['success'] && $this->is_fenced() ) {
+            $this->find_user( $email );
         }
         return $result;
     }

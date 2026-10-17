@@ -18,7 +18,9 @@ Config::define('DISALLOW_INDEXING', true);
  * account. So it may write to the journal only for test accounts. Reads, and
  * the daily deep monitor's own round-trip (monitor-<epoch>@test.invalid), are
  * unaffected; `wp ojs-sync fence` proves it holds. `.invalid` is a reserved
- * TLD, so no real member can be inside this fence. Hard-coded on purpose: no
- * env var can lift it. See docs/wpojs-sync-plugin.md#fence.
+ * TLD, so no real member can be inside this fence. Hard-coded rather than
+ * read from the environment; it applies whenever WP_ENV is staging, which
+ * docker-compose.staging.yml pins, and the deep monitor fails if it is ever
+ * off. See docs/wpojs-sync-plugin.md#fence.
  */
 Config::define('WPOJS_FENCE_EMAIL_PATTERN', '/^[^@\s]+@test\.invalid\z/i');
