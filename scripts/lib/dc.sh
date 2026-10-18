@@ -3,7 +3,7 @@
 #
 # Source this in any script that needs to call docker compose:
 #   source "$(dirname "$0")/../lib/dc.sh"
-#   init_dc [--env=dev|staging|prod] [--ssl]
+#   init_dc [--env=dev|staging|prod]
 #
 # After init_dc, use $DC everywhere:
 #   $DC up -d
@@ -24,13 +24,13 @@ is_dind() {
 # Build the $DC variable. Call once at the top of your script.
 # Args:
 #   --env=dev|staging|prod  (default: auto-detect from DinD)
-#   --ssl                   (include Caddy overlay)
+# There is no Caddy overlay: TLS is the box's shared Caddy (on the SEA box,
+# Harbour's harbour-infra stack), which this project's compose never loads.
 init_dc() {
-  local env="" ssl=""
+  local env=""
   for arg in "$@"; do
     case "$arg" in
       --env=*) env="${arg#--env=}" ;;
-      --ssl) ssl=1 ;;
     esac
   done
 
@@ -59,12 +59,7 @@ init_dc() {
       fi
       ;;
     staging|prod)
-      local compose_files="-f docker-compose.yml -f docker-compose.staging.yml"
-      # Detect Caddy overlay (either from --ssl flag or already running)
-      if [ -n "$ssl" ] || docker compose $compose_files -f docker-compose.caddy.yml ps --status running 2>/dev/null | grep -q caddy; then
-        compose_files="$compose_files -f docker-compose.caddy.yml"
-      fi
-      DC="docker compose $compose_files"
+      DC="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
       ;;
     *)
       echo "ERROR: Unknown environment '$env'. Use dev, staging, or prod." >&2

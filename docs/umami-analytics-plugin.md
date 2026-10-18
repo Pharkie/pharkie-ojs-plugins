@@ -48,11 +48,11 @@ Plugin settings are stored per-OJS-database, so dev and live are configured inde
 
 ## Self-hosting Umami
 
-A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. This repo includes a `docker-compose.umami.yml` overlay (Umami app + `mysql:8.0`) and a Caddy vhost for exactly that.
+A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. **This repo does not run one.** The SEA's runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` in `Pharkie/sea-membership-platform`): the Umami app, its `umami-db` on `mysql:8.0`, and its Caddy vhost, `umami.caddy`. Harbour's nightly backup dumps that database; this repo's `backup-ojs-db.sh` does not.
 
-> **Note:** Umami requires **MySQL 8 / PostgreSQL** — it fails on MariaDB (the `05_add_visit_id` Prisma migration errors with P3009), so the overlay uses `mysql:8.0` even where the rest of the stack is MariaDB.
+> **Note:** Umami requires **MySQL 8 / PostgreSQL** — it fails on MariaDB (the `05_add_visit_id` Prisma migration errors with P3009), so use `mysql:8.0` even where the rest of the stack is MariaDB.
 
-Required env vars (see `.env.example`): `CADDY_UMAMI_DOMAIN`, `UMAMI_DB_PASSWORD`, `UMAMI_DB_ROOT_PASSWORD`, `UMAMI_APP_SECRET` (`APP_SECRET` must not change after first boot). On first boot Umami creates its schema; log in with the default `admin` / `umami` and **change the password immediately**.
+Umami needs its database credentials and an `APP_SECRET`, which must not change after first boot. On first boot Umami creates its schema; log in with the default `admin` / `umami` and **change the password immediately**.
 
 The self-hosted `@mikusnuz/umami-mcp` MCP works against a self-hosted instance (it speaks the `/api` dialect with username/password auth); it does **not** work with Umami Cloud's `/v1` API.
 
