@@ -151,7 +151,7 @@ detect_compose() {
     done
   else
     # Auto-detect failed — use bare docker compose (uses docker-compose.yml only).
-    # This may miss services in overlay files (caddy, staging) but is safer than
+    # This may miss services in the staging overlay but is safer than
     # guessing which overlay is active.
     COMPOSE="docker compose"
   fi

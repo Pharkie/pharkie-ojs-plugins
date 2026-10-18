@@ -35,7 +35,7 @@ Layers are ordered **heavy → volatile** so small additions don't bust the expe
 - **`scripts/infra/deploy.sh`** — deploys code to a VPS via SSH: git pull, build images, start containers, run setup. Run every time you ship code. Flags: `--host`, `--provision`, `--skip-setup`, `--skip-build`, `--ref`, `--clean`, `--env-file`.
 - **`scripts/monitoring/smoke-test.sh`** — lightweight staging/prod health checks via SSH (curl + WP-CLI). Includes backup health checks.
 - **`scripts/monitoring/load-test.sh`** — performance tests using `hey` with server resource monitoring.
-- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB + WP DB + Umami DB + OJS files volume → gzip → AES-256-CBC encrypt → rotate (DB: 7 daily + 4 weekly; files tarball: 1 daily + 2 weekly). Then calls the off-site step below.
+- **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB + WP DB + OJS files volume → gzip → AES-256-CBC encrypt → rotate (DB: 7 daily + 4 weekly; files tarball: 1 daily + 2 weekly). Then calls the off-site step below. Umami's database is not in it: Umami runs in Harbour's `harbour-infra` stack, and Harbour's nightly backup dumps it.
 - **`scripts/ojs/upload-backup-r2.sh`** — copies the encrypted `*.sql.gz.enc` dumps to Cloudflare R2 and expires old ones. See **Off-site backups** below.
 - **`scripts/ojs/install-backup-cron.sh`** — runs ON the VPS, called by `deploy.sh` and `pull-ojs-backup.sh --install-cron`. Writes the 03:00 line into root's crontab: `backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1 && curl -sf <hb> > /dev/null || curl -sf <hb>/fail > /dev/null`, where `<hb>` is the Better Stack heartbeat URL in `BETTERSTACK_HB_OJS_BACKUP` in `/opt/pharkie-ojs-plugins/.env`. The backup's exit status is the whole alarm, so if the variable is unset it installs the line without the ping and prints a WARNING. A crontab that already has the line is left alone, with a WARNING if that line pings nothing.
 - **`scripts/infra/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`).
@@ -94,10 +94,10 @@ Configuration lives in the VPS's root-only `/opt/pharkie-ojs-plugins/.env`:
 Retention in R2 is by age — 30 days daily, 84 days weekly — matching what the
 LFS store held, so changing the storage did not quietly change the recovery
 window. Two guards sit on the delete. Expiry is **skipped entirely at or below
-14 objects** in a prefix (a night writes three, ojs, wp and umami, so 14 is
-under five nights), so a month of failed uploads followed by one good run
-cannot age the whole store out at once. And **a night deletes at most ten from
-a prefix**, a little over three nights' worth.
+14 objects** in a prefix (a night uploads two, ojs and wp, so 14 is a week),
+so a month of failed uploads followed by one good run cannot age the whole
+store out at once. And **a night deletes at most ten from a prefix**, five
+nights' worth.
 
 🛑 **More than ten due turns the night red, and deletes none of them.** The
 uploader lists what is past the age first. Over ten, it deletes nothing, skips
@@ -175,7 +175,7 @@ sops -d private/.env.live | grep NEW_VAR
 rm /tmp/.env.live*
 
 # Deploy (deploy.sh auto-detects SOPS and decrypts before SCP)
-scripts/infra/deploy.sh --host=<your-server> --ssl --env-file=.env.live
+scripts/infra/deploy.sh --host=<your-server> --env-file=.env.live
 
 # Decrypt to a temp file (for manual inspection)
 sops -d private/.env.live > /tmp/.env.live

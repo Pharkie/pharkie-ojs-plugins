@@ -49,14 +49,17 @@ KEEP_WEEKLY_DAYS=84
 # run that empties the store. At or below this many objects the expiry step is
 # skipped and says so, on the principle that too many backups is not an incident.
 #
-# 14, not 7, because a night here writes THREE dumps into daily/ — ojs, wp and
-# umami — so 7 is barely two nights of margin. Pick this from what a night
-# actually produces rather than copying the number from another script.
+# 14 is a week of floor: a night here uploads TWO dumps into daily/, ojs and wp.
+# The files tarball is not uploaded (see the top), and Umami's database is
+# Harbour's to back up, not this script's. In weekly/, which gains the same two
+# each Sunday, 14 is seven weeks. Harbour's uploader keeps the same intent with
+# its own arithmetic. Pick this from what a night actually produces rather than
+# copying the number from another script.
 EXPIRE_FLOOR=14
 
-# The most one night may delete from a prefix: ten, a little over three nights
-# of steady-state expiry. More than that due, and the night deletes none of it
-# and goes red; see expire().
+# The most one night may delete from a prefix: ten, five nights of steady-state
+# expiry. More than that due, and the night deletes none of it and goes red; see
+# expire().
 MAX_DELETE=10
 # The exit code for exactly that: the dumps reached R2 and the expiry was
 # refused. backup-ojs-db.sh reads it as its own alarm, apart from "the dumps are
@@ -85,7 +88,10 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 # Production never sets it.
 ENV_FILE="${OJS_BACKUP_ENV_FILE:-$PROJECT_DIR/.env}"
 if [ -f "$ENV_FILE" ]; then
-  set -a; source "$ENV_FILE"; set +a
+  set -a
+  # shellcheck source=/dev/null  # the box's .env, which is not in git
+  source "$ENV_FILE"
+  set +a
 fi
 
 # 🛑 DORMANT UNTIL SWITCHED ON, and that is not a hedge — it is what lets this
@@ -276,8 +282,8 @@ expire() {
   fi
   # 🛑 THE CAP IS COUNTED HERE, BEFORE ANYTHING IS DELETED, NOT LEFT TO
   # rclone's --max-delete. The floor above is only the cheap half. In a steady
-  # state three objects age out of daily/ per night (ojs, wp and umami), so a
-  # run with more than MAX_DELETE due has misunderstood something: a clock jump,
+  # state two objects age out of daily/ per night (ojs and wp), so a run with
+  # more than MAX_DELETE due has misunderstood something: a clock jump,
   # a changed prefix, a restored-from-cold store whose mtimes are all old. It
   # deletes none of them, says so, and turns the night red, and the weekly
   # expiry is not attempted. The cause is still there tomorrow, so tomorrow
