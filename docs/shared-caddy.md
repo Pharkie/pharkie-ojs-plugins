@@ -4,11 +4,13 @@ The server runs several independent projects (each its own Docker Compose stack)
 
 ## How it works
 
-- The committed `docker/caddy/Caddyfile` is a stable one-liner:
+- **The shared Caddy is not part of this repo.** On the SEA box it runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` and `deploy/Caddyfile` in `Pharkie/sea-membership-platform`, at `/opt/harbour/infra` on the box), which runs Umami too. This repo supplies only its own vhost snippets.
+
+- Its Caddyfile is a stable one-liner:
   ```
   import /etc/caddy/conf.d/*.caddy
   ```
-  **Nobody edits it.** Because it never changes, `git pull` on this repo never aborts on a locally-modified Caddyfile (the problem that used to happen when projects edited the monolithic file directly on the box).
+  **Nobody edits it to add a vhost.** Each project's routing lives in its own snippet, so no project's change touches a file another project depends on.
 
 - Each project owns exactly one file: `/etc/caddy/conf.d/<project>.caddy` (bind-mounted from `/opt/caddy-conf.d` on the host). One file per project → no shared file, no merge collisions, unambiguous ownership.
 
@@ -45,13 +47,13 @@ The drop-in directory `/opt/caddy-conf.d/` and its snippets are normally `root:r
 
 ## This repo's snippets
 
-`pharkie-ojs-plugins` owns `wp.caddy`, `ojs.caddy`, `umami.caddy`. They're version-controlled in `docker/caddy/conf.d/` and synced to `/opt/caddy-conf.d/` on deploy:
+`pharkie-ojs-plugins` owns `wp.caddy` and `ojs.caddy`. (`umami.caddy` is Harbour's, with Umami.) They're version-controlled in `docker/caddy/conf.d/` and copied to `/opt/caddy-conf.d/` by hand; `deploy.sh` does not copy them:
 
 ```bash
 sudo mkdir -p /opt/caddy-conf.d
 sudo cp docker/caddy/conf.d/*.caddy /opt/caddy-conf.d/
 ```
 
-This copies only `wp/ojs/umami.caddy`, so it doesn't touch other projects' files. If you ever re-provision the directory itself (create it, or reset ownership across it), see [File ownership in the drop-in dir](#file-ownership-in-the-drop-in-dir) — other projects' snippets may be non-root-owned and must keep their ownership.
+This copies only `wp.caddy` and `ojs.caddy`, so it doesn't touch other projects' files. If you ever re-provision the directory itself (create it, or reset ownership across it), see [File ownership in the drop-in dir](#file-ownership-in-the-drop-in-dir) — other projects' snippets may be non-root-owned and must keep their ownership.
 
-Env-var placeholders in a snippet (e.g. `{$CADDY_OJS_DOMAIN}`) are substituted from the Caddy container's environment (`docker-compose.caddy.yml`).
+Env-var placeholders in a snippet (e.g. `{$CADDY_OJS_DOMAIN}`) are substituted from the **shared Caddy container's** environment, not from this repo's `.env`. On the SEA box that is `/opt/harbour/infra/.env.infra`, passed in by `harbour-infra`'s compose file, so a changed domain or WordPress basic-auth hash is set there and Caddy recreated from there. A Caddy started without `CADDY_OJS_DOMAIN` loses the journal's vhost.

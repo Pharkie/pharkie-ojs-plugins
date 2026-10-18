@@ -11,8 +11,12 @@
 #   scripts/infra/deploy.sh --ref=some-branch        # Deploy a specific git ref
 #   scripts/infra/deploy.sh --clean                  # Tear down volumes first (fresh DB)
 #   scripts/infra/deploy.sh --env-file=.env.staging  # Copy local env file to VPS
-#   scripts/infra/deploy.sh --ssl                    # Enable Caddy reverse proxy with automatic Let's Encrypt SSL
 #   scripts/infra/deploy.sh --with-sample-data       # Include test users/subscriptions in setup (dev/staging only!)
+#
+# TLS is not this stack's: the box's shared Caddy serves it, and on the SEA box
+# that is Harbour's harbour-infra stack. This repo supplies only its vhost
+# snippets, docker/caddy/conf.d/*.caddy (docs/shared-caddy.md). --ssl stops
+# with that explanation before anything touches the box.
 #
 # Prerequisites:
 #   - hcloud CLI with active context (resolves server IP automatically)
@@ -47,7 +51,10 @@ REMOTE_DIR="/opt/pharkie-ojs-plugins"
 REPO_URL="https://github.com/Pharkie/pharkie-ojs-plugins.git"
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 if [ -n "$SSL" ]; then
-  COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.caddy.yml"
+  echo "ERROR: --ssl is gone. This stack has no Caddy of its own, so there is nothing for it to add." >&2
+  echo "  TLS comes from the box's shared Caddy: on the SEA box, Harbour's harbour-infra stack." >&2
+  echo "  Run this again without --ssl. The vhosts are docker/caddy/conf.d/*.caddy; see docs/shared-caddy.md." >&2
+  exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -154,7 +161,7 @@ fi
 # - root: container master process reads it at startup; host root + backup cron need it.
 # - deploy group: the CI deploy user reads it for remote monitoring (monitor-deep.sh greps it over SSH).
 # - NOT world-readable: .env holds DB/Stripe/API secrets. (scp/editors leave it 600 root:root, which
-#   silently breaks deploy-user monitoring — see docs/monitoring.md. www-data does not read it at runtime.)
+#   silently breaks deploy-user monitoring — see private/docs/monitoring.md. www-data does not read it at runtime.)
 $SSH_CMD "chown root:deploy $REMOTE_DIR/.env && chmod 640 $REMOTE_DIR/.env"
 
 # Validate required env vars are set (catch blank passwords before compose fails with a cryptic error)

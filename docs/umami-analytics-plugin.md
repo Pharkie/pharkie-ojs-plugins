@@ -48,11 +48,11 @@ Plugin settings are stored per-OJS-database, so dev and live are configured inde
 
 ## Self-hosting Umami
 
-A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. This repo includes a `docker-compose.umami.yml` overlay (Umami app + `mysql:8.0`) and a Caddy vhost for exactly that.
+A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. **This repo does not run one.** The SEA's runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` in `Pharkie/sea-membership-platform`): the Umami app, its `umami-db` on `mysql:8.0`, and its Caddy vhost, `umami.caddy`. Harbour's nightly backup dumps that database; this repo's `backup-ojs-db.sh` does not.
 
-> **Note:** Umami requires **MySQL 8 / PostgreSQL** — it fails on MariaDB (the `05_add_visit_id` Prisma migration errors with P3009), so the overlay uses `mysql:8.0` even where the rest of the stack is MariaDB.
+> **Note:** Umami requires **MySQL 8 / PostgreSQL** — it fails on MariaDB (the `05_add_visit_id` Prisma migration errors with P3009), so use `mysql:8.0` even where the rest of the stack is MariaDB.
 
-Required env vars (see `.env.example`): `CADDY_UMAMI_DOMAIN`, `UMAMI_DB_PASSWORD`, `UMAMI_DB_ROOT_PASSWORD`, `UMAMI_APP_SECRET` (`APP_SECRET` must not change after first boot). On first boot Umami creates its schema; log in with the default `admin` / `umami` and **change the password immediately**.
+Umami needs its database credentials and an `APP_SECRET`, which must not change after first boot. On first boot Umami creates its schema; log in with the default `admin` / `umami` and **change the password immediately**.
 
 The self-hosted `@mikusnuz/umami-mcp` MCP works against a self-hosted instance (it speaks the `/api` dialect with username/password auth); it does **not** work with Umami Cloud's `/v1` API.
 
@@ -63,7 +63,7 @@ The self-hosted `@mikusnuz/umami-mcp` MCP works against a self-hosted instance (
 The plugin itself is a code-only change (new plugin, no article data). Per `CLAUDE.md` → "Code-only changes":
 
 1. Pull the repo on the server.
-2. `docker compose up -d ojs` — the new bind mount in `docker-compose.yml` requires the container to be recreated.
+2. `docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs` in the repo directory on the server — the new bind mount in `docker-compose.yml` requires the container to be recreated. Name both files, as `deploy.sh` does: a bare `docker compose` recreates it without the staging overlay.
 3. Enable + configure the plugin in the live OJS admin (Website ID + script URL above).
 4. Run the content-check smoke test to verify the site still works.
 
@@ -73,4 +73,4 @@ Umami is cookieless and does not collect personal data, so it does not require a
 
 ## Uninstall
 
-Disable the plugin in the OJS Plugins UI (stops all injection immediately). To remove entirely, delete the `./plugins/umami-analytics` bind-mount line from `docker-compose.yml`, `docker compose up -d ojs`, and delete the `plugins/umami-analytics/` folder.
+Disable the plugin in the OJS Plugins UI (stops all injection immediately). To remove entirely, delete the `./plugins/umami-analytics` bind-mount line from `docker-compose.yml`, recreate the container on the server with `docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs`, and delete the `plugins/umami-analytics/` folder.

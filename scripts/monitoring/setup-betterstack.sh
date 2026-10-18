@@ -1,12 +1,23 @@
 #!/bin/bash
-# Set up Better Stack uptime monitors via API.
-# Idempotent — checks for existing monitors by name before creating.
+# Set up Better Stack uptime monitors and heartbeats via API.
+# Idempotent — checks for existing monitors and heartbeats by name before creating.
+#
+# What it manages: the ten URL monitors and the four OJS heartbeats defined
+# below, each as Better Stack has it (checked against the API on 2026-10-18).
+# The account's other two heartbeats, "SEA: Harbour nightly backup" and
+# "SEA: Harbour browser checks", are Harbour's (docs/on-call.md in
+# Pharkie/sea-membership-platform). This script never creates, changes or
+# deletes them, --delete-all included.
 #
 # Usage:
-#   scripts/monitoring/setup-betterstack.sh --host=sea-live                       # Create monitors
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live                       # Create what is missing
 #   scripts/monitoring/setup-betterstack.sh --host=sea-live --dry-run             # Show what would be created
-#   scripts/monitoring/setup-betterstack.sh --host=sea-live --delete-all          # Remove all SEA monitors
-#   scripts/monitoring/setup-betterstack.sh --host=sea-live --update-heartbeats   # PATCH existing heartbeats to match script-defined config
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --delete-all          # Delete the monitors and heartbeats defined here
+#   scripts/monitoring/setup-betterstack.sh --host=sea-live --update-heartbeats   # PATCH the four heartbeats to the config below
+#
+# 🛑 Never run --delete-all against the live account. A recreated heartbeat gets
+# a new URL, and every job still pinging the old one leaves it Down until each
+# copy is replaced (private/docs/monitoring.md, "Where each heartbeat URL is read").
 #
 # Public status page: https://status.existentialanalysis.org.uk/
 # Admin dashboard:    https://uptime.betterstack.com
@@ -69,23 +80,15 @@ source "$SCRIPTS_ROOT/lib/resolve-ssh.sh"
 resolve_ssh "$SSH_HOST"
 
 REMOTE_DIR="/opt/pharkie-ojs-plugins"
-WP_HOME=$($SSH_CMD "grep '^WP_HOME=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_BASE_URL=$($SSH_CMD "grep '^OJS_BASE_URL=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d= -f2")
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
 
-# Better Stack monitors must use publicly reachable URLs.
-# WP_HOME may be an internal Docker address — derive public URL from Caddy config.
-CADDY_WP=$($SSH_CMD "grep '^CADDY_WP_DOMAIN=' $REMOTE_DIR/.env | cut -d= -f2" 2>/dev/null)
-if [ -n "$CADDY_WP" ]; then
-  WP_PUBLIC_URL="https://$CADDY_WP"
-elif echo "$WP_HOME" | grep -qE '^https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|localhost|127\.|.*:[0-9]{4,})'; then
-  echo "ERROR: WP_HOME ($WP_HOME) is internal and CADDY_WP_DOMAIN is not set."
-  echo "       Better Stack needs a public URL. Set CADDY_WP_DOMAIN in .env on the server."
-  exit 1
-else
-  WP_PUBLIC_URL="$WP_HOME"
-fi
+# The two WP monitors watch the live WordPress, which is on Krystal, not on the
+# box. The box's WordPress (its WP_HOME and CADDY_WP_DOMAIN) is the test rig,
+# wp-staging, so its URL is never a monitor's: read from the box's .env, it
+# would recreate both monitors on the rig.
+WP_PUBLIC_URL="https://community.existentialanalysis.org.uk"
 
 echo "=== Better Stack Monitor Setup ==="
 echo "    WP:  $WP_PUBLIC_URL"
@@ -166,28 +169,29 @@ heartbeat_id() {
   echo "$EXISTING_HB" | grep "^$1|" | cut -d'|' -f2
 }
 
-# --- Delete all SEA monitors and heartbeats ---
-if [ "$DELETE_ALL" = true ]; then
-  echo "Deleting all SEA monitors..."
-  echo "$EXISTING" | grep "^SEA:" | while IFS='|' read -r name id; do
-    if [ "$DRY_RUN" = true ]; then
-      echo "  [DRY-RUN] Would delete monitor: $name (ID: $id)"
-    else
-      bs_api DELETE "/monitors/$id" > /dev/null
-      echo "  Deleted monitor: $name"
-    fi
-  done
-  echo "Deleting all SEA heartbeats..."
-  echo "$EXISTING_HB" | grep "^SEA:" | while IFS='|' read -r name id url; do
-    if [ "$DRY_RUN" = true ]; then
-      echo "  [DRY-RUN] Would delete heartbeat: $name (ID: $id)"
-    else
-      bs_api DELETE "/heartbeats/$id" > /dev/null
-      echo "  Deleted heartbeat: $name"
-    fi
-  done
-  exit 0
-fi
+# --- Delete what this script defines ---
+# --delete-all deletes by walking the definitions below: in that mode
+# create_monitor and create_heartbeat delete their own name instead of creating
+# it. Anything else whose name starts "SEA:" (Harbour's two heartbeats, or a
+# monitor added in the UI) is not defined here, so it is left alone.
+DELETED=0
+
+delete_defined() {
+  local kind="$1" name="$2" id="$3"   # kind: monitors | heartbeats
+  if [ -z "$id" ]; then
+    echo "  [SKIP] $name (not in Better Stack)"
+    return
+  fi
+  if [ "$DRY_RUN" = true ]; then
+    echo "  [DRY-RUN] Would delete ${kind%s}: $name (ID: $id)"
+    DELETED=$((DELETED + 1))
+  elif bs_api DELETE "/$kind/$id" > /dev/null; then
+    echo "  Deleted ${kind%s}: $name"
+    DELETED=$((DELETED + 1))
+  else
+    echo "  [ERROR] Failed to delete ${kind%s}: $name"
+  fi
+}
 
 # --- Define monitors ---
 # Prefix all names with "SEA:" for easy identification
@@ -197,6 +201,11 @@ SKIPPED=0
 create_monitor() {
   local name="$1"
   local json="$2"
+
+  if [ "$DELETE_ALL" = true ]; then
+    delete_defined monitors "$name" "$(monitor_id "$name")"
+    return
+  fi
 
   if monitor_exists "$name"; then
     echo "  [SKIP] $name (already exists)"
@@ -228,7 +237,11 @@ FREQ=180
 # Filters out transient self-healing blips (e.g. brief 503s during WP auto-updates).
 CONFIRM=300
 
-echo "Creating monitors..."
+if [ "$DELETE_ALL" = true ]; then
+  echo "Deleting the monitors defined here..."
+else
+  echo "Creating monitors..."
+fi
 echo ""
 
 # 1. WP homepage
@@ -263,8 +276,8 @@ EOF
 )"
 
 # 3. WP Admin — REMOVED 2026-08-03. It watched wp-staging, which is a test
-# rig that will never be promoted (see "The WordPress here is a test rig"
-# above), so an alert on it is noise about something nobody would act on.
+# rig that will never be promoted (see the WP_PUBLIC_URL note above), so an
+# alert on it is noise about something nobody would act on.
 # It had no live counterpart either: defined here but absent from Better
 # Stack, one of three such drifts found when the definitions were
 # reconciled against the API.
@@ -351,10 +364,10 @@ EOF
 )"
 
 # 11-14. Added in the Better Stack UI, not here, and so invisible to this script
-# until 2026-08-03. That mattered: --delete-all removes every monitor whose name
-# starts with "SEA:" — all ten — and a setup run afterwards would have recreated
-# only the nine defined here, quietly dropping these four. Config captured from
-# the live monitors so re-creating them reproduces what is actually running.
+# until 2026-08-03. Config captured from the live monitors so re-creating them
+# reproduces what is actually running. (--delete-all now deletes only what is
+# defined here, so a monitor added in the UI and not written down here would
+# survive it rather than be lost.)
 
 create_monitor "SEA: Docs Knowledge Base" "$(cat <<EOF
 {
@@ -430,6 +443,15 @@ EOF
 # Heartbeats monitor that periodic jobs actually run.
 # Each job pings its heartbeat URL on success, or /fail on error.
 # If no ping arrives within period + grace, Better Stack creates an incident.
+#
+# These four are the OJS heartbeats, each exactly as Better Stack has it, so
+# --update-heartbeats changes nothing. Harbour's two are not defined here.
+#
+# Notification fields: email, SMS and push are on and phone calls off, as in
+# Better Stack's settings. The plan does not deliver SMS or push (incident
+# timelines read "Failed to text … because your subscription is no longer
+# active"), so only the emails go out. The fields stay as set, so a renewed
+# plan needs no change here.
 
 HB_CREATED=0
 HB_SKIPPED=0
@@ -439,6 +461,11 @@ HB_UPDATED=0
 create_heartbeat() {
   local name="$1"
   local json="$2"
+
+  if [ "$DELETE_ALL" = true ]; then
+    delete_defined heartbeats "$name" "$(heartbeat_id "$name")"
+    return
+  fi
 
   if heartbeat_exists "$name"; then
     if [ "$UPDATE_HEARTBEATS" = true ]; then
@@ -485,83 +512,93 @@ create_heartbeat() {
 }
 
 echo ""
-echo "Creating heartbeats..."
+if [ "$DELETE_ALL" = true ]; then
+  echo "Deleting the heartbeats defined here..."
+else
+  echo "Creating heartbeats..."
+fi
 echo ""
 
-# 1. Hourly monitoring (expect every 75 min, grace 30 min)
-# Pinged by server cron on sea-live (see private/docs/monitoring.md).
-# 75min period accommodates the 15-past-the-hour cron + a check that takes ~30s;
-# 30min grace catches a single skipped run without alerting on a real outage too late.
+# 1. Hourly monitoring: 1 h period, 30 min grace.
+# Pinged by the box's own cron at :15 (see private/docs/monitoring.md), and by
+# phase 1 of the daily run. The grace lets a run be up to 30 minutes late; a
+# skipped run alerts.
 create_heartbeat "SEA: Hourly monitoring" "$(cat <<EOF
 {
   "name": "SEA: Hourly monitoring",
-  "period": 4500,
+  "period": 3600,
   "grace": 1800,
   "call": false,
   "sms": true,
   "email": true,
-  "push": true
+  "push": true,
+  "critical_alert": false
 }
 EOF
 )"
 
-# 2. Daily deep monitoring workflow (expect every 25 hours, grace 2 hours)
+# 2. Daily monitoring: 1 day period, 2 h grace.
+# Pinged by monitor-daily.yml in the private repo (06:30 UTC), and also by
+# Harbour's daily run (06:45 UTC), so a Harbour pass can resolve an OJS failure.
+# Defined here all the same: Harbour does not create or manage it.
 create_heartbeat "SEA: Daily monitoring" "$(cat <<EOF
 {
   "name": "SEA: Daily monitoring",
-  "period": 90000,
+  "period": 86400,
   "grace": 7200,
   "call": false,
   "sms": true,
   "email": true,
-  "push": true
+  "push": true,
+  "critical_alert": false
 }
 EOF
 )"
 
-# 3. Database backup (expect every 25 hours, grace 2 hours)
+# 3. Database backup: 1 day period, 2 h grace.
+# Pinged by root's 03:00 crontab line on the exit status of backup-ojs-db.sh.
 create_heartbeat "SEA: Database backup" "$(cat <<EOF
 {
   "name": "SEA: Database backup",
-  "period": 90000,
+  "period": 86400,
   "grace": 7200,
   "call": false,
   "sms": true,
   "email": true,
-  "push": true
+  "push": true,
+  "critical_alert": false
 }
 EOF
 )"
 
-# 4. OJS scheduled tasks cron (expect every 75 min, grace 30 min)
+# 4. OJS scheduled tasks: 1 h period, 30 min grace.
+# Pinged by ojs-scheduler-heartbeat.sh from the cron inside the ojs container
+# (both written by docker/ojs/entrypoint.sh).
 create_heartbeat "SEA: OJS scheduled tasks" "$(cat <<EOF
 {
   "name": "SEA: OJS scheduled tasks",
-  "period": 4500,
+  "period": 3600,
   "grace": 1800,
   "call": false,
   "sms": true,
   "email": true,
-  "push": true
+  "push": true,
+  "critical_alert": false
 }
 EOF
 )"
 
-# 5. GitHub backup pull workflow (expect every 25 hours, grace 2 hours)
-create_heartbeat "SEA: GitHub backup pull" "$(cat <<EOF
-{
-  "name": "SEA: GitHub backup pull",
-  "period": 90000,
-  "grace": 7200,
-  "call": false,
-  "sms": true,
-  "email": true,
-  "push": true
-}
-EOF
-)"
+# There is no "SEA: GitHub backup pull". Its workflow, backup.yml in the private
+# repo, was deleted with the heartbeat on 2026-08-29, when R2 replaced it.
 
 echo ""
+if [ "$DELETE_ALL" = true ]; then
+  echo "=== Done: $DELETED deleted ==="
+  if [ "$DRY_RUN" = true ]; then
+    echo "(Dry run — nothing was actually deleted)"
+  fi
+  exit 0
+fi
 echo "=== Done: $CREATED monitors created, $SKIPPED skipped; $HB_CREATED heartbeats created, $HB_UPDATED updated, $HB_SKIPPED skipped ==="
 if [ "$DRY_RUN" = true ]; then
   echo "(Dry run — no monitors were actually created)"
