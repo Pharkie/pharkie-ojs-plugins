@@ -205,15 +205,13 @@ When you have domains pointing at the server:
 1. Add DNS A records pointing to the server IP
 2. Set `CADDY_WP_DOMAIN` and `CADDY_OJS_DOMAIN` in `.env`
 3. Open ports 80 and 443 in the server firewall
-4. Start with the Caddy overlay:
+4. Put this repo's vhost snippets, `docker/caddy/conf.d/ojs.caddy` and `wp.caddy`, in the shared Caddy's drop-in directory ([shared-caddy.md](shared-caddy.md)). Caddy is not part of this stack: there is no Caddy overlay (`docker-compose.caddy.yml` was removed on 2026-08-16, when Caddy moved out to a stack of its own). This stack starts with the same two files as always:
    ```bash
    ssh your-server "cd /opt/pharkie-ojs-plugins && \
-     docker compose -f docker-compose.yml \
-       -f docker-compose.staging.yml \
-       -f docker-compose.caddy.yml up -d"
+     docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d"
    ```
 
-Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
+The shared Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
 
 ---
 

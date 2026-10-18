@@ -1,9 +1,14 @@
 #!/bin/bash
-# Restricted shell for GitHub Actions monitoring SSH key.
-# Deployed to /usr/local/bin/monitor-shell.sh on the live server.
+# Restricted shell for GitHub Actions monitoring SSH key: an older, frozen copy
+# of the live server's /usr/local/bin/monitor-shell.sh.
 # Referenced in authorized_keys: command="/usr/local/bin/monitor-shell.sh",restrict
 #
-# To deploy: scp scripts/lib/monitor-shell.sh sea-live:/usr/local/bin/monitor-shell.sh
+# 🛑 DO NOT DEPLOY THIS COPY. The box's /usr/local/bin/monitor-shell.sh is
+# Harbour's scripts/monitoring/lib/monitor-shell.sh (Pharkie/sea-membership-platform),
+# which holds this repo's rules AND Harbour's, because Harbour's monitoring key
+# goes through the same file. Copying this one over it would drop Harbour's
+# rules and break Harbour's monitoring. This copy is frozen: to add or change a
+# rule, edit Harbour's copy and deploy from there.
 
 CMD="${SSH_ORIGINAL_COMMAND:-}"
 

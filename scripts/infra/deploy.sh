@@ -154,7 +154,7 @@ fi
 # - root: container master process reads it at startup; host root + backup cron need it.
 # - deploy group: the CI deploy user reads it for remote monitoring (monitor-deep.sh greps it over SSH).
 # - NOT world-readable: .env holds DB/Stripe/API secrets. (scp/editors leave it 600 root:root, which
-#   silently breaks deploy-user monitoring — see docs/monitoring.md. www-data does not read it at runtime.)
+#   silently breaks deploy-user monitoring — see private/docs/monitoring.md. www-data does not read it at runtime.)
 $SSH_CMD "chown root:deploy $REMOTE_DIR/.env && chmod 640 $REMOTE_DIR/.env"
 
 # Validate required env vars are set (catch blank passwords before compose fails with a cryptic error)
