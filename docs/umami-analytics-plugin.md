@@ -63,7 +63,7 @@ The self-hosted `@mikusnuz/umami-mcp` MCP works against a self-hosted instance (
 The plugin itself is a code-only change (new plugin, no article data). Per `CLAUDE.md` → "Code-only changes":
 
 1. Pull the repo on the server.
-2. `docker compose up -d ojs` — the new bind mount in `docker-compose.yml` requires the container to be recreated.
+2. `docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs` in the repo directory on the server — the new bind mount in `docker-compose.yml` requires the container to be recreated. Name both files, as `deploy.sh` does: a bare `docker compose` recreates it without the staging overlay.
 3. Enable + configure the plugin in the live OJS admin (Website ID + script URL above).
 4. Run the content-check smoke test to verify the site still works.
 
@@ -73,4 +73,4 @@ Umami is cookieless and does not collect personal data, so it does not require a
 
 ## Uninstall
 
-Disable the plugin in the OJS Plugins UI (stops all injection immediately). To remove entirely, delete the `./plugins/umami-analytics` bind-mount line from `docker-compose.yml`, `docker compose up -d ojs`, and delete the `plugins/umami-analytics/` folder.
+Disable the plugin in the OJS Plugins UI (stops all injection immediately). To remove entirely, delete the `./plugins/umami-analytics` bind-mount line from `docker-compose.yml`, recreate the container on the server with `docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs`, and delete the `plugins/umami-analytics/` folder.

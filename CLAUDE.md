@@ -158,7 +158,7 @@ Three scenarios, from lightest to heaviest.
 No article data changes — just updated plugin behaviour or UI.
 
 1. `ssh sea-live 'cd /opt/pharkie-ojs-plugins && git pull'`
-2. If docker-compose.yml changed (volume mounts, env vars): `docker compose up -d --force-recreate ojs`
+2. If docker-compose.yml changed (volume mounts, env vars): `ssh sea-live 'cd /opt/pharkie-ojs-plugins && docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --force-recreate ojs'`. Always both files, as `deploy.sh` uses them: a bare `docker compose` loads `docker-compose.override.yml` (dev) in place of the staging overlay.
 3. `scripts/monitoring/content-check.sh --host=sea-live` — verify site still works
 
 #### Specific issues changed (pipeline fix affecting some volumes)

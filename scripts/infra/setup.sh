@@ -9,8 +9,8 @@
 #   scripts/infra/setup.sh --env=dev --with-sample-data   # Dev + test data
 #
 # Compose modes:
-#   IP-only (default):  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
-#   With Caddy/SSL:     docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.caddy.yml up -d
+#   Server:  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+#   (TLS comes from the box's shared Caddy, its own stack; see docs/shared-caddy.md.)
 #
 # Requires: containers already running.
 set -eo pipefail

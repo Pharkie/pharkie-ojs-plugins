@@ -1,7 +1,12 @@
 # Better Stack Collector (host metrics + logs).
-# Deployed separately from the main app stack.
 #
-# Usage (from /opt/pharkie-ojs-plugins on live):
+# 🛑 DO NOT START THIS ON THE LIVE BOX. The box's collector is Harbour's: the
+# `collector` service of `harbour-infra` (Pharkie/sea-membership-platform,
+# docs/box-maintenance.md), since 8 Oct 2026. It has the same container_name,
+# better-stack-collector, so `up -d` here would collide with it. Nothing on
+# the box runs from this file, and it retires with this project.
+#
+# Usage (on a box with no other collector):
 #   docker compose -f docker-compose.collector.yml up -d
 #
 # Requires COLLECTOR_SECRET in .env file.
