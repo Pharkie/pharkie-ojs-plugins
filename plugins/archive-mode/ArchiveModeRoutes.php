@@ -168,6 +168,60 @@ class ArchiveModeRoutes
         return [$page, $op, $parts];
     }
 
+    /**
+     * Does this link lead to a closed page on this site? $href is as a menu
+     * item or the footer holds it: a path ("/ea/submitanarticle") or a full
+     * address on one of this site's own hosts. Anything else (another site,
+     * mailto:, a relative path) is not ours to judge, so false.
+     *
+     * @param string[] $hosts this site's host names, without a port
+     */
+    public static function linksToClosed(string $href, ?string $contextPath, array $hosts): bool
+    {
+        $parts = parse_url(html_entity_decode(trim($href), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if (!is_array($parts)) {
+            return false;
+        }
+        if (isset($parts['host'])) {
+            $ours = array_map('strtolower', $hosts);
+            if (!in_array(strtolower($parts['host']), $ours, true)) {
+                return false;
+            }
+        } elseif (isset($parts['scheme'])) {
+            return false;
+        }
+        $parsed = self::parseSource((string) ($parts['path'] ?? ''), $contextPath);
+        return $parsed !== null && self::isClosed(...$parsed);
+    }
+
+    /**
+     * The footer's HTML without its links to closed pages, each taken with
+     * the line break after it (or before it, when it ends a column), so no
+     * gap is left. Everything else is untouched.
+     *
+     * @param string[] $hosts this site's host names, without a port
+     */
+    public static function withoutClosedLinks(string $html, ?string $contextPath, array $hosts): string
+    {
+        $gone = "\x00";
+        $marked = preg_replace_callback(
+            '~<a\b[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>.*?</a>~is',
+            fn (array $m): string => self::linksToClosed($m[2], $contextPath, $hosts) ? $gone : $m[0],
+            $html
+        );
+        if ($marked === null || !str_contains($marked, $gone)) {
+            return $html;
+        }
+        // A link between two breaks leaves one; at either end of a column, none.
+        $br = '<br\s*/?>';
+        $x = '\x00';
+        return preg_replace(
+            ['~' . $br . '\s*' . $x . '\s*(' . $br . ')~i', '~' . $x . '\s*' . $br . '~i', '~' . $br . '\s*' . $x . '~i', '~' . $x . '~'],
+            ['$1', '', '', ''],
+            $marked
+        ) ?? $html;
+    }
+
     /** The host to name in the notice: "existentialanalysis.org.uk". */
     public static function siteName(string $movedTo): string
     {

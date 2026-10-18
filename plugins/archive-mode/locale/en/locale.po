@@ -39,7 +39,4 @@ msgid "plugins.generic.archiveMode.closed.title"
 msgstr "This website is no longer live"
 
 msgid "plugins.generic.archiveMode.closed.text"
-msgstr "You can't sign in, register, submit an article, buy anything or reset a password here. This is an archive of the journal, for reading only."
-
-msgid "plugins.generic.archiveMode.closed.moved"
-msgstr "The journal has moved to the SEA's website, {$site}. Members sign in there."
+msgstr "You can't sign in, register, submit an article, buy anything or reset a password here."

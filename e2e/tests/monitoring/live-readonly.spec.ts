@@ -83,7 +83,7 @@ test.describe('OJS Journal', () => {
     // In archive mode (plugins/archive-mode) sign-in is closed on purpose: the
     // page must say so, and offer no form.
     if (await page.locator('.archive-mode-bar').count() > 0) {
-      await expect(page.locator('a.archive-mode-closed__link')).toBeVisible();
+      await expect(page.locator('.archive-mode-closed')).toBeVisible();
       await expect(page.locator('input[name="password"]')).toHaveCount(0);
       return;
     }

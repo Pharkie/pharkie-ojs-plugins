@@ -22,7 +22,10 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
   OJS's 404 for an unknown article is a bare one-line response with no page
   around it, so it has no bar.
 - **Closed routes show one message instead** (`ArchiveModeHandler`), GET or
-  POST, and do nothing else:
+  POST, and do nothing else: the heading "This website is no longer live" and
+  one line, "You can't sign in, register, submit an article, buy anything or
+  reset a password here." The bar above it says where the journal has gone
+  and carries the link, so the message repeats neither:
 
   | Route | Why |
   |---|---|
@@ -44,7 +47,7 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
   buttons print the price from). So no price and no purchase step appears
   even if the journal's fees are still set. A reader without access who clicks a
   padlocked galley is sent to sign in or to About > Subscriptions, both
-  closed, and the message links to the article they wanted. Journal managers
+  closed, and the bar there links to the article they wanted. Journal managers
   and the site admin are left out of this, because a settings form they open
   would save the in-memory value.
 - **The sidebar loses its offers**, in memory for that request: every
@@ -56,6 +59,12 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
   as they are.
   Nothing is saved: the journal's `sidebar` setting is untouched, and staff
   see the sidebar as it is, for the same reason as payments.
+- **The main menu and the footer lose their links to closed pages**, in
+  memory for that request: a menu item whose address is a closed route is
+  not shown (`NavigationMenus::displaySettings`; "Submissions" locally, the
+  SEA's "Submit an Article" on live), and each such link goes from the
+  journal's footer HTML with the line break beside it. Staff see both as
+  they are.
 - **Register and Login leave the header** for everyone but staff.
 - **Two other plugins stand down on the same value**: WP-OJS Subscription API
   adds none of its sign-in, reset or profile messages, no reset handler and no
@@ -127,7 +136,7 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs
 
 ```bash
 curl -s https://journal.existentialanalysis.org.uk/ea | grep -c 'archive-mode-bar"'        # 1
-curl -s https://journal.existentialanalysis.org.uk/ea/login | grep -c 'archive-mode-closed__link'   # 1
+curl -s https://journal.existentialanalysis.org.uk/ea/login | grep -c 'class="archive-mode-closed"'   # 1
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://journal.existentialanalysis.org.uk/ea/payment/plugin/StripePayment/webhook   # 400: the webhook still answers
 ```
 
@@ -154,8 +163,8 @@ undoing.
 
 These follow Harbour's own routes (`src/pages/journal/`) and its redirect map
 (`src/lib/redirects.ts`), which is what `journal.` 301s into once OJS retires.
-On a closed page reached by OJS sending a reader to sign in, the link follows
-the page they were after (OJS's `source` parameter).
+On a closed page reached by OJS sending a reader to sign in, the bar's link
+follows the page they were after (OJS's `source` parameter).
 
 ## Monitoring
 
@@ -171,7 +180,8 @@ php plugins/archive-mode/tests/routes-test.php
 ```
 
 Runs without OJS: which routes close, which sidebar blocks go, where each
-page links, how `source` is read, and how the bar goes into a page.
+page links, how `source` is read, which menu and footer links count as
+closed and how they leave the footer, and how the bar goes into a page.
 
 ## Uninstall
 

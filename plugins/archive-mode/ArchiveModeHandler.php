@@ -2,9 +2,11 @@
 
 /**
  * Stands in for every route archive mode closes (ArchiveModeRoutes::isClosed):
- * sign-in, registration, password resets, the profile, subscriptions and
- * payments. Whatever was asked for, GET or POST, it does nothing and shows
- * one message with a link to the journal's new home.
+ * sign-in, registration, password resets, the profile, subscriptions,
+ * payments and the pages on submitting. Whatever was asked for, GET or POST,
+ * it does nothing and shows one heading and one line. The bar above it
+ * already says the journal has moved and carries the link there, so the
+ * message repeats neither.
  */
 
 namespace APP\plugins\generic\archiveMode;
@@ -14,21 +16,11 @@ use APP\template\TemplateManager;
 
 class ArchiveModeHandler extends Handler
 {
-    public function __construct(private ArchiveModePlugin $plugin)
-    {
-        parent::__construct();
-    }
-
     public function closed($args, $request)
     {
         $this->setupTemplate($request);
-        [$kind, $url] = $this->plugin->destination($request);
-        $site = ArchiveModeRoutes::siteName(ArchiveModePlugin::movedTo());
-
-        $esc = fn (string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-        $message = '<p>' . $esc(__('plugins.generic.archiveMode.closed.text')) . '</p>'
-            . '<p>' . $esc(__('plugins.generic.archiveMode.closed.moved', ['site' => $site])) . '</p>'
-            . '<p><a class="archive-mode-closed__link" href="' . $esc($url) . '">' . $esc($this->plugin->linkLabel($kind)) . '</a></p>';
+        $message = '<p class="archive-mode-closed">'
+            . htmlspecialchars(__('plugins.generic.archiveMode.closed.text'), ENT_QUOTES, 'UTF-8') . '</p>';
 
         header('X-Robots-Tag: noindex');
         $templateMgr = TemplateManager::getManager($request);

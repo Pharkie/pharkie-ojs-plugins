@@ -22,6 +22,8 @@
  * - the sidebar loses every block that offers something the archive no
  *   longer does (event banners, adverts, submissions, subscriptions) and the
  *   links to For Readers and For Authors, which are closed;
+ * - the main menu and the footer lose their links to closed pages
+ *   ("Submissions", "Submit an Article");
  * - Register and Login leave the header.
  * Reading is unchanged: the home page, issues, articles, open galleys,
  * search and OAI-PMH.
@@ -58,6 +60,7 @@ class ArchiveModePlugin extends GenericPlugin
 
     private ?array $map = null;
     private bool $filterAdded = false;
+    private ?bool $staff = null;
 
     /** The journal's new home, or '' when archive mode is off. */
     public static function movedTo(): string
@@ -77,6 +80,8 @@ class ArchiveModePlugin extends GenericPlugin
         // for the password reset, so a closed route never reaches it.
         Hook::add('LoadHandler', $this->closeRoutes(...), Hook::SEQUENCE_CORE);
         Hook::add('TemplateManager::display', $this->addBar(...));
+        // Last, so every item's address is final by the time it is read.
+        Hook::add('NavigationMenus::displaySettings', $this->hideClosedMenuItem(...), Hook::SEQUENCE_LAST);
 
         return $success;
     }
@@ -123,7 +128,7 @@ class ArchiveModePlugin extends GenericPlugin
         $this->forReaders($request, $closed || $page !== 'payment');
 
         if ($closed) {
-            $args[3] = new ArchiveModeHandler($this);
+            $args[3] = new ArchiveModeHandler();
             $args[1] = 'closed';
             return Hook::ABORT;
         }
@@ -189,14 +194,53 @@ class ArchiveModePlugin extends GenericPlugin
         }
     }
 
+    /** Once per request: the menu asks for every item. */
     private function isStaff(PKPRequest $request): bool
     {
-        if (!$request->getUser()) {
-            return false;
+        if ($this->staff === null) {
+            $contextId = $request->getContext()?->getId();
+            $this->staff = $request->getUser() !== null && (Validation::isSiteAdmin()
+                || ($contextId !== null && Validation::isAuthorized(Role::ROLE_ID_MANAGER, $contextId)));
         }
-        $contextId = $request->getContext()?->getId();
-        return Validation::isSiteAdmin()
-            || ($contextId !== null && Validation::isAuthorized(Role::ROLE_ID_MANAGER, $contextId));
+        return $this->staff;
+    }
+
+    // ---------------------------------------------------------------
+    // Links to closed pages: the main menu and the footer
+    // ---------------------------------------------------------------
+
+    /**
+     * NavigationMenus::displaySettings: a menu item that leads to a closed
+     * page is not shown ("Submissions" locally, the SEA's "Submit an
+     * Article" on live). In memory, for this request; the menu is untouched.
+     */
+    public function hideClosedMenuItem(string $hookName, array $args): bool
+    {
+        $item = $args[0];
+        $request = Application::get()->getRequest();
+        if ($item->getIsDisplayed() && !$this->isStaff($request)
+            && ArchiveModeRoutes::linksToClosed((string) $item->getUrl(), $request->getContext()?->getPath(), self::hosts($request))) {
+            $item->setIsDisplayed(false);
+        }
+        return Hook::CONTINUE;
+    }
+
+    /**
+     * This site's host names: the one the request came in on, and the one
+     * in config.inc.php's base_url, which OJS writes its own links with.
+     *
+     * @return string[]
+     */
+    private static function hosts(PKPRequest $request): array
+    {
+        $hosts = [];
+        foreach ([$request->getBaseUrl(), (string) Config::getVar('general', 'base_url')] as $url) {
+            $host = parse_url($url, PHP_URL_HOST);
+            if (is_string($host) && $host !== '') {
+                $hosts[] = $host;
+            }
+        }
+        return $hosts;
     }
 
     // ---------------------------------------------------------------
@@ -208,7 +252,7 @@ class ArchiveModePlugin extends GenericPlugin
      * A closed route that OJS reached by redirecting a reader to sign in
      * carries the page they wanted in `source`, so the link follows that.
      */
-    public function destination(PKPRequest $request): array
+    private function destination(PKPRequest $request): array
     {
         $page = (string) $request->getRequestedPage();
         $op = (string) $request->getRequestedOp();
@@ -227,7 +271,7 @@ class ArchiveModePlugin extends GenericPlugin
     }
 
     /** The link's words for a destination kind. */
-    public function linkLabel(string $kind): string
+    private function linkLabel(string $kind): string
     {
         return __('plugins.generic.archiveMode.link.' . $kind);
     }
@@ -282,6 +326,12 @@ class ArchiveModePlugin extends GenericPlugin
         $journal = $templateMgr->getTemplateVars('currentJournal');
         if ($journal && !$staff && (string) $request->getRequestedPage() !== 'payment') {
             self::zeroPayments($journal);
+        }
+
+        // The journal's footer HTML, without its links to closed pages.
+        $footer = $templateMgr->getTemplateVars('pageFooter');
+        if (!$staff && is_string($footer) && $footer !== '') {
+            $templateMgr->assign('pageFooter', ArchiveModeRoutes::withoutClosedLinks($footer, $request->getContext()?->getPath(), self::hosts($request)));
         }
 
         [$kind, $url] = $this->destination($request);
@@ -355,8 +405,6 @@ body.archive-mode-viewer { display: flex; flex-direction: column; height: 100vh;
 body.archive-mode-viewer > .archive-mode-bar, body.archive-mode-viewer > .header_view { flex: none; }
 body.archive-mode-viewer > .galley_view { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
 body.archive-mode-viewer > .galley_view iframe { padding-top: 0; }
-.archive-mode-closed__link { display: inline-block; margin-top: 4px; padding: 10px 16px; background: #1f3540; color: #fff !important; border-radius: 4px; font-weight: 700; text-decoration: none; }
-.archive-mode-closed__link:hover, .archive-mode-closed__link:focus { background: #2f4f5e; text-decoration: none; }
 ';
         if ($hideUserMenu) {
             $css .= '.pkp_navigation_user_wrapper { display: none !important; }';

@@ -113,6 +113,28 @@ namespace {
     check('protocol-relative is refused', R::parseSource('//evil.example/x', 'ea'), null);
     check('empty is refused', R::parseSource('', 'ea'), null);
 
+    echo "Links to closed pages (menu and footer)\n";
+    $hosts = ['journal.existentialanalysis.org.uk', 'localhost'];
+    check('menu: Submit an Article (full address)', R::linksToClosed('https://journal.existentialanalysis.org.uk/ea/submitanarticle', 'ea', $hosts), true);
+    check('menu: Submissions, with index.php', R::linksToClosed('http://localhost/index.php/ea/about/submissions', 'ea', $hosts), true);
+    check('menu: host case ignored', R::linksToClosed('https://Journal.ExistentialAnalysis.org.uk/ea/login', 'ea', $hosts), true);
+    check('menu: Archives stays', R::linksToClosed('https://journal.existentialanalysis.org.uk/ea/issue/archive', 'ea', $hosts), false);
+    check('menu: another site is not ours', R::linksToClosed('https://example.org/ea/submitanarticle', 'ea', $hosts), false);
+    check('footer: path', R::linksToClosed('/ea/submitanarticle', 'ea', $hosts), true);
+    check('footer: mailto', R::linksToClosed('mailto:editor@example.org', 'ea', $hosts), false);
+    check('footer: relative path', R::linksToClosed('submitanarticle', 'ea', $hosts), false);
+    check('footer: empty', R::linksToClosed('', 'ea', $hosts), false);
+    $col = '<div><a href="/ea/issue/current">Current</a><br><a href="/ea/issue/archive">Archives</a><br><a href="/ea/about">About</a><br><a href="/ea/submitanarticle">Submit an Article</a></div>';
+    check('footer: last in its column, with its break', R::withoutClosedLinks($col, 'ea', $hosts),
+        '<div><a href="/ea/issue/current">Current</a><br><a href="/ea/issue/archive">Archives</a><br><a href="/ea/about">About</a></div>');
+    check('footer: between two breaks, one left', R::withoutClosedLinks('<a href="/ea/about">About</a><br><a href="/ea/login">Login</a><br><a href="/ea/about/contact">Contact</a>', 'ea', $hosts),
+        '<a href="/ea/about">About</a><br><a href="/ea/about/contact">Contact</a>');
+    check('footer: first in its column', R::withoutClosedLinks('<div><a href="/ea/submitanarticle">Submit</a><br/><a href="/ea/about">About</a></div>', 'ea', $hosts),
+        '<div><a href="/ea/about">About</a></div>');
+    check('footer: alone', R::withoutClosedLinks('<p><a href=\'/ea/user/register\'>Register</a></p>', 'ea', $hosts), '<p></p>');
+    $none = '<div><a href="/ea/about">About</a><br><img src="/x.png" alt="SEA"></div>';
+    check('footer: nothing closed, untouched', R::withoutClosedLinks($none, 'ea', $hosts), $none);
+
     echo "Site name\n";
     check('apex', R::siteName($home), 'existentialanalysis.org.uk');
     check('www dropped', R::siteName('https://www.example.org/journal'), 'example.org');
