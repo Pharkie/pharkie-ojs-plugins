@@ -23,6 +23,11 @@
 # changes slowly, so off-siting it is a cost decision rather than an oversight —
 # recorded in docs/setup-guide.md so that the gap is a known one.
 #
+# Harbour's scripts/infra/upload-backup-r2.sh (Pharkie/sea-membership-platform)
+# does the same job for its own dumps into the same bucket under `harbour/`.
+# Keep the two in step: the rclone version floor, the env-only config,
+# copy-not-sync and the two delete guards rest on the same reasoning in both.
+#
 # Usage:
 #   scripts/ojs/upload-backup-r2.sh              # copy up, then expire
 #   scripts/ojs/upload-backup-r2.sh --dry-run    # say what would move, write nothing
@@ -41,13 +46,23 @@ KEEP_WEEKLY_DAYS=84
 # 🛑 REFUSE TO EXPIRE A NEARLY-EMPTY PREFIX. Expiry is by age, so a month of
 # failed uploads followed by one successful run would age every remaining object
 # past the limit and delete the lot — the run that finally works would be the
-# run that empties the store. Below this many objects the expiry step is skipped
-# and says so, on the principle that too many backups is not an incident.
+# run that empties the store. At or below this many objects the expiry step is
+# skipped and says so, on the principle that too many backups is not an incident.
 #
 # 14, not 7, because a night here writes THREE dumps into daily/ — ojs, wp and
 # umami — so 7 is barely two nights of margin. Pick this from what a night
 # actually produces rather than copying the number from another script.
 EXPIRE_FLOOR=14
+
+# The most one night may delete from a prefix: ten, a little over three nights
+# of steady-state expiry. More than that due, and the night deletes none of it
+# and goes red; see expire().
+MAX_DELETE=10
+# The exit code for exactly that: the dumps reached R2 and the expiry was
+# refused. backup-ojs-db.sh reads it as its own alarm, apart from "the dumps are
+# still only on this box". Not 1 (every other failure here), and outside
+# rclone's 0-10. Harbour's uploader uses the same number.
+EXPIRY_CAPPED_EXIT=20
 
 DRY_RUN=""
 for arg in "$@"; do
@@ -259,23 +274,78 @@ expire() {
     log "  $sub/: $count objects, at or below the floor of $EXPIRE_FLOOR — not expiring"
     return 0
   fi
-  # 🛑 --max-delete IS THE REAL GUARD, and the floor above is only the cheap
-  # half of it. In a steady state three objects age out per night (ojs, wp and
-  # umami), so a run that wants to remove more than ten has misunderstood
-  # something — a
-  # clock jump, a changed prefix, a restored-from-cold store whose mtimes are all
-  # old. rclone aborts the delete rather than doing it, and the run goes red.
-  local args=(delete "$REMOTE/$sub/" --min-age "${days}d" --retries 3 --max-delete 10)
+  # 🛑 THE CAP IS COUNTED HERE, BEFORE ANYTHING IS DELETED, NOT LEFT TO
+  # rclone's --max-delete. The floor above is only the cheap half. In a steady
+  # state three objects age out of daily/ per night (ojs, wp and umami), so a
+  # run with more than MAX_DELETE due has misunderstood something: a clock jump,
+  # a changed prefix, a restored-from-cold store whose mtimes are all old. It
+  # deletes none of them, says so, and turns the night red, and the weekly
+  # expiry is not attempted. The cause is still there tomorrow, so tomorrow
+  # refuses and is red too, until someone looks.
+  #
+  # 🛑 rclone's own cap cannot do this job. `delete --max-delete 10` deletes
+  # ten, then each of its 8 checkers takes one more object, fails fatally and
+  # stops reading; once its 8-slot queue is full the listing blocks for ever.
+  # Measured with 1.73.2: 26 due deletes ten and exits 7, 27 due never exits,
+  # and operations.Delete in v1.75.0 has the same unguarded send. A clock jump
+  # puts some 90 objects past the age in daily/, so the 03:00 backup would hang
+  # with nothing in the log after "expiring daily/", and no heartbeat ping at
+  # all. Under 27 it exits 7, which a `|| true` on the delete would turn into a
+  # green night.
+  #
+  # The flag stays on the delete as a backstop for a count that went stale in
+  # the seconds between, and its exit 7 is the same alarm. Any OTHER failure of
+  # the delete or of the count stays a warning: nothing is lost, and the next
+  # night tries again.
+  local due n
+  if ! due=$("$RCLONE" lsf -R --files-only --min-age "${days}d" "$REMOTE/$sub/" 2>/dev/null); then
+    log "  WARNING: could not list what is due in $sub/, so not expiring it tonight."
+    return 0
+  fi
+  n=$(printf '%s' "$due" | grep -c . || true)
+  if [ "${n:-0}" -gt "$MAX_DELETE" ]; then
+    log "ERROR: $n objects in $sub/ are older than ${days}d, more than the $MAX_DELETE a night may delete. Deleting none of them."
+    capped="$sub"
+    return 0
+  fi
+  local args=(delete "$REMOTE/$sub/" --min-age "${days}d" --retries 3 --max-delete "$MAX_DELETE")
   [ -n "$DRY_RUN" ] && args+=(--dry-run)
-  log "  expiring $sub/ older than ${days}d ($count objects now)…"
-  "$RCLONE" "${args[@]}" 2>&1 | while read -r l; do [ -n "$l" ] && log "    $l"; done || true
+  log "  expiring $sub/ older than ${days}d ($n of $count objects)…"
+  local out rc=0 l
+  out=$("$RCLONE" "${args[@]}" 2>&1) || rc=$?
+  # `if`, not `[ -n ] && log`: a loop whose last line is blank would return 1.
+  while IFS= read -r l; do if [ -n "$l" ]; then log "    $l"; fi; done <<< "$out"
+  if [ "$rc" -eq 7 ] || [[ "$out" == *"max-delete threshold reached"* ]]; then
+    log "ERROR: rclone's own --max-delete cap stopped the expiry of $sub/ (see above)."
+    capped="$sub"
+  elif [ "$rc" -ne 0 ]; then
+    log "  WARNING: expiring $sub/ failed (rclone exit $rc). Nothing was lost; the next night tries again."
+  fi
+  return 0
 }
+
+capped=""
 
 if [ -n "$DRY_RUN" ] || [ "$copied" = "1" ]; then
   expire daily  "$KEEP_DAILY_DAYS"
-  expire weekly "$KEEP_WEEKLY_DAYS"
+  if [ -n "$capped" ]; then
+    log "  not expiring weekly/: daily/ says something is wrong, so nothing more is deleted tonight."
+  else
+    expire weekly "$KEEP_WEEKLY_DAYS"
+  fi
 else
   log "  skipping expiry: nothing was verified as uploaded this run"
+fi
+
+if [ -n "$capped" ]; then
+  if [ -n "$DRY_RUN" ]; then
+    log "ERROR: a real run would refuse to expire $capped/ (see above). See docs/setup-guide.md."
+  else
+    log "ERROR: R2 expiry refused on $capped/: more was due than a night may delete (see above)."
+    log "  Tonight's dumps are in R2. Each night refuses, and is red, until the cause is found."
+    log "  See docs/setup-guide.md, Off-site backups."
+  fi
+  exit "$EXPIRY_CAPPED_EXIT"
 fi
 
 log "R2 off-site complete."

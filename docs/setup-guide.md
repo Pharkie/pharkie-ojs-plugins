@@ -92,9 +92,32 @@ Configuration lives in the VPS's root-only `/opt/pharkie-ojs-plugins/.env`:
 
 Retention in R2 is by age — 30 days daily, 84 days weekly — matching what the
 LFS store held, so changing the storage did not quietly change the recovery
-window. Two guards sit on the delete: it is skipped entirely below 7 objects,
-and `--max-delete 10` aborts a run that wants to remove more than a night's
-worth.
+window. Two guards sit on the delete. Expiry is **skipped entirely at or below
+14 objects** in a prefix (a night writes three, ojs, wp and umami, so 14 is
+under five nights), so a month of failed uploads followed by one good run
+cannot age the whole store out at once. And **a night deletes at most ten from
+a prefix**, a little over three nights' worth.
+
+🛑 **More than ten due turns the night red, and deletes none of them.** The
+uploader lists what is past the age first. Over ten, it deletes nothing, skips
+`weekly/` if it was `daily/`, and exits 20; `backup-ojs-db.sh` then exits 1
+with a line of its own, `ERROR: the R2 expiry was refused`, apart from a failed
+copy: that night's dumps did reach R2. The SEA: Database backup heartbeat goes
+down. The cause is still there the next night, so every night is red until
+someone looks. Look at the box's clock, at `BACKUP_R2_PREFIX`, and at whether
+the store was restored with old modification times. A failed count, or any
+other failure of the delete, is only a warning: it deletes nothing, and the
+next night tries again.
+
+🛑 **rclone's own `--max-delete` cannot be the guard.** Once it is hit, each of
+rclone's 8 checkers takes one more object, fails and stops reading, and the
+listing then blocks on a full queue for ever: measured with 1.73.2, 26 due
+deletes ten and exits 7, and 27 due never exits (v1.75.0's `operations.Delete`
+has the same unguarded send). A clock jump puts some 90 objects past the age in
+`daily/`, so the 03:00 backup would hang after deleting ten, and the heartbeat
+would only go down when no ping arrived. The flag stays on the delete only as a
+backstop for a count that went stale in the seconds between; its exit 7 turns
+the night red the same way.
 
 🛑 **rclone must be 1.65 or newer, and NOT the one in apt.** Ubuntu 24.04 ships
 1.60.1, which cannot talk to R2 reliably: measured on the box, a 200 KB PUT
