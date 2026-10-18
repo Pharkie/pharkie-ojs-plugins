@@ -152,14 +152,14 @@ undoing.
 
 | OJS page | Link |
 |---|---|
-| `article/view/<id>/…` or `article/download/<id>/…`, in the map | `<moved_to>/<slug>` "Read this article on the SEA's website" |
-| `issue/view/<id>/…` or `issue/download/<id>/…`, in the map | `<moved_to>/issues/<slug>` "See this issue on the SEA's website" |
+| `article/view/<id>/…` or `article/download/<id>/…`, in the map | `<moved_to>/<slug>` "Read this article on our website" |
+| `issue/view/<id>/…` or `issue/download/<id>/…`, in the map | `<moved_to>/issues/<slug>` "See this issue on our website" |
 | any other `issue/*` | `<moved_to>/issues` |
 | `about` | `<moved_to>/about` |
 | `about/submissions`, `information/authors`, `submitanarticle` (all closed) | `<moved_to>/for-contributors` |
 | `about/editorialMasthead`, `editorialTeam` | `<moved_to>/editorial-board` |
 | `search` with words | `<moved_to>?q=<words>` |
-| anything else | `<moved_to>` "Go to the journal on the SEA's website" |
+| anything else | `<moved_to>` "Go to the journal on our website" |
 
 These follow Harbour's own routes (`src/pages/journal/`) and its redirect map
 (`src/lib/redirects.ts`), which is what `journal.` 301s into once OJS retires.

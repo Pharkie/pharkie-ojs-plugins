@@ -24,16 +24,16 @@ msgid "plugins.generic.archiveMode.bar.lead"
 msgstr "This website is no longer live. It is an archive of the journal, for reading only."
 
 msgid "plugins.generic.archiveMode.bar.text"
-msgstr "The journal has moved to the SEA's website, {$site}. Please don't sign in, register, buy anything or reset a password here."
+msgstr "The journal has moved to our website, {$site}. Please don't sign in, register, buy anything or reset a password here."
 
 msgid "plugins.generic.archiveMode.link.article"
-msgstr "Read this article on the SEA's website"
+msgstr "Read this article on our website"
 
 msgid "plugins.generic.archiveMode.link.issue"
-msgstr "See this issue on the SEA's website"
+msgstr "See this issue on our website"
 
 msgid "plugins.generic.archiveMode.link.journal"
-msgstr "Go to the journal on the SEA's website"
+msgstr "Go to the journal on our website"
 
 msgid "plugins.generic.archiveMode.closed.title"
 msgstr "This website is no longer live"
