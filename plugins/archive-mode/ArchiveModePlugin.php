@@ -213,12 +213,17 @@ class ArchiveModePlugin extends GenericPlugin
      * NavigationMenus::displaySettings: a menu item that leads to a closed
      * page is not shown ("Submissions" locally, the SEA's "Submit an
      * Article" on live). In memory, for this request; the menu is untouched.
+     *
+     * Not the user menu (Register, Login, and a signed-in reader's name with
+     * Log Out under it): the bar's CSS hides all of it for readers, and its
+     * name item leads to the closed profile, so hiding by address here would
+     * take Log Out from the page as well.
      */
     public function hideClosedMenuItem(string $hookName, array $args): bool
     {
-        $item = $args[0];
+        [$item, $menu] = $args;
         $request = Application::get()->getRequest();
-        if ($item->getIsDisplayed() && !$this->isStaff($request)
+        if ($item->getIsDisplayed() && $menu->getAreaName() !== 'user' && !$this->isStaff($request)
             && ArchiveModeRoutes::linksToClosed((string) $item->getUrl(), $request->getContext()?->getPath(), self::hosts($request))) {
             $item->setIsDisplayed(false);
         }
