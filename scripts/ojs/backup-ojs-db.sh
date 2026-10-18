@@ -308,11 +308,21 @@ fi
 # below, and a persistent off-site failure would then fill a 75 GB disk that
 # already runs five databases. Trading a loud failure for a slow disk-fill is a
 # bad trade. Everything after this point is cleanup, so it all still runs.
+#
+# Exit 20 is the uploader's EXPIRY_CAPPED_EXIT: tonight's dumps reached R2, but
+# more was due for expiry than a night may delete, so it deleted none of it. Red
+# too, under its own name: it wants a different response from a copy that never
+# left the box.
 R2_FATAL=0
+EXPIRY_CAPPED=0
 if [ -x "$PROJECT_DIR/scripts/ojs/upload-backup-r2.sh" ]; then
-  if ! "$PROJECT_DIR/scripts/ojs/upload-backup-r2.sh"; then
-    R2_FATAL=1
-  fi
+  r2_rc=0
+  "$PROJECT_DIR/scripts/ojs/upload-backup-r2.sh" || r2_rc=$?
+  case "$r2_rc" in
+    0)  ;;
+    20) EXPIRY_CAPPED=1 ;;
+    *)  R2_FATAL=1 ;;
+  esac
 else
   log "WARNING: upload-backup-r2.sh not found or not executable — no off-site copy"
 fi
@@ -342,12 +352,21 @@ rotate "$WEEKLY_DIR" "wp-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly WP DB"
 rotate "$WEEKLY_DIR" "umami-weekly-*.sql.gz.enc" "$KEEP_WEEKLY" "weekly Umami DB"
 rotate "$WEEKLY_DIR" "ojs-files-weekly-*.tar.gz.enc" "$KEEP_WEEKLY_FILES" "weekly OJS files"
 
-# The deferred exit from the off-site block. Non-zero is the whole alarm: the
+# The deferred exits from the off-site block. Non-zero is the whole alarm: the
 # cron line pings the Better Stack heartbeat on this exit status and nothing
-# else reads the log.
-if [ "$R2_FATAL" -ne 0 ]; then
-  log "ERROR: backup FAILED — the dumps were written and verified on this box,"
-  log "       but nothing was copied off it. A box failure tonight loses them."
+# else reads the log. Each is named separately because they mean different
+# things and want different responses.
+if [ "$R2_FATAL" -ne 0 ] || [ "$EXPIRY_CAPPED" -ne 0 ]; then
+  if [ "$R2_FATAL" -ne 0 ]; then
+    log "ERROR: backup FAILED — the dumps were written and verified on this box,"
+    log "       but nothing was copied off it. A box failure tonight loses them."
+  fi
+  if [ "$EXPIRY_CAPPED" -ne 0 ]; then
+    log "ERROR: the R2 expiry was refused: more objects were due for deletion"
+    log "       than a night may delete (see above). Tonight's dumps reached R2."
+    log "       Each night stays red until the cause is found."
+    log "       See docs/setup-guide.md, Off-site backups."
+  fi
   exit 1
 fi
 
