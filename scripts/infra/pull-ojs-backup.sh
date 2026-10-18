@@ -39,8 +39,8 @@ done
 
 REMOTE_BACKUP_DIR="/opt/backups/ojs"
 REMOTE_PROJECT_DIR="/opt/pharkie-ojs-plugins"
-CRON_SCHEDULE="0 3 * * *"
-CRON_CMD="$REMOTE_PROJECT_DIR/scripts/ojs/backup-ojs-db.sh >> $REMOTE_BACKUP_DIR/backup.log 2>&1"
+# Writes the 03:00 line, heartbeat ping included. Runs on the box.
+INSTALL_CRON="$REMOTE_PROJECT_DIR/scripts/ojs/install-backup-cron.sh"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -129,18 +129,21 @@ case "$MODE" in
     # Make backup script executable
     ssh "$SSH_HOST" "chmod +x $REMOTE_PROJECT_DIR/scripts/ojs/backup-ojs-db.sh"
 
-    # Check if cron already installed
-    EXISTING=$(ssh "$SSH_HOST" "crontab -l 2>/dev/null | grep -F 'backup-ojs-db.sh' || true")
-    if [ -n "$EXISTING" ]; then
-      log "Cron job already installed:"
-      echo "  $EXISTING"
+    # Check if cron already installed (if so, no first backup below)
+    EXISTING=$(ssh "$SSH_HOST" "crontab -l 2>/dev/null | grep -cF 'backup-ojs-db.sh' || true")
+
+    # The line, with its heartbeat ping from BETTERSTACK_HB_OJS_BACKUP in the
+    # box's .env, is written by the box's own copy of the installer. It leaves
+    # an existing line alone, and warns if that line pings nothing.
+    if ! ssh "$SSH_HOST" "test -f $INSTALL_CRON"; then
+      log "ERROR: $INSTALL_CRON not on $SSH_HOST. Pull the box's checkout first."
+      exit 1
+    fi
+    ssh "$SSH_HOST" "bash $INSTALL_CRON"
+    if [ "${EXISTING:-0}" -gt 0 ]; then
       exit 0
     fi
 
-    # Add to crontab (preserve existing entries)
-    ssh "$SSH_HOST" "( crontab -l 2>/dev/null; echo '$CRON_SCHEDULE $CRON_CMD' ) | crontab -"
-
-    log "Cron job installed: daily at 03:00 UTC"
     log "Verify with: ssh $SSH_HOST crontab -l"
 
     # Run a test backup now

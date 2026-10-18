@@ -12,8 +12,10 @@
 # Retention: DB dumps 7 daily + 4 weekly; files tarball 1 daily + 2 weekly (Sunday dumps promoted).
 # Backups stored in /opt/backups/ojs/
 #
-# Cron (installed by --install-cron from pull-ojs-backup.sh):
-#   0 3 * * * /opt/pharkie-ojs-plugins/scripts/ojs/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1
+# Cron (written into root's crontab by scripts/ojs/install-backup-cron.sh, which
+# deploy.sh and pull-ojs-backup.sh --install-cron both run; <hb> is
+# BETTERSTACK_HB_OJS_BACKUP from .env, and this script's exit status is the ping):
+#   0 3 * * * /opt/pharkie-ojs-plugins/scripts/ojs/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1 && curl -sf <hb> > /dev/null || curl -sf <hb>/fail > /dev/null
 #
 # To restore:
 #   openssl enc -aes-256-cbc -d -pbkdf2 -in backup.sql.gz.enc -pass file:/path/to/.backup-key | gunzip | mariadb -u root -p"$PASS" ojs

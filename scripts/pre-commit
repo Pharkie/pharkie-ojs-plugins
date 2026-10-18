@@ -35,7 +35,9 @@ source "$SCRIPT_DIR/lib/check-yaml-syntax.sh"
 source "$SCRIPT_DIR/lib/check-doc-links.sh"
 source "$SCRIPT_DIR/lib/check-backfill-tests.sh"
 
-# Track results
+# Track results. Counted as ERRORS=$((ERRORS + 1)), never ((ERRORS++)): under
+# set -e, bash 4.1+ exits on ((ERRORS++)) from 0, ending the hook at the first
+# failure with no summary.
 ERRORS=0
 
 echo ""
@@ -57,9 +59,8 @@ fi
 echo -e "${BLUE}1. Checking environment variable documentation...${NC}"
 if check_env_vars; then
     echo -e "    ${GREEN}OK${NC}: All compose variables documented"
-fi
-if [[ $? -ne 0 ]]; then
-    ((ERRORS++))
+else
+    ERRORS=$((ERRORS + 1))
 fi
 echo ""
 
@@ -70,7 +71,7 @@ echo -e "${BLUE}2. Checking YAML syntax...${NC}"
 if check_yaml_syntax; then
     echo -e "    ${GREEN}OK${NC}: YAML syntax valid"
 else
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 echo ""
 
@@ -81,7 +82,7 @@ echo -e "${BLUE}3. Checking documentation links...${NC}"
 if check_doc_links; then
     echo -e "    ${GREEN}OK${NC}: All internal links valid"
 else
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 echo ""
 
@@ -92,7 +93,7 @@ echo -e "${BLUE}4. Checking backfill tests...${NC}"
 if check_backfill_tests; then
     echo -e "    ${GREEN}OK${NC}: Backfill tests passed"
 else
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 echo ""
 
@@ -104,7 +105,7 @@ if ! command -v ggshield &>/dev/null; then
     echo -e "    ${RED}WARNING${NC}: ggshield not installed (install: pipx install ggshield)"
 elif ! ggshield secret scan pre-commit 2>/dev/null; then
     echo -e "    ${RED}FAIL${NC}: ggshield detected secrets"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 else
     echo -e "    ${GREEN}OK${NC}: ggshield found no secrets"
 fi

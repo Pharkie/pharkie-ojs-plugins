@@ -267,21 +267,15 @@ if [ -z "$SKIP_SETUP" ]; then
 fi
 
 # --- Ensure backup cron is installed ---
+# install-backup-cron.sh writes the line with its heartbeat ping, from
+# BETTERSTACK_HB_OJS_BACKUP in the box's .env, and leaves an existing line alone.
 echo "--- Checking backup cron ---"
 $SSH_CMD "
   chmod +x $REMOTE_DIR/scripts/ojs/backup-ojs-db.sh 2>/dev/null
-  CRONTAB_CURRENT=\$(sudo crontab -l 2>/dev/null) || CRONTAB_CURRENT=''
-  if echo \"\$CRONTAB_CURRENT\" | grep -qF 'scripts/backup-ojs-db.sh' && ! echo \"\$CRONTAB_CURRENT\" | grep -qF 'scripts/ojs/backup-ojs-db.sh'; then
-    echo \"\$CRONTAB_CURRENT\" | sed 's|scripts/backup-ojs-db.sh|scripts/ojs/backup-ojs-db.sh|g' | sudo crontab -
-    echo '[ok] Backup cron migrated to new path.'
-  elif echo \"\$CRONTAB_CURRENT\" | grep -qF 'scripts/ojs/backup-ojs-db.sh'; then
-    echo '[ok] Backup cron already installed.'
-  elif [ -f $REMOTE_DIR/scripts/ojs/backup-ojs-db.sh ]; then
-    sudo mkdir -p /opt/backups/ojs/daily /opt/backups/ojs/weekly
-    (echo \"\$CRONTAB_CURRENT\"; echo '0 3 * * * /opt/pharkie-ojs-plugins/scripts/ojs/backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1') | sudo crontab -
-    echo '[ok] Backup cron installed (daily 03:00 UTC).'
+  if [ -f $REMOTE_DIR/scripts/ojs/install-backup-cron.sh ]; then
+    bash $REMOTE_DIR/scripts/ojs/install-backup-cron.sh || echo 'WARNING: the backup cron could not be checked (see above).'
   else
-    echo '[skip] backup-ojs-db.sh not found, skipping cron.'
+    echo '[skip] install-backup-cron.sh not found, skipping cron.'
   fi
 "
 
