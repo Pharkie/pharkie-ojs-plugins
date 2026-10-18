@@ -4,7 +4,7 @@ Last updated: 2026-03-08
 
 > **What is this?** Before building anything, several approaches were evaluated for syncing membership data between WordPress and OJS. This document records what was tried, what was found, and why most options were eliminated. The winning approach — **push-sync** — is what this project implements.
 
-This document records the research phase: what approaches were evaluated, what was found, and why options were eliminated. For the forward-looking implementation plan, see [`plan.md`](./private/plan.md).
+This document records the research phase: what approaches were evaluated, what was found, and why options were eliminated. For the forward-looking implementation plan, see [`plan.md`](../private/plan.md).
 
 ---
 

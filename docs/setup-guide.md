@@ -37,6 +37,7 @@ Layers are ordered **heavy → volatile** so small additions don't bust the expe
 - **`scripts/monitoring/load-test.sh`** — performance tests using `hey` with server resource monitoring.
 - **`scripts/ojs/backup-ojs-db.sh`** — runs ON the VPS (via cron at 03:00 UTC). Dumps OJS DB + WP DB + Umami DB + OJS files volume → gzip → AES-256-CBC encrypt → rotate (DB: 7 daily + 4 weekly; files tarball: 1 daily + 2 weekly). Then calls the off-site step below.
 - **`scripts/ojs/upload-backup-r2.sh`** — copies the encrypted `*.sql.gz.enc` dumps to Cloudflare R2 and expires old ones. See **Off-site backups** below.
+- **`scripts/ojs/install-backup-cron.sh`** — runs ON the VPS, called by `deploy.sh` and `pull-ojs-backup.sh --install-cron`. Writes the 03:00 line into root's crontab: `backup-ojs-db.sh >> /opt/backups/ojs/backup.log 2>&1 && curl -sf <hb> > /dev/null || curl -sf <hb>/fail > /dev/null`, where `<hb>` is the Better Stack heartbeat URL in `BETTERSTACK_HB_OJS_BACKUP` in `/opt/pharkie-ojs-plugins/.env`. The backup's exit status is the whole alarm, so if the variable is unset it installs the line without the ping and prints a WARNING. A crontab that already has the line is left alone, with a WARNING if that line pings nothing.
 - **`scripts/infra/pull-ojs-backup.sh`** — runs FROM devcontainer. Pull, list, decrypt backups. Also manages VPS cron (`--install-cron`, `--remove-cron`).
 
 ## Off-site backups
@@ -102,7 +103,7 @@ a prefix**, a little over three nights' worth.
 uploader lists what is past the age first. Over ten, it deletes nothing, skips
 `weekly/` if it was `daily/`, and exits 20; `backup-ojs-db.sh` then exits 1
 with a line of its own, `ERROR: the R2 expiry was refused`, apart from a failed
-copy: that night's dumps did reach R2. The SEA: Database backup heartbeat goes
+copy: that night's dumps did reach R2. The backup heartbeat goes
 down. The cause is still there the next night, so every night is red until
 someone looks. Look at the box's clock, at `BACKUP_R2_PREFIX`, and at whether
 the store was restored with old modification times. A failed count, or any

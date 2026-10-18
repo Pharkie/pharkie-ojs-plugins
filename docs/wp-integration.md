@@ -2,7 +2,7 @@
 
 Last updated: 2026-03-22.
 
-This doc covers the WP membership stack and the raw hooks available. For the full WP plugin spec (queue tables, CLI commands, cron schedule, admin pages), see [`plan.md`](./private/plan.md#wp-plugin-spec).
+This doc covers the WP membership stack and the raw hooks available. For the full WP plugin spec (queue tables, CLI commands, cron schedule, admin pages), see [`plan.md`](../private/plan.md#wp-plugin-spec).
 
 ## Plugin stack
 
@@ -63,7 +63,7 @@ Ultimate Member remains irrelevant to the sync — it renders profiles and drive
 
 ### Why this is fragile
 
-Six plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with independent update cycles, database tables, hooks, and paid licences (~£200+/year for WCS alone). A breaking update in any one of them can silently break the membership chain. This stack is a strong candidate for future replacement — see [`membership-platform.md`](./private/membership-platform.md).
+Six plugins, three vendors (Automattic, SkyVerge, Ultimate Member), each with independent update cycles, database tables, hooks, and paid licences (~£200+/year for WCS alone). A breaking update in any one of them can silently break the membership chain. This stack is a strong candidate for future replacement — see [`membership-platform.md`](../private/membership-platform.md).
 
 ### Plugin versions and sources
 
@@ -196,7 +196,7 @@ The WP plugin needs to know which WordPress roles represent members with journal
 
 Configure manual member roles on the WP plugin settings page (OJS Sync → Settings). The role slugs are visible in WP Admin → Users → edit any user → Role dropdown.
 
-> **Site-specific role audit:** For an example of mapping live site roles, see [`private/sea-site-audit.md`](./private/sea-site-audit.md).
+> **Site-specific role audit:** For an example of mapping live site roles, see [`private/sea-site-audit.md`](../private/sea-site-audit.md).
 
 ## WooCommerce subscription products
 
@@ -206,7 +206,7 @@ If all tiers grant identical journal access, they can all map to a single OJS su
 
 Find your WC Product IDs in WP Admin → Products → edit each subscription product (the ID is in the URL).
 
-> **Site-specific product audit:** For an example product mapping, see [`private/sea-site-audit.md`](./private/sea-site-audit.md).
+> **Site-specific product audit:** For an example product mapping, see [`private/sea-site-audit.md`](../private/sea-site-audit.md).
 
 ## Mapping membership tiers to OJS subscription types
 
@@ -223,7 +223,7 @@ foreach ($items as $item) {
 
 ## Bulk sync
 
-WP-CLI command only (not admin button — avoids HTTP timeouts). See [`plan.md`](./private/plan.md#wp-cli-commands) for the full command spec.
+WP-CLI command only (not admin button — avoids HTTP timeouts). See [`plan.md`](../private/plan.md#wp-cli-commands) for the full command spec.
 
 ```php
 // Core query for bulk sync:
