@@ -15,13 +15,13 @@ msgid "plugins.generic.archiveMode.displayName"
 msgstr "Archive Mode"
 
 msgid "plugins.generic.archiveMode.description"
-msgstr "Marks the journal as an archived copy once it has moved to a new home: a notice on every page, and no sign-in, registration, password reset or purchase. Switched on by [archive] moved_to in config.inc.php; does nothing while that is empty."
+msgstr "Marks the journal as an archive once it has moved to a new home: a notice on every page saying the site is no longer live, and no sign-in, registration, password reset or purchase. Switched on by [archive] moved_to in config.inc.php; does nothing while that is empty."
 
 msgid "plugins.generic.archiveMode.bar.label"
 msgstr "Archived site"
 
 msgid "plugins.generic.archiveMode.bar.lead"
-msgstr "This is an archived copy of the journal and is no longer in use."
+msgstr "This website is no longer live. It is an archive of the journal, for reading only."
 
 msgid "plugins.generic.archiveMode.bar.text"
 msgstr "The journal has moved to the SEA's website, {$site}. Please don't sign in, register, buy anything or reset a password here."
@@ -36,10 +36,10 @@ msgid "plugins.generic.archiveMode.link.journal"
 msgstr "Go to the journal on the SEA's website"
 
 msgid "plugins.generic.archiveMode.closed.title"
-msgstr "This archive is read only"
+msgstr "This website is no longer live"
 
 msgid "plugins.generic.archiveMode.closed.text"
-msgstr "You can no longer sign in, register, buy articles or reset a password on this archived copy of the journal."
+msgstr "You can't sign in, register, submit an article, buy anything or reset a password here. This is an archive of the journal, for reading only."
 
 msgid "plugins.generic.archiveMode.closed.moved"
 msgstr "The journal has moved to the SEA's website, {$site}. Members sign in there."

@@ -44,7 +44,8 @@ namespace {
         ['user', 'validate'], ['user', 'profile'], ['user', 'subscriptions'], ['user', 'purchaseSubscription'],
         ['user', 'payPurchaseSubscription'], ['user', 'payRenewSubscription'], ['user', 'payMembership'],
         ['user', 'completePurchaseSubscription'],
-        ['payment', 'pay'], ['about', 'subscriptions'], ['information', 'readers'],
+        ['payment', 'pay'], ['about', 'subscriptions'], ['about', 'submissions'], ['information', 'readers'],
+        ['advertisers', ''], ['advertisers', 'index'],
     ] as [$page, $op]) {
         check("{$page}/{$op} is closed", R::isClosed($page, $op, []), true);
     }
@@ -55,7 +56,7 @@ namespace {
     foreach ([
         ['', ''], ['index', ''], ['issue', 'current'], ['issue', 'archive'], ['issue', 'view'],
         ['article', 'view'], ['article', 'download'], ['search', 'search'], ['about', ''],
-        ['about', 'submissions'], ['about', 'contact'], ['about', 'editorialMasthead'],
+        ['about', 'contact'], ['about', 'editorialMasthead'], ['about', 'privacy'],
         ['information', 'authors'], ['information', 'librarians'], ['oai', ''],
         ['login', 'signOut'], ['login', 'signOutAsUser'],
     ] as [$page, $op]) {
@@ -63,6 +64,18 @@ namespace {
     }
     check('Stripe webhook stays open', R::isClosed('payment', 'plugin', ['StripePayment', 'webhook']), false);
     check('Stripe return stays open', R::isClosed('payment', 'plugin', ['StripePayment', 'return']), false);
+
+    echo "Sidebar\n";
+    $custom = ['advertisers-link', 'banner', 'sea-events-banner'];
+    check('custom blocks go, reading blocks stay in order',
+        R::readingSidebar(['informationblockplugin', 'advertisers-link', 'banner', 'browseblockplugin', 'sea-events-banner', 'languagetoggleblockplugin'], $custom),
+        ['informationblockplugin', 'browseblockplugin', 'languagetoggleblockplugin']);
+    check('live sidebar: Information stays, For Advertisers goes',
+        R::readingSidebar(['informationblockplugin', 'advertisers-link'], ['advertisers-link']), ['informationblockplugin']);
+    check('Make a Submission and Subscription blocks go',
+        R::readingSidebar(['makesubmissionblockplugin', 'informationblockplugin', 'subscriptionblockplugin'], []), ['informationblockplugin']);
+    check('a sidebar of offers only ends empty', R::readingSidebar(['banner'], $custom), []);
+    check('no custom blocks registered', R::readingSidebar(['informationblockplugin'], []), ['informationblockplugin']);
 
     echo "Destinations\n";
     $home = 'https://existentialanalysis.org.uk/journal';

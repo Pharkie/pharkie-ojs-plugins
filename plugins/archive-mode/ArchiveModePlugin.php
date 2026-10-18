@@ -19,6 +19,9 @@
  *   ArchiveModeRoutes::isClosed);
  * - OJS is told payments are off for readers, so no price or purchase step is
  *   offered, whatever the journal's fees are set to;
+ * - the sidebar loses every block that offers something the archive no
+ *   longer does (event banners, adverts, submissions, subscriptions) and the
+ *   link to For Readers, which is closed;
  * - Register and Login leave the header.
  * Reading is unchanged: the home page, issues, articles, open galleys,
  * search and OAI-PMH.
@@ -44,6 +47,7 @@ use PKP\config\Config;
 use PKP\core\PKPRequest;
 use PKP\plugins\GenericPlugin;
 use PKP\plugins\Hook;
+use PKP\plugins\PluginRegistry;
 use PKP\security\Role;
 use PKP\security\Validation;
 
@@ -103,7 +107,8 @@ class ArchiveModePlugin extends GenericPlugin
 
     /**
      * LoadHandler: hand a closed route to ArchiveModeHandler, and tell OJS
-     * payments are off for everything else a reader sees.
+     * payments are off, and the sidebar's offers gone, for every page a
+     * reader sees (the closed message included).
      */
     public function closeRoutes(string $hookName, array $args): bool
     {
@@ -111,24 +116,58 @@ class ArchiveModePlugin extends GenericPlugin
         $op = (string) $args[1];
         $request = Application::get()->getRequest();
         $routeArgs = $request->getRequestedArgs();
-
-        if (ArchiveModeRoutes::isClosed($page, $op, $routeArgs)) {
-            $args[3] = new ArchiveModeHandler($this);
-            $args[1] = 'closed';
-            return Hook::ABORT;
-        }
+        $closed = ArchiveModeRoutes::isClosed($page, $op, $routeArgs);
 
         // Stripe's callbacks (the only payment routes left open) finish a
         // payment already taken, so they keep OJS's real payment settings.
-        if ($page !== 'payment') {
-            $this->switchOffPayments($request);
+        $this->forReaders($request, $closed || $page !== 'payment');
+
+        if ($closed) {
+            $args[3] = new ArchiveModeHandler($this);
+            $args[1] = 'closed';
+            return Hook::ABORT;
         }
 
         return Hook::CONTINUE;
     }
 
     /**
-     * Payments off for this request only, in memory: never saved.
+     * What a reader is offered, for this request only, in memory: never
+     * saved. Payments off (when asked), and the sidebar without its offers.
+     *
+     * The sidebar is read from the request's journal when the page is drawn
+     * (PKPTemplateManager::displaySidebar), and so is the Information block's
+     * For Readers link, which shows only while readerInformation has text.
+     *
+     * Not for journal managers or the site admin: a settings form they open
+     * would read these values, and saving it would write them to the database.
+     */
+    private function forReaders(PKPRequest $request, bool $paymentsOff): void
+    {
+        $context = $request->getContext();
+        if (!$context || $this->isStaff($request)) {
+            return;
+        }
+        if ($paymentsOff) {
+            self::zeroPayments($context);
+        }
+
+        $sidebar = $context->getData('sidebar');
+        if (is_array($sidebar)) {
+            $custom = [];
+            foreach ((array) PluginRegistry::getPlugins('blocks') as $name => $plugin) {
+                if ($plugin instanceof \APP\plugins\generic\customBlockManager\CustomBlockPlugin) {
+                    $custom[] = (string) $name;
+                }
+            }
+            $context->setData('sidebar', ArchiveModeRoutes::readingSidebar($sidebar, $custom));
+        }
+        // For Readers is closed, so the Information block stops linking to it.
+        $context->setData('readerInformation', null);
+    }
+
+    /**
+     * Payments off, on a journal object, in memory.
      *
      * With paymentsEnabled false, OJSPaymentManager reports no purchase,
      * issue or membership fee, so a reader without access is sent to sign in
@@ -137,19 +176,8 @@ class ArchiveModePlugin extends GenericPlugin
      * context whether or not payments are on. That holds even if the
      * journal's fees are still set in the database.
      *
-     * Not for journal managers or the site admin: a settings form they open
-     * would read this value, and saving it would write it to the database.
+     * @param \PKP\context\Context $context
      */
-    private function switchOffPayments(PKPRequest $request): void
-    {
-        $context = $request->getContext();
-        if (!$context || $this->isStaff($request)) {
-            return;
-        }
-        self::zeroPayments($context);
-    }
-
-    /** @param \PKP\context\Context $context */
     private static function zeroPayments($context): void
     {
         $context->setData('paymentsEnabled', false);

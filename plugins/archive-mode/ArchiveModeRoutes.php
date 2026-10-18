@@ -24,8 +24,10 @@ class ArchiveModeRoutes
      * Closed: signing in, registering and every password reset (the whole
      * `login` page except signing out), everything under `user` (profile,
      * registration, subscriptions and their payments), every `payment` route,
-     * the About > Subscriptions page and For Readers, whose only content is
-     * how to register.
+     * the About > Subscriptions page, About > Submissions (which tells a
+     * signed-out reader to log in or register to make a submission), For
+     * Readers, whose only content is how to register, and the SEA's "For
+     * Advertisers" page (a static page at `advertisers`, selling adverts).
      *
      * Left open: Stripe's webhook and its return from Checkout. Both only
      * complete a payment that has already been taken, so a purchase made just
@@ -44,11 +46,29 @@ class ArchiveModeRoutes
                     && in_array($args[1] ?? '', ['return', 'webhook'], true);
                 return !$stripeCallback;
             case 'about':
-                return $op === 'subscriptions';
+                return in_array($op, ['subscriptions', 'submissions'], true);
             case 'information':
                 return $op === 'readers';
+            case 'advertisers':
+                return true;
         }
         return false;
+    }
+
+    /**
+     * The sidebar's blocks, less every one that offers something the archive
+     * no longer does: each custom block (the journal's own banners, event
+     * adverts and its "For Advertisers" link, written for the live site), and
+     * OJS's "Make a Submission" and "Subscription" blocks. Reading blocks
+     * (Information, Browse, Language and the like) stay, in their order.
+     *
+     * @param array $sidebar block plugin names, as the journal's `sidebar` setting holds them
+     * @param array $customBlocks the names of the custom blocks (Custom Block Manager)
+     */
+    public static function readingSidebar(array $sidebar, array $customBlocks): array
+    {
+        $hidden = array_merge(['makesubmissionblockplugin', 'subscriptionblockplugin'], $customBlocks);
+        return array_values(array_filter($sidebar, fn ($name) => !in_array($name, $hidden, true)));
     }
 
     /**
