@@ -1,0 +1,302 @@
+<?php
+
+/**
+ * Archive Mode plugin
+ *
+ * Puts the journal into a read-only, archived state once it has moved to a
+ * new home. For the SEA that is Harbour cut-over: OJS stays up for a few days
+ * only, as the landing page for the journal's DOIs until Crossref holds the
+ * new addresses, and nobody should sign in, register, reset a password or buy
+ * anything on it.
+ *
+ * With archive mode on:
+ * - every reader-facing page, the PDF and HTML galley viewers included,
+ *   starts with a bar saying this is an archived copy, linking to the same
+ *   article or issue on the new site when the map (map.json) knows it, and
+ *   to the journal's home there when it does not;
+ * - every route that signs in, registers, resets a password, edits a profile
+ *   or takes a payment shows one message instead (ArchiveModeHandler,
+ *   ArchiveModeRoutes::isClosed);
+ * - OJS is told payments are off for readers, so no price or purchase step is
+ *   offered, whatever the journal's fees are set to;
+ * - Register and Login leave the header.
+ * Reading is unchanged: the home page, issues, articles, open galleys,
+ * search and OAI-PMH.
+ *
+ * The switch is ONE config value, `[archive] moved_to` in config.inc.php,
+ * templated from OJS_ARCHIVE_MOVED_TO by docker/ojs/entrypoint.sh: the URL of
+ * the journal's new home. Empty means off, and the plugin then adds no hooks
+ * at all. The plugin is enabled ahead of time, so the day's step is setting
+ * that value and recreating the container. See README.md.
+ *
+ * Two other plugins read the same value and stand down with it:
+ * wpojsSubscriptionApi (its membership footer and sign-in messages) and
+ * inlineHtmlGalley (its "log in or buy" box).
+ *
+ * Deploy to: plugins/generic/archiveMode/ in the OJS installation.
+ * Requires OJS 3.5+.
+ */
+
+namespace APP\plugins\generic\archiveMode;
+
+use APP\core\Application;
+use PKP\config\Config;
+use PKP\core\PKPRequest;
+use PKP\plugins\GenericPlugin;
+use PKP\plugins\Hook;
+use PKP\security\Role;
+use PKP\security\Validation;
+
+class ArchiveModePlugin extends GenericPlugin
+{
+    /** Galley viewers render their own full-height page; the bar has to share it. */
+    private const VIEWER_TEMPLATES = ['pdfJsViewer', 'htmlArticleGalley'];
+
+    private ?array $map = null;
+    private bool $filterAdded = false;
+
+    /** The journal's new home, or '' when archive mode is off. */
+    public static function movedTo(): string
+    {
+        return trim((string) Config::getVar('archive', 'moved_to', ''));
+    }
+
+    public function register($category, $path, $mainContextId = null)
+    {
+        $success = parent::register($category, $path, $mainContextId);
+
+        if (!$success || !$this->getEnabled($mainContextId) || self::movedTo() === '') {
+            return $success;
+        }
+
+        // First in the queue, ahead of wpojsSubscriptionApi's own LoadHandler
+        // for the password reset, so a closed route never reaches it.
+        Hook::add('LoadHandler', $this->closeRoutes(...), Hook::SEQUENCE_CORE);
+        Hook::add('TemplateManager::display', $this->addBar(...));
+
+        return $success;
+    }
+
+    public function getDisplayName()
+    {
+        return __('plugins.generic.archiveMode.displayName');
+    }
+
+    public function getDescription()
+    {
+        return __('plugins.generic.archiveMode.description');
+    }
+
+    // ---------------------------------------------------------------
+    // Closed routes and payments
+    // ---------------------------------------------------------------
+
+    /**
+     * LoadHandler: hand a closed route to ArchiveModeHandler, and tell OJS
+     * payments are off for everything else a reader sees.
+     */
+    public function closeRoutes(string $hookName, array $args): bool
+    {
+        $page = (string) $args[0];
+        $op = (string) $args[1];
+        $request = Application::get()->getRequest();
+        $routeArgs = $request->getRequestedArgs();
+
+        if (ArchiveModeRoutes::isClosed($page, $op, $routeArgs)) {
+            $args[3] = new ArchiveModeHandler($this);
+            $args[1] = 'closed';
+            return Hook::ABORT;
+        }
+
+        // Stripe's callbacks (the only payment routes left open) finish a
+        // payment already taken, so they keep OJS's real payment settings.
+        if ($page !== 'payment') {
+            $this->switchOffPayments($request);
+        }
+
+        return Hook::CONTINUE;
+    }
+
+    /**
+     * Payments off for this request only, in memory: never saved.
+     *
+     * With paymentsEnabled false, OJSPaymentManager reports no purchase,
+     * issue or membership fee, so templates show no prices and a reader
+     * without access is sent to sign in or to About > Subscriptions, both of
+     * which are closed. That holds even if the journal's fees are still set.
+     *
+     * Not for journal managers or the site admin: a settings form they open
+     * would read this value, and saving it would write it to the database.
+     */
+    private function switchOffPayments(PKPRequest $request): void
+    {
+        $context = $request->getContext();
+        if (!$context || $this->isStaff($request)) {
+            return;
+        }
+        $context->setData('paymentsEnabled', false);
+    }
+
+    private function isStaff(PKPRequest $request): bool
+    {
+        if (!$request->getUser()) {
+            return false;
+        }
+        $contextId = $request->getContext()?->getId();
+        return Validation::isSiteAdmin()
+            || ($contextId !== null && Validation::isAuthorized(Role::ROLE_ID_MANAGER, $contextId));
+    }
+
+    // ---------------------------------------------------------------
+    // Where this page lives now
+    // ---------------------------------------------------------------
+
+    /**
+     * [kind, url] of the page on the new site standing for this request.
+     * A closed route that OJS reached by redirecting a reader to sign in
+     * carries the page they wanted in `source`, so the link follows that.
+     */
+    public function destination(PKPRequest $request): array
+    {
+        $page = (string) $request->getRequestedPage();
+        $op = (string) $request->getRequestedOp();
+        $args = $request->getRequestedArgs();
+        $query = ['query' => (string) $request->getUserVar('query')];
+
+        $source = $request->getUserVar('source');
+        if (is_string($source) && ArchiveModeRoutes::isClosed($page, $op, $args)) {
+            $parsed = ArchiveModeRoutes::parseSource($source, $request->getContext()?->getPath());
+            if ($parsed !== null) {
+                [$page, $op, $args] = $parsed;
+            }
+        }
+
+        return ArchiveModeRoutes::destination(self::movedTo(), $page, $op, $args, $this->map(), $query);
+    }
+
+    /** The link's words for a destination kind. */
+    public function linkLabel(string $kind): string
+    {
+        return __('plugins.generic.archiveMode.link.' . $kind);
+    }
+
+    /**
+     * map.json, beside this file: OJS ids to Harbour slugs, written on the
+     * box from Harbour's database (README.md). Missing or unreadable means
+     * every page links to the journal's home.
+     */
+    private function map(): array
+    {
+        if ($this->map === null) {
+            $file = __DIR__ . '/map.json';
+            $data = is_readable($file) ? json_decode((string) file_get_contents($file), true) : null;
+            $this->map = is_array($data) ? $data : [];
+        }
+        return $this->map;
+    }
+
+    // ---------------------------------------------------------------
+    // The bar
+    // ---------------------------------------------------------------
+
+    /**
+     * TemplateManager::display: on reader-facing pages and the galley
+     * viewers, add an output filter that puts the bar first in <body>.
+     * Server-side, so it shows with JavaScript off. The back office is left
+     * alone.
+     */
+    public function addBar(string $hookName, array $args): bool
+    {
+        $templateMgr = $args[0];
+        $template = $args[1] ?? '';
+        if (!is_string($template) || $this->filterAdded) {
+            return Hook::CONTINUE;
+        }
+
+        $isViewer = false;
+        foreach (self::VIEWER_TEMPLATES as $viewer) {
+            $isViewer = $isViewer || str_contains($template, $viewer);
+        }
+        if (!$isViewer && !str_contains($template, 'frontend/')) {
+            return Hook::CONTINUE;
+        }
+
+        $request = Application::get()->getRequest();
+        [$kind, $url] = $this->destination($request);
+        $bar = $this->barHtml($kind, $url);
+        $css = $this->css(!$this->isStaff($request));
+
+        $templateMgr->registerFilter('output', function (string $html) use ($bar, $css, $isViewer): string {
+            return self::insertBar($html, $bar, $css, $isViewer);
+        });
+        $this->filterAdded = true;
+
+        return Hook::CONTINUE;
+    }
+
+    /**
+     * Put the CSS at the end of <head> and the bar straight after <body>.
+     * Anything without a <body> (a fragment) passes through untouched, and a
+     * page is only ever given one bar.
+     */
+    public static function insertBar(string $html, string $bar, string $css, bool $isViewer): string
+    {
+        if (str_contains($html, 'class="archive-mode-bar"') || !preg_match('/<body\b[^>]*>/i', $html, $m, PREG_OFFSET_CAPTURE)) {
+            return $html;
+        }
+        $bodyTag = $m[0][0];
+        $at = $m[0][1];
+        $newBodyTag = $bodyTag;
+        if ($isViewer) {
+            $newBodyTag = preg_match('/\bclass="/', $bodyTag)
+                ? preg_replace('/\bclass="/', 'class="archive-mode-viewer ', $bodyTag, 1)
+                : preg_replace('/^<body\b/i', '<body class="archive-mode-viewer"', $bodyTag, 1);
+        }
+        $html = substr($html, 0, $at) . $newBodyTag . $bar . substr($html, $at + strlen($bodyTag));
+
+        $head = stripos($html, '</head>');
+        $style = '<style id="archive-mode-css">' . $css . '</style>';
+        return $head === false ? $style . $html : substr($html, 0, $head) . $style . substr($html, $head);
+    }
+
+    private function barHtml(string $kind, string $url): string
+    {
+        $site = ArchiveModeRoutes::siteName(self::movedTo());
+        return '<div class="archive-mode-bar" role="region" aria-label="' . htmlspecialchars(__('plugins.generic.archiveMode.bar.label'), ENT_QUOTES, 'UTF-8') . '">'
+            . '<div class="archive-mode-bar__inner">'
+            . '<p class="archive-mode-bar__lead">' . htmlspecialchars(__('plugins.generic.archiveMode.bar.lead'), ENT_QUOTES, 'UTF-8') . '</p>'
+            . '<p class="archive-mode-bar__text">' . htmlspecialchars(__('plugins.generic.archiveMode.bar.text', ['site' => $site]), ENT_QUOTES, 'UTF-8') . '</p>'
+            . '<a class="archive-mode-bar__link" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">'
+            . htmlspecialchars($this->linkLabel($kind), ENT_QUOTES, 'UTF-8') . '</a>'
+            . '</div></div>';
+    }
+
+    /**
+     * The bar's styles, in the site's own font. White on deep slate is about
+     * 12:1. Not sticky: a fixed band would eat a phone's screen on every page.
+     */
+    private function css(bool $hideUserMenu): string
+    {
+        $css = '
+.archive-mode-bar { background: #1f3540; color: #fff; font-family: inherit; border-bottom: 4px solid #e9b949; }
+.archive-mode-bar__inner { max-width: 1160px; margin: 0 auto; padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 24px; }
+.archive-mode-bar p { margin: 0; line-height: 1.45; font-size: 15px; color: #fff; }
+.archive-mode-bar__lead { flex: 1 1 100%; font-weight: 700; font-size: 17px !important; }
+.archive-mode-bar__text { flex: 1 1 420px; }
+.archive-mode-bar__link { flex: 0 0 auto; display: inline-block; padding: 9px 14px; border: 2px solid #fff; border-radius: 4px; color: #fff !important; font-weight: 700; font-size: 15px; line-height: 1.3; text-decoration: none; }
+.archive-mode-bar__link:hover, .archive-mode-bar__link:focus { background: #fff; color: #1f3540 !important; text-decoration: none; }
+.archive-mode-bar__link:focus-visible { outline: 3px solid #e9b949; outline-offset: 2px; }
+@media (max-width: 480px) { .archive-mode-bar__link { display: block; width: 100%; text-align: center; box-sizing: border-box; } }
+body.archive-mode-viewer { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; }
+body.archive-mode-viewer > .archive-mode-bar, body.archive-mode-viewer > .header_view { flex: none; }
+body.archive-mode-viewer > .galley_view { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
+body.archive-mode-viewer > .galley_view iframe { padding-top: 0; }
+.archive-mode-closed__link { display: inline-block; margin-top: 4px; padding: 10px 16px; background: #1f3540; color: #fff !important; border-radius: 4px; font-weight: 700; text-decoration: none; }
+.archive-mode-closed__link:hover, .archive-mode-closed__link:focus { background: #2f4f5e; text-decoration: none; }
+';
+        if ($hideUserMenu) {
+            $css .= '.pkp_navigation_user_wrapper { display: none !important; }';
+        }
+        return $css;
+    }
+}

@@ -773,6 +773,17 @@ SQL
   echo "[OJS] Inline HTML galley configured (org: $INLINE_ORG)."
 fi
 
+# --- Enable Archive Mode plugin ---
+# Inert until OJS_ARCHIVE_MOVED_TO is set (plugins/archive-mode/README.md), so
+# enabling it everywhere changes nothing on its own.
+echo "[OJS] Enabling archive-mode plugin for journal $JOURNAL_ID..."
+$MARIADB <<SQL
+  INSERT IGNORE INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  VALUES ('archivemodeplugin', $JOURNAL_ID, 'enabled', '1', 'bool');
+  INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
+  VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'archiveMode', 'ArchiveModePlugin', 1, 0);
+SQL
+
 # --- Enable Archive Checker plugin (dev/staging only) ---
 if [ "${ARCHIVE_CHECKER_ENABLED:-1}" = "1" ]; then
   echo "[OJS] Enabling archive-checker plugin for journal $JOURNAL_ID..."

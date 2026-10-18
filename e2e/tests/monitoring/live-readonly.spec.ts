@@ -80,6 +80,14 @@ test.describe('OJS Journal', () => {
     });
     expect(response?.status()).toBeLessThan(400);
 
+    // In archive mode (plugins/archive-mode) sign-in is closed on purpose: the
+    // page must say so, and offer no form.
+    if (await page.locator('.archive-mode-bar').count() > 0) {
+      await expect(page.locator('a.archive-mode-closed__link')).toBeVisible();
+      await expect(page.locator('input[name="password"]')).toHaveCount(0);
+      return;
+    }
+
     // Login form should have username/password fields and submit button
     await expect(page.locator('input[name="username"], input[name="email"]').first()).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();

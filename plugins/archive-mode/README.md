@@ -1,0 +1,160 @@
+# Archive Mode Plugin
+
+Marks the journal as an archived copy once it has moved to a new home. For
+the SEA that is Harbour cut-over: OJS stays up for a few days only, as the
+landing page for the journal's DOIs until Crossref holds the new addresses,
+and nobody should sign in, register, reset a password or buy anything on it.
+
+Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
+`/var/www/html/plugins/generic/archiveMode` (`docker-compose.yml`).
+
+## What it does, when on
+
+- **A bar at the top of every reader-facing page**, the PDF and HTML galley
+  viewers and error pages included: this is an archived copy, the journal has
+  moved, don't sign in, register, buy or reset a password here. Its link goes
+  to the same article or issue on the new site when `map.json` knows it, to
+  the matching section (issues, about, author guidelines, editorial board,
+  search) when it does not, and to the journal's home otherwise. It is in the
+  HTML from the server, so it shows with JavaScript off. It is not sticky.
+- **Closed routes show one message instead** (`ArchiveModeHandler`), GET or
+  POST, and do nothing else:
+
+  | Route | Why |
+  |---|---|
+  | `login/*` except `signOut`, `signOutAsUser` | sign-in, lost password, reset, change password, sign in as |
+  | `user/*` | register, activate, profile, subscriptions and their payments |
+  | `payment/*` except Stripe's `return` and `webhook` | any payment |
+  | `about/subscriptions` | "Non-members can purchase individual articles or issues" |
+  | `information/readers` | its only content is how to register |
+
+  Stripe's two callbacks stay open because they only complete a payment that
+  was already taken before the switch.
+- **Payments read as off** for every other page, in memory for that request
+  (never saved), so no price and no purchase step appears even if the
+  journal's fees are still set. A reader without access who clicks a
+  padlocked galley is sent to sign in or to About > Subscriptions, both
+  closed, and the message links to the article they wanted. Journal managers
+  and the site admin are left out of this, because a settings form they open
+  would save the in-memory value.
+- **Register and Login leave the header** for everyone but staff.
+- **Two other plugins stand down on the same value**: WP-OJS Subscription API
+  adds none of its sign-in, reset or profile messages, no reset handler and no
+  "Manage your membership" footer; Inline HTML Galley shows no "log in or buy"
+  box.
+
+Reading is unchanged: the home page, issues, articles, open galleys (viewer
+and download), search and OAI-PMH. Anyone already signed in stays signed in,
+and can do nothing a signed-out reader cannot.
+
+## The switch
+
+One value, `OJS_ARCHIVE_MOVED_TO` in `/opt/pharkie-ojs-plugins/.env`: the URL
+of the journal's new home. `entrypoint.sh` writes it into `config.inc.php` as
+`[archive] moved_to` each time the container starts. Empty, the plugin adds no
+hooks and the site is exactly as before.
+
+### Before the day, once (nothing visible changes)
+
+```bash
+ssh sea-live
+cd /opt/pharkie-ojs-plugins && git pull
+C="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+$C up -d ojs     # recreates OJS with the plugin's bind mount
+$C exec -T ojs-db bash -c 'mariadb -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE' <<'SQL'
+INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
+  VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'archiveMode', 'ArchiveModePlugin', 1, 0);
+INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
+  SELECT 'archivemodeplugin', journal_id, 'enabled', '1', 'bool' FROM journals WHERE path = 'ea'
+  ON DUPLICATE KEY UPDATE setting_value = '1';
+SQL
+```
+
+That registers and enables the plugin, which is inert while the value is
+empty. Settings > Website > Plugins then lists **Archive Mode** as enabled.
+
+**The article and issue map** (optional; without it every page links to the
+journal's home or section). Write it from Harbour's database, on the box, any
+time after Harbour's journal import:
+
+```bash
+docker exec harbour-harbour-db-1 psql -U harbour -d harbour -Atc "
+  select json_build_object(
+    'articles', (select coalesce(json_object_agg(substring(source_ref from 9), slug), '{}'::json)
+                 from journal_articles where source_ref like 'ojs:sub:%' and published_at is not null),
+    'issues',   (select coalesce(json_object_agg(substring(source_ref from 11), slug), '{}'::json)
+                 from journal_issues where source_ref like 'ojs:issue:%' and published_at is not null))
+" > /opt/pharkie-ojs-plugins/plugins/archive-mode/map.json
+python3 -c "import json; d=json.load(open('/opt/pharkie-ojs-plugins/plugins/archive-mode/map.json')); print(len(d['articles']), 'articles,', len(d['issues']), 'issues')"
+```
+
+Harbour keys each imported article on its OJS submission id
+(`ojs:sub:<id>`) and each issue on its OJS issue id (`ojs:issue:<id>`), the
+same ids in OJS's addresses (`/ea/article/view/<id>`, `/ea/issue/view/<id>`).
+Only published Harbour pages are listed, so no link goes to a 404. The file is
+gitignored, read on each request, and a missing or broken one falls back to
+the journal's home. A slug that is not lowercase letters, digits and hyphens
+is ignored.
+
+### On the day
+
+```bash
+ssh sea-live
+cd /opt/pharkie-ojs-plugins
+echo 'OJS_ARCHIVE_MOVED_TO=https://existentialanalysis.org.uk/journal' >> .env
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs
+```
+
+**Proves it** (signed out):
+
+```bash
+curl -s https://journal.existentialanalysis.org.uk/ea | grep -c 'archive-mode-bar"'        # 1
+curl -s https://journal.existentialanalysis.org.uk/ea/login | grep -c 'This archive is read only'   # 1
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://journal.existentialanalysis.org.uk/ea/payment/plugin/StripePayment/webhook   # 400: the webhook still answers
+```
+
+### The way back
+
+Delete the `OJS_ARCHIVE_MOVED_TO` line (or leave it empty) and run the same
+`up -d ojs`. Nothing was written to the database, so nothing else needs
+undoing.
+
+## Where the links go
+
+`ArchiveModeRoutes::destination`, with `moved_to` as the base:
+
+| OJS page | Link |
+|---|---|
+| `article/view/<id>/…` or `article/download/<id>/…`, in the map | `<moved_to>/<slug>` "Read this article on the SEA's website" |
+| `issue/view/<id>/…` or `issue/download/<id>/…`, in the map | `<moved_to>/issues/<slug>` "See this issue on the SEA's website" |
+| any other `issue/*` | `<moved_to>/issues` |
+| `about` | `<moved_to>/about` |
+| `about/submissions` | `<moved_to>/for-contributors` |
+| `about/editorialMasthead`, `editorialTeam` | `<moved_to>/editorial-board` |
+| `search` with words | `<moved_to>?q=<words>` |
+| anything else | `<moved_to>` "Go to the journal on the SEA's website" |
+
+These follow Harbour's own routes (`src/pages/journal/`) and its redirect map
+(`src/lib/redirects.ts`), which is what `journal.` 301s into once OJS retires.
+On a closed page reached by OJS sending a reader to sign in, the link follows
+the page they were after (OJS's `source` parameter).
+
+## Monitoring
+
+With archive mode on, the smoke test's OJS password login (`smoke-test.sh`,
+I3) fails, as it should. The daily read-only browser check accepts the closed
+page in place of the sign-in form (`live-readonly.spec.ts`). The hourly
+monitor's Stripe webhook check still passes.
+
+## Tests
+
+```bash
+php plugins/archive-mode/tests/routes-test.php
+```
+
+Runs without OJS: which routes close, where each page links, how `source` is
+read, and how the bar goes into a page.
+
+## Uninstall
+
+It goes with OJS. Before that, the way back above turns it off.

@@ -62,6 +62,14 @@ class WpojsSubscriptionApiPlugin extends GenericPlugin
             $userProvider->setHasher(new WpCompatibleHasher());
         }
 
+        // Archive mode (plugins/archive-mode) is on: the journal has moved,
+        // sign-in and resets are closed, and there is no membership to
+        // manage here. None of the messages below applies, and the footer's
+        // "Manage your membership" would be the one link left offering it.
+        if (trim((string) Config::getVar('archive', 'moved_to', '')) !== '') {
+            return $success;
+        }
+
         // Synced members get a "password is managed on the membership
         // site" email instead of an OJS reset link (see WpojsLoginHandler).
         Hook::add('LoadHandler', $this->loadLoginHandler(...));

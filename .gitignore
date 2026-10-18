@@ -48,6 +48,10 @@ logs/
 
 # Backfill private data — single symlink to private repo
 backfill/private
+
+# Archive mode's OJS-to-Harbour id map, written on the box (plugins/archive-mode/README.md)
+plugins/archive-mode/map.json
+
 # Legacy symlinks (may be recreated by old scripts/devcontainers)
 backfill/input
 backfill/output

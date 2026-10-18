@@ -123,6 +123,8 @@ services:
       WPOJS_ALLOWED_IPS: ${WPOJS_ALLOWED_IPS:?WPOJS_ALLOWED_IPS not set in .env}
       WPOJS_WP_MEMBER_URL: ${WPOJS_WP_MEMBER_URL:?WPOJS_WP_MEMBER_URL not set in .env}
       WPOJS_SUPPORT_EMAIL: ${WPOJS_SUPPORT_EMAIL:-}
+      # Archive mode (plugins/archive-mode): the journal's new home. Empty = off.
+      OJS_ARCHIVE_MOVED_TO: ${OJS_ARCHIVE_MOVED_TO:-}
       # UI messages (written to plugin_settings DB by setup-ojs.sh, not config.inc.php)
       WPOJS_DEFAULT_LOGIN_HINT: ${WPOJS_DEFAULT_LOGIN_HINT:-}
       WPOJS_DEFAULT_PAYWALL_HINT: ${WPOJS_DEFAULT_PAYWALL_HINT:-}
@@ -183,6 +185,7 @@ services:
       - ./plugins/archive-checker/api/v1/archive-checker:/var/www/html/api/v1/archive-checker:ro
       - ./plugins/smarter-similar-articles:/var/www/html/plugins/generic/smarterSimilarArticles
       - ./plugins/umami-analytics:/var/www/html/plugins/generic/umamiAnalytics
+      - ./plugins/archive-mode:/var/www/html/plugins/generic/archiveMode
       - ./docker/ojs/entrypoint.sh:/etc/ojs/entrypoint.sh:ro
       - ./docker/ojs/config.inc.php.tmpl:/etc/ojs/config.inc.php.tmpl:ro
       - ./docker/ojs/php-overrides.ini:/usr/local/etc/php/conf.d/zz-overrides.ini:ro

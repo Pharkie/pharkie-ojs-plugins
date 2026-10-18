@@ -150,9 +150,14 @@ class InlineHtmlGalleyPlugin extends GenericPlugin
 
         $hasAccess = $templateMgr->getTemplateVars('hasAccess');
 
-        // Non-subscriber CTA (shown instead of inline content when no access)
+        // Non-subscriber CTA (shown instead of inline content when no access).
+        // Not in archive mode (plugins/archive-mode): it tells members to log
+        // in and non-members to register and buy, and both have closed. The
+        // archive bar at the top of the page links to the article's new home.
         if (!$hasAccess) {
-            $output .= $this->getNonSubscriberNotice();
+            if (trim((string) \PKP\config\Config::getVar('archive', 'moved_to', '')) === '') {
+                $output .= $this->getNonSubscriberNotice();
+            }
             return Hook::CONTINUE;
         }
 
