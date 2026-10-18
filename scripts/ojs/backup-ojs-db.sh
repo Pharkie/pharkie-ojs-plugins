@@ -227,8 +227,13 @@ if check_container_running ojs; then
       --exclude='./scheduledTaskLogs' --exclude='./temp' \
       -C /var/www/files . \
     | openssl enc -aes-256-cbc -pbkdf2 -pass file:"$KEY_FILE" -out "$OJS_FILES_TMP"
-  TAR_RC=${PIPESTATUS[0]}
-  OPENSSL_RC=${PIPESTATUS[1]}
+  # Copy PIPESTATUS in ONE assignment. Every command resets it, an assignment
+  # included, so a second read of ${PIPESTATUS[1]} is always empty: the test
+  # below then errors ("integer expression expected") and lets a failed openssl
+  # through.
+  RCS=("${PIPESTATUS[@]}")
+  TAR_RC=${RCS[0]}
+  OPENSSL_RC=${RCS[1]:-1}
   set -e
   if [ "$OPENSSL_RC" -ne 0 ] || [ "$TAR_RC" -gt 1 ]; then
     log "ERROR: files backup pipeline failed (tar=$TAR_RC openssl=$OPENSSL_RC). Removing."
