@@ -1,0 +1,42 @@
+# Archive Mode Plugin
+# Copyright (C) 2026 Adam Knowles
+msgid ""
+msgstr ""
+"Project-Id-Version: archiveMode 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "plugins.generic.archiveMode.displayName"
+msgstr "Archive Mode"
+
+msgid "plugins.generic.archiveMode.description"
+msgstr "Marks the journal as an archive once it has moved to a new home: a notice on every page saying the site is no longer live, and no sign-in, registration, password reset or purchase. Switched on by [archive] moved_to in config.inc.php; does nothing while that is empty."
+
+msgid "plugins.generic.archiveMode.bar.label"
+msgstr "Archived site"
+
+msgid "plugins.generic.archiveMode.bar.lead"
+msgstr "This website is no longer live. It is an archive of the journal, for reading only."
+
+msgid "plugins.generic.archiveMode.bar.text"
+msgstr "The journal has moved to our website, {$site}. Please don't sign in, register, buy anything or reset a password here."
+
+msgid "plugins.generic.archiveMode.link.article"
+msgstr "Read this article on our website"
+
+msgid "plugins.generic.archiveMode.link.issue"
+msgstr "See this issue on our website"
+
+msgid "plugins.generic.archiveMode.link.journal"
+msgstr "Go to the journal on our website"
+
+msgid "plugins.generic.archiveMode.closed.title"
+msgstr "This website is no longer live"
+
+msgid "plugins.generic.archiveMode.closed.text"
+msgstr "You can't sign in, register, submit an article, buy anything or reset a password here."
