@@ -428,22 +428,51 @@ else
   pass "Memory OK (${MEM_AVAILABLE}MB available of ${MEM_TOTAL}MB)"
 fi
 
-# 7c. Swap
-# Threshold is a share of total, not an absolute: the old >100MB test dates
-# from when the box had no swap and ANY usage was suspicious. Since the 3GB
-# swapfile (2026-08-04), a few hundred MB of cold pages parked there is the
-# file doing its job — it alerted at 105MB the same afternoon, at load 0.2
-# with 1GB of RAM free. Half full is where swap stops being parking and
-# starts being pressure.
+# 7c. Swap and memory pressure
+# Swap is REPORTED, never alerted on. Memory pressure is measured directly.
+#
+# How full swap is says nothing about trouble. The 03:00 backups push cold pages
+# of the long-lived daemons (mysqld, mariadbd, vector, node) out to the 3GB
+# swapfile, and nothing reads them back. A "more than half full" alert then
+# stayed red for hours on a healthy box (3 and 18 Oct 2026: si/so 0, ~2GB of
+# RAM available); the >100MB alert before it fired at load 0.2. Parked pages
+# are the swapfile doing its job.
+#
+# /proc/pressure/memory measures the thing itself: the share of time tasks were
+# STALLED waiting on memory. `full` is the share when EVERY task was stalled;
+# a healthy box reads 0.00, a thrashing one whole percentages and climbing.
+# avg300 (five minutes) rides out a momentary spike during a deploy.
 SWAP_INFO=$(ssh_retry $SSH_CMD "free -m | grep '^Swap:'") || SWAP_INFO=""
 SWAP_USED=$(echo "$SWAP_INFO" | awk '{print $3}')
 SWAP_TOTAL=$(echo "$SWAP_INFO" | awk '{print $2}')
-if ! [[ "$SWAP_USED" =~ ^[0-9]+$ ]] || ! [[ "$SWAP_TOTAL" =~ ^[0-9]+$ ]]; then
-  fail "Swap info unreadable (free -m: ${SWAP_INFO:-<empty>})"
-elif [ "$SWAP_TOTAL" -gt 0 ] && [ "$SWAP_USED" -gt $((SWAP_TOTAL / 2)) ]; then
-  fail "High swap usage (${SWAP_USED}MB of ${SWAP_TOTAL}MB — over half full indicates real memory pressure)"
+info "Swap: ${SWAP_USED:-?}MB of ${SWAP_TOTAL:-?}MB used (diagnostic only — see the pressure check)"
+
+# Tenths of a percent of time fully stalled: fail at 0.5%, warn at 0.1%.
+PSI_FAIL="${MONITOR_MEM_PSI_FAIL:-5}"
+PSI_WARN="${MONITOR_MEM_PSI_WARN:-1}"
+[[ "$PSI_FAIL" =~ ^[0-9]+$ ]] || { warn "MONITOR_MEM_PSI_FAIL='$PSI_FAIL' is not a whole number — using 5"; PSI_FAIL=5; }
+[[ "$PSI_WARN" =~ ^[0-9]+$ ]] || { warn "MONITOR_MEM_PSI_WARN='$PSI_WARN' is not a whole number — using 1"; PSI_WARN=1; }
+if ! PSI_LINE=$(ssh_retry $SSH_CMD "cat /proc/pressure/memory 2>/dev/null | grep '^full' || true"); then
+  fail "Memory pressure unreadable (${PSI_LINE:-<empty>})"
 else
-  pass "Swap OK (${SWAP_USED}MB of ${SWAP_TOTAL}MB used)"
+  PSI_AVG300=$(echo "$PSI_LINE" | grep -oE 'avg300=[0-9]+(\.[0-9]+)?' | cut -d= -f2)
+  if [ -z "$PSI_AVG300" ]; then
+    # Not fatal: PSI needs CONFIG_PSI, which some kernels lack. The available-RAM
+    # check (7b) has already judged memory, so fall back on it.
+    warn "No /proc/pressure/memory on this kernel — relying on the available-RAM check alone"
+    pass "Memory pressure not measurable (PSI unavailable)"
+  else
+    # Integer tenths, so this compares without bc: "0.42" -> 4.
+    PSI_TENTHS=$(echo "$PSI_AVG300" | awk '{printf "%d", $1 * 10}')
+    if [ "$PSI_TENTHS" -ge "$PSI_FAIL" ]; then
+      fail "Memory pressure: every task stalled on memory ${PSI_AVG300}% of the last 5 minutes (swap ${SWAP_USED:-?}MB, ${MEM_AVAILABLE:-?}MB RAM available)"
+    elif [ "$PSI_TENTHS" -ge "$PSI_WARN" ]; then
+      warn "Some memory pressure (full avg300=${PSI_AVG300}%, swap ${SWAP_USED:-?}MB)"
+      pass "Memory pressure below the alert threshold (${PSI_AVG300}%)"
+    else
+      pass "No memory pressure (full avg300=${PSI_AVG300}%)"
+    fi
+  fi
 fi
 
 # 7d. Disk space
