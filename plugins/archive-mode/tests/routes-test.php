@@ -45,7 +45,7 @@ namespace {
         ['user', 'payPurchaseSubscription'], ['user', 'payRenewSubscription'], ['user', 'payMembership'],
         ['user', 'completePurchaseSubscription'],
         ['payment', 'pay'], ['about', 'subscriptions'], ['about', 'submissions'], ['information', 'readers'],
-        ['advertisers', ''], ['advertisers', 'index'],
+        ['information', 'authors'], ['submitanarticle', ''], ['advertisers', ''], ['advertisers', 'index'],
     ] as [$page, $op]) {
         check("{$page}/{$op} is closed", R::isClosed($page, $op, []), true);
     }
@@ -57,7 +57,7 @@ namespace {
         ['', ''], ['index', ''], ['issue', 'current'], ['issue', 'archive'], ['issue', 'view'],
         ['article', 'view'], ['article', 'download'], ['search', 'search'], ['about', ''],
         ['about', 'contact'], ['about', 'editorialMasthead'], ['about', 'privacy'],
-        ['information', 'authors'], ['information', 'librarians'], ['oai', ''],
+        ['information', 'librarians'], ['oai', ''],
         ['login', 'signOut'], ['login', 'signOutAsUser'],
     ] as [$page, $op]) {
         check("{$page}/{$op} stays open", R::isClosed($page, $op, []), false);
@@ -96,6 +96,9 @@ namespace {
     check('archive', R::destination($home, 'issue', 'archive', [], $map), ['journal', "{$home}/issues"]);
     check('about', R::destination($home, 'about', '', [], $map), ['journal', "{$home}/about"]);
     check('about/submissions', R::destination($home, 'about', 'submissions', [], $map), ['journal', "{$home}/for-contributors"]);
+    check('For Authors', R::destination($home, 'information', 'authors', [], $map), ['journal', "{$home}/for-contributors"]);
+    check('Submit an Article', R::destination($home, 'submitanarticle', '', [], $map), ['journal', "{$home}/for-contributors"]);
+    check('For Librarians', R::destination($home, 'information', 'librarians', [], $map), ['journal', $home]);
     check('masthead', R::destination($home, 'about', 'editorialMasthead', [], $map), ['journal', "{$home}/editorial-board"]);
     check('search with words', R::destination($home, 'search', 'search', [], $map, ['query' => 'death anxiety']), ['journal', "{$home}?q=death%20anxiety"]);
     check('search without words', R::destination($home, 'search', 'search', [], $map, ['query' => '']), ['journal', $home]);

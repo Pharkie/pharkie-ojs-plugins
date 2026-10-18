@@ -11,8 +11,10 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
 ## What it does, when on
 
 - **A bar at the top of every reader-facing page**, the PDF and HTML galley
-  viewers and OJS's own pages (the closed message, search) included: this is an archived copy, the journal has
-  moved, don't sign in, register, buy or reset a password here. Its link goes
+  viewers and OJS's own pages (the closed message, search) included: this
+  website is no longer live and is an archive of the journal for reading
+  only; the journal has moved; don't sign in, register, buy or reset a
+  password here. Its link goes
   to the same article or issue on the new site when `map.json` knows it, to
   the matching section (issues, about, author guidelines, editorial board,
   search) when it does not, and to the journal's home otherwise. It is in the
@@ -28,7 +30,11 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
   | `user/*` | register, activate, profile, subscriptions and their payments |
   | `payment/*` except Stripe's `return` and `webhook` | any payment |
   | `about/subscriptions` | "Non-members can purchase individual articles or issues" |
+  | `about/submissions` | "Login or Register to make a submission" (stock OJS, signed out) |
   | `information/readers` | its only content is how to register |
+  | `information/authors` | stock OJS: register or log in to submit (the SEA's says to email the editors) |
+  | `submitanarticle` | the SEA's "Submit an Article" static page, in its menu and footer |
+  | `advertisers` | the SEA's "For Advertisers" static page: advert rates and booking |
 
   Stripe's two callbacks stay open because they only complete a payment that
   was already taken before the switch.
@@ -41,6 +47,15 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
   closed, and the message links to the article they wanted. Journal managers
   and the site admin are left out of this, because a settings form they open
   would save the in-memory value.
+- **The sidebar loses its offers**, in memory for that request: every
+  custom block (Custom Block Manager: the SEA's "BOOK NOW" event banners and
+  its "For Advertisers" link, all written for the live site), and OJS's own
+  "Make a Submission" and "Subscription" blocks if a journal has them. The
+  Information block stays, with For Librarians only (For Readers and For
+  Authors are closed). Reading blocks (Browse, Language and the like) stay
+  as they are.
+  Nothing is saved: the journal's `sidebar` setting is untouched, and staff
+  see the sidebar as it is, for the same reason as payments.
 - **Register and Login leave the header** for everyone but staff.
 - **Two other plugins stand down on the same value**: WP-OJS Subscription API
   adds none of its sign-in, reset or profile messages, no reset handler and no
@@ -112,7 +127,7 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d ojs
 
 ```bash
 curl -s https://journal.existentialanalysis.org.uk/ea | grep -c 'archive-mode-bar"'        # 1
-curl -s https://journal.existentialanalysis.org.uk/ea/login | grep -c 'This archive is read only'   # 1
+curl -s https://journal.existentialanalysis.org.uk/ea/login | grep -c 'archive-mode-closed__link'   # 1
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://journal.existentialanalysis.org.uk/ea/payment/plugin/StripePayment/webhook   # 400: the webhook still answers
 ```
 
@@ -132,7 +147,7 @@ undoing.
 | `issue/view/<id>/…` or `issue/download/<id>/…`, in the map | `<moved_to>/issues/<slug>` "See this issue on the SEA's website" |
 | any other `issue/*` | `<moved_to>/issues` |
 | `about` | `<moved_to>/about` |
-| `about/submissions` | `<moved_to>/for-contributors` |
+| `about/submissions`, `information/authors`, `submitanarticle` (all closed) | `<moved_to>/for-contributors` |
 | `about/editorialMasthead`, `editorialTeam` | `<moved_to>/editorial-board` |
 | `search` with words | `<moved_to>?q=<words>` |
 | anything else | `<moved_to>` "Go to the journal on the SEA's website" |
@@ -155,8 +170,8 @@ monitor's Stripe webhook check still passes.
 php plugins/archive-mode/tests/routes-test.php
 ```
 
-Runs without OJS: which routes close, where each page links, how `source` is
-read, and how the bar goes into a page.
+Runs without OJS: which routes close, which sidebar blocks go, where each
+page links, how `source` is read, and how the bar goes into a page.
 
 ## Uninstall
 

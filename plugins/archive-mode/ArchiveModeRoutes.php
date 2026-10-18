@@ -24,10 +24,13 @@ class ArchiveModeRoutes
      * Closed: signing in, registering and every password reset (the whole
      * `login` page except signing out), everything under `user` (profile,
      * registration, subscriptions and their payments), every `payment` route,
-     * the About > Subscriptions page, About > Submissions (which tells a
-     * signed-out reader to log in or register to make a submission), For
-     * Readers, whose only content is how to register, and the SEA's "For
-     * Advertisers" page (a static page at `advertisers`, selling adverts).
+     * the About > Subscriptions page, and every page on joining or
+     * submitting: For Readers (how to register), For Authors (stock OJS:
+     * register or log in to submit), About > Submissions (stock OJS: "Login
+     * or Register to make a submission") and the SEA's own "Submit an
+     * Article" page. Also the SEA's "For Advertisers" page, which sells
+     * adverts. Those two are static pages, at `submitanarticle` and
+     * `advertisers`.
      *
      * Left open: Stripe's webhook and its return from Checkout. Both only
      * complete a payment that has already been taken, so a purchase made just
@@ -48,7 +51,8 @@ class ArchiveModeRoutes
             case 'about':
                 return in_array($op, ['subscriptions', 'submissions'], true);
             case 'information':
-                return $op === 'readers';
+                return in_array($op, ['readers', 'authors'], true);
+            case 'submitanarticle':
             case 'advertisers':
                 return true;
         }
@@ -119,6 +123,10 @@ class ArchiveModeRoutes
                 case 'editorialTeam':
                     return [self::KIND_JOURNAL, $base . '/editorial-board'];
             }
+        }
+
+        if (($page === 'information' && $op === 'authors') || $page === 'submitanarticle') {
+            return [self::KIND_JOURNAL, $base . '/for-contributors'];
         }
 
         if ($page === 'search') {

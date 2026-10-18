@@ -21,7 +21,7 @@
  *   offered, whatever the journal's fees are set to;
  * - the sidebar loses every block that offers something the archive no
  *   longer does (event banners, adverts, submissions, subscriptions) and the
- *   link to For Readers, which is closed;
+ *   links to For Readers and For Authors, which are closed;
  * - Register and Login leave the header.
  * Reading is unchanged: the home page, issues, articles, open galleys,
  * search and OAI-PMH.
@@ -136,8 +136,9 @@ class ArchiveModePlugin extends GenericPlugin
      * saved. Payments off (when asked), and the sidebar without its offers.
      *
      * The sidebar is read from the request's journal when the page is drawn
-     * (PKPTemplateManager::displaySidebar), and so is the Information block's
-     * For Readers link, which shows only while readerInformation has text.
+     * (PKPTemplateManager::displaySidebar), and so are the Information
+     * block's For Readers and For Authors links, each shown only while its
+     * text is set.
      *
      * Not for journal managers or the site admin: a settings form they open
      * would read these values, and saving it would write them to the database.
@@ -162,8 +163,10 @@ class ArchiveModePlugin extends GenericPlugin
             }
             $context->setData('sidebar', ArchiveModeRoutes::readingSidebar($sidebar, $custom));
         }
-        // For Readers is closed, so the Information block stops linking to it.
+        // For Readers and For Authors are closed, so the Information block
+        // stops linking to them. For Librarians stays.
         $context->setData('readerInformation', null);
+        $context->setData('authorInformation', null);
     }
 
     /**
