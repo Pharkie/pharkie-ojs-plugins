@@ -65,7 +65,7 @@ class ArchiveModePlugin extends GenericPlugin
     {
         $success = parent::register($category, $path, $mainContextId);
 
-        if (!$success || !$this->getEnabled($mainContextId) || self::movedTo() === '') {
+        if (!$success || !$this->getEnabled() || self::movedTo() === '') {
             return $success;
         }
 
@@ -75,6 +75,16 @@ class ArchiveModePlugin extends GenericPlugin
         Hook::add('TemplateManager::display', $this->addBar(...));
 
         return $success;
+    }
+
+    /**
+     * A site plugin, enabled once for the whole install: OJS's site-level
+     * pages (/index/login, /index/user/register) sign people in and register
+     * them too, and a plugin enabled for the journal alone never loads there.
+     */
+    public function isSitePlugin()
+    {
+        return true;
     }
 
     public function getDisplayName()
@@ -121,9 +131,11 @@ class ArchiveModePlugin extends GenericPlugin
      * Payments off for this request only, in memory: never saved.
      *
      * With paymentsEnabled false, OJSPaymentManager reports no purchase,
-     * issue or membership fee, so templates show no prices and a reader
-     * without access is sent to sign in or to About > Subscriptions, both of
-     * which are closed. That holds even if the journal's fees are still set.
+     * issue or membership fee, so a reader without access is sent to sign in
+     * or to About > Subscriptions, both of which are closed. The fees go to 0
+     * as well, because the galley buttons print the journal's fee from the
+     * context whether or not payments are on. That holds even if the
+     * journal's fees are still set in the database.
      *
      * Not for journal managers or the site admin: a settings form they open
      * would read this value, and saving it would write it to the database.
@@ -134,7 +146,16 @@ class ArchiveModePlugin extends GenericPlugin
         if (!$context || $this->isStaff($request)) {
             return;
         }
+        self::zeroPayments($context);
+    }
+
+    /** @param \PKP\context\Context $context */
+    private static function zeroPayments($context): void
+    {
         $context->setData('paymentsEnabled', false);
+        foreach (['purchaseArticleFee', 'purchaseIssueFee', 'membershipFee'] as $fee) {
+            $context->setData($fee, 0);
+        }
     }
 
     private function isStaff(PKPRequest $request): bool
@@ -222,13 +243,25 @@ class ArchiveModePlugin extends GenericPlugin
         }
 
         $request = Application::get()->getRequest();
+        $staff = $this->isStaff($request);
+
+        // The galley buttons print the fee from the template's own copy of
+        // the journal, which is not the object the request holds (measured:
+        // a second instance), so it is zeroed here as well.
+        $journal = $templateMgr->getTemplateVars('currentJournal');
+        if ($journal && !$staff && (string) $request->getRequestedPage() !== 'payment') {
+            self::zeroPayments($journal);
+        }
+
         [$kind, $url] = $this->destination($request);
         $bar = $this->barHtml($kind, $url);
-        $css = $this->css(!$this->isStaff($request));
+        $css = $this->css(!$staff);
 
+        // Named, so it neither replaces nor is replaced by another plugin's
+        // closure (Smarty files every unnamed closure as "closure").
         $templateMgr->registerFilter('output', function (string $html) use ($bar, $css, $isViewer): string {
             return self::insertBar($html, $bar, $css, $isViewer);
-        });
+        }, 'archiveModeBar');
         $this->filterAdded = true;
 
         return Hook::CONTINUE;

@@ -11,18 +11,20 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
 ## What it does, when on
 
 - **A bar at the top of every reader-facing page**, the PDF and HTML galley
-  viewers and error pages included: this is an archived copy, the journal has
+  viewers and OJS's own pages (the closed message, search) included: this is an archived copy, the journal has
   moved, don't sign in, register, buy or reset a password here. Its link goes
   to the same article or issue on the new site when `map.json` knows it, to
   the matching section (issues, about, author guidelines, editorial board,
   search) when it does not, and to the journal's home otherwise. It is in the
   HTML from the server, so it shows with JavaScript off. It is not sticky.
+  OJS's 404 for an unknown article is a bare one-line response with no page
+  around it, so it has no bar.
 - **Closed routes show one message instead** (`ArchiveModeHandler`), GET or
   POST, and do nothing else:
 
   | Route | Why |
   |---|---|
-  | `login/*` except `signOut`, `signOutAsUser` | sign-in, lost password, reset, change password, sign in as |
+  | `login/*` except `signOut`, `signOutAsUser` | sign-in, lost password, reset, change password, sign in as; the site-level `/index/login` too |
   | `user/*` | register, activate, profile, subscriptions and their payments |
   | `payment/*` except Stripe's `return` and `webhook` | any payment |
   | `about/subscriptions` | "Non-members can purchase individual articles or issues" |
@@ -31,8 +33,10 @@ Plugin slug: `archiveMode`. Repo folder: `plugins/archive-mode/`, mounted at
   Stripe's two callbacks stay open because they only complete a payment that
   was already taken before the switch.
 - **Payments read as off** for every other page, in memory for that request
-  (never saved), so no price and no purchase step appears even if the
-  journal's fees are still set. A reader without access who clicks a
+  (never saved): `paymentsEnabled` false and the three fees 0, on the
+  request's journal and on the template's (a second copy, which the galley
+  buttons print the price from). So no price and no purchase step appears
+  even if the journal's fees are still set. A reader without access who clicks a
   padlocked galley is sent to sign in or to About > Subscriptions, both
   closed, and the message links to the article they wanted. Journal managers
   and the site admin are left out of this, because a settings form they open
@@ -61,17 +65,16 @@ ssh sea-live
 cd /opt/pharkie-ojs-plugins && git pull
 C="docker compose -f docker-compose.yml -f docker-compose.staging.yml"
 $C up -d ojs     # recreates OJS with the plugin's bind mount
-$C exec -T ojs-db bash -c 'mariadb -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE' <<'SQL'
-INSERT IGNORE INTO versions (major, minor, revision, build, date_installed, current, product_type, product, product_class_name, lazy_load, sitewide)
-  VALUES (1, 0, 0, 0, NOW(), 1, 'plugins.generic', 'archiveMode', 'ArchiveModePlugin', 1, 0);
-INSERT INTO plugin_settings (plugin_name, context_id, setting_name, setting_value, setting_type)
-  SELECT 'archivemodeplugin', journal_id, 'enabled', '1', 'bool' FROM journals WHERE path = 'ea'
-  ON DUPLICATE KEY UPDATE setting_value = '1';
-SQL
+$C exec -T ojs-db bash -c 'mariadb -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE' < plugins/archive-mode/install.sql
+$C exec -T ojs php -r 'require_once("/var/www/html/tools/bootstrap.php"); Illuminate\Support\Facades\Cache::flush();'
 ```
 
-That registers and enables the plugin, which is inert while the value is
-empty. Settings > Website > Plugins then lists **Archive Mode** as enabled.
+[`install.sql`](install.sql) registers and enables the plugin for the whole
+install (it is a site plugin, so the site-level `/index/login` and
+`/index/user/register` are covered too), and is safe to run again. The cache
+flush is the one `setup-ojs.sh` does after its own SQL. The plugin is inert
+while the value is empty: the site looks exactly as before. `setup-ojs.sh`
+runs the same file on a dev or staging rebuild.
 
 **The article and issue map** (optional; without it every page links to the
 journal's home or section). Write it from Harbour's database, on the box, any
