@@ -17,6 +17,14 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR/..")"
 
+# In a linked worktree, .git/hooks/pre-commit points at the primary checkout's
+# scripts. Run this checkout's own copy instead, so a worktree is checked by
+# the hook on its own branch.
+if [[ -z "${PRECOMMIT_DELEGATED:-}" && -x "$REPO_ROOT/scripts/pre-commit" \
+      && "$(cd "$REPO_ROOT/scripts" && pwd -P)" != "$(cd "$SCRIPT_DIR" && pwd -P)" ]]; then
+    PRECOMMIT_DELEGATED=1 exec "$REPO_ROOT/scripts/pre-commit" "$@"
+fi
+
 # Color output (disabled if not interactive)
 if [[ -t 1 ]]; then
     RED='\033[0;31m'
