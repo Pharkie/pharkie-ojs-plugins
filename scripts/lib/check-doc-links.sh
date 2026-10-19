@@ -23,10 +23,38 @@ _get_file_anchors() {
     done
 }
 
+# The primary checkout's root. In a linked worktree (e.g. .claude/worktrees/<name>)
+# this is the checkout that owns the .git directory; otherwise it is the repo root.
+_primary_root() {
+    local common
+    common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || { get_repo_root; return; }
+    dirname "$common"
+}
+
+# A target is external when it leaves the repo (a sibling repo such as
+# ../membership-platform) or sits under a gitignored top-level directory
+# (private/). Prints the root that must exist for the target to be checkable:
+# "../membership-platform" or "private". Prints nothing for in-repo targets.
+_external_root() {
+    local check_file="$1" first
+    if [[ "$check_file" == ../* ]]; then
+        local rest="${check_file#../}"
+        echo "../${rest%%/*}"
+        return
+    fi
+    first="${check_file%%/*}"
+    [[ "$first" == "$check_file" ]] && return
+    if git check-ignore -q "$first/" 2>/dev/null; then
+        echo "$first"
+    fi
+}
+
 check_doc_links() {
-    local repo_root errors
+    local repo_root primary_root errors skipped
     repo_root=$(get_repo_root)
+    primary_root=$(_primary_root)
     errors=0
+    skipped=0
 
     # Find all markdown files tracked by git
     local md_files
@@ -106,11 +134,24 @@ check_doc_links() {
                     check_file=$(python3 -c "import os.path; print(os.path.normpath('$check_file'))" 2>/dev/null || echo "$check_file")
                 fi
 
-                # Check if target file exists
+                # In-repo targets resolve against this checkout. External ones
+                # (sibling repo, private/) resolve against the primary checkout,
+                # and are skipped when their repo is not on this machine.
+                local base="$repo_root"
                 if [[ -n "$target_file" ]]; then
-                    if [[ ! -f "$repo_root/$check_file" ]]; then
+                    local ext_root
+                    ext_root=$(_external_root "$check_file")
+                    if [[ -n "$ext_root" ]]; then
+                        base="$primary_root"
+                        if [[ ! -e "$base/$ext_root" ]]; then
+                            echo "    SKIP: $md_file:$line_num — '$target_file' ($ext_root is not on this machine)"
+                            skipped=$((skipped + 1))
+                            continue
+                        fi
+                    fi
+                    if [[ ! -f "$base/$check_file" ]]; then
                         echo "    ERROR: $md_file:$line_num — broken link to '$target_file' (file not found)"
-                        ((errors++))
+                        errors=$((errors + 1))
                         continue
                     fi
                 fi
@@ -118,10 +159,10 @@ check_doc_links() {
                 # Check if anchor exists in target file
                 if [[ -n "$target_anchor" ]]; then
                     local anchors
-                    anchors=$(_get_file_anchors "$repo_root/$check_file")
+                    anchors=$(_get_file_anchors "$base/$check_file")
                     if ! echo "$anchors" | grep -qFx -- "$target_anchor"; then
                         echo "    ERROR: $md_file:$line_num — broken anchor '#$target_anchor' in '$(basename "$check_file")'"
-                        ((errors++))
+                        errors=$((errors + 1))
                     fi
                 fi
             done <<< "$targets"
@@ -130,7 +171,8 @@ check_doc_links() {
 
     if [[ $errors -eq 0 ]]; then
         echo "    OK: All internal doc links valid"
+        [[ $skipped -gt 0 ]] && echo "    ($skipped link(s) into repos not on this machine skipped)"
     fi
 
-    return $errors
+    return $(( errors > 0 ))
 }
