@@ -31,7 +31,8 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
 
 # PHP2Shell hardening from the advisory (sansec.io/research/php2shell): one of
 # the two bugs is in the session upload-progress handler, which nothing here
-# uses. Kept off after the patch too.
-RUN printf 'session.upload_progress.enabled = 0\n' > "$PHP_INI_DIR/conf.d/zz-hardening.ini"
+# uses. Kept off after the patch too. expose_php Off drops the X-Powered-By
+# header, which names the exact PHP version.
+RUN printf 'session.upload_progress.enabled = 0\nexpose_php = Off\n' > "$PHP_INI_DIR/conf.d/zz-hardening.ini"
 
 WORKDIR /var/www/html
