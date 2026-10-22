@@ -10,8 +10,9 @@ RUN composer install --no-dev --no-interaction --optimize-autoloader
 # PHP 8.3.29, which has PHP2Shell (CVE-2026-109618, CVE-2026-109619:
 # unauthenticated RCE from a multipart upload, fixed in 8.3.36). PKP has
 # published no patched image. So this stage takes the official image at the
-# fixed version and builds the same 13 extensions PKP's image carries, with
-# PKP's own copy of install-php-extensions; the final stage lays the result
+# fixed version and builds the extensions PKP's image adds (opcache and sodium
+# come with the base), with PKP's own copy of install-php-extensions, so the
+# module list matches PKP's exactly; the final stage lays the result
 # over PKP's PHP. Same Debian, same PHP minor (extension API 20230831), same
 # paths: OJS and its config are untouched, and the bind-mounted
 # php-overrides.ini applies as before. Drop this stage when PKP ships a 3.5

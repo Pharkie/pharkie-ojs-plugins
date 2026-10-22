@@ -8,7 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
-- **PHP2Shell (CVE-2026-109618, CVE-2026-109619): the journal and the WordPress rig move to patched PHP.** Both bugs give unauthenticated remote code execution from an ordinary multipart form upload, worst under Apache mod_php, which both containers run. OJS goes from PHP 8.3.29 to 8.3.36: PKP has published no patched `pkpofficial/ojs` image, so `docker/ojs/Dockerfile` builds PKP's 13 extensions on the official `php:8.3.36-apache-trixie` image, with PKP's own installer, and lays that PHP over PKP's. OJS 3.5.0-3, its code volume and its config are unchanged, and `php-overrides.ini` still applies at the same path. The WordPress rig goes from 8.2.30 to 8.2.35, its base pinned to the patch tag. Both also turn off `session.upload_progress.enabled`, the advisory's mitigation, which neither app uses.
+- **PHP2Shell (CVE-2026-109618, CVE-2026-109619): the journal and the WordPress rig move to patched PHP.** Both bugs give unauthenticated remote code execution from an ordinary multipart form upload, worst under Apache mod_php, which both containers run. OJS goes from PHP 8.3.29 to 8.3.36: PKP has published no patched `pkpofficial/ojs` image, so `docker/ojs/Dockerfile` builds the same extensions PKP's image carries on the official `php:8.3.36-apache-trixie` image, with PKP's own installer, and lays that PHP over PKP's. OJS 3.5.0-3, its code volume and its config are unchanged, and `php-overrides.ini` still applies at the same path. The WordPress rig goes from 8.2.30 to 8.2.35, its base pinned to the patch tag. Both also turn off `session.upload_progress.enabled`, the advisory's mitigation, which neither app uses.
 
 ### Features
 
