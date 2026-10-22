@@ -146,8 +146,8 @@ This handles everything in one shot:
 
 | Service | Image / Build | App version | Notes |
 |---------|---------------|-------------|-------|
-| WordPress | Custom `docker/wp/Dockerfile` (from `php:8.2-apache`) | WP 6.9.1 (Bedrock), PHP 8.2 | Composer-managed deps |
-| OJS | Custom `docker/ojs/Dockerfile` (from `pkpofficial/ojs:3_5_0-3`) | OJS 3.5.0.3, PHP 8.3 | Adds envsubst + mariadb client |
+| WordPress | Custom `docker/wp/Dockerfile` (from `php:8.2.35-apache-trixie`) | WP 6.9.1 (Bedrock), PHP 8.2.35 | Composer-managed deps. Base pinned to the patch release so a rebuild cannot reuse a cached older PHP |
+| OJS | Custom `docker/ojs/Dockerfile` (from `pkpofficial/ojs:3_5_0-3`) | OJS 3.5.0.3, PHP 8.3.36 | Adds envsubst + mariadb client. Replaces PKP's PHP 8.3.29 with 8.3.36 (PHP2Shell fix; PKP has no patched image), built from `php:8.3.36-apache-trixie` with the same extensions. Drop the `php-patched` stage once PKP ships one |
 | MariaDB (both) | `mariadb:10.11` | 10.11 | — |
 | Adminer | `adminer:4-standalone` | ~4.8 | DB admin GUI (~15MB RAM) |
 

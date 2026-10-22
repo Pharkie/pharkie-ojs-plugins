@@ -1,4 +1,7 @@
-FROM php:8.2-apache
+# Pinned to the patch release, not php:8.2-apache: a floating tag builds from
+# whatever copy of the base the box has cached. 8.2.35 fixes PHP2Shell
+# (CVE-2026-109618, CVE-2026-109619).
+FROM php:8.2.35-apache-trixie
 
 # PHP extensions required by WordPress + WooCommerce
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,5 +28,10 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
     /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf \
     && sed -ri -e 's/AllowOverride None/AllowOverride All/g' \
     /etc/apache2/apache2.conf
+
+# PHP2Shell hardening from the advisory (sansec.io/research/php2shell): one of
+# the two bugs is in the session upload-progress handler, which nothing here
+# uses. Kept off after the patch too.
+RUN printf 'session.upload_progress.enabled = 0\n' > "$PHP_INI_DIR/conf.d/zz-hardening.ini"
 
 WORKDIR /var/www/html
