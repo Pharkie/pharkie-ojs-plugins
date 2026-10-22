@@ -1,10 +1,76 @@
 # OJS (public journal) vhost. Owned by pharkie-ojs-plugins.
+#
+# The journal's DNS record is behind Cloudflare's proxy (orange cloud, SSL mode
+# Full, "Always Use HTTPS" off), so every request reaches this block from a
+# Cloudflare edge address. The tls, header_up and log settings below are there
+# because of that.
 {$CADDY_OJS_DOMAIN} {
+	# CERTIFICATE: HTTP-01 ONLY. Let's Encrypt's TLS-ALPN-01 check opens port 443
+	# at the address DNS gives, which is Cloudflare's edge; Cloudflare ends TLS
+	# itself and never offers acme-tls/1, so that challenge cannot pass. HTTP-01
+	# can: Cloudflare forwards port 80 to this Caddy with the path untouched, and
+	# Caddy answers /.well-known/acme-challenge/ on 443 as well, so it still
+	# works if "Always Use HTTPS" is ever turned on. Left to the default, Caddy
+	# picks a challenge at random and can fail TLS-ALPN once per renewal before
+	# trying HTTP-01. Grey-clouding the record needs no change here.
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+		}
+	}
+
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
 	}
-	reverse_proxy ojs:80
+
+	reverse_proxy ojs:80 {
+		# OJS takes the visitor's address from the LAST X-Forwarded-For entry
+		# (PKPRequest::getRemoteAddr). {client_ip} is the visitor's
+		# CF-Connecting-IP once the shared Caddy trusts Cloudflare's ranges, and
+		# the connecting address until then; never a value the client wrote.
+		header_up X-Forwarded-For {client_ip}
+	}
+
+	# Access log, to a file in the shared Caddy's logs volume, as Harbour's
+	# vhosts do: it survives a container recreate and keeps for a stated period.
+	# Request logs hold IP addresses, so they are kept 30 days and no longer.
+	#
+	# client_ip is the visitor once the shared Caddy trusts Cloudflare's ranges
+	# (trusted_proxies, a global option in Harbour's deploy/Caddyfile); until
+	# then it is Cloudflare's edge, and the visitor is the logged
+	# Cf-Connecting-Ip request header.
+	#
+	# Redacted, because a log that lets its reader act as somebody is worse than
+	# no log:
+	#   query confirm, validate, key, invitationKey, token, apiToken, code: the
+	#     password reset, notification unsubscribe, reviewer and invitation
+	#     links, ORCID's verification and sign-in, and the API token. Also
+	#     session_id (the Stripe return) and email (the WordPress sync's member
+	#     lookups). Matched percent-encoded too, as a sign-in return path
+	#     (?source=) carries them.
+	#   the key at the end of /user/activateUser/<username>/<key>.
+	#   Referer and the response's Location carry the same URLs.
+	#   Cookie, Authorization and Set-Cookie: the OJSSID session, and the
+	#     WordPress sync's bearer key.
+	log {
+		output file /var/log/caddy/ojs-access.log {
+			roll_size 20MiB
+			roll_keep_for 720h
+			roll_keep 20
+		}
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "((?:/|%2[Ff])activateUser(?:/|%2[Ff])[^/?#&%]+(?:/|%2[Ff]))[^/?#&%]+|((?:[?&]|%3[Ff]|%26)(?:confirm|validate|key|invitationKey|token|apiToken|code|session_id|email)(?:=|%3[Dd]))[^&#]*" "${1}${2}REDACTED"
+				request>headers>Referer regexp "((?:/|%2[Ff])activateUser(?:/|%2[Ff])[^/?#&%]+(?:/|%2[Ff]))[^/?#&%]+|((?:[?&]|%3[Ff]|%26)(?:confirm|validate|key|invitationKey|token|apiToken|code|session_id|email)(?:=|%3[Dd]))[^&#]*" "${1}${2}REDACTED"
+				resp_headers>Location regexp "((?:/|%2[Ff])activateUser(?:/|%2[Ff])[^/?#&%]+(?:/|%2[Ff]))[^/?#&%]+|((?:[?&]|%3[Ff]|%26)(?:confirm|validate|key|invitationKey|token|apiToken|code|session_id|email)(?:=|%3[Dd]))[^&#]*" "${1}${2}REDACTED"
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
 }

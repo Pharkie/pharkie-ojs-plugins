@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **The journal behind Cloudflare's proxy.** `ojs.caddy` renews the journal's certificate by HTTP-01 alone, since TLS-ALPN-01 cannot reach Caddy through Cloudflare; writes an access log, `/var/log/caddy/ojs-access.log`, kept 30 days, with reset, activation, invitation, reviewer, ORCID, API and Stripe tokens, members' email lookups and session cookies redacted; and hands OJS `{client_ip}` as `X-Forwarded-For`, so OJS gets the visitor's address once the shared Caddy trusts Cloudflare's ranges, and a value no client can write. `expose_php = Off` for the journal and the WordPress rig: no `X-Powered-By: PHP/8.3.36`.
 - **PHP2Shell (CVE-2026-109618, CVE-2026-109619): the journal and the WordPress rig move to patched PHP.** Both bugs give unauthenticated remote code execution from an ordinary multipart form upload, worst under Apache mod_php, which both containers run. OJS goes from PHP 8.3.29 to 8.3.36: PKP has published no patched `pkpofficial/ojs` image, so `docker/ojs/Dockerfile` builds the same extensions PKP's image carries on the official `php:8.3.36-apache-trixie` image, with PKP's own installer, and lays that PHP over PKP's. OJS 3.5.0-3, its code volume and its config are unchanged, and `php-overrides.ini` still applies at the same path. The WordPress rig goes from 8.2.30 to 8.2.35, its base pinned to the patch tag. Both also turn off `session.upload_progress.enabled`, the advisory's mitigation, which neither app uses.
 
 ### Features

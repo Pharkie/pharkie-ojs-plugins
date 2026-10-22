@@ -215,6 +215,14 @@ When you have domains pointing at the server:
 
 The shared Caddy handles Let's Encrypt certificate provisioning and renewal automatically.
 
+### The journal behind Cloudflare's proxy
+
+The journal's DNS record is proxied by Cloudflare (orange cloud, SSL mode Full, "Always Use HTTPS" off). Three things follow, all set in `ojs.caddy`:
+
+- **Renewal is HTTP-01 only.** Let's Encrypt's TLS-ALPN-01 check reaches Cloudflare's edge, not Caddy, and cannot pass, so the vhost turns it off (`disable_tlsalpn_challenge`). Cloudflare forwards `http://…/.well-known/acme-challenge/` to Caddy on port 80 unchanged. Anything in Cloudflare that challenges or blocks that path (a WAF rule, "I'm Under Attack", Bot Fight Mode) can stop renewal. Grey-clouding the record needs no change.
+- **An external check sees Cloudflare's certificate.** To read Caddy's own, connect to the box by address (`harbour.` is DNS-only): `echo | openssl s_client -connect "$(dig +short harbour.existentialanalysis.org.uk | head -1):443" -servername journal.existentialanalysis.org.uk 2>/dev/null | openssl x509 -noout -issuer -enddate`.
+- **Access log:** `/var/log/caddy/ojs-access.log` in the shared Caddy (`docker exec harbour-infra-caddy-1 tail /var/log/caddy/ojs-access.log`), kept 30 days, with links' secrets and session cookies redacted. The visitor's address is `client_ip` once the shared Caddy trusts Cloudflare's ranges (a global option in Harbour's `deploy/Caddyfile`); until then it is the logged `Cf-Connecting-Ip` header.
+
 ---
 
 ## Testing a deployment
