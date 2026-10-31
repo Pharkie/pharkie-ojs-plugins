@@ -4,7 +4,9 @@
 > WP↔OJS integration before a change reaches the live site, and will never be
 > promoted to be the real site — Harbour replaces WordPress (decided
 > 2026-07-29). It is kept because the integration is still in production until
-> Harbour cut-over. **Live WordPress is on Krystal, not here.**
+> Harbour cut-over. **Live WordPress is on Krystal, not here.** It runs in local
+> dev only: on a server (`docker-compose.staging.yml`) it is behind the `wp-rig`
+> profile and off unless `COMPOSE_PROFILES=wp-rig` is set.
 
 > **The WordPress container is not given `.env`.** Bedrock's config reads its
 > 17 variables from the container environment instead (`environment:` in the

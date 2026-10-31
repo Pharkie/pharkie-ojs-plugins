@@ -5,15 +5,25 @@
 # internet. Docker's iptables bypass UFW, so a 0.0.0.0 binding here would
 # silently publish the app despite the firewall. Caddy is the only public entry point.
 #   Production:  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+#
+# The WordPress test rig (wp, wp-db) is behind the `wp-rig` profile here, so a
+# server runs the journal alone unless it asks for the rig:
+#   COMPOSE_PROFILES=wp-rig docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# Local dev (docker-compose.override.yml) is unaffected: it has no profiles.
+# Compose still interpolates the rig's variables, so its required ones stay in .env.
 # For IP-only mode (no Caddy/SSL, direct public access), publish these ports on
 # 0.0.0.0 explicitly instead.
 
 services:
   wp:
+    profiles: [wp-rig]
     ports:
       - "127.0.0.1:8080:80"
     environment:
       WP_ENV: staging
+
+  wp-db:
+    profiles: [wp-rig]
 
   ojs:
     ports:
@@ -24,3 +34,10 @@ services:
   adminer:
     ports:
       - "127.0.0.1:8082:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: ojs-db
+    # Base adminer depends on wp-db; without the rig that dependency is absent.
+    depends_on:
+      wp-db:
+        condition: service_started
+        required: false

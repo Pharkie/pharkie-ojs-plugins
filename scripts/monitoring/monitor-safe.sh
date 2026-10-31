@@ -1,7 +1,8 @@
 #!/bin/bash
-# Non-mutating monitoring checks for live environments.
+# Non-mutating monitoring checks for the journal (OJS) and the box it runs on.
 # Runs FROM the devcontainer, GitHub Actions, server cron, or any machine with SSH access.
-# Does NOT create test users or modify any state on the server.
+# Does NOT create test users or modify any state on the server. Needs no
+# WordPress: the sync API is checked from inside the ojs container.
 #
 # Usage:
 #   scripts/monitoring/monitor-safe.sh                      # Test sea-staging (via SSH)
@@ -53,36 +54,7 @@ if [ -z "$OJS_BASE_URL" ] || [ -z "$OJS_JOURNAL_PATH" ] || [ -z "$API_KEY" ]; th
 fi
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
 
-# Optional env vars
-WP_HOME=$(read_env "WP_HOME")
-WP_PUBLIC_URL=$(read_env "WP_PUBLIC_URL")
-if [ -z "$WP_PUBLIC_URL" ]; then
-  CADDY_WP=$(read_env "CADDY_WP_DOMAIN")
-  if [ -n "$CADDY_WP" ]; then
-    WP_PUBLIC_URL="https://$CADDY_WP"
-  fi
-fi
-
-# Basic auth credentials for staging sites behind Caddy
-CADDY_AUTH_USER=$(read_env "CADDY_WP_AUTH_USER")
-CADDY_AUTH_PASS=$(read_env "CADDY_WP_AUTH_PASS")
-WP_CURL_AUTH_ARGS=()
-if [ -n "$CADDY_AUTH_USER" ] && [ -n "$CADDY_AUTH_PASS" ]; then
-  WP_CURL_AUTH_ARGS=(-u "${CADDY_AUTH_USER}:${CADDY_AUTH_PASS}")
-fi
-
-# Fallback: if WP_HOME looks public (not private IP/non-standard port), use it directly
-if [ -z "$WP_PUBLIC_URL" ]; then
-  if echo "$WP_HOME" | grep -qE '^https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|localhost|127\.|.*:[0-9]{4,})'; then
-    WP_PUBLIC_URL=""
-  else
-    WP_PUBLIC_URL="$WP_HOME"
-  fi
-fi
-
 echo "=== Monitor (safe): $SSH_HOST ==="
-echo "    WP:  $WP_HOME"
-echo "    WP (public): ${WP_PUBLIC_URL:-N/A — will check via SSH}"
 echo "    OJS: $OJS_BASE_URL"
 echo ""
 
@@ -91,52 +63,7 @@ echo ""
 # ============================================================
 echo "--- HTTP & API ---"
 
-# Helper: curl WP, handling internal vs public URLs.
-wp_curl() {
-  local path="$1" url
-  if [ -n "$WP_PUBLIC_URL" ]; then
-    url="${WP_PUBLIC_URL}${path}"
-    curl -s -o /dev/null -w '%{http_code}' "${WP_CURL_AUTH_ARGS[@]}" "$url" 2>/dev/null
-  else
-    remote "$COMPOSE exec -T wp curl -s -o /dev/null -w '%{http_code}' 'http://localhost:80${path}'" 2>/dev/null
-  fi
-}
-
-# 1a. WP HTTP
-WP_CHECK_URL="${WP_PUBLIC_URL:-$WP_HOME}"
-WP_STATUS=$(wp_curl "") || WP_STATUS="000"
-if [ -n "$WP_PUBLIC_URL" ]; then
-  WP_TIME=$(curl -s -o /dev/null -w '%{time_total}' "${WP_CURL_AUTH_ARGS[@]}" "$WP_PUBLIC_URL" 2>/dev/null) || WP_TIME="0"
-else
-  WP_TIME="0"
-fi
-if [ "$WP_STATUS" = "200" ] || [ "$WP_STATUS" = "301" ] || [ "$WP_STATUS" = "302" ]; then
-  pass "WP responds (HTTP $WP_STATUS${WP_TIME:+, ${WP_TIME}s})"
-else
-  fail "WP not responding (HTTP $WP_STATUS via ${WP_CHECK_URL})"
-fi
-
-# 1b. WP Admin (path differs: /wp/wp-admin/ internally, /wp-admin/ via Caddy)
-if [ -n "$WP_PUBLIC_URL" ]; then
-  WP_ADMIN_STATUS=$(wp_curl "/wp-admin/") || WP_ADMIN_STATUS="000"
-else
-  WP_ADMIN_STATUS=$(wp_curl "/wp/wp-admin/") || WP_ADMIN_STATUS="000"
-fi
-if [ "$WP_ADMIN_STATUS" = "200" ] || [ "$WP_ADMIN_STATUS" = "301" ] || [ "$WP_ADMIN_STATUS" = "302" ]; then
-  pass "WP Admin responds (HTTP $WP_ADMIN_STATUS)"
-else
-  fail "WP Admin not responding (HTTP $WP_ADMIN_STATUS)"
-fi
-
-# 1c. WP REST API
-WP_API_STATUS=$(wp_curl "/wp-json/") || WP_API_STATUS="000"
-if [ "$WP_API_STATUS" = "200" ]; then
-  pass "WP REST API responds"
-else
-  fail "WP REST API not responding (HTTP $WP_API_STATUS)"
-fi
-
-# 1d. OJS HTTP
+# 1a. OJS HTTP
 OJS_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$OJS_BASE_URL" 2>/dev/null) || OJS_STATUS="000"
 OJS_TIME=$(curl -s -o /dev/null -w '%{time_total}' "$OJS_BASE_URL" 2>/dev/null) || OJS_TIME="0"
 if [ "$OJS_STATUS" = "200" ] || [ "$OJS_STATUS" = "301" ] || [ "$OJS_STATUS" = "302" ]; then
@@ -145,7 +72,7 @@ else
   fail "OJS not responding (HTTP $OJS_STATUS)"
 fi
 
-# 1e. OJS Admin
+# 1b. OJS Admin
 OJS_ADMIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$OJS_JOURNAL_URL/management/settings/access" 2>/dev/null) || OJS_ADMIN_STATUS="000"
 OJS_ADMIN_BODY=$(curl -s "$OJS_JOURNAL_URL/management/settings/access" 2>/dev/null | head -30)
 if echo "$OJS_ADMIN_BODY" | grep -qi "Fatal error\|Exception\|404 Not Found"; then
@@ -156,12 +83,8 @@ else
   fail "OJS Admin not responding (HTTP $OJS_ADMIN_STATUS)"
 fi
 
-# 1f. Response time thresholds (10s — generous for cross-Atlantic CI runners)
-WP_TIME_INT=$(echo "$WP_TIME" | cut -d. -f1)
+# 1c. Response time threshold (10s — generous for cross-Atlantic CI runners)
 OJS_TIME_INT=$(echo "$OJS_TIME" | cut -d. -f1)
-if [ "${WP_TIME_INT:-0}" -gt 10 ] 2>/dev/null; then
-  fail "WP response time too slow (${WP_TIME}s > 10s)"
-fi
 if [ "${OJS_TIME_INT:-0}" -gt 10 ] 2>/dev/null; then
   fail "OJS response time too slow (${OJS_TIME}s > 10s)"
 fi
@@ -180,8 +103,10 @@ else
   fail "OJS plugin ping failed" "${PING:-<empty — SSH or container may be down>}"
 fi
 
-# 2b. OJS preflight
-PREFLIGHT=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/preflight") || PREFLIGHT=""
+# 2b. OJS preflight. The keyed calls go to http://ojs:80 from inside the ojs
+# container, not to localhost: the API's IP allowlist (WPOJS_ALLOWED_IPS) admits
+# the Docker network, and the container's own address on it is in that range.
+PREFLIGHT=$(remote "$COMPOSE exec -T ojs curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/preflight") || PREFLIGHT=""
 if echo "$PREFLIGHT" | grep -q '"compatible":true'; then
   CHECKS=$(echo "$PREFLIGHT" | grep -o '"ok":true' | wc -l)
   pass "Preflight passes ($CHECKS checks OK)"
@@ -189,107 +114,18 @@ else
   fail "Preflight failed" "${PREFLIGHT:-<empty — SSH or container may be down>}"
 fi
 
-# 2c. WP-CLI test-connection
-TC_OUTPUT=$(wp_cli "ojs-sync test-connection") || TC_OUTPUT=""
-if echo "$TC_OUTPUT" | grep -q "Connection test passed"; then
-  pass "test-connection passes"
-else
-  fail "test-connection failed" "$(echo "${TC_OUTPUT:-<empty>}" | tail -3)"
-fi
-
 # ============================================================
-# 3. REQUIRED PLUGINS
-# ============================================================
-echo ""
-echo "--- Required Plugins ---"
-
-REQUIRED_PLUGINS="woocommerce woocommerce-subscriptions woocommerce-memberships ultimate-member wpojs-sync"
-PLUGINS=$(wp_cli "plugin list --status=active --format=csv --fields=name") || PLUGINS=""
-if [ -z "$PLUGINS" ]; then
-  fail "Could not retrieve plugin list (SSH or WP-CLI may be down)"
-else
-  # A single active-plugins read can momentarily omit a plugin that is in fact
-  # active (2026-06-02: one read had ultimate-member missing while the other four
-  # were present; it was active again seconds later — 1 false alarm in ~840 runs).
-  # If anything looks inactive, re-read once before alerting: a genuine outage
-  # stays missing across the re-read, a transient blip clears and never pages.
-  MISSING=""
-  for PLUGIN in $REQUIRED_PLUGINS; do
-    echo "$PLUGINS" | grep -q "^$PLUGIN$" || MISSING="$MISSING $PLUGIN"
-  done
-  if [ -n "$MISSING" ]; then
-    sleep 5
-    # Keep the re-read only if it returned something; an empty second read (e.g.
-    # transient WP-CLI failure) must not flip every plugin to "not active".
-    PLUGINS_RECHECK=$(wp_cli "plugin list --status=active --format=csv --fields=name") || PLUGINS_RECHECK=""
-    [ -n "$PLUGINS_RECHECK" ] && PLUGINS="$PLUGINS_RECHECK"
-  fi
-  for PLUGIN in $REQUIRED_PLUGINS; do
-    if echo "$PLUGINS" | grep -q "^$PLUGIN$"; then
-      pass "$PLUGIN active"
-    else
-      fail "$PLUGIN not active"
-    fi
-  done
-fi
-
-# ============================================================
-# 4. SUBSCRIPTION TYPES & MAPPING
+# 4. SUBSCRIPTION TYPES
 # ============================================================
 echo ""
 echo "--- Subscription Config ---"
 
-SUB_TYPES=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/subscription-types") || SUB_TYPES=""
+SUB_TYPES=$(remote "$COMPOSE exec -T ojs curl -sf -H 'Authorization: Bearer $API_KEY' http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/subscription-types") || SUB_TYPES=""
 TYPE_COUNT=$(echo "$SUB_TYPES" | grep -o '"id"' | wc -l)
 if [ "$TYPE_COUNT" -gt "0" ]; then
   pass "$TYPE_COUNT subscription type(s) configured"
 else
   fail "No subscription types found" "${SUB_TYPES:-<empty — SSH or API may be down>}"
-fi
-
-# Product-to-type mapping
-MAPPING_JSON=$(wp_cli "eval '
-  \$mapping = get_option(\"wpojs_type_mapping\", []);
-  echo json_encode(\$mapping);
-'") || MAPPING_JSON="{}"
-MAPPING_OK=true
-if [ "$MAPPING_JSON" = "{}" ] || [ "$MAPPING_JSON" = "[]" ] || [ -z "$MAPPING_JSON" ]; then
-  fail "No product-to-type mappings configured"
-  MAPPING_OK=false
-else
-  BROKEN=$(wp_cli "eval '
-    \$mapping = get_option(\"wpojs_type_mapping\", []);
-    \$broken = [];
-    foreach (\$mapping as \$product_id => \$type_id) {
-      if (!wc_get_product(\$product_id)) {
-        \$broken[] = \"product_\" . \$product_id;
-      }
-    }
-    echo implode(\",\", \$broken);
-  '") || BROKEN=""
-  if [ -n "$BROKEN" ]; then
-    fail "Broken product mapping(s): $BROKEN"
-    MAPPING_OK=false
-  fi
-  # Check OJS type IDs
-  BROKEN_TYPES=$(wp_cli "eval '
-    \$mapping = get_option(\"wpojs_type_mapping\", []);
-    \$type_ids = array_unique(array_values(\$mapping));
-    echo implode(\",\", \$type_ids);
-  '") || BROKEN_TYPES=""
-  if [ -n "$BROKEN_TYPES" ]; then
-    IFS=',' read -ra TYPE_IDS <<< "$BROKEN_TYPES"
-    for TID in "${TYPE_IDS[@]}"; do
-      if ! echo "$SUB_TYPES" | grep -q "\"id\":$TID"; then
-        fail "OJS subscription type $TID not found"
-        MAPPING_OK=false
-      fi
-    done
-  fi
-  if [ "$MAPPING_OK" = true ]; then
-    MAPPING_COUNT=$(echo "$MAPPING_JSON" | grep -o '"[0-9]*"' | wc -l)
-    pass "All $MAPPING_COUNT product-to-type mappings valid"
-  fi
 fi
 
 # ============================================================
@@ -528,7 +364,7 @@ fi
 # next docker compose up, so a single crash-restart would cause permanent
 # hourly alerts. Crash-restarts are already caught by OOM detection and
 # PHP fatal error checks.)
-for CONTAINER in wp ojs wp-db ojs-db; do
+for CONTAINER in ojs ojs-db; do
   RESTART_COUNT=$(remote "docker inspect --format='{{.RestartCount}}' \$($COMPOSE ps -q $CONTAINER 2>/dev/null) 2>/dev/null") || RESTART_COUNT="0"
   RESTART_COUNT=$(echo "$RESTART_COUNT" | tr -d '[:space:]')
   if [ "${RESTART_COUNT:-0}" -gt 0 ] 2>/dev/null; then
@@ -547,18 +383,17 @@ PHP_ERROR_THRESHOLD=3
 PHP_ERROR_EXCLUDE='NotFoundHttpException.*PKPRouter|flock\(\).*LockableFile|Core::cleanFileVar|getId\(\) on null in.*IssueHandler'
 TOTAL_ERRORS=0
 ERROR_SAMPLE=""
-for CONTAINER in wp ojs; do
-  CONTAINER_ID=$(remote "docker compose -f docker-compose.yml -f docker-compose.staging.yml ps -q $CONTAINER 2>/dev/null" 2>/dev/null) || CONTAINER_ID=""
-  [ -z "$CONTAINER_ID" ] && continue
+CONTAINER_ID=$(remote "$COMPOSE ps -q ojs 2>/dev/null" 2>/dev/null) || CONTAINER_ID=""
+if [ -n "$CONTAINER_ID" ]; then
   ERROR_COUNT=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -vcE '$PHP_ERROR_EXCLUDE'" 2>/dev/null) || ERROR_COUNT="0"
   ERROR_COUNT=$(echo "$ERROR_COUNT" | tr -d '[:space:]')
   TOTAL_ERRORS=$((TOTAL_ERRORS + ${ERROR_COUNT:-0}))
   # Capture the last error line for diagnostics
   if [ "${ERROR_COUNT:-0}" -gt 0 ] 2>/dev/null; then
     SAMPLE=$(remote "docker logs --since=1h $CONTAINER_ID 2>&1 | grep -iE 'Fatal error|PHP Fatal|Uncaught Exception|Out of memory' | grep -vE '$PHP_ERROR_EXCLUDE' | tail -1 | cut -c1-120" 2>/dev/null) || SAMPLE=""
-    [ -n "$SAMPLE" ] && ERROR_SAMPLE="[$CONTAINER] $SAMPLE"
+    [ -n "$SAMPLE" ] && ERROR_SAMPLE="[ojs] $SAMPLE"
   fi
-done
+fi
 if [ "$TOTAL_ERRORS" -ge "$PHP_ERROR_THRESHOLD" ] 2>/dev/null; then
   fail "$TOTAL_ERRORS PHP fatal/OOM errors in container logs (last hour)" "$ERROR_SAMPLE"
 elif [ "$TOTAL_ERRORS" -gt 0 ] 2>/dev/null; then
@@ -583,26 +418,13 @@ else
 fi
 
 # ============================================================
-# 9. WP HEALTH
+# 9. ADMINER
 # ============================================================
 echo ""
-echo "--- WP Health ---"
+echo "--- Adminer ---"
 
-# 9a. Action Scheduler queue depth
-PENDING_JOBS=$(wp_cli "action-scheduler list --status=pending --per-page=100 --format=count" 2>/dev/null) || PENDING_JOBS=""
-PENDING_JOBS=$(echo "$PENDING_JOBS" | tr -d '[:space:]')
-# action-scheduler CLI may not be registered (depends on WCS version)
-if ! [[ "$PENDING_JOBS" =~ ^[0-9]+$ ]]; then
-  PENDING_JOBS="0"
-fi
-if [ "${PENDING_JOBS:-0}" -gt 50 ] 2>/dev/null; then
-  fail "Action Scheduler queue backing up ($PENDING_JOBS pending jobs)"
-else
-  pass "Action Scheduler queue OK ($PENDING_JOBS pending)"
-fi
-
-# 9b. Adminer (accessible within Docker network only)
-ADMINER_STATUS=$(remote "$COMPOSE exec -T wp curl -s -o /dev/null -w '%{http_code}' http://adminer:8080/") || ADMINER_STATUS="000"
+# 9a. Adminer (accessible within Docker network only, bound to 127.0.0.1)
+ADMINER_STATUS=$(remote "$COMPOSE exec -T ojs curl -s -o /dev/null -w '%{http_code}' http://adminer:8080/") || ADMINER_STATUS="000"
 if [ "$ADMINER_STATUS" = "200" ]; then
   pass "Adminer responds (HTTP $ADMINER_STATUS)"
 else

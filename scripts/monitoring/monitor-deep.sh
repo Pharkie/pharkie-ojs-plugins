@@ -1,7 +1,9 @@
 #!/bin/bash
-# Deep monitoring checks for live environments — runs daily.
-# Includes everything from monitor-safe.sh PLUS mutating/expensive checks:
-# sync round-trip, backup health, search index, reconciliation, DB size.
+# Deep monitoring checks for the journal (OJS) — runs daily.
+# Includes everything from monitor-safe.sh PLUS slower checks: the sync API's
+# access control, the members' site's recent sync traffic, backup health,
+# search index, DB size. Read-only: nothing here writes to OJS beyond the sync
+# API's own request log, which records every call.
 #
 # Usage:
 #   scripts/monitoring/monitor-deep.sh                      # Test sea-staging
@@ -38,7 +40,6 @@ register_heartbeat "$BETTERSTACK_HB_DAILY"
 
 detect_compose
 
-WP_HOME=$(read_env "WP_HOME")
 OJS_BASE_URL=$(require_env "OJS_BASE_URL") || OJS_BASE_URL=""
 OJS_JOURNAL_PATH=$(require_env "OJS_JOURNAL_PATH") || OJS_JOURNAL_PATH=""
 API_KEY=$(require_env "WPOJS_API_KEY_SECRET") || API_KEY=""
@@ -54,91 +55,81 @@ OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
 
 echo ""
 echo "================================================================"
-echo "PHASE 2: Deep (mutating/expensive) checks"
+echo "PHASE 2: Deep (read-only, slower) checks"
 echo "================================================================"
 
 # ============================================================
-# D1. SYNC ROUND-TRIP
+# D1. SYNC API (READ-ONLY)
 # ============================================================
 echo ""
-echo "--- Sync Round-Trip ---"
+echo "--- Sync API ---"
 
-# Cleanup stale monitor users from previous failed runs
-STALE_IDS=$(wp_cli "user list --search=monitor-*@test.invalid --field=ID" 2>/dev/null) || STALE_IDS=""
-if [ -n "$STALE_IDS" ]; then
-  echo "$STALE_IDS" | while read uid; do
-    [ -z "$uid" ] && continue
-    wp_cli "user delete $uid --yes" > /dev/null 2>&1 || true
-  done
-  info "Cleaned up $(echo "$STALE_IDS" | wc -w) stale monitor user(s)"
+# The live members' WordPress (on Krystal, not this box) calls the journal's
+# wpojs API for every member who joins, renews or lapses. These checks prove,
+# without writing anything, that the API is up, takes the key, reaches the
+# journal's users, and refuses a caller without the key. They run from inside
+# the ojs container against http://ojs:80, which the IP allowlist admits.
+#
+# The address below cannot exist (.invalid is reserved, RFC 2606), so the
+# lookup must come back as a clean "not found". GET /users is read-only.
+SYNC_API="http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs"
+PROBE_EMAIL="monitor-absent@test.invalid"
+
+# Prints the body, then the HTTP status on its own last line.
+# Usage: sync_api_get <path> [api-key]
+sync_api_get() {
+  local path="$1" key="${2:-}" auth=""
+  [ -n "$key" ] && auth="-H 'Authorization: Bearer $key'"
+  remote "$COMPOSE exec -T ojs curl -s -w '\n%{http_code}' $auth '$SYNC_API/$path'"
+}
+
+# D1a. With the key: the lookup answers 200 {"found":false}
+LOOKUP=$(sync_api_get "users?email=$PROBE_EMAIL" "$API_KEY") || LOOKUP=""
+LOOKUP_STATUS=$(echo "$LOOKUP" | tail -1 | tr -d '[:space:]')
+LOOKUP_BODY=$(echo "$LOOKUP" | sed '$d')
+if [ "$LOOKUP_STATUS" = "200" ] && echo "$LOOKUP_BODY" | grep -q '"found":false'; then
+  pass "Sync API accepts the key and looks up journal users (absent address: not found)"
+else
+  fail "Sync API lookup with the key failed (HTTP ${LOOKUP_STATUS:-none})" "${LOOKUP_BODY:-<empty — SSH or container may be down>}"
 fi
 
-TEST_EMAIL="monitor-$(date +%s)@test.invalid"
-TEST_LOGIN="monitor_$(date +%s)"
-SYNC_OK=true
-
-WP_USER_ID=$(wp_cli "user create $TEST_LOGIN $TEST_EMAIL --role=subscriber --first_name=Monitor --last_name=Test --porcelain") || WP_USER_ID=""
-if [ -z "$WP_USER_ID" ] || ! [[ "$WP_USER_ID" =~ ^[0-9]+$ ]]; then
-  fail "Could not create test user" "$WP_USER_ID"
-  SYNC_OK=false
-fi
-
-if [ "$SYNC_OK" = true ]; then
-  PRODUCT_ID=$(wp_cli "post list --post_type=product --posts_per_page=1 --format=ids") || PRODUCT_ID=""
-  SUB_ID=""
-  if [ -n "$PRODUCT_ID" ]; then
-    SUB_ID=$(wp_cli "eval '
-      \$sub = wcs_create_subscription([\"customer_id\" => $WP_USER_ID, \"billing_period\" => \"year\", \"billing_interval\" => 1]);
-      if (is_wp_error(\$sub)) { echo 0; return; }
-      \$sub->add_product(wc_get_product($PRODUCT_ID));
-      \$sub->update_status(\"active\");
-      echo \$sub->get_id();
-    '") || SUB_ID=""
-  fi
-
-  if [ -z "$SUB_ID" ] || [ "$SUB_ID" = "0" ]; then
-    fail "Could not create test subscription"
-    SYNC_OK=false
-  fi
-fi
-
-if [ "$SYNC_OK" = true ]; then
-  SYNC_OUTPUT=$(wp_cli "ojs-sync sync --member=$TEST_EMAIL --yes" 2>&1) || true
-  wp_cli "action-scheduler run" > /dev/null 2>&1 || true
-
-  OJS_USER=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/users?email=$TEST_EMAIL'") || OJS_USER=""
-  if echo "$OJS_USER" | grep -q "$TEST_EMAIL"; then
-    pass "User synced to OJS"
-
-    OJS_USER_ID=$(echo "$OJS_USER" | grep -o '"userId":[0-9]*' | head -1 | cut -d: -f2)
-    if [ -n "$OJS_USER_ID" ]; then
-      OJS_SUBS=$(remote "$COMPOSE exec -T wp curl -sf -H 'Authorization: Bearer $API_KEY' 'http://ojs:80/index.php/$OJS_JOURNAL_PATH/api/v1/wpojs/subscriptions?userId=$OJS_USER_ID'") || OJS_SUBS=""
-      if echo "$OJS_SUBS" | grep -q '"status"'; then
-        pass "OJS subscription created"
-      else
-        fail "OJS subscription not found" "${OJS_SUBS:-<empty>}"
-      fi
-    fi
+# D1b. Without a key, and with a wrong one: 401. A 403 here would be the IP
+# allowlist refusing the monitor, not the key check.
+for KEY_CASE in "no key" "a wrong key"; do
+  if [ "$KEY_CASE" = "no key" ]; then
+    REFUSED=$(sync_api_get "users?email=$PROBE_EMAIL") || REFUSED=""
   else
-    fail "User not found in OJS after sync" "${OJS_USER:-<empty>}"
+    REFUSED=$(sync_api_get "users?email=$PROBE_EMAIL" "monitor-wrong-key") || REFUSED=""
   fi
+  REFUSED_STATUS=$(echo "$REFUSED" | tail -1 | tr -d '[:space:]')
+  if [ "$REFUSED_STATUS" = "401" ]; then
+    pass "Sync API refuses a caller with $KEY_CASE (HTTP 401)"
+  else
+    fail "Sync API did not refuse a caller with $KEY_CASE (HTTP ${REFUSED_STATUS:-none}, expected 401)" "$(echo "$REFUSED" | sed '$d' | head -c 200)"
+  fi
+done
 
-  # Cleanup
-  wp_cli "user delete $WP_USER_ID --yes" > /dev/null 2>&1 || true
-  for _run in 1 2 3; do
-    wp_cli "action-scheduler run" > /dev/null 2>&1 || true
-  done
-  # Hard-delete the anonymised shell
-  if [ -n "$OJS_USER_ID" ]; then
-    remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -e \"
-      DELETE FROM subscriptions WHERE user_id = $OJS_USER_ID;
-      DELETE FROM event_log WHERE user_id = $OJS_USER_ID;
-      DELETE FROM user_settings WHERE user_id = $OJS_USER_ID;
-      DELETE FROM user_user_groups WHERE user_id = $OJS_USER_ID;
-      DELETE FROM users WHERE user_id = $OJS_USER_ID;
-    \"'" > /dev/null 2>&1 || true
-    pass "Monitor test user cleaned up"
+# D1c. The members' site's own traffic, from the API's request log. Server
+# errors are the sync failing for real members; 1-2 in a day can be a blip
+# the site retries, 3 or more is a fault. The last successful write is shown
+# for the record only: a quiet day for joins and renewals is not an outage.
+SYNC_5XX=$(require_remote "Sync API server errors (24h)" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT COUNT(*) FROM wpojs_api_log WHERE http_status >= 500 AND created_at > NOW() - INTERVAL 1 DAY\"'") || SYNC_5XX=""
+if [ -n "$SYNC_5XX" ]; then
+  if [ "$SYNC_5XX" -ge 3 ] 2>/dev/null; then
+    fail "Sync API answered $SYNC_5XX requests with a server error in the last 24h (wpojs_api_log)"
+  elif [ "$SYNC_5XX" -gt 0 ] 2>/dev/null; then
+    warn "Sync API answered $SYNC_5XX request(s) with a server error in the last 24h (below the alert threshold of 3)"
+    pass "Sync API server errors below alert threshold ($SYNC_5XX < 3)"
+  else
+    pass "No sync API server errors in the last 24h"
   fi
+fi
+# CHAR(71,69,84) = 'GET'
+LAST_WRITE_H=$(remote "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT IFNULL(TIMESTAMPDIFF(HOUR, MAX(created_at), NOW()), -1) FROM wpojs_api_log WHERE method <> CHAR(71,69,84) AND http_status < 300\"'" 2>/dev/null | tr -d '[:space:]')
+if [ -n "$LAST_WRITE_H" ] && [ "$LAST_WRITE_H" -ge 0 ] 2>/dev/null; then
+  info "Last successful sync write from the members' site: ${LAST_WRITE_H}h ago"
+else
+  info "No successful sync write in the request log (it keeps 30 days)"
 fi
 
 # ============================================================
@@ -326,49 +317,20 @@ if [ -n "$SIMILAR_EXISTS" ]; then
 fi
 
 # ============================================================
-# D4. RECONCILIATION
-# ============================================================
-echo ""
-echo "--- Reconciliation ---"
-
-RECON_OUTPUT=$(wp_cli "ojs-sync reconcile") || RECON_OUTPUT=""
-if echo "$RECON_OUTPUT" | grep -q "Reconciliation complete"; then
-  pass "Reconciliation completes successfully"
-else
-  fail "Reconciliation failed" "$(echo "${RECON_OUTPUT:-<empty>}" | tail -3)"
-fi
-
-# The WordPress this script drives is the test rig, and its sync writes to the
-# LIVE journal, for a copy of real members linked to their real journal
-# accounts. It is fenced (WPOJS_FENCE_EMAIL_PATTERN in the rig's staging.php)
-# so that only test accounts like D1's can be written to. D1 above proves the
-# fence still lets the monitor's own user through; this proves it stops
-# everyone else. It cannot change anything on OJS: it blocks every request
-# but the user lookups (GETs) while it runs.
-FENCE_OUTPUT=$(wp_cli "ojs-sync fence" 2>&1) || FENCE_OUTPUT="${FENCE_OUTPUT:-<empty>}"
-if echo "$FENCE_OUTPUT" | grep -q "Fence holds"; then
-  pass "Rig sync fenced: $(echo "$FENCE_OUTPUT" | grep -o '[0-9]* of [0-9]* linked journal accounts are outside the fence')"
-else
-  fail "Rig sync NOT fenced: it can change real members' live journal accounts" "$(echo "$FENCE_OUTPUT" | tail -3)"
-fi
-
-# ============================================================
 # D5. DATABASE SIZES
 # ============================================================
 echo ""
 echo "--- Database ---"
 
-for DB_CONTAINER in wp-db ojs-db; do
-  DB_SIZE=$(require_remote "$DB_CONTAINER database size" "$COMPOSE exec -T $DB_CONTAINER bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) FROM information_schema.tables WHERE table_schema = DATABASE()\"'") || DB_SIZE=""
-  if [ -n "$DB_SIZE" ]; then
-    DB_SIZE_INT=$(echo "$DB_SIZE" | cut -d. -f1)
-    if [ "${DB_SIZE_INT:-0}" -gt 2048 ] 2>/dev/null; then
-      fail "$DB_CONTAINER database size ${DB_SIZE}MB exceeds 2GB"
-    else
-      pass "$DB_CONTAINER database size: ${DB_SIZE}MB"
-    fi
+DB_SIZE=$(require_remote "ojs-db database size" "$COMPOSE exec -T ojs-db bash -c 'mariadb -u\$MYSQL_USER -p\$MYSQL_PASSWORD \$MYSQL_DATABASE -N -e \"SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) FROM information_schema.tables WHERE table_schema = DATABASE()\"'") || DB_SIZE=""
+if [ -n "$DB_SIZE" ]; then
+  DB_SIZE_INT=$(echo "$DB_SIZE" | cut -d. -f1)
+  if [ "${DB_SIZE_INT:-0}" -gt 2048 ] 2>/dev/null; then
+    fail "ojs-db database size ${DB_SIZE}MB exceeds 2GB"
+  else
+    pass "ojs-db database size: ${DB_SIZE}MB"
   fi
-done
+fi
 
 # ============================================================
 # D6. OJS SCHEDULED TASKS

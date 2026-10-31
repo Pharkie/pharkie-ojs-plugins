@@ -50,8 +50,19 @@ fi
 
 echo "=== Setup ($ENV) ==="
 
+# --- Is the WordPress test rig here? ---
+# On a server it runs only with the wp-rig profile (docker-compose.staging.yml);
+# without it this sets up the journal alone. Local dev always has it.
+WP_RIG=1
+if [ "$ENV" != "dev" ] && ! $DC ps --services --status running 2>/dev/null | grep -qx wp; then
+  WP_RIG=""
+  echo "[skip] WordPress test rig not running (profile wp-rig): journal only."
+fi
+SERVICES="ojs ojs-db"
+[ -n "$WP_RIG" ] && SERVICES="ojs wp ojs-db wp-db"
+
 # --- Verify containers are running ---
-for SVC in ojs wp ojs-db wp-db; do
+for SVC in $SERVICES; do
   PS_OUTPUT=$($DC ps --status running 2>/dev/null) || true
   if ! echo "$PS_OUTPUT" | grep -q "$SVC"; then
     echo "ERROR: Container '$SVC' is not running."
@@ -63,7 +74,7 @@ for SVC in ojs wp ojs-db wp-db; do
     exit 1
   fi
 done
-echo "[ok] All 4 containers running."
+echo "[ok] Containers running: $SERVICES."
 
 # --- Wait for OJS to be ready (entrypoint install may still be running) ---
 echo "Waiting for OJS HTTP..."
@@ -94,9 +105,11 @@ if [ "$ENV" != "dev" ]; then
 fi
 
 # --- Run WP setup ---
-echo ""
-echo "=== WP setup ==="
-$DC exec -T wp bash /var/www/html/scripts/wp/setup-wp.sh $SAMPLE_DATA
+if [ -n "$WP_RIG" ]; then
+  echo ""
+  echo "=== WP setup ==="
+  $DC exec -T wp bash /var/www/html/scripts/wp/setup-wp.sh $SAMPLE_DATA
+fi
 
 # --- Summary ---
 echo ""
@@ -106,11 +119,13 @@ OJS_URL=$($DC exec -T ojs printenv OJS_BASE_URL 2>/dev/null) || OJS_URL="http://
 JOURNAL_PATH=$($DC exec -T ojs printenv OJS_JOURNAL_PATH 2>/dev/null) || JOURNAL_PATH="ea"
 WP_PASS=$($DC exec -T wp printenv WP_ADMIN_PASSWORD 2>/dev/null) || WP_PASS="(check .env)"
 OJS_PASS=$($DC exec -T ojs printenv OJS_ADMIN_PASSWORD 2>/dev/null) || OJS_PASS="(check .env)"
-echo ""
-echo "  WordPress:"
-echo "    URL:   $WP_URL"
-echo "    Admin: $WP_URL/wp/wp-admin/"
-echo "    Login: admin / $WP_PASS"
+if [ -n "$WP_RIG" ]; then
+  echo ""
+  echo "  WordPress:"
+  echo "    URL:   $WP_URL"
+  echo "    Admin: $WP_URL/wp/wp-admin/"
+  echo "    Login: admin / $WP_PASS"
+fi
 echo ""
 echo "  OJS:"
 echo "    URL:   $OJS_URL"
@@ -125,10 +140,10 @@ if [ "$ENV" = "dev" ]; then
 else
   echo "    Access:   ssh -L 8082:127.0.0.1:8082 <host>  →  http://localhost:8082"
 fi
-echo "    WP DB:    server=wp-db   user=wordpress  password=$WP_DB_PASS"
+[ -n "$WP_RIG" ] && echo "    WP DB:    server=wp-db   user=wordpress  password=$WP_DB_PASS"
 echo "    OJS DB:   server=ojs-db  user=ojs        password=$OJS_DB_PASS"
 
-if [ -n "$SAMPLE_DATA" ]; then
+if [ -n "$SAMPLE_DATA" ] && [ -n "$WP_RIG" ]; then
   echo ""
   echo "  Next: run bulk sync to push WP members to OJS (~5-10 min):"
   echo "    wp ojs-sync sync --bulk --dry-run    # preview"

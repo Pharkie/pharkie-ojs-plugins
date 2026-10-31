@@ -26,7 +26,7 @@ OJS and WordPress both run PHP — they benefit from CPU and RAM more than disk.
 | Port | Service | When |
 |---|---|---|
 | 22 | SSH | Always |
-| 8080 | WordPress | IP-only / staging |
+| 8080 | WordPress | IP-only / staging, only with the `wp-rig` profile |
 | 8081 | OJS | IP-only / staging |
 | 8082 | Adminer (DB GUI) | localhost only — SSH tunnel required |
 | 80 | HTTP (Caddy) | Production with SSL |
@@ -115,7 +115,7 @@ The `.env` file on the VPS controls all configuration. It is **not in git** — 
 
 ### For SSL (production)
 
-TLS is the shared Caddy's, not this stack's ([Adding SSL](#adding-ssl-production)). It reads these from its own environment; this stack's `.env` keeps `CADDY_WP_DOMAIN` for the monitoring.
+TLS is the shared Caddy's, not this stack's ([Adding SSL](#adding-ssl-production)). It reads these from its own environment. `CADDY_WP_DOMAIN` is needed only where the WordPress rig runs (profile `wp-rig`); the SEA box has none.
 
 | Variable | What |
 |---|---|
@@ -205,9 +205,9 @@ Use `deploy.sh` when:
 When you have domains pointing at the server:
 
 1. Add DNS A records pointing to the server IP
-2. Set `CADDY_WP_DOMAIN` and `CADDY_OJS_DOMAIN` in the **shared Caddy's** environment, which is where the snippets' placeholders are filled from. On the SEA box that is Harbour's `harbour-infra` stack, `/opt/harbour/infra/.env.infra`. Set `CADDY_WP_DOMAIN` in this stack's `.env` too, for the monitoring.
+2. Set `CADDY_WP_DOMAIN` and `CADDY_OJS_DOMAIN` in the **shared Caddy's** environment, which is where the snippets' placeholders are filled from. On the SEA box that is Harbour's `harbour-infra` stack, `/opt/harbour/infra/.env.infra`, which sets only `CADDY_OJS_DOMAIN`: the box runs no WordPress.
 3. Open ports 80 and 443 in the server firewall
-4. Put this repo's vhost snippets, `docker/caddy/conf.d/ojs.caddy` and `wp.caddy`, in the shared Caddy's drop-in directory ([shared-caddy.md](shared-caddy.md)). Caddy is not part of this stack: there is no Caddy overlay (`docker-compose.caddy.yml` was removed on 2026-08-16, when Caddy moved out to a stack of its own). This stack starts with the same two files as always:
+4. Put this repo's vhost snippets in the shared Caddy's drop-in directory: `docker/caddy/conf.d/ojs.caddy`, and `wp.caddy` only on a server running the rig ([shared-caddy.md](shared-caddy.md)). Caddy is not part of this stack: there is no Caddy overlay (`docker-compose.caddy.yml` was removed on 2026-08-16, when Caddy moved out to a stack of its own). This stack starts with the same two files as always, the journal alone unless `COMPOSE_PROFILES=wp-rig` is set:
    ```bash
    ssh your-server "cd /opt/pharkie-ojs-plugins && \
      docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d"
@@ -235,7 +235,7 @@ Lightweight health checks — no Node or Playwright needed on the VPS. Runs from
 scripts/monitoring/smoke-test.sh --host=your-server
 ```
 
-Checks (22 total):
+Checks (22 total). It needs the WordPress rig: most sections drive it, and the keyed API calls go through the `wp` container. A server without the rig (the SEA box) is checked with `scripts/monitoring/monitor-safe.sh --host=<server>` instead:
 1. WP HTTP responds
 1b. WP Admin page loads (catches .env permission issues, PHP fatals)
 1c. OJS Admin page loads (catches missing journal, PHP fatals)
