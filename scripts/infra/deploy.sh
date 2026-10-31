@@ -245,11 +245,15 @@ fi
 if [ -z "$CLEAN" ]; then
   echo "--- Snapshotting databases ---"
   SNAP_TS=$(date +%s)
+  # Each dump is created 600 before it is written: it holds members' data.
+  # wp-db is dumped only when the WordPress rig runs (profile wp-rig).
   $SSH_CMD "cd $REMOTE_DIR && {
-    $COMPOSE_CMD exec -T ojs-db bash -c 'mysqldump -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE 2>/dev/null' > /tmp/pre-deploy-ojs-$SNAP_TS.sql && \
-    $COMPOSE_CMD exec -T wp-db bash -c 'mysqldump -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE 2>/dev/null' > /tmp/pre-deploy-wp-$SNAP_TS.sql && \
-    chmod 600 /tmp/pre-deploy-ojs-$SNAP_TS.sql /tmp/pre-deploy-wp-$SNAP_TS.sql && \
-    echo '[ok] Snapshots: /tmp/pre-deploy-{ojs,wp}-$SNAP_TS.sql'
+    ( umask 077 && $COMPOSE_CMD exec -T ojs-db bash -c 'mysqldump -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE 2>/dev/null' > /tmp/pre-deploy-ojs-$SNAP_TS.sql ) && \
+    echo '[ok] Snapshot: /tmp/pre-deploy-ojs-$SNAP_TS.sql'
+    if $COMPOSE_CMD ps --services --status running | grep -qx wp-db; then
+      ( umask 077 && $COMPOSE_CMD exec -T wp-db bash -c 'mysqldump -u root -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE 2>/dev/null' > /tmp/pre-deploy-wp-$SNAP_TS.sql ) && \
+      echo '[ok] Snapshot: /tmp/pre-deploy-wp-$SNAP_TS.sql'
+    fi
     # Keep last 3 snapshots per DB, delete older ones
     ls -t /tmp/pre-deploy-ojs-*.sql 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
     ls -t /tmp/pre-deploy-wp-*.sql 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null

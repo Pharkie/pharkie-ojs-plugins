@@ -294,7 +294,7 @@ sudo python3 backfill/html_pipeline/pipe9c_content_filtered.py --target dev
 After deploying to live, run both check scripts:
 
 ```bash
-scripts/monitoring/smoke-test.sh --host=sea-live      # 28 infrastructure checks
+scripts/monitoring/monitor-safe.sh --host=sea-live    # infrastructure (the hourly checks)
 scripts/monitoring/content-check.sh --host=sea-live    # 14 content checks
 ```
 

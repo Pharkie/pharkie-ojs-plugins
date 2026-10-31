@@ -85,9 +85,9 @@ OJS_JOURNAL_PATH=$($SSH_CMD "grep '^OJS_JOURNAL_PATH=' $REMOTE_DIR/.env | cut -d
 OJS_JOURNAL_URL="${OJS_BASE_URL}/index.php/${OJS_JOURNAL_PATH}"
 
 # The two WP monitors watch the live WordPress, which is on Krystal, not on the
-# box. The box's WordPress (its WP_HOME and CADDY_WP_DOMAIN) is the test rig,
-# wp-staging, so its URL is never a monitor's: read from the box's .env, it
-# would recreate both monitors on the rig.
+# box. The box's .env still names the retired test rig (WP_HOME), so its URL
+# is never a monitor's: read from there, it would point both monitors at a
+# host that no longer exists.
 WP_PUBLIC_URL="https://community.existentialanalysis.org.uk"
 
 echo "=== Better Stack Monitor Setup ==="

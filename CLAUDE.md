@@ -30,30 +30,39 @@ WordPress ↔ OJS integration. WP manages memberships via WooCommerce Subscripti
 
 ## The WordPress here is a test rig, not a future site
 
-**Decided 2026-07-29.** The `wp` / `wp-db` services on the box
-(`wp-staging.*`, basic-auth gated, `noindex`) exist for one reason: to exercise
-the WP↔OJS integration before a change reaches the live WordPress. They are
-**never** going to be promoted to the real site — Harbour replaces WordPress,
-and the migration this mirror was built for is not being resumed.
+**Decided 2026-07-29.** The `wp` / `wp-db` services exist for one reason: to
+exercise the WP↔OJS integration before a change reaches the live WordPress.
+They are **never** going to be promoted to the real site — Harbour replaces
+WordPress, and the migration this mirror was built for is not being resumed.
 
-They are kept anyway, and should be, because the integration they test is still
-in production: the live WP on Krystal runs the sync until Harbour cut-over.
-Deleting the rig would leave that with nowhere to rehearse.
+**The rig runs in local dev only.** The box runs the journal alone: in
+`docker-compose.staging.yml` the rig is behind the `wp-rig` profile, so a plain
+`docker compose up -d` there leaves it off. It is kept locally because the
+integration it tests is still in production: the live WP on Krystal runs the
+sync until Harbour cut-over. Compose still interpolates the rig's variables on
+the box, so its required ones (`WP_HOME`, the salts, …) stay in the box's `.env`.
 
-**Its sync is fenced (2026-10-17).** The rig's wpojs-sync talks to the LIVE
-journal — `http://ojs:80` is the public journal's own container — and its 684
-members are a March copy of real people, each linked to their live journal
-account. So `wordpress/config/environments/staging.php` defines
-`WPOJS_FENCE_EMAIL_PATTERN`: the rig may write to the journal only for
-`@test.invalid` accounts (the deep monitor's and the smoke test's). Reads are
-unaffected. It applies whenever `WP_ENV=staging`. `wp ojs-sync fence` proves it holds; the deep monitor runs it daily.
-Never lift it to test something — make a `…@test.invalid` user instead. See
+**The monitors need no WordPress.** `monitor-safe.sh` (hourly) and
+`monitor-deep.sh` (daily) check the journal's wpojs sync API from inside the
+`ojs` container: preflight and subscription types hourly; daily, that a lookup
+with the key answers and that a caller with no key or a wrong one is refused,
+plus the server errors in the API's request log from the live site's traffic.
+They write nothing to OJS beyond that log's own rows.
+
+**The rig's sync is fenced whenever `WP_ENV=staging`** (the server overlay):
+`wordpress/config/environments/staging.php` defines `WPOJS_FENCE_EMAIL_PATTERN`,
+so a rig run beside the LIVE journal may write to it only for `@test.invalid`
+accounts. A server copy of the rig holds real members linked to their live
+journal accounts. Never lift it to test something — make a `…@test.invalid`
+user instead. `wp ojs-sync fence` proves it holds. See
 [`docs/wpojs-sync-plugin.md#fence`](docs/wpojs-sync-plugin.md#fence).
 
 So: keep it working, don't invest in it, and don't confuse it with live.
-**Live WordPress is on Krystal, reached as `sea-wp-live`** — never the box. Once
-cut-over completes and the sync is retired, the rig and its smoke-test sections
-(1, 1b, 3, 6, 7, 9) can go.
+**Live WordPress is on Krystal, reached as `sea-wp-live`** — never the box.
+`smoke-test.sh` needs the rig (most sections drive it, and its keyed API calls
+go through the `wp` container), so it does not run against the box: check the
+box with `monitor-safe.sh` and `content-check.sh`. Once cut-over completes and
+the sync is retired, the rig and those sections can go.
 
 ## Asking for a decision — 🛑 HARD RULE
 
@@ -191,7 +200,7 @@ Nuclear option — wipes all articles and reimports from scratch. Use when syste
 7. `pipe9c_content_filtered.py --target live --confirm` — writes content-filtered flags
 8. Sync Archive Checker reviews: export from dev `archive_checker_reviews`, import to live
 9. Better Stack: `scripts/monitoring/maintenance-window.sh --resume`
-10. `scripts/monitoring/smoke-test.sh --host=sea-live` — infrastructure (28 checks)
+10. `scripts/monitoring/monitor-safe.sh --host=sea-live` — infrastructure (the hourly checks)
 11. `scripts/monitoring/content-check.sh --host=sea-live` — content (14 checks)
 
 #### DOI re-attachment after pipeline reruns

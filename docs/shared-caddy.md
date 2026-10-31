@@ -47,13 +47,13 @@ The drop-in directory `/opt/caddy-conf.d/` and its snippets are normally `root:r
 
 ## This repo's snippets
 
-`pharkie-ojs-plugins` owns `wp.caddy` and `ojs.caddy`. (`umami.caddy` is Harbour's, with Umami.) They're version-controlled in `docker/caddy/conf.d/` and copied to `/opt/caddy-conf.d/` by hand; `deploy.sh` does not copy them:
+`pharkie-ojs-plugins` has two snippets, version-controlled in `docker/caddy/conf.d/`: `ojs.caddy`, the journal's, and `wp.caddy`, for the WordPress test rig on a server that runs it (profile `wp-rig`). (`umami.caddy` is Harbour's, with Umami.) The SEA box runs no rig, so it takes `ojs.caddy` alone. They're copied to `/opt/caddy-conf.d/` by hand; `deploy.sh` does not copy them:
 
 ```bash
 sudo mkdir -p /opt/caddy-conf.d
-sudo cp docker/caddy/conf.d/*.caddy /opt/caddy-conf.d/
+sudo cp docker/caddy/conf.d/ojs.caddy /opt/caddy-conf.d/
 ```
 
-This copies only `wp.caddy` and `ojs.caddy`, so it doesn't touch other projects' files. If you ever re-provision the directory itself (create it, or reset ownership across it), see [File ownership in the drop-in dir](#file-ownership-in-the-drop-in-dir) — other projects' snippets may be non-root-owned and must keep their ownership.
+Never copy `wp.caddy` to a box without the rig: its vhost needs `CADDY_WP_*` in the shared Caddy's environment, and Caddy would also try to get a certificate for it. Copying by name doesn't touch other projects' files. If you ever re-provision the directory itself (create it, or reset ownership across it), see [File ownership in the drop-in dir](#file-ownership-in-the-drop-in-dir) — other projects' snippets may be non-root-owned and must keep their ownership.
 
 Env-var placeholders in a snippet (e.g. `{$CADDY_OJS_DOMAIN}`) are substituted from the **shared Caddy container's** environment, not from this repo's `.env`. On the SEA box that is `/opt/harbour/infra/.env.infra`, passed in by `harbour-infra`'s compose file, so a changed domain or WordPress basic-auth hash is set there and Caddy recreated from there. A Caddy started without `CADDY_OJS_DOMAIN` loses the journal's vhost.
