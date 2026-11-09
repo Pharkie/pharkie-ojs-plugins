@@ -55,6 +55,25 @@ def test_an_unchanged_name_keeps_the_ojs_split():
     assert plan['touched']['publications'] == {}
 
 
+def test_exact_split_corrects_the_split_alone():
+    plan = _plan(_art(contribs=[('Yaqui Andrés', 'Martínez Robles')], exact_split=True),
+                 _state(('Yaqui Andrés Martínez', 'Robles'),
+                        holder='Yaqui Andrés Martínez Robles (Author)'))
+    sql, undo = _sql(plan), _undo(plan)
+    assert "'givenName', 'Yaqui Andrés') ON DUPLICATE KEY UPDATE setting_value='Yaqui Andrés';" in sql
+    assert "'familyName', 'Martínez Robles') ON DUPLICATE KEY UPDATE setting_value='Martínez Robles';" in sql
+    assert 'copyrightHolder' not in sql
+    assert "'givenName', 'Yaqui Andrés Martínez')" in undo
+    assert "'familyName', 'Robles')" in undo
+    assert plan['redeposit'] == {'8.1': ['10.65828/abc']}
+
+
+def test_exact_split_already_right_is_no_change():
+    plan = _plan(_art(contribs=[('Wilfried', 'Ver Eecke')], exact_split=True),
+                 _state(('Wilfried', 'Ver Eecke'), holder='Wilfried Ver Eecke (Author)'))
+    assert plan['changes'] == [] and plan['redeposit'] == {}
+
+
 def test_a_renamed_author_is_upserted_redeposited_and_undoable():
     plan = _plan(_art(contribs=[('Robert Gareth', 'Hill')]),
                  _state(('Robert', 'Hill'), holder='Robert Hill (Author)'))
