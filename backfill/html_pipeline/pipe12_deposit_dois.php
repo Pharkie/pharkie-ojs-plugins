@@ -58,13 +58,16 @@ class DepositIssueDoisTool extends CommandLineTool
         [$volume, $number] = $this->argv;
         $confirm = in_array('--confirm', $this->argv, true);
 
-        // --redeposit=<doi>: deposit this DOI again even though it is
-        // registered — for metadata corrections (author name, title) that
-        // Crossref must receive. Everything else keeps the registered-skip.
+        // --redeposit=<doi>[,<doi>...]: deposit exactly these DOIs again,
+        // registered or not — for metadata corrections (author name, title,
+        // date) that Crossref must receive. Every other DOI in the issue is
+        // left alone, the issue's own DOI included unless it is listed.
         $redeposit = null;
         foreach ($this->argv as $arg) {
             if (str_starts_with($arg, '--redeposit=')) {
-                $redeposit = substr($arg, strlen('--redeposit='));
+                $redeposit = array_values(array_filter(array_map(
+                    fn ($d) => strtolower(trim($d)),
+                    explode(',', substr($arg, strlen('--redeposit='))))));
             }
         }
 
@@ -114,23 +117,41 @@ class DepositIssueDoisTool extends CommandLineTool
                 continue;
             }
             $status = (int) $doi->getData('status');
-            if ($status === Doi::STATUS_REGISTERED) {
-                if ($redeposit !== null && $doi->getData('doi') === $redeposit) {
-                    echo "  registered but --redeposit requested: {$doi->getData('doi')}\n";
-                } else {
-                    echo "  already registered, skipping: {$doi->getData('doi')}\n";
+            if ($redeposit !== null) {
+                if (!in_array(strtolower($doi->getData('doi')), $redeposit, true)) {
                     $skipped++;
                     continue;
                 }
+                echo "  --redeposit requested (status {$status}): {$doi->getData('doi')}\n";
+            } elseif ($status === Doi::STATUS_REGISTERED) {
+                echo "  already registered, skipping: {$doi->getData('doi')}\n";
+                $skipped++;
+                continue;
             }
             $toDeposit[] = ['id' => $submission->getId(), 'doi' => $doi, 'title' => $title];
         }
 
         // The issue itself carries a DOI too, deposited by its own job.
         $issueDoi = $issue->getData('doiObject');
-        $depositIssue = $issueDoi
-            && (int) $issueDoi->getData('status') !== Doi::STATUS_REGISTERED;
-        if ($issueDoi && !$depositIssue) {
+        if ($redeposit !== null) {
+            $depositIssue = $issueDoi
+                && in_array(strtolower($issueDoi->getData('doi')), $redeposit, true);
+        } else {
+            $depositIssue = $issueDoi
+                && (int) $issueDoi->getData('status') !== Doi::STATUS_REGISTERED;
+        }
+        if ($redeposit !== null) {
+            $found = array_map(fn ($r) => strtolower($r['doi']->getData('doi')), $toDeposit);
+            if ($depositIssue) {
+                $found[] = strtolower($issueDoi->getData('doi'));
+            }
+            $missing = array_diff($redeposit, $found);
+            if ($missing) {
+                echo "ERROR: not DOIs of issue {$volume}.{$number}: "
+                    . implode(', ', $missing) . "\n";
+                exit(1);
+            }
+        } elseif ($issueDoi && !$depositIssue) {
             echo '  issue DOI already registered, skipping: '
                 . $issueDoi->getData('doi') . "\n";
         }
@@ -157,23 +178,24 @@ class DepositIssueDoisTool extends CommandLineTool
         // Crossref rate-limits a burst: depositing 23 at once returned a 429
         // on one of them. A short gap between deposits avoids it, and the
         // whole issue still goes through in under a minute.
-        $doiIds = [];
+        // Each DOI is marked submitted just BEFORE its own job is queued: with
+        // job_runner on, a web request can run the job at once, and its result
+        // (registered, or error) must not be overwritten by a late "submitted".
         $first = true;
         foreach ($toDeposit as $row) {
             if (!$first) {
                 usleep(DEPOSIT_GAP_MICROSECONDS);
             }
             $first = false;
+            Repo::doi()->markSubmitted(Repo::doi()->getDoisForSubmission($row['id']));
             dispatch(new DepositSubmission($row['id'], $context, $agency));
-            $doiIds = array_merge($doiIds, Repo::doi()->getDoisForSubmission($row['id']));
             echo '  deposited ' . $row['doi']->getData('doi') . "\n";
         }
         if ($depositIssue) {
             usleep(DEPOSIT_GAP_MICROSECONDS);
+            Repo::doi()->markSubmitted([$issueDoi->getId()]);
             dispatch(new DepositIssue($issue->getId(), $context, $agency));
-            $doiIds[] = $issueDoi->getId();
         }
-        Repo::doi()->markSubmitted($doiIds);
 
         $total = count($toDeposit) + ($depositIssue ? 1 : 0);
         echo "\nQueued {$total} deposits and marked them submitted.\n";

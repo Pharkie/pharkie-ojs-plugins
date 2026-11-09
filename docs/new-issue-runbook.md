@@ -194,6 +194,24 @@ backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
    It refuses structural changes (author count, abstract, missing
    submissions): those go through the reimport path.
 
+   **A correction made in Harbour first** (the content's successor) skips
+   JATS: `pipe13_patch_metadata.py --spec <corrections.json> --target live`
+   names each article by DOI and submission id with the authors, title or
+   date wanted, and can add an author or unpublish an article (through
+   OJS's own unpublish, `pipe13_unpublish.php`). It applies everything in one
+   transaction, refuses `--confirm` unless the job queue and `failed_jobs`
+   are empty, writes a rollback SQL file from the old values first,
+   redispatches exactly its own failed reindex jobs, and writes one
+   `pipe12 --redeposit=<doi>,<doi>…` line per issue, which deposits exactly
+   the DOIs listed. It never touches galleys. The spec's shape is in the
+   script's docstring.
+
+   🛑 **Spec mode leaves the pipeline's sources behind.** JATS, toc.json and
+   `backfill/private/authors.json` still hold the old names, titles and
+   dates, so a later pipe6/pipe7 reimport or a pipe13 run from toc.json
+   puts them back. Flip the sources to match (the runbook for the run lists
+   what), or never reimport those issues.
+
    🛑 **The scoped reindex fails on its first run and has to be redispatched.**
    `UpdateSubmissionSearchJob` dies with `Call to a member function
    getContext() on null` when the worker picks it up, because there is no
