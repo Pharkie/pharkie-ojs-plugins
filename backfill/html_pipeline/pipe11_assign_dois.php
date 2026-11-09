@@ -12,6 +12,11 @@
  * configured pattern and match the rest of the archive. Both repository calls
  * skip anything that already has a DOI, so re-running is safe.
  *
+ * --submissions=<id>[,<id>...] mints for exactly those submissions of the
+ * issue and leaves the issue's own DOI alone, minted or not: for articles
+ * added to an issue that is already published (pipe7 --add-articles). It
+ * refuses, minting nothing, if any listed id is not in the issue.
+ *
  * Run inside the OJS container:
  *   docker compose exec -T ojs php /var/www/html/backfill-assign-dois.php 37 2
  *   ...or via the wrapper: backfill/html_pipeline/pipe11_assign_dois.sh 37.2
@@ -40,13 +45,24 @@ class AssignIssueDoisTool extends CommandLineTool
     public function usage()
     {
         echo "Assign DOIs to an issue and all its articles.\n\n"
-            . "Usage: php {$this->scriptName} <volume> <number> [--dry-run]\n";
+            . "Usage: php {$this->scriptName} <volume> <number> [--dry-run] [--submissions=<id>,...]\n";
     }
 
     public function execute()
     {
         [$volume, $number] = $this->argv;
         $dryRun = in_array('--dry-run', $this->argv, true);
+        $only = null;
+        foreach ($this->argv as $arg) {
+            if (str_starts_with($arg, '--submissions=')) {
+                $only = array_values(array_unique(array_map('intval', array_filter(
+                    explode(',', substr($arg, strlen('--submissions='))), 'strlen'))));
+                if (!$only || in_array(0, $only, true)) {
+                    echo "ERROR: --submissions takes submission ids, e.g. --submissions=9901,9902\n";
+                    exit(1);
+                }
+            }
+        }
 
         $contextDao = DAORegistry::getDAO('JournalDAO');
         $context = $contextDao->getByPath('ea');
@@ -72,7 +88,9 @@ class AssignIssueDoisTool extends CommandLineTool
         echo $dryRun ? "DRY RUN — nothing will be written\n\n" : "\n";
 
         // Issue DOI
-        if (empty($issue->getData('doiId'))) {
+        if ($only !== null) {
+            echo "  issue: left alone (--submissions)\n";
+        } elseif (empty($issue->getData('doiId'))) {
             if ($dryRun) {
                 echo "  issue: would mint a DOI\n";
             } else {
@@ -91,6 +109,20 @@ class AssignIssueDoisTool extends CommandLineTool
             ->filterByContextIds([$context->getId()])
             ->filterByIssueIds([$issue->getId()])
             ->getMany();
+
+        if ($only !== null) {
+            $inIssue = [];
+            foreach ($submissions as $submission) {
+                $inIssue[$submission->getId()] = $submission;
+            }
+            $missing = array_diff($only, array_keys($inIssue));
+            if ($missing) {
+                echo 'ERROR: not submissions of issue ' . "{$volume}.{$number}: " . implode(', ', $missing)
+                    . "\nNothing minted.\n";
+                exit(1);
+            }
+            $submissions = array_map(fn ($id) => $inIssue[$id], $only);
+        }
 
         $minted = $existing = $failed = 0;
         foreach ($submissions as $submission) {
@@ -119,7 +151,8 @@ class AssignIssueDoisTool extends CommandLineTool
             $fresh = Repo::publication()->get($publication->getId());
             $doi = $fresh->getData('doiObject');
             $minted++;
-            echo '  ' . ($doi ? $doi->getData('doi') : '(no doi returned)') . "  {$title}\n";
+            echo '  ' . ($doi ? $doi->getData('doi') : '(no doi returned)') . "  {$title}"
+                . ($only !== null ? "  (submission {$submission->getId()})" : '') . "\n";
         }
 
         echo "\nMinted {$minted}, already had one {$existing}, failed {$failed}\n";

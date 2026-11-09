@@ -8,6 +8,10 @@
 #   backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1       # Import one issue
 #   backfill/html_pipeline/pipe7_import.sh backfill/private/output/*                  # Import all prepared issues
 #
+#   # Add articles to an issue OJS already holds (XML from pipe6 --only):
+#   backfill/html_pipeline/pipe7_import.sh <dir with import.xml> --add-articles \
+#     --container=pharkie-ojs-plugins-ojs-1 --db-container=pharkie-ojs-plugins-ojs-db-1
+#
 # Requires: OJS running in Docker (auto-detected), or --container=<name>.
 #
 # What it does:
@@ -28,12 +32,16 @@ ADMIN_USER="admin"
 FORCE=0
 CLEAN=0
 REINDEX=1
+ADD=0
+DB_CONTAINER_ARG=""
 for arg in "$@"; do
   case "$arg" in
     --container=*) CONTAINER="${arg#--container=}" ;;
     --journal=*) JOURNAL_PATH="${arg#--journal=}" ;;
     --admin=*) ADMIN_USER="${arg#--admin=}" ;;
     --force) FORCE=1 ;;
+    --add-articles) ADD=1 ;;
+    --db-container=*) DB_CONTAINER_ARG="${arg#--db-container=}" ;;
     --no-reindex) REINDEX=0 ;;  # skip full search rebuild (e.g. galley-only changes: JATS/PDF/DOI edits aren't searchable text)
     --wipe-articles) CLEAN=1 ;;
     --clean) CLEAN=1 ;;  # legacy alias
@@ -77,10 +85,37 @@ if [ ${#DIRS[@]} -eq 0 ]; then
   echo "  --force             Reimport issues that already exist in OJS"
   echo "  --no-reindex        Skip the full search index rebuild (galley-only changes)"
   echo "  --wipe-articles     Wipe all existing issues/articles before importing (users/subs/payments kept)"
+  echo "  --add-articles      Add the XML's articles to an issue OJS already holds (see below)"
+  echo "  --db-container=<n>  OJS DB Docker container (auto-detected if omitted)"
   echo
   echo "Example: backfill/html_pipeline/pipe7_import.sh backfill/private/output/37.1"
   echo "         backfill/html_pipeline/pipe7_import.sh backfill/private/output/*"
   exit 1
+fi
+
+# --- --add-articles: add to an existing issue, change nothing else ---
+# For articles new to an issue already in OJS (pipe6 --only writes their XML).
+# OJS's native import, given an issue whose identification (volume, number,
+# year, title) matches exactly one existing issue, imports only the articles
+# and sections and leaves the issue itself alone. This mode never deletes,
+# never touches the job queue (it refuses unless it is empty), never reorders
+# the archive or changes the current issue, and never rebuilds the search
+# index (the import indexes the new articles itself). It refuses an issue OJS
+# would not match exactly once (the import would create a new, empty issue)
+# and an article whose title the issue already has (a re-run). Both
+# containers must be named: there is no auto-detection, so a rehearsal can
+# never reach the live database by accident. It stops at the first issue that
+# fails: OJS does not undo a failed native import, so that issue may hold some
+# of its new articles, and no later issue is tried.
+if [ "$ADD" = "1" ]; then
+  if [ -z "$CONTAINER" ] || [ -z "$DB_CONTAINER_ARG" ]; then
+    echo "ERROR: --add-articles needs both --container=<ojs app> and --db-container=<ojs db>"
+    exit 1
+  fi
+  if [ "$FORCE" = "1" ] || [ "$CLEAN" = "1" ]; then
+    echo "ERROR: --add-articles cannot be combined with --force or --wipe-articles"
+    exit 1
+  fi
 fi
 
 # --- Find OJS container ---
@@ -94,7 +129,11 @@ fi
 echo "OJS container: $CONTAINER"
 
 # --- Find OJS DB container ---
-DB_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '\-ojs-db-?1?$' | head -1)
+if [ -n "$DB_CONTAINER_ARG" ]; then
+  DB_CONTAINER="$DB_CONTAINER_ARG"
+else
+  DB_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '\-ojs-db-?1?$' | head -1)
+fi
 if [ -z "$DB_CONTAINER" ]; then
   echo "WARNING: No OJS DB container found. Idempotency checks and ordering will be skipped."
 fi
@@ -111,6 +150,26 @@ if [ -n "$DB_CONTAINER" ]; then
   OJS_DB_PASSWORD=$(docker exec "$CONTAINER" printenv OJS_DB_PASSWORD 2>/dev/null || true)
 fi
 
+# --add-articles: SQL that fails loudly (the helper above swallows errors).
+add_sql() {
+  docker exec -e MYSQL_PWD="$OJS_DB_PASSWORD" "$DB_CONTAINER" mysql -N -u ojs ojs -e "$1"
+}
+
+if [ "$ADD" = "1" ]; then
+  echo "OJS DB container: $DB_CONTAINER"
+  if [ -z "$OJS_DB_PASSWORD" ]; then
+    echo "ERROR: no OJS_DB_PASSWORD in $CONTAINER's environment"
+    exit 1
+  fi
+  QUEUED=$(add_sql "SELECT (SELECT COUNT(*) FROM jobs) + (SELECT COUNT(*) FROM failed_jobs);") || {
+    echo "ERROR: cannot read the job queue on $DB_CONTAINER"; exit 1; }
+  if [ "$QUEUED" != "0" ]; then
+    echo "ERROR: --add-articles refuses: jobs + failed_jobs hold $QUEUED. Find out what they are first."
+    exit 1
+  fi
+fi
+ADDED_IDS=""
+
 echo
 
 # Sort directories by volume.issue numerically (skip non-issue names like reports, Pro, etc.)
@@ -125,7 +184,7 @@ done | sort -t. -k1,1n -k2,2n | cut -f2))
 unset IFS
 
 # --- Suggest --wipe-articles for bulk imports ---
-if [ ${#SORTED_DIRS[@]} -ge 5 ] && [ "$CLEAN" = "0" ]; then
+if [ ${#SORTED_DIRS[@]} -ge 5 ] && [ "$CLEAN" = "0" ] && [ "$ADD" = "0" ]; then
   echo "WARNING: Importing ${#SORTED_DIRS[@]} issues without --wipe-articles."
   echo "  Existing issues will be skipped unless you also pass --force."
   echo "  For a full re-import, use: backfill/html_pipeline/pipe7_import.sh backfill/private/output/* --wipe-articles"
@@ -165,6 +224,80 @@ FAILED=0
 SUCCEEDED=0
 SKIPPED=0
 
+# One issue's XML in --add-articles mode. Returns non-zero on any refusal or
+# mismatch; nothing is imported unless every check before the import passes.
+add_articles() {
+  local xml="$1" info vol num year title_hex issue_id issues_before n_art max_sub
+  docker cp "$xml" "$CONTAINER:/tmp/import.xml"
+  # Read the XML with PHP's DOM in the OJS container: the issue identification
+  # OJS will match on, and each article's title, hex-encoded so SQL needs no quoting.
+  info=$(docker exec "$CONTAINER" php -r '
+    $d = new DOMDocument();
+    if (!$d->load("/tmp/import.xml")) { exit(1); }
+    $ident = $d->getElementsByTagName("issue_identification")->item(0);
+    if (!$ident) { exit(1); }
+    $f = function ($tag) use ($ident) { $n = $ident->getElementsByTagName($tag)->item(0); return $n ? trim($n->textContent) : ""; };
+    echo "ISSUE\t", $f("volume"), "\t", $f("number"), "\t", $f("year"), "\t", bin2hex($f("title")), "\n";
+    foreach ($d->getElementsByTagName("publication") as $p) {
+      foreach ($p->childNodes as $c) {
+        if ($c instanceof DOMElement && $c->tagName === "title") { echo "ARTICLE\t", bin2hex(trim($c->textContent)), "\n"; break; }
+      }
+    }') || { echo "  ERROR: could not read the XML's issue identification"; return 1; }
+  IFS=$'\t' read -r _ vol num year title_hex <<< "$(printf '%s\n' "$info" | grep '^ISSUE')"
+  if ! [[ "$vol" =~ ^[0-9]+$ && "$num" =~ ^[0-9]+$ && "$year" =~ ^[0-9]{4}$ && "$title_hex" =~ ^[0-9a-f]*$ ]]; then
+    echo "  ERROR: unexpected issue identification: volume '$vol' number '$num' year '$year'"
+    return 1
+  fi
+  local title_clause=""
+  [ -n "$title_hex" ] && title_clause="AND i.issue_id IN (SELECT issue_id FROM issue_settings WHERE setting_name = 'title' AND setting_value = UNHEX('$title_hex'))"
+  # The same match OJS makes (NativeXmlIssueFilter::_issueExists).
+  issue_id=$(add_sql "SELECT i.issue_id FROM issues i JOIN journals j ON j.journal_id = i.journal_id
+    WHERE j.path = '$JOURNAL_PATH' AND i.volume = $vol AND i.number = '$num' AND i.year = $year $title_clause;") || return 1
+  if [ "$(printf '%s\n' "$issue_id" | grep -c . || true)" != "1" ]; then
+    echo "  ERROR: OJS matches $(printf '%s\n' "$issue_id" | grep -c . || true) issues for Vol $vol No $num ($year), not 1: importing would create a new issue. Nothing imported."
+    return 1
+  fi
+  issues_before=$(add_sql "SELECT COUNT(*) FROM issues WHERE volume = $vol AND number = '$num';") || return 1
+  n_art=0
+  local h dup
+  for h in $(printf '%s\n' "$info" | awk -F'\t' '$1 == "ARTICLE" { print $2 }'); do
+    [[ "$h" =~ ^[0-9a-f]+$ ]] || { echo "  ERROR: an article has no title"; return 1; }
+    n_art=$((n_art + 1))
+    dup=$(add_sql "SELECT COUNT(*) FROM submissions s JOIN publications p ON p.publication_id = s.current_publication_id
+      JOIN publication_settings ps ON ps.publication_id = p.publication_id AND ps.setting_name = 'title'
+      WHERE p.issue_id = $issue_id AND ps.setting_value = UNHEX('$h');") || return 1
+    if [ "$dup" != "0" ]; then
+      echo "  ERROR: Vol $vol No $num already has an article titled \"$(printf '%b' "$(printf '%s' "$h" | sed 's/../\\x&/g')")\". Nothing imported."
+      return 1
+    fi
+  done
+  [ "$n_art" -gt 0 ] || { echo "  ERROR: the XML has no articles"; return 1; }
+  max_sub=$(add_sql "SELECT IFNULL(MAX(submission_id), 0) FROM submissions;") || return 1
+  echo "  Adding $n_art article(s) to Vol $vol No $num (issue $issue_id); submissions so far end at $max_sub"
+
+  docker exec "$CONTAINER" php tools/importExport.php \
+    NativeImportExportPlugin import /tmp/import.xml "$JOURNAL_PATH" "$ADMIN_USER" 2>&1 | sed 's/^/    /'
+
+  local added added_here issues_after
+  added=$(add_sql "SELECT s.submission_id, IFNULL(p.issue_id, 0), p.seq, IFNULL(ps.setting_value, '')
+    FROM submissions s JOIN publications p ON p.publication_id = s.current_publication_id
+    LEFT JOIN publication_settings ps ON ps.publication_id = p.publication_id AND ps.setting_name = 'title' AND ps.locale = 'en'
+    WHERE s.submission_id > $max_sub ORDER BY s.submission_id;") || return 1
+  issues_after=$(add_sql "SELECT COUNT(*) FROM issues WHERE volume = $vol AND number = '$num';") || return 1
+  added_here=$(printf '%s\n' "$added" | awk -F'\t' -v id="$issue_id" '$2 == id' | grep -c . || true)
+  printf '%s\n' "$added" | awk -F'\t' 'NF { printf "  added submission %s (issue %s, seq %s): %s\n", $1, $2, $3, $4 }'
+  if [ "$issues_after" != "$issues_before" ]; then
+    echo "  ERROR: Vol $vol No $num now has $issues_after issues (was $issues_before): the import created one. Stop and look."
+    return 1
+  fi
+  if [ "$added_here" != "$n_art" ] || [ "$(printf '%s\n' "$added" | grep -c . || true)" != "$n_art" ]; then
+    echo "  ERROR: expected $n_art new submission(s) in issue $issue_id, found $added_here (and $(printf '%s\n' "$added" | grep -c . || true) new in all). Stop and look."
+    return 1
+  fi
+  ADDED_IDS="$ADDED_IDS $(printf '%s\n' "$added" | awk -F'\t' 'NF { printf "%s ", $1 }')"
+  echo "  OK: $n_art article(s) added to Vol $vol No $num"
+}
+
 for DIR in "${SORTED_DIRS[@]}"; do
   DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "ERROR: $DIR not found"; FAILED=$((FAILED + 1)); continue; }
   XML_FILE="$DIR/import.xml"
@@ -183,6 +316,24 @@ for DIR in "${SORTED_DIRS[@]}"; do
 
   XML_SIZE=$(du -h "$XML_FILE" | cut -f1)
   echo "  XML: $XML_FILE ($XML_SIZE)"
+
+  if [ "$ADD" = "1" ]; then
+    if ! add_articles "$XML_FILE"; then
+      FAILED=$((FAILED + 1))
+      docker exec "$CONTAINER" rm -f /tmp/import.xml
+      # OJS does not undo a failed native import: this issue may now hold some
+      # of its new articles (the "added submission" lines above list them).
+      # Stop here, so at most one issue is in an unknown state.
+      echo "  STOPPED at $ISSUE_NAME: the $SUCCEEDED issue(s) before it were added; the ones after it were not tried."
+      echo "  Any \"added submission\" line above for $ISSUE_NAME is a partial import: check it before anything else."
+      echo
+      break
+    fi
+    SUCCEEDED=$((SUCCEEDED + 1))
+    docker exec "$CONTAINER" rm -f /tmp/import.xml
+    echo
+    continue
+  fi
 
   # Extract volume and number from import.xml for idempotency check
   # (sed, not grep -P: BSD grep on macOS has no -P)
@@ -311,7 +462,7 @@ docker exec "$CONTAINER" sh -c 'chown -R www-data:www-data /var/www/files/journa
 # --- Fix archive ordering ---
 # OJS archive page sorts by custom_issue_orders.seq first. Without entries,
 # order is undefined. Populate with newest-first by date_published.
-if [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ]; then
+if [ $SUCCEEDED -gt 0 ] && [ -n "$DB_CONTAINER" ] && [ "$ADD" = "0" ]; then
   echo ""
   echo "--- Fixing archive ordering ---"
   ORDERED=$(ojs_db_query "
@@ -348,14 +499,21 @@ fi
 # regression (commit 82ba72d, 2026-03-31) is why live site search only
 # returned results from the 2 most recent issues until 2026-04-16.
 # See docs/ojs-issues-log.md.
-if [ $SUCCEEDED -gt 0 ] && [ "$REINDEX" = "0" ]; then
+if [ "$ADD" = "1" ]; then
+  echo ""
+  echo "Added submissions:${ADDED_IDS:- none}"
+  echo "Not done here, by design: their place in the running order"
+  echo "(tools/resequence_issue.py) and their DOIs (pipe11 --submissions=...)."
+fi
+
+if [ $SUCCEEDED -gt 0 ] && [ "$REINDEX" = "0" ] && [ "$ADD" = "0" ]; then
   echo ""
   echo "--- Skipping search index rebuild (--no-reindex) ---"
   echo "  NOTE: reimported articles are re-indexed by their publish jobs only if"
   echo "  the queue is drained; body-text changes REQUIRE a full rebuild."
 fi
 
-if [ $SUCCEEDED -gt 0 ] && [ "$REINDEX" = "1" ]; then
+if [ $SUCCEEDED -gt 0 ] && [ "$REINDEX" = "1" ] && [ "$ADD" = "0" ]; then
   echo ""
   echo "--- Rebuilding search index ---"
   if docker exec "$CONTAINER" php tools/rebuildSearchIndex.php 2>&1 | grep -v "CROSSREF BOOT"; then

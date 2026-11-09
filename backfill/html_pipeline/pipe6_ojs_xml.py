@@ -96,6 +96,16 @@ def parse_date(date_str):
     return datetime.now().strftime('%Y-%m-%d')
 
 
+# Names whose family name the rules below cannot find: a Dutch "Ver" (not a
+# particle in general: "Ver" can be a given name) and a Spanish double surname.
+# Keyed by the whole name as written; the value is (given, family).
+NAME_SPLITS = {
+    'Wilfried Ver Eecke': ('Wilfried', 'Ver Eecke'),
+    'Yaqui Andrés Martínez Robles': ('Yaqui Andrés', 'Martínez Robles'),
+    'Yaqui Andres Martinez Robles': ('Yaqui Andres', 'Martinez Robles'),
+}
+
+
 def split_author_name(full_name):
     """Split 'Kim Loliya' into ('Kim', 'Loliya').
 
@@ -103,6 +113,7 @@ def split_author_name(full_name):
     - 'Emmy van Deurzen' -> ('Emmy', 'van Deurzen')
     - 'Sheba Boakye-Duah & Neresia Osbourne' -> [('Sheba', 'Boakye-Duah'), ('Neresia', 'Osbourne')]
     - 'Michael R. Montgomery & Noah Cebuliak' -> [('Michael R.', 'Montgomery'), ('Noah', 'Cebuliak')]
+    - a name in NAME_SPLITS -> its explicit split
     """
     if not full_name:
         return [('', '')]
@@ -122,6 +133,9 @@ def split_author_name(full_name):
 
     for name in parts:
         if not name:
+            continue
+        if ' '.join(name.split()) in NAME_SPLITS:
+            authors.append(NAME_SPLITS[' '.join(name.split())])
             continue
         words = name.split()
         if len(words) == 1:
@@ -757,10 +771,22 @@ def load_enrichment(toc_json_path):
     return data.get('articles', {})
 
 
-def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwargs):
+def article_stem(article):
+    """The file stem an article's split files share, e.g. '17-book-review-x'."""
+    return os.path.splitext(os.path.basename(article.get('split_pdf') or ''))[0]
+
+
+def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, only=None, **_kwargs):
     """Generate complete OJS Native XML for an issue.
 
     DOIs and publisher-IDs are read from JATS (single source of truth).
+
+    only: a set of article stems. When given, the XML carries just those
+    articles, for adding them to an issue OJS already holds (pipe7
+    --add-articles): OJS matches the issue by its identification and imports
+    only the articles and sections, leaving the issue itself alone. Each keeps
+    its place in toc.json as its seq, and the issue galley and cover are left
+    out, since OJS ignores them for an existing issue.
     """
     vol = toc_data.get('volume', 1)
     iss = toc_data.get('issue', 1)
@@ -780,7 +806,8 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
     # Determine which sections are actually used
     used_sections = set()
     for article in toc_data['articles']:
-        used_sections.add(article['section'])
+        if only is None or article_stem(article) in only:
+            used_sections.add(article['section'])
 
     lines = []
 
@@ -824,7 +851,7 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
     lines.append(f'    </sections>')
 
     # Cover image (first page of issue PDF)
-    cover_filename, cover_b64 = generate_cover_image(toc_json_path, vol, iss)
+    cover_filename, cover_b64 = (None, None) if only else generate_cover_image(toc_json_path, vol, iss)
     if cover_filename and cover_b64:
         lines.append(f'    <covers>')
         lines.append(f'      <cover locale="en">')
@@ -835,7 +862,7 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
         lines.append(f'    </covers>')
 
     # Issue galley (whole-issue PDF)
-    if not skip_issue_galley:
+    if not skip_issue_galley and not only:
         galley_lines = generate_issue_galley(toc_json_path, vol, iss, date_published)
         lines.extend(galley_lines)
 
@@ -843,6 +870,8 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
     lines.append(f'    <articles>')
     doi_count = 0
     for idx, article in enumerate(toc_data['articles']):
+        if only is not None and article_stem(article) not in only:
+            continue
         doi = _load_jats_doi(article.get('split_pdf'))
         if doi:
             doi_count += 1
@@ -864,6 +893,8 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, **_kwarg
     # Say out loud which articles depart from their section's access default —
     # a paywall set the wrong way is not something to discover from a reader.
     for art in toc_data['articles']:
+        if only is not None and article_stem(art) not in only:
+            continue
         override = str(art.get('access', '')).strip().lower()
         if override in ACCESS_OVERRIDES:
             section_default = SECTIONS.get(art['section'], SECTIONS['Articles'])['access_status']
@@ -888,6 +919,12 @@ def main():
                         help='Skip PDF embedding (much faster, for testing XML structure)')
     parser.add_argument('--no-issue-galley', action='store_true',
                         help='Skip whole-issue PDF galley (article galleys still included)')
+    parser.add_argument('--only',
+                        help='Comma-separated article stems (the split file name without '
+                             'extension). The XML carries just those articles, to add them '
+                             'to an issue already in OJS with pipe7 --add-articles. Leaves '
+                             'out the issue galley and cover; each article keeps its toc.json '
+                             'position as its seq.')
     parser.add_argument('--allow-bad-dois', action='store_true',
                         help='Import despite malformed DOIs or DOI links that break '
                              'when the page is read as text. Last resort — the fault '
@@ -901,6 +938,19 @@ def main():
         for article in toc_data['articles']:
             article.pop('split_pdf', None)
 
+    only = None
+    if args.only:
+        only = {s.strip() for s in args.only.split(',') if s.strip()}
+        stems = [article_stem(a) for a in toc_data['articles']]
+        missing = sorted(only - set(stems))
+        if missing:
+            print(f"ERROR: --only names articles not in this toc.json: {', '.join(missing)}",
+                  file=sys.stderr)
+            sys.exit(1)
+        for idx, stem in enumerate(stems):
+            if stem in only:
+                print(f"Only: seq {idx}  {stem}", file=sys.stderr)
+
     print(f"Generating XML for Vol {toc_data.get('volume')}.{toc_data.get('issue')}", file=sys.stderr)
     print(f"Articles: {len(toc_data['articles'])}", file=sys.stderr)
     if not args.no_pdfs:
@@ -908,7 +958,7 @@ def main():
         print(f"PDFs to embed: {pdfs}", file=sys.stderr)
 
     xml = generate_xml(toc_data, toc_json_path=args.toc_json,
-                       skip_issue_galley=args.no_issue_galley)
+                       skip_issue_galley=args.no_issue_galley, only=only)
 
     # Validate generated XML
     try:
@@ -944,8 +994,10 @@ def main():
         articles = findall(issue, './/article')
         if not articles:
             raise ValueError("No <article> elements found")
+        if only is not None and len(articles) != len(only):
+            raise ValueError(f"--only asked for {len(only)} articles, the XML has {len(articles)}")
         # Check issue galley if expected
-        if not args.no_issue_galley:
+        if not args.no_issue_galley and only is None:
             galley = find(issue, './/issue_galleys/issue_galley')
             if galley is not None:
                 embed = find(galley, './/issue_file/embed')

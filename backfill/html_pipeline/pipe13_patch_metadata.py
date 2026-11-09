@@ -59,7 +59,9 @@ wanted (backfill/tests/test_pipe13_spec.py shows the shape):
                    "unpublish": true}]}
 
 Every key but doi and submission_id is optional. Authors compare by full
-name, so OJS's own given/family split is kept for a name that is unchanged.
+name, so OJS's own given/family split is kept for a name that is unchanged,
+unless the article sets "exact_split": true (the split itself is the
+correction, e.g. given "Yaqui Andrés", family "Martínez Robles").
 A spec with more authors than OJS appends the extra ones (fewer is refused).
 "date_published" also sets copyrightYear; an issue's also sets its year.
 "unpublish" takes the article off the site through OJS's own unpublish
@@ -367,6 +369,7 @@ def load_spec(spec_path):
                          if 'authors' in art else None),
             'date_published': art.get('date_published'),
             'unpublish': bool(art.get('unpublish')),
+            'exact_split': bool(art.get('exact_split')),
         })
     return spec.get('issues', []), articles
 
@@ -561,8 +564,13 @@ def plan_spec(issues, articles, state, issue_state, columns):
                 del changes[n_before:]
                 continue
             for (given, family), row in zip(contribs, have):
+                # The same full name split another way is not a change, unless
+                # the spec says the split itself is the correction
+                # ("exact_split": a family name of two words, say).
                 if full_name(given, family) == full_name(row['given'] or '',
-                                                         row['family'] or ''):
+                                                         row['family'] or '') and (
+                        not art.get('exact_split')
+                        or (given, family) == (row['given'] or '', row['family'] or '')):
                     continue
                 for field, want, old in (('givenName', given, row['given']),
                                          ('familyName', family, row['family'])):

@@ -69,6 +69,14 @@ class TestSplitAuthorName:
         assert result[0] == ('Sheba', 'Boakye-Duah')
         assert result[1] == ('Neresia', 'Osbourne')
 
+    def test_explicit_splits(self):
+        assert split_author_name('Wilfried Ver Eecke') == [('Wilfried', 'Ver Eecke')]
+        assert split_author_name('Yaqui Andrés Martínez Robles') == [('Yaqui Andrés', 'Martínez Robles')]
+        assert split_author_name('Jo Bloggs & Wilfried Ver Eecke') == [('Jo', 'Bloggs'), ('Wilfried', 'Ver Eecke')]
+
+    def test_ver_is_not_a_particle(self):
+        assert split_author_name('Anna Ver Smith') == [('Anna Ver', 'Smith')]
+
     def test_single_name(self):
         result = split_author_name('Plato')
         assert result == [('', 'Plato')]
