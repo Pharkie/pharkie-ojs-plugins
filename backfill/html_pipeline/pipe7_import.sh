@@ -104,7 +104,9 @@ fi
 # would not match exactly once (the import would create a new, empty issue)
 # and an article whose title the issue already has (a re-run). Both
 # containers must be named: there is no auto-detection, so a rehearsal can
-# never reach the live database by accident.
+# never reach the live database by accident. It stops at the first issue that
+# fails: OJS does not undo a failed native import, so that issue may hold some
+# of its new articles, and no later issue is tried.
 if [ "$ADD" = "1" ]; then
   if [ -z "$CONTAINER" ] || [ -z "$DB_CONTAINER_ARG" ]; then
     echo "ERROR: --add-articles needs both --container=<ojs app> and --db-container=<ojs db>"
@@ -318,9 +320,16 @@ for DIR in "${SORTED_DIRS[@]}"; do
   if [ "$ADD" = "1" ]; then
     if ! add_articles "$XML_FILE"; then
       FAILED=$((FAILED + 1))
-    else
-      SUCCEEDED=$((SUCCEEDED + 1))
+      docker exec "$CONTAINER" rm -f /tmp/import.xml
+      # OJS does not undo a failed native import: this issue may now hold some
+      # of its new articles (the "added submission" lines above list them).
+      # Stop here, so at most one issue is in an unknown state.
+      echo "  STOPPED at $ISSUE_NAME: the $SUCCEEDED issue(s) before it were added; the ones after it were not tried."
+      echo "  Any \"added submission\" line above for $ISSUE_NAME is a partial import: check it before anything else."
+      echo
+      break
     fi
+    SUCCEEDED=$((SUCCEEDED + 1))
     docker exec "$CONTAINER" rm -f /tmp/import.xml
     echo
     continue

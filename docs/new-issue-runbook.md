@@ -277,7 +277,10 @@ the issue. Add just the new one. First used for 19 book reviews in November
    would create a new empty issue), an article title the issue already has
    (a re-run) and a non-empty job queue. It deletes nothing, leaves the
    archive order and current issue alone, and prints the new submission ids.
-   The import indexes the new articles for search itself.
+   The import indexes the new articles for search itself. It stops at the
+   first issue that fails and tries none after it: OJS does not undo a failed
+   native import, so that issue may hold some of its new articles (its
+   `added submission` lines list them).
 4. `tools/resequence_issue.py <toc.json> --target live [--confirm --out-dir <dir>]`
    sets every published article's `seq` to its toc.json position: the
    articles after the new one keep their old positions until it runs. It

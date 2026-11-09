@@ -96,6 +96,16 @@ def parse_date(date_str):
     return datetime.now().strftime('%Y-%m-%d')
 
 
+# Names whose family name the rules below cannot find: a Dutch "Ver" (not a
+# particle in general: "Ver" can be a given name) and a Spanish double surname.
+# Keyed by the whole name as written; the value is (given, family).
+NAME_SPLITS = {
+    'Wilfried Ver Eecke': ('Wilfried', 'Ver Eecke'),
+    'Yaqui Andrés Martínez Robles': ('Yaqui Andrés', 'Martínez Robles'),
+    'Yaqui Andres Martinez Robles': ('Yaqui Andres', 'Martinez Robles'),
+}
+
+
 def split_author_name(full_name):
     """Split 'Kim Loliya' into ('Kim', 'Loliya').
 
@@ -103,6 +113,7 @@ def split_author_name(full_name):
     - 'Emmy van Deurzen' -> ('Emmy', 'van Deurzen')
     - 'Sheba Boakye-Duah & Neresia Osbourne' -> [('Sheba', 'Boakye-Duah'), ('Neresia', 'Osbourne')]
     - 'Michael R. Montgomery & Noah Cebuliak' -> [('Michael R.', 'Montgomery'), ('Noah', 'Cebuliak')]
+    - a name in NAME_SPLITS -> its explicit split
     """
     if not full_name:
         return [('', '')]
@@ -122,6 +133,9 @@ def split_author_name(full_name):
 
     for name in parts:
         if not name:
+            continue
+        if ' '.join(name.split()) in NAME_SPLITS:
+            authors.append(NAME_SPLITS[' '.join(name.split())])
             continue
         words = name.split()
         if len(words) == 1:
