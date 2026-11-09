@@ -15,6 +15,8 @@
 # authors/title, so it must be redeposited after e.g. an author-name fix):
 #   backfill/html_pipeline/pipe12_deposit_dois.sh 37.2 --host=sea-live \
 #     --redeposit=10.65828/rg2zhd62 --confirm
+# --redeposit takes a comma-separated list and deposits ONLY those DOIs (the
+# issue's own DOI too, when listed); it refuses a DOI not in the issue.
 #
 # Deposit is asynchronous: drain the job queue afterwards, and remember that
 # "submitted" is not "registered" until Crossref confirms.

@@ -194,6 +194,14 @@ backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
    It refuses structural changes (author count, abstract, missing
    submissions): those go through the reimport path.
 
+   **A correction made in Harbour first** (the content's successor) skips
+   JATS: `pipe13_patch_metadata.py --spec <corrections.json> --target live`
+   names each article by DOI and submission id with the authors, title or
+   date wanted, and can add an author or unpublish an article. It never
+   touches galleys, and after `--confirm` prints one
+   `pipe12 --redeposit=<doi>,<doi>…` per issue, which deposits exactly the
+   DOIs listed. The spec's shape is in the script's docstring.
+
    🛑 **The scoped reindex fails on its first run and has to be redispatched.**
    `UpdateSubmissionSearchJob` dies with `Call to a member function
    getContext() on null` when the worker picks it up, because there is no
