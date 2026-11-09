@@ -178,23 +178,24 @@ class DepositIssueDoisTool extends CommandLineTool
         // Crossref rate-limits a burst: depositing 23 at once returned a 429
         // on one of them. A short gap between deposits avoids it, and the
         // whole issue still goes through in under a minute.
-        $doiIds = [];
+        // Each DOI is marked submitted just BEFORE its own job is queued: with
+        // job_runner on, a web request can run the job at once, and its result
+        // (registered, or error) must not be overwritten by a late "submitted".
         $first = true;
         foreach ($toDeposit as $row) {
             if (!$first) {
                 usleep(DEPOSIT_GAP_MICROSECONDS);
             }
             $first = false;
+            Repo::doi()->markSubmitted(Repo::doi()->getDoisForSubmission($row['id']));
             dispatch(new DepositSubmission($row['id'], $context, $agency));
-            $doiIds = array_merge($doiIds, Repo::doi()->getDoisForSubmission($row['id']));
             echo '  deposited ' . $row['doi']->getData('doi') . "\n";
         }
         if ($depositIssue) {
             usleep(DEPOSIT_GAP_MICROSECONDS);
+            Repo::doi()->markSubmitted([$issueDoi->getId()]);
             dispatch(new DepositIssue($issue->getId(), $context, $agency));
-            $doiIds[] = $issueDoi->getId();
         }
-        Repo::doi()->markSubmitted($doiIds);
 
         $total = count($toDeposit) + ($depositIssue ? 1 : 0);
         echo "\nQueued {$total} deposits and marked them submitted.\n";
