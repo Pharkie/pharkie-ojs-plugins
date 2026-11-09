@@ -11,6 +11,9 @@
 # Usage:
 #   backfill/html_pipeline/pipe11_assign_dois.sh 37.2 [--dry-run]
 #   backfill/html_pipeline/pipe11_assign_dois.sh 37.2 --host=sea-live
+#   # Only these submissions (articles added to a published issue); the issue
+#   # DOI is left alone:
+#   backfill/html_pipeline/pipe11_assign_dois.sh 23.2 --host=sea-live --submissions=9901,9902 [--dry-run]
 #
 # Assigning is not depositing — deposit from the OJS admin DOIs page afterwards.
 
@@ -21,11 +24,19 @@ PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 VOL_ISS=""
 HOST=""
 DRY_RUN=""
+SUBMISSIONS=""
 
 for arg in "$@"; do
   case "$arg" in
     --host=*) HOST="${arg#--host=}" ;;
     --dry-run) DRY_RUN="--dry-run" ;;
+    --submissions=*)
+      SUBMISSIONS="$arg"
+      if ! [[ "${arg#--submissions=}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+        echo "ERROR: --submissions takes comma-separated ids, got '${arg#--submissions=}'" >&2
+        exit 1
+      fi
+      ;;
     *) VOL_ISS="$arg" ;;
   esac
 done
@@ -52,7 +63,7 @@ if [ -n "$HOST" ]; then
   scp -q -i ~/.ssh/hetzner "$TOOL" "root@$SERVER_IP:/tmp/assign-dois.php"
   $SSH_CMD "cd $REMOTE_DIR \
     && docker compose cp /tmp/assign-dois.php ojs:$REMOTE_TOOL \
-    && docker compose exec -T ojs php $REMOTE_TOOL $VOL $ISS $DRY_RUN; \
+    && docker compose exec -T ojs php $REMOTE_TOOL $VOL $ISS $DRY_RUN $SUBMISSIONS; \
     rc=\$?; \
     docker compose exec -T ojs rm -f $REMOTE_TOOL; rm -f /tmp/assign-dois.php; exit \$rc"
 else
@@ -67,7 +78,7 @@ else
   echo "OJS container: $CONTAINER"
   docker cp "$TOOL" "$CONTAINER:$REMOTE_TOOL"
   set +e
-  docker exec -i "$CONTAINER" php "$REMOTE_TOOL" "$VOL" "$ISS" $DRY_RUN
+  docker exec -i "$CONTAINER" php "$REMOTE_TOOL" "$VOL" "$ISS" $DRY_RUN $SUBMISSIONS
   rc=$?
   set -e
   docker exec -i "$CONTAINER" rm -f "$REMOTE_TOOL"

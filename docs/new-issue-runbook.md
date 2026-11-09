@@ -256,6 +256,39 @@ backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
    call, not a side effect of a publication correction. Check, report,
    don't touch.
 
+## 1d. Adding an article to a published issue
+
+When a published issue gains an article it should always have had (a book
+review that was printed but never split out), reimporting the issue with
+`pipe7 --force` is the wrong tool: it deletes and recreates every article in
+the issue. Add just the new one. First used for 19 book reviews in November
+2026 (the runbook is in sea-ojs-private, `runbooks/2026-11-10-review-articles/`).
+
+1. Put the article in the issue's `toc.json` at its printed place, with its
+   split files beside it, and add any new name to
+   `backfill/private/authors.json`.
+2. `pipe6_ojs_xml.py <toc.json> --only=<stem>[,<stem>…] -o <dir>/import.xml`
+   writes an XML carrying only those articles, each with its toc.json
+   position as its `seq`, and no issue galley or cover.
+3. `pipe7_import.sh <dir> --add-articles --container=<ojs> --db-container=<ojs-db>`.
+   OJS matches the issue by volume, number, year and title and adds the
+   articles ("This issue will not be modified, but articles will be added").
+   This mode refuses an issue OJS would not match exactly once (the import
+   would create a new empty issue), an article title the issue already has
+   (a re-run) and a non-empty job queue. It deletes nothing, leaves the
+   archive order and current issue alone, and prints the new submission ids.
+   The import indexes the new articles for search itself.
+4. `tools/resequence_issue.py <toc.json> --target live [--confirm --out-dir <dir>]`
+   sets every published article's `seq` to its toc.json position: the
+   articles after the new one keep their old positions until it runs. It
+   writes a rollback file first.
+5. `pipe11_assign_dois.sh <vol>.<iss> --submissions=<ids>` mints DOIs for
+   exactly those submissions, never the issue's own. Then
+   `tools/snapshot_ids.py --target live --issue <vol>.<iss>` writes the
+   submission ids and DOIs into the JATS, and
+   `pipe12_deposit_dois.sh <vol>.<iss> --redeposit=<the new DOIs>` deposits
+   exactly those.
+
 ## 2. Split into per-article PDFs
 
 ```bash
