@@ -241,6 +241,71 @@ def update_jats(jats_path, submission_id, doi, dry_run=False):
     return changed
 
 
+def jats_publisher_id(jats_path):
+    """The submission id a JATS file already holds, or None."""
+    try:
+        meta = ET.parse(jats_path).getroot().find('.//{*}article-meta')
+    except (ET.ParseError, OSError):
+        return None
+    if meta is None:
+        return None
+    el = meta.find('{*}article-id[@pub-id-type="publisher-id"]')
+    if el is None:
+        el = meta.find('article-id[@pub-id-type="publisher-id"]')
+    if el is None or not (el.text or '').strip().isdigit():
+        return None
+    return int(el.text.strip())
+
+
+def match_articles(issue_articles, toc_articles, issue_dir,
+                   read_id=jats_publisher_id):
+    """Pair each OJS article with its JATS file in one issue.
+
+    Matching is by title, and an issue can hold several articles with the
+    same title (three reviews of one book). A title shared by several files
+    goes to the file that already holds this submission id; with no such
+    file it is ambiguous and nothing is written, since a wrong pairing
+    would overwrite another article's id and DOI. No file is ever paired
+    with two submissions.
+
+    Returns (pairs, problems): pairs is [(article, jats_path)], problems is
+    [(kind, article, detail)] with kind 'MISS', 'AMBIGUOUS' or 'CLAIMED'.
+    """
+    by_title = {}
+    for toc_art in toc_articles:
+        sp = toc_art.get('split_pdf', '')
+        if not sp:
+            continue
+        stem = os.path.splitext(os.path.basename(sp))[0]
+        jats_path = os.path.join(issue_dir, f'{stem}.jats.xml')
+        if not os.path.exists(jats_path):
+            continue
+        by_title.setdefault(normalize_title(toc_art.get('title', '')), []).append(jats_path)
+
+    pairs, problems, claimed = [], [], {}
+    for art in issue_articles:
+        candidates = by_title.get(normalize_title(art['title']), [])
+        if not candidates:
+            problems.append(('MISS', art, ''))
+            continue
+        if len(candidates) == 1:
+            jats_path = candidates[0]
+        else:
+            held = [c for c in candidates if read_id(c) == art['submission_id']]
+            if len(held) != 1:
+                problems.append(('AMBIGUOUS', art, ', '.join(
+                    os.path.basename(c) for c in candidates)))
+                continue
+            jats_path = held[0]
+        if jats_path in claimed:
+            problems.append(('CLAIMED', art, f'{os.path.basename(jats_path)} '
+                             f'already paired with id={claimed[jats_path]}'))
+            continue
+        claimed[jats_path] = art['submission_id']
+        pairs.append((art, jats_path))
+    return pairs, problems
+
+
 def normalize_title(title):
     """Simple title normalization for matching."""
     import re
@@ -283,6 +348,7 @@ def main():
     # Update JATS files
     jats_updated = 0
     jats_not_found = 0
+    jats_ambiguous = 0
     for (vol, iss), issue_articles in sorted(by_issue.items()):
         dirname = issue_dir_name(vol, iss)
         issue_dir = os.path.join(OUTPUT_DIR, dirname)
@@ -298,25 +364,16 @@ def main():
         with open(toc_path) as f:
             toc = json.load(f)
 
-        # Build title → JATS path lookup from toc.json
-        title_to_jats = {}
-        for toc_art in toc.get('articles', []):
-            sp = toc_art.get('split_pdf', '')
-            if sp:
-                stem = os.path.splitext(os.path.basename(sp))[0]
-                jats_path = os.path.join(issue_dir, f'{stem}.jats.xml')
-                norm = normalize_title(toc_art.get('title', ''))
-                title_to_jats[norm] = jats_path
-
-        for art in issue_articles:
-            norm = normalize_title(art['title'])
-            jats_path = title_to_jats.get(norm)
-            if not jats_path or not os.path.exists(jats_path):
+        pairs, problems = match_articles(issue_articles, toc.get('articles', []), issue_dir)
+        for kind, art, detail in problems:
+            if kind == 'MISS':
                 jats_not_found += 1
-                if jats_not_found <= 5:
-                    print(f'  MISS: {art["title"][:50]} (Vol {vol}.{iss})')
-                continue
+            else:
+                jats_ambiguous += 1
+            print(f'  {kind}: {art["title"][:50]} (Vol {vol}.{iss}, id={art["submission_id"]})'
+                  + (f' {detail}' if detail else ''))
 
+        for art, jats_path in pairs:
             changed = update_jats(jats_path, art['submission_id'], art['doi'],
                                   dry_run=args.dry_run)
             if changed:
@@ -353,7 +410,8 @@ def main():
             print(f'  {action}: {dirname}/toc.json '
                   f'(issue_id={issue_data["issue_id"]}, doi={issue_data["doi"] or "none"})')
 
-    print(f'\nJATS updated: {jats_updated}, not found: {jats_not_found}')
+    print(f'\nJATS updated: {jats_updated}, not found: {jats_not_found}, '
+          f'ambiguous: {jats_ambiguous}')
     print(f'toc.json updated: {toc_updated}')
     if args.dry_run:
         print('(dry run — no files changed)')
