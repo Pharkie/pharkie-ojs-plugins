@@ -134,14 +134,9 @@ echo "    Login: admin / $OJS_PASS"
 echo ""
 WP_DB_PASS=$($DC exec -T wp printenv WORDPRESS_DB_PASSWORD 2>/dev/null) || WP_DB_PASS="(check .env)"
 OJS_DB_PASS=$($DC exec -T ojs printenv OJS_DB_PASSWORD 2>/dev/null) || OJS_DB_PASS="(check .env)"
-echo "  Adminer (DB admin):"
-if [ "$ENV" = "dev" ]; then
-  echo "    URL:      http://localhost:8082"
-else
-  echo "    Access:   ssh -L 8082:127.0.0.1:8082 <host>  →  http://localhost:8082"
-fi
-[ -n "$WP_RIG" ] && echo "    WP DB:    server=wp-db   user=wordpress  password=$WP_DB_PASS"
-echo "    OJS DB:   server=ojs-db  user=ojs        password=$OJS_DB_PASS"
+echo "  Databases (mysql client in the DB container):"
+[ -n "$WP_RIG" ] && echo "    WP DB:    $DC exec wp-db mariadb -u wordpress -p wordpress   (password=$WP_DB_PASS)"
+echo "    OJS DB:   $DC exec ojs-db mariadb -u ojs -p ojs   (password=$OJS_DB_PASS)"
 
 if [ -n "$SAMPLE_DATA" ] && [ -n "$WP_RIG" ]; then
   echo ""

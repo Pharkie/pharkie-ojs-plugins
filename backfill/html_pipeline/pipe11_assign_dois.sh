@@ -70,7 +70,7 @@ else
   # Same container auto-detection as pipe7_import.sh -- works on the host, in
   # the devcontainer, and on the box, without needing a compose project dir.
   CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null \
-    | grep -E '\-ojs-?1?$' | grep -v -E 'db|adminer' | head -1)
+    | grep -E '\-ojs-?1?$' | grep -v db | head -1)
   if [ -z "$CONTAINER" ]; then
     echo "ERROR: no running OJS container found" >&2
     exit 1
