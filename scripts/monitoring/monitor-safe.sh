@@ -417,20 +417,6 @@ else
   pass "No OOM kills in last 24h"
 fi
 
-# ============================================================
-# 9. ADMINER
-# ============================================================
-echo ""
-echo "--- Adminer ---"
-
-# 9a. Adminer (accessible within Docker network only, bound to 127.0.0.1)
-ADMINER_STATUS=$(remote "$COMPOSE exec -T ojs curl -s -o /dev/null -w '%{http_code}' http://adminer:8080/") || ADMINER_STATUS="000"
-if [ "$ADMINER_STATUS" = "200" ]; then
-  pass "Adminer responds (HTTP $ADMINER_STATUS)"
-else
-  fail "Adminer not responding (HTTP $ADMINER_STATUS)"
-fi
-
 # --- Summary ---
 echo ""
 echo "=== Results: $PASSED/$TOTAL passed, $FAILED failed ==="

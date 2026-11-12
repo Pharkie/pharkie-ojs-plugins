@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Removed
+
+- **Adminer.** The database GUI is gone from `docker-compose.yml`, the local and staging overrides, the devcontainer's port forwards, the e2e tests, `smoke-test.sh` and the hourly `monitor-safe.sh`; nobody used it, and it was one more service listening on the box. Use the MariaDB client in the database container instead: `docker compose exec ojs-db mariadb -u ojs -p ojs` (`docs/support-runbook.md`, "Database access").
+
 ### Security
 
 - **The journal behind Cloudflare's proxy.** `ojs.caddy` renews the journal's certificate by HTTP-01 alone, since TLS-ALPN-01 cannot reach Caddy through Cloudflare; writes an access log, `/var/log/caddy/ojs-access.log`, kept 30 days, with reset, activation, invitation, reviewer, ORCID, API and Stripe tokens, members' email lookups and session cookies redacted; and hands OJS `{client_ip}` as `X-Forwarded-For`, so OJS gets the visitor's address once the shared Caddy trusts Cloudflare's ranges, and a value no client can write. `expose_php = Off` for the journal and the WordPress rig: no `X-Powered-By: PHP/8.3.36`.

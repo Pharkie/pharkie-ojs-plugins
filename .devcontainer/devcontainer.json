@@ -41,7 +41,7 @@
   "postStartCommand": "sudo chgrp docker /var/run/docker.sock && scripts/dev/forward-ports.sh",
 
   // VS Code Ports tab entries — socat makes these actually reachable in DinD
-  "forwardPorts": [8080, 8081, 8082],
+  "forwardPorts": [8080, 8081],
 
   "customizations": {
     "vscode": {

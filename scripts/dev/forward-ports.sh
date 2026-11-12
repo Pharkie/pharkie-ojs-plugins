@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start socat port forwarders for DinD devcontainer.
 # Maps localhost ports to Docker Compose service hostnames so the browser
-# can reach WP/OJS/Adminer via VS Code port forwarding.
+# can reach WP/OJS via VS Code port forwarding.
 #
 # Safe to run repeatedly — kills stale forwarders first.
 # Called by: postStartCommand (devcontainer.json), rebuild-dev.sh, or manually.
@@ -52,7 +52,7 @@ done
 pkill -f '[s]ocat.*TCP-LISTEN' 2>/dev/null || true
 sleep 0.5
 
-FORWARDS="8080:wp:80 8081:ojs:80 8082:adminer:8080"
+FORWARDS="8080:wp:80 8081:ojs:80"
 ALL_OK=true
 
 for FORWARD in $FORWARDS; do
