@@ -28,6 +28,7 @@ between them.
 | `pipe11_assign_dois.sh` | Mints DOIs through OJS's own repository code, so suffixes match the archive |
 | `pipe12_deposit_dois.sh` | Deposits them at Crossref. Assigning is not depositing |
 | `pipe13_patch_metadata.py` | Fast path for metadata-only corrections, skipping a reimport |
+| `pipe14_replace_text.py` | Corrected article text from the source repo (a `<base>..<head>` diff) onto the Full Text and JATS galley files in place, with a backup and `--restore`; Harbour's twin is `scripts/ops/apply-article-text.ts` |
 | `tools/snapshot_ids.py` | Writes assigned ids and DOIs back into the JATS, which is what makes an issue self-describing |
 
 `lib/` holds only what these need: `crossref.py`, `doi_validate.py` (malformed
