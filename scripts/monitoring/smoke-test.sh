@@ -111,15 +111,6 @@ else
   fail "OJS not responding (HTTP $OJS_STATUS)"
 fi
 
-# --- 2b. Adminer ---
-echo "2b. Adminer"
-ADMINER_STATUS=$(remote "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082") || ADMINER_STATUS="000"
-if [ "$ADMINER_STATUS" = "200" ]; then
-  pass "Adminer responds (HTTP $ADMINER_STATUS)"
-else
-  fail "Adminer not responding (HTTP $ADMINER_STATUS)" "Expected on 127.0.0.1:8082"
-fi
-
 # --- 3. WP REST API ---
 echo "3. WordPress REST API"
 WP_API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' $WP_CURL_AUTH "$WP_HOME/wp-json/" 2>/dev/null) || WP_API_STATUS="000"

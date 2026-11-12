@@ -120,7 +120,7 @@ fi
 
 # --- Find OJS container ---
 if [ -z "$CONTAINER" ]; then
-  CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '\-ojs-?1?$' | grep -v -E 'db|adminer' | head -1)
+  CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '\-ojs-?1?$' | grep -v db | head -1)
   if [ -z "$CONTAINER" ]; then
     echo "ERROR: No OJS Docker container found. Use --container=<name> or start OJS."
     exit 1

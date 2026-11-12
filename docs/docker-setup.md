@@ -48,9 +48,8 @@ docker compose exec ojs bash /scripts/ojs/setup-ojs.sh --with-sample-data
 | OJS | http://localhost:8081 | http://ojs:80 |
 | OJS journal | http://localhost:8081/index.php/ea | http://ojs:80/index.php/ea |
 | OJS API (from WP) | — | http://ojs:80/index.php/ea/api/v1/wpojs/... |
-| Adminer (DB GUI) | http://localhost:8082 | http://adminer:8080 |
 
-Adminer connects to both databases — type `wp-db` or `ojs-db` as the server on the login screen. See credentials below.
+There is no database GUI. Use the MariaDB client in the database container: `docker compose exec ojs-db mariadb -u ojs -p ojs` (or `wp-db`, user and database `wordpress`). See credentials below.
 
 ## Credentials
 
@@ -151,7 +150,6 @@ This handles everything in one shot:
 | WordPress | Custom `docker/wp/Dockerfile` (from `php:8.2.35-apache-trixie`) | WP 6.9.1 (Bedrock), PHP 8.2.35 | Composer-managed deps. Base pinned to the patch release so a rebuild cannot reuse a cached older PHP |
 | OJS | Custom `docker/ojs/Dockerfile` (from `pkpofficial/ojs:3_5_0-3`) | OJS 3.5.0.3, PHP 8.3.36 | Adds envsubst + mariadb client. Replaces PKP's PHP 8.3.29 with 8.3.36 (PHP2Shell fix; PKP has no patched image), built from `php:8.3.36-apache-trixie` with the same extensions. Drop the `php-patched` stage once PKP ships one |
 | MariaDB (both) | `mariadb:10.11` | 10.11 | — |
-| Adminer | `adminer:4-standalone` | ~4.8 | DB admin GUI (~15MB RAM) |
 
 Do not use Docker tag `3_5_0-2` — it has a [known install bug](https://github.com/pkp/pkp-lib/issues/12144).
 

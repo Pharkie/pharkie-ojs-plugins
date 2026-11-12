@@ -130,26 +130,18 @@ This calls OJS directly (not through Action Scheduler) and reports the result im
 
 > **For IT / server admins only.** Support staff can skip this section.
 
-## Database access (Adminer)
+## Database access
 
-Adminer is a lightweight DB admin GUI on the staging/prod server. It's bound to localhost only — you reach it via SSH tunnel.
-
-**Connect:**
+There is no database GUI on the server. Open the MariaDB client inside the database container, over SSH:
 
 ```bash
-ssh -L 8082:127.0.0.1:8082 <your-server>
+ssh <your-server>
+cd /opt/pharkie-ojs-plugins
+docker compose exec ojs-db mariadb -u ojs -p ojs            # password: OJS_DB_PASSWORD in .env
+docker compose exec wp-db mariadb -u wordpress -p wordpress # only where the wp-rig profile runs; password: WP_DB_PASSWORD
 ```
 
-Then open `http://localhost:8082` in your browser.
-
-**Credentials:**
-
-| Database | Server | Username | Password | DB name |
-|----------|--------|----------|----------|---------|
-| WordPress | `wp-db` | `wordpress` | `WP_DB_PASSWORD` from `.env` on VPS | `wordpress` |
-| OJS | `ojs-db` | `ojs` | `OJS_DB_PASSWORD` from `.env` on VPS | `ojs` |
-
-Select **MySQL** as the system on the Adminer login page. Type the server name exactly as shown (these are Docker container hostnames).
+For a one-off query without the prompt: `docker compose exec -T ojs-db bash -c 'mariadb -u root -p"$MYSQL_ROOT_PASSWORD" ojs -e "SELECT ..."'`.
 
 ---
 

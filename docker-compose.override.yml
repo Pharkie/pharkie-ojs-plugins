@@ -1,8 +1,8 @@
 # Local dev overrides — auto-loaded by Docker Compose alongside docker-compose.yml.
-# Exposes ports for direct browser access: localhost:8080 (WP), localhost:8081 (OJS), localhost:8082 (Adminer).
+# Exposes ports for direct browser access: localhost:8080 (WP), localhost:8081 (OJS).
 # Bound to 127.0.0.1 so they are reachable from localhost only and NEVER exposed to the
 # network. This matters because this file auto-loads on any bare `docker compose` command,
-# including on servers — a 0.0.0.0 binding here would publish OJS/WP/Adminer to the internet
+# including on servers — a 0.0.0.0 binding here would publish OJS/WP to the internet
 # (Docker's iptables rules bypass UFW). In production, Caddy is the only public entry point.
 
 services:
@@ -13,7 +13,3 @@ services:
   ojs:
     ports:
       - "127.0.0.1:8081:80"
-
-  adminer:
-    ports:
-      - "127.0.0.1:8082:8080"
