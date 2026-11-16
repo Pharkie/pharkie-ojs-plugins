@@ -25,7 +25,7 @@ import argparse, json, os, posixpath, re, subprocess, sys, urllib.request
 OUTLINE = "https://docs.existentialanalysis.org.uk"
 THIS_REPO = "https://github.com/Pharkie/pharkie-ojs-plugins/blob/main"
 # Sibling repos, keyed by the leading path segment a relative link uses to escape.
-SIBLING_REPOS = {"membership-platform": "https://github.com/Pharkie/sea-membership-platform/blob/main"}
+SIBLING_REPOS = {"membership-platform": "https://github.com/Pharkie/sea-harbour-private/blob/main"}
 
 
 def absolutise(md: str, doc_path: str) -> str:

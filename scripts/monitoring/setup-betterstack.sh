@@ -6,7 +6,7 @@
 # below, each as Better Stack has it (checked against the API on 2026-10-18).
 # The account's other two heartbeats, "SEA: Harbour nightly backup" and
 # "SEA: Harbour browser checks", are Harbour's (docs/on-call.md in
-# Pharkie/sea-membership-platform). This script never creates, changes or
+# Pharkie/sea-harbour-private). This script never creates, changes or
 # deletes them, --delete-all included.
 #
 # Usage:

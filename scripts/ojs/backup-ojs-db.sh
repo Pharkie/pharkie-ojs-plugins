@@ -5,7 +5,7 @@
 # 🛑 UMAMI IS NOT BACKED UP HERE, AND THAT IS NOT A GAP. Umami and its database
 # run in Harbour's harbour-infra stack, not this project's compose, and
 # Harbour's nightly backup dumps that database with its own (umami_dump in
-# scripts/infra/backup.sh, Pharkie/sea-membership-platform). Harbour owns it.
+# scripts/infra/backup.sh, Pharkie/sea-harbour-private). Harbour owns it.
 #
 # Usage:
 #   scripts/ojs/backup-ojs-db.sh              # Dump + compress + encrypt + rotate

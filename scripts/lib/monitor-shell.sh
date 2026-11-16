@@ -4,7 +4,7 @@
 # Referenced in authorized_keys: command="/usr/local/bin/monitor-shell.sh",restrict
 #
 # 🛑 DO NOT DEPLOY THIS COPY. The box's /usr/local/bin/monitor-shell.sh is
-# Harbour's scripts/monitoring/lib/monitor-shell.sh (Pharkie/sea-membership-platform),
+# Harbour's scripts/monitoring/lib/monitor-shell.sh (Pharkie/sea-harbour-private),
 # which holds this repo's rules AND Harbour's, because Harbour's monitoring key
 # goes through the same file. Copying this one over it would drop Harbour's
 # rules and break Harbour's monitoring. This copy is frozen: to add or change a

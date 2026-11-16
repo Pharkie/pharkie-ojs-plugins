@@ -23,7 +23,7 @@
 # changes slowly, so off-siting it is a cost decision rather than an oversight —
 # recorded in docs/setup-guide.md so that the gap is a known one.
 #
-# Harbour's scripts/infra/upload-backup-r2.sh (Pharkie/sea-membership-platform)
+# Harbour's scripts/infra/upload-backup-r2.sh (Pharkie/sea-harbour-private)
 # does the same job for its own dumps into the same bucket under `harbour/`.
 # Keep the two in step: the rclone version floor, the env-only config,
 # copy-not-sync and the two delete guards rest on the same reasoning in both.

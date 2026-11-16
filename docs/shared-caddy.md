@@ -4,7 +4,7 @@ The server runs several independent projects (each its own Docker Compose stack)
 
 ## How it works
 
-- **The shared Caddy is not part of this repo.** On the SEA box it runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` and `deploy/Caddyfile` in `Pharkie/sea-membership-platform`, at `/opt/harbour/infra` on the box), which runs Umami too. This repo supplies only its own vhost snippets.
+- **The shared Caddy is not part of this repo.** On the SEA box it runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` and `deploy/Caddyfile` in `Pharkie/sea-harbour-private`, at `/opt/harbour/infra` on the box), which runs Umami too. This repo supplies only its own vhost snippets.
 
 - Its Caddyfile is a stable one-liner:
   ```
