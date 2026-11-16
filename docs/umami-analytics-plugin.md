@@ -48,7 +48,7 @@ Plugin settings are stored per-OJS-database, so dev and live are configured inde
 
 ## Self-hosting Umami
 
-A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. **This repo does not run one.** The SEA's runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` in `Pharkie/sea-membership-platform`): the Umami app, its `umami-db` on `mysql:8.0`, and its Caddy vhost, `umami.caddy`. Harbour's nightly backup dumps that database; this repo's `backup-ojs-db.sh` does not.
+A self-hosted instance (unlimited websites/events, data on your own infra) needs the Umami app plus a MySQL 8 or PostgreSQL database, fronted by a reverse proxy with TLS. **This repo does not run one.** The SEA's runs in Harbour's `harbour-infra` compose stack (`deploy/docker-compose.infra.yml` in `Pharkie/sea-harbour-private`): the Umami app, its `umami-db` on `mysql:8.0`, and its Caddy vhost, `umami.caddy`. Harbour's nightly backup dumps that database; this repo's `backup-ojs-db.sh` does not.
 
 > **Note:** Umami requires **MySQL 8 / PostgreSQL** — it fails on MariaDB (the `05_add_visit_id` Prisma migration errors with P3009), so use `mysql:8.0` even where the rest of the stack is MariaDB.
 

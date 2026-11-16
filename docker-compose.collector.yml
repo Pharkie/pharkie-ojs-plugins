@@ -1,7 +1,7 @@
 # Better Stack Collector (host metrics + logs).
 #
 # 🛑 DO NOT START THIS ON THE LIVE BOX. The box's collector is Harbour's: the
-# `collector` service of `harbour-infra` (Pharkie/sea-membership-platform,
+# `collector` service of `harbour-infra` (Pharkie/sea-harbour-private,
 # docs/box-maintenance.md), since 8 Oct 2026. It has the same container_name,
 # better-stack-collector, so `up -d` here would collide with it. Nothing on
 # the box runs from this file, and it retires with this project.
