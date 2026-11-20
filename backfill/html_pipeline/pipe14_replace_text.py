@@ -55,7 +55,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from pipe13_patch_metadata import (  # noqa: E402
-    SCRIPT_DIR as _P13_DIR, fetch_galleys, ojs_php_cmd, queue_counts)
+    SCRIPT_DIR as _P13_DIR, backups_dir, fetch_galleys, ojs_php_cmd, queue_counts)
 
 FILES_ROOT = '/var/www/files'
 SOURCE = re.compile(r'^backfill/output/([^/]+)/(.+)\.(galley\.html|jats\.xml)$')
@@ -331,6 +331,8 @@ def main():
         ap.error('--repo, --base and --head are needed (or --restore)')
     if args.confirm and not args.out_dir:
         ap.error('--confirm needs --out-dir for the backup')
+    if args.out_dir:
+        args.out_dir = str(backups_dir(args.out_dir))
 
     articles = changed_articles(args.repo, args.base, args.head, set(args.only))
     ids = sorted({a['submission_id'] for a in articles if a['submission_id']})

@@ -119,6 +119,19 @@ DB_CMD['rehearse'] = [
 ]
 
 # php reads the script from stdin; ids arrive as argv after `--`.
+
+# Undo backups live in one folder, never loose in the home folder (Adam, 20 Nov).
+JOURNAL_BACKUPS = Path(os.environ.get('JOURNAL_BACKUPS_DIR', '~/dev/SEA/journal-backups')).expanduser().resolve()
+
+
+def backups_dir(path):
+    """The resolved --out-dir, refused unless it is inside JOURNAL_BACKUPS."""
+    d = Path(path).expanduser().resolve()
+    if d != JOURNAL_BACKUPS and JOURNAL_BACKUPS not in d.parents:
+        raise SystemExit(f'--out-dir must be inside {JOURNAL_BACKUPS} (got {d}); '
+                         f'e.g. --out-dir {JOURNAL_BACKUPS}/ojs-text-<date>-<tag>')
+    return d
+
 def ojs_php_cmd(target, ids):
     id_args = ' '.join(str(i) for i in ids)
     if target == 'dev':
@@ -757,7 +770,7 @@ def run_spec(args):
 
     stamp, unstamp = stamp_sql(plan['touched'])
     stamp_id = time.strftime('%Y%m%d-%H%M%S')
-    out_dir = Path(args.out_dir or '.')
+    out_dir = backups_dir(args.out_dir or JOURNAL_BACKUPS)
     rollback = out_dir / f'pipe13-rollback-{args.target}-{stamp_id}.sql'
     rollback.write_text(
         f'-- Undo for pipe13 --spec {args.spec} on {args.target}, {stamp_id}.\n'
