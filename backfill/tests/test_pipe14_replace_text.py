@@ -158,3 +158,123 @@ def test_restore_puts_the_backup_back(tmp_path, monkeypatch):
     assert path == HTML and data.decode() == p14.wrap(galley(BASE))
     assert (info.uid, info.mode) == (33, 0o644)
     assert put[1] == ('reindex', [9758])
+
+
+# ── --exact-bytes: a change only in the JATS structure ──────────────────────
+
+def jats_refs(doi):
+    """Same <body> text whatever the DOI: only the <back> reference differs."""
+    return ('<article><front><article-meta>'
+            '<article-id pub-id-type="publisher-id">9758</article-id>'
+            '</article-meta></front><body><p>Same text.</p></body><back><ref-list>'
+            f'<ref><mixed-citation>A. Author.<pub-id pub-id-type="doi">{doi}</pub-id>'
+            '</mixed-citation></ref></ref-list></back></article>')
+
+
+WRONG, RIGHT = '10.1/wrong', '10.1/right'
+
+
+def pubid_article():
+    return article(base={'galley': galley('Same.'), 'jats': jats_refs(WRONG)},
+                   head={'galley': galley('Same.'), 'jats': jats_refs(RIGHT)})
+
+
+def pubid_current():
+    return {HTML: p14.wrap(galley('Same.')), XML: jats_refs(WRONG)}
+
+
+def test_a_pub_id_only_change_is_invisible_to_the_text_comparison():
+    writes, report = p14.plan([pubid_article()], GALLEYS, pubid_current())
+    assert writes == []
+    assert [r['state'] for r in report] == ['unchanged', 'unchanged']
+
+
+def test_exact_bytes_replaces_the_jats_and_says_why():
+    writes, report = p14.plan([pubid_article()], GALLEYS, pubid_current(),
+                              exact=('jats',))
+    assert [(w[0], w[1]) for w in writes] == [(XML, jats_refs(RIGHT))]
+    assert [r['state'] for r in report] == ['unchanged', 'bytes-only']
+    assert 'bytes differ only' in report[1]['note']
+
+
+def test_exact_bytes_html_is_a_separate_ask():
+    cur = pubid_current()
+    cur[HTML] = '<html><body>' + galley('Same.') + '</body></html>'  # unwrapped copy
+    writes, _ = p14.plan([pubid_article()], GALLEYS, cur, exact=('jats',))
+    assert [w[0] for w in writes] == [XML]
+    writes, report = p14.plan([pubid_article()], GALLEYS, cur, exact=('jats', 'html'))
+    assert [w[0] for w in writes] == [HTML, XML]
+    assert report[0]['state'] == 'bytes-only'
+
+
+def test_exact_bytes_leaves_a_file_already_at_the_head_alone():
+    cur = pubid_current()
+    cur[XML] = jats_refs(RIGHT)
+    writes, report = p14.plan([pubid_article()], GALLEYS, cur, exact=('jats',))
+    assert writes == [] and report[1]['state'] == 'unchanged'
+
+
+def run_main(monkeypatch, tmp_path, argv, on_disk):
+    """main() against a fake OJS: returns (stdout, files written)."""
+    import sys
+    wrote = []
+    monkeypatch.setattr(p14, 'backups_dir', lambda d: tmp_path / 'bk')
+    monkeypatch.setattr(p14, 'changed_articles', lambda *a, **k: [pubid_article()])
+    monkeypatch.setattr(p14, 'fetch_galleys', lambda t, ids: GALLEYS)
+    info = tarfile.TarInfo('x')
+    info.mode, info.uid, info.gid, info.uname, info.gname = 0o644, 33, 33, 'www-data', 'www-data'
+    monkeypatch.setattr(p14, 'read_files',
+                        lambda t, paths: {p: (on_disk[p], info) for p in paths})
+    monkeypatch.setattr(p14, 'queue_counts', lambda t: (0, 0))
+    monkeypatch.setattr(p14, 'write_files', lambda t, files: wrote.extend(files))
+    monkeypatch.setattr(p14, 'reindex', lambda t, ids: None)
+    monkeypatch.setattr(sys, 'argv', ['pipe14', '--target', 'dev', '--repo', 'r',
+                                      '--base', 'a', '--head', 'b'] + argv)
+    return wrote
+
+
+def test_dry_run_reports_why_and_writes_nothing(monkeypatch, tmp_path, capsys):
+    wrote = run_main(monkeypatch, tmp_path, ['--exact-bytes'], pubid_current())
+    p14.main()
+    out = capsys.readouterr().out
+    assert 'JATS XML  bytes-only  +0 -0 words  bytes differ only' in out
+    assert 'DRY RUN' in out and wrote == []
+
+
+def test_write_backs_up_and_restore_puts_it_back(monkeypatch, tmp_path, capsys):
+    wrote = run_main(monkeypatch, tmp_path, ['--exact-bytes', '--confirm',
+                                             '--out-dir', str(tmp_path / 'bk')],
+                     pubid_current())
+    p14.main()
+    assert [(p, d) for p, d, _ in wrote] == [(XML, jats_refs(RIGHT).encode())]
+    wrote.clear()
+    assert (tmp_path / 'bk' / 'files' / p14.rel(XML)).read_text() == jats_refs(WRONG)
+
+    class Args:
+        restore, target, confirm, no_reindex = str(tmp_path / 'bk'), 'dev', True, True
+
+    p14.restore(Args)
+    assert [(p, d) for p, d, _ in wrote] == [(XML, jats_refs(WRONG).encode())]
+
+
+def test_without_the_flag_the_same_run_writes_nothing(monkeypatch, tmp_path, capsys):
+    wrote = run_main(monkeypatch, tmp_path, [], pubid_current())
+    p14.main()
+    assert wrote == [] and '0 file(s) to write' in capsys.readouterr().out
+
+
+def test_exact_bytes_html_needs_exact_bytes(monkeypatch, tmp_path):
+    import pytest
+    run_main(monkeypatch, tmp_path, ['--exact-bytes-html'], pubid_current())
+    with pytest.raises(SystemExit):
+        p14.main()
+
+
+def test_the_out_dir_guard_still_holds_with_exact_bytes(monkeypatch, tmp_path):
+    import pytest
+    import sys
+    monkeypatch.setattr(sys, 'argv', [
+        'pipe14', '--target', 'dev', '--repo', 'r', '--base', 'a', '--head', 'b',
+        '--exact-bytes', '--confirm', '--out-dir', str(tmp_path / 'elsewhere')])
+    with pytest.raises(SystemExit, match='--out-dir must be inside'):
+        p14.main()

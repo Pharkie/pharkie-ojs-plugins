@@ -35,6 +35,10 @@ Usage (from this repo's root; --repo is a checkout of sea-ojs-private):
     python3 backfill/html_pipeline/pipe14_replace_text.py \\
         --restore <dir> --target live [--confirm]    # put the backed-up files back
 
+--exact-bytes replaces a JATS galley whenever its bytes differ from the head's,
+not only its <body> text (state `bytes-only`; the dry run says why each file is
+written). --exact-bytes-html adds the same for Full Text galleys.
+
 --only <issue>/<stem> (repeatable) narrows the run. --confirm refuses while the
 OJS job queue holds jobs (the reindex drains the queue). After writing it
 dispatches one search reindex job per changed submission and drains them.
@@ -156,13 +160,18 @@ def classify(current, base, head):
     return 'other'
 
 
-def plan(articles, galleys, current, include_other=False):
+def plan(articles, galleys, current, include_other=False, exact=()):
     """What to write.
 
     articles: changed_articles(); galleys: {submission_id: [(label, container
     path, mime)]} (pipe13 fetch_galleys); current: {container path: str}.
     Returns (writes, report): writes is [(path, new text, submission id)],
     report one dict per galley file (tag, galley, state, note).
+
+    exact: kinds ('jats', 'html') compared by bytes as well as text. A file
+    whose <body> text is the head's but whose bytes are not (a change only in
+    the JATS <back>, e.g. a reference's <pub-id>) is state 'bytes-only' and is
+    written; the note says why. Without it such a file is 'unchanged'.
     """
     writes, report = [], []
 
@@ -192,8 +201,15 @@ def plan(articles, galleys, current, include_other=False):
                 row(tag, label, 'missing', f'submission {sid} has no {label} galley on disk')
                 continue
             state = classify(current[path], base, new)
-            write = state == 'change' or (state == 'other' and include_other)
+            if state == 'unchanged' and kind in exact and current[path] != new:
+                state = 'bytes-only'
+            write = (state in ('change', 'bytes-only')
+                     or (state == 'other' and include_other))
             note = f'submission {sid}'
+            if state == 'change':
+                note = f'text differs  {note}'
+            elif state == 'bytes-only':
+                note = f'bytes differ only (text is the same)  {note}'
             if state != 'unchanged':
                 added, removed = word_changes(body_of(current[path]), body_of(new))
                 note = f'+{added} -{removed} words  {note}'
@@ -320,6 +336,12 @@ def main():
     ap.add_argument('--only', action='append', default=[])
     ap.add_argument('--include-other', action='store_true',
                     help='also replace files that are neither the base nor the head')
+    ap.add_argument('--exact-bytes', action='store_true',
+                    help='also replace a JATS galley whose bytes differ from the head '
+                         'even when its text is the same (a change only in the JATS '
+                         'structure, e.g. reference DOIs)')
+    ap.add_argument('--exact-bytes-html', action='store_true',
+                    help='with --exact-bytes, the same for the Full Text HTML galleys')
     ap.add_argument('--confirm', action='store_true')
     ap.add_argument('--out-dir', help='where --confirm keeps the backup and manifest')
     ap.add_argument('--no-reindex', action='store_true')
@@ -329,6 +351,9 @@ def main():
         return restore(args)
     if not (args.repo and args.base and args.head):
         ap.error('--repo, --base and --head are needed (or --restore)')
+    if args.exact_bytes_html and not args.exact_bytes:
+        ap.error('--exact-bytes-html needs --exact-bytes')
+    exact = (('jats',) if args.exact_bytes else ()) + (('html',) if args.exact_bytes_html else ())
     if args.confirm and not args.out_dir:
         ap.error('--confirm needs --out-dir for the backup')
     if args.out_dir:
@@ -342,7 +367,7 @@ def main():
     paths = [p for g in galleys.values() for (_, p, m) in g if m == 'text/html' or 'xml' in m]
     on_disk = read_files(args.target, paths)
     writes, report = plan(articles, galleys, {p: t for p, (t, _) in on_disk.items()},
-                          args.include_other)
+                          args.include_other, exact)
     states = {}
     for r in report:
         print(f"{r['tag']}  {r['galley']}  {r['state']}  {r['note']}".rstrip())
