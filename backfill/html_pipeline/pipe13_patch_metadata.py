@@ -327,6 +327,7 @@ def replace_galley_files(target, copies):
 
 
 def reindex(target, submission_ids):
+    """Dispatch the scoped reindex, drain it, settle failures. True if clean."""
     php_src = (SCRIPT_DIR / 'pipe13_reindex.php').read_text()
     cmd = ojs_php_cmd(target, submission_ids)
     proc = subprocess.run(cmd, input=php_src, capture_output=True, text=True,
@@ -335,23 +336,8 @@ def reindex(target, submission_ids):
     if proc.returncode != 0:
         print('WARNING: reindex dispatch failed — run it manually or accept '
               'a stale search entry for these articles.', file=sys.stderr)
-        return
-    # Drain just these jobs: one `run --once` per job, plus a couple spare.
-    drain = 'cd /var/www/html && php lib/pkp/tools/jobs.php run --once'
-    for _ in range(len(submission_ids) + 2):
-        if target == 'dev':
-            p = subprocess.run(['docker', 'compose', 'exec', '-T', 'ojs',
-                                'bash', '-c', drain],
-                               capture_output=True, text=True, timeout=120)
-        else:
-            p = subprocess.run(['ssh', 'sea-live',
-                                'cd /opt/pharkie-ojs-plugins && docker compose '
-                                f'exec -T ojs bash -c "{drain}"'],
-                               capture_output=True, text=True, timeout=120)
-        if 'No jobs' in (p.stdout + p.stderr):
-            break
-        time.sleep(1)
-    print(f'Reindexed {len(submission_ids)} submission(s).')
+        return False
+    return settle_queue(target, len(set(submission_ids)))
 
 
 def full_name(given, family):
@@ -704,6 +690,36 @@ def drain(target, n):
         time.sleep(1)
 
 
+def settle_queue(target, n):
+    """Drain the n jobs just dispatched, redispatch the ones that failed, drain
+    again, and report the final counts. True only if nothing is left queued
+    or failed.
+
+    Why: UpdateSubmissionSearchJob fails the first time a queue worker picks
+    it up ("Call to a member function getContext() on null": no request
+    context on the queue) and succeeds when redispatched. Redispatch is
+    limited to failures that are all search jobs; anything else in
+    failed_jobs is not ours and is left alone, and reported as a failure.
+    """
+    drain(target, n)
+    total, search = failed_search_jobs(target)
+    print(f'Failed jobs after the first pass: {total} ({search} search reindex).')
+    if total and total == search:
+        ojs_shell(target, 'cd /var/www/html && php lib/pkp/tools/jobs.php '
+                          'failed --redispatch')
+        drain(target, total)
+    elif total:
+        print("NOT redispatching: the failures are not all search jobs, so they "
+              "may not be this run's. Look at failed_jobs before anything else.",
+              file=sys.stderr)
+    jobs, failed = queue_counts(target)
+    print(f'Queue now: {jobs} queued, {failed} failed (both should be 0).')
+    if jobs or failed:
+        print('ERROR: search reindex is not settled; search may hold the old '
+              'text. Check the queue on the box.', file=sys.stderr)
+    return not (jobs or failed)
+
+
 def unpublish_via_ojs(target, ids):
     php_src = (SCRIPT_DIR / 'pipe13_unpublish.php').read_text()
     cmd = ojs_php_cmd(target, ['--confirm', *ids])
@@ -746,7 +762,6 @@ def run_spec(args):
               "through OJS's own unpublish")
     redeposit = plan['redeposit']
     n_dois = sum(len(v) for v in redeposit.values())
-    expect_failed = len(set(plan['reindex'])) + len(plan['unpublish'])
     print(f"\nSUMMARY {len(changes)} change(s), {len(plan['unpublish'])} unpublish, "
           f"{len(set(plan['reindex']))} reindex, {n_dois} DOI(s) to redeposit "
           f'across {len(redeposit)} issue(s), {len(blocked)} not patched')
@@ -804,24 +819,15 @@ def run_spec(args):
     if plan['unpublish']:
         unpublish_via_ojs(args.target, [sid for sid, _ in plan['unpublish']])
 
+    settled = True
     if plan['reindex'] and not args.no_reindex:
-        reindex(args.target, sorted(set(plan['reindex'])))
-    drain(args.target, expect_failed)
-    total, search = failed_search_jobs(args.target)
-    print(f'Failed jobs after the first pass: {total} ({search} search reindex); '
-          f'at most {expect_failed}, all search reindex.')
-    if total == search and total <= expect_failed:
-        ojs_shell(args.target, 'cd /var/www/html && php lib/pkp/tools/jobs.php '
-                               'failed --redispatch')
-        drain(args.target, expect_failed)
-        total, search = failed_search_jobs(args.target)
-        jobs, _ = queue_counts(args.target)
-        print(f'After redispatch: {total} failed, {jobs} queued (both should be 0).')
-    else:
-        print('NOT redispatching: the failures are not exactly this run\'s '
-              'search jobs. Look at failed_jobs before anything else.')
+        settled = reindex(args.target, sorted(set(plan['reindex'])))
+    elif plan['unpublish']:
+        settled = settle_queue(args.target, len(plan['unpublish']))
     print('\nCrossref still holds the old metadata. Redeposit with the lines in '
           f'{deposit_file} (dry run, then add --confirm).')
+    if not settled:
+        sys.exit(1)
 
 
 def main():
@@ -978,14 +984,17 @@ def main():
         print(f'\nApplied {len(updates)} update(s) on {args.target}.')
     if copies:
         replace_galley_files(args.target, copies)
+    settled = True
     if args.no_reindex:
         print('Reindex skipped (--no-reindex): search still holds the old '
               'metadata for these articles.')
     else:
-        reindex(args.target, sorted(set(changed_submissions)))
+        settled = reindex(args.target, sorted(set(changed_submissions)))
     print('Remember: OJS is patched, but Crossref metadata is not — if an '
           'author or title changed on an article with a registered DOI, '
           'redeposit it: pipe12_deposit_dois.sh <vol.iss> --redeposit <doi>.')
+    if not settled:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

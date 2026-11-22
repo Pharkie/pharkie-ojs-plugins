@@ -59,7 +59,8 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from pipe13_patch_metadata import (  # noqa: E402
-    SCRIPT_DIR as _P13_DIR, backups_dir, fetch_galleys, ojs_php_cmd, queue_counts)
+    SCRIPT_DIR as _P13_DIR, backups_dir, fetch_galleys, ojs_php_cmd, queue_counts,
+    settle_queue)
 
 FILES_ROOT = '/var/www/files'
 SOURCE = re.compile(r'^backfill/output/([^/]+)/(.+)\.(galley\.html|jats\.xml)$')
@@ -274,6 +275,7 @@ def write_files(target, files):
 
 
 def reindex(target, ids):
+    """Dispatch the scoped reindex, drain, redispatch failures. True if clean."""
     php_src = (_P13_DIR / 'pipe13_reindex.php').read_text()
     for i in range(0, len(ids), 200):
         chunk = ids[i:i + 200]
@@ -282,12 +284,11 @@ def reindex(target, ids):
         if p.returncode != 0:
             print('WARNING: reindex dispatch failed; search keeps the old words '
                   'for these articles until a reindex.', file=sys.stderr)
-            return
-    drain = ('cd /var/www/html && for i in $(seq %d); do '
-             'php lib/pkp/tools/jobs.php run --once 2>&1 | grep -q "No jobs" && break; done'
-             % (len(ids) + 2))
-    subprocess.run(ojs_cmd(target, drain), capture_output=True, timeout=7200)
-    print(f'Reindexed {len(ids)} submission(s).')
+            return False
+    ok = settle_queue(target, len(ids))
+    if ok:
+        print(f'Reindexed {len(ids)} submission(s).')
+    return ok
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -323,7 +324,9 @@ def restore(args):
     write_files(args.target, files)
     ids = sorted({int(p.split('/articles/')[1].split('/')[0]) for p, _, _ in files if '/articles/' in p})
     if not args.no_reindex:
-        reindex(args.target, ids)
+        if not reindex(args.target, ids):
+            print('Restored, but the reindex is not settled.', file=sys.stderr)
+            sys.exit(1)
     print('Restored.')
 
 
@@ -380,21 +383,25 @@ def main():
     if not args.confirm:
         print('DRY RUN: nothing written. Re-run with --confirm --out-dir <dir>.')
         return
-    jobs, _ = queue_counts(args.target)
-    if jobs:
-        raise SystemExit(f'Refusing --confirm: the OJS job queue holds {jobs} job(s); '
-                         'the reindex would drain them too.')
+    jobs, failed = queue_counts(args.target)
+    if jobs or failed:
+        raise SystemExit(f'Refusing --confirm: the OJS job queue holds {jobs} job(s) '
+                         f'and {failed} failed job(s); the reindex would drain and '
+                         'redispatch them too.')
     save_backup(args.out_dir, args.base, args.head,
                 [(p, on_disk[p][0], on_disk[p][1]) for p, _, _ in writes])
     print(f'Backed up {len(writes)} file(s) to {args.out_dir}.')
     write_files(args.target, [(p, new.encode('utf-8'), on_disk[p][1]) for p, new, _ in writes])
     print(f'Wrote {len(writes)} file(s).')
+    settled = True
     if args.no_reindex:
         print('Reindex skipped (--no-reindex): search holds the old words.')
     else:
-        reindex(args.target, sorted({sid for _, _, sid in writes}))
+        settled = reindex(args.target, sorted({sid for _, _, sid in writes}))
     print(f'Undo: python3 backfill/html_pipeline/pipe14_replace_text.py '
           f'--restore {args.out_dir} --target {args.target} --confirm')
+    if not settled:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
