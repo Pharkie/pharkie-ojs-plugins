@@ -216,13 +216,16 @@ backfill/html_pipeline/pipe12_deposit_dois.sh <vol>.<iss> --host=sea-live \
    `UpdateSubmissionSearchJob` dies with `Call to a member function
    getContext() on null` when the worker picks it up, because there is no
    request context on the queue. The same job succeeds when pushed back
-   through, so after every pipe13 run:
+   through. pipe13 (both modes) and pipe14 now do this themselves: drain,
+   `jobs.php failed --redispatch` (only if every failure is a search job),
+   drain, then print the final queued/failed counts and exit non-zero if
+   either is not 0. By hand, if ever needed:
 
    ```bash
    php lib/pkp/tools/jobs.php failed --redispatch
    ```
 
-   Skip it and two things follow: the article's searchable text stays on the
+   Left failed, two things follow: the article's searchable text stays on the
    pre-correction version, and job monitoring alerts on the failures (one per
    article patched, so a batch is a batch of alerts). Confirm it worked with a
    site search for a phrase that exists only in the corrected text, rather than

@@ -175,3 +175,39 @@ def test_the_batch_is_one_utf8mb4_transaction():
     sql = transaction(['UPDATE x SET y=1;'])
     assert sql.splitlines() == ['SET NAMES utf8mb4;', 'START TRANSACTION;',
                                 'UPDATE x SET y=1;', 'COMMIT;']
+
+
+# ── settle_queue: the first-run reindex failure is redispatched ─────────────
+
+def _settle_env(monkeypatch, failed_seq, counts_seq):
+    import backfill.html_pipeline.pipe13_patch_metadata as p13
+    calls = []
+    monkeypatch.setattr(p13, 'drain', lambda t, n: calls.append('drain'))
+    monkeypatch.setattr(p13, 'ojs_shell', lambda t, c, timeout=300: calls.append(c))
+    monkeypatch.setattr(p13, 'failed_search_jobs', lambda t: failed_seq.pop(0))
+    monkeypatch.setattr(p13, 'queue_counts', lambda t: counts_seq.pop(0))
+    return p13, calls
+
+
+def test_settle_redispatches_search_failures_and_reports_clean(monkeypatch):
+    p13, calls = _settle_env(monkeypatch, [(2, 2)], [(0, 0)])
+    assert p13.settle_queue('dev', 2) is True
+    assert any('failed --redispatch' in str(c) for c in calls)
+    assert calls.count('drain') == 2
+
+
+def test_settle_fails_if_a_job_is_still_failed(monkeypatch):
+    p13, _ = _settle_env(monkeypatch, [(1, 1)], [(0, 1)])
+    assert p13.settle_queue('dev', 1) is False
+
+
+def test_settle_leaves_foreign_failures_alone(monkeypatch):
+    p13, calls = _settle_env(monkeypatch, [(3, 1)], [(0, 3)])
+    assert p13.settle_queue('dev', 1) is False
+    assert not any('redispatch' in str(c) for c in calls)
+
+
+def test_settle_with_nothing_failed_does_not_redispatch(monkeypatch):
+    p13, calls = _settle_env(monkeypatch, [(0, 0)], [(0, 0)])
+    assert p13.settle_queue('dev', 1) is True
+    assert not any('redispatch' in str(c) for c in calls)

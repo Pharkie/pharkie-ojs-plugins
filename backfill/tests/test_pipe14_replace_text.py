@@ -148,7 +148,7 @@ def test_restore_puts_the_backup_back(tmp_path, monkeypatch):
     p14.save_backup(tmp_path, 'aaa', 'bbb', [(HTML, p14.wrap(galley(BASE)), old)])
     put = []
     monkeypatch.setattr(p14, 'write_files', lambda target, files: put.extend(files))
-    monkeypatch.setattr(p14, 'reindex', lambda target, ids: put.append(('reindex', ids)))
+    monkeypatch.setattr(p14, 'reindex', lambda target, ids: put.append(('reindex', ids)) or True)
 
     class Args:
         restore, target, confirm, no_reindex = str(tmp_path), 'dev', True, False
@@ -227,7 +227,7 @@ def run_main(monkeypatch, tmp_path, argv, on_disk):
                         lambda t, paths: {p: (on_disk[p], info) for p in paths})
     monkeypatch.setattr(p14, 'queue_counts', lambda t: (0, 0))
     monkeypatch.setattr(p14, 'write_files', lambda t, files: wrote.extend(files))
-    monkeypatch.setattr(p14, 'reindex', lambda t, ids: None)
+    monkeypatch.setattr(p14, 'reindex', lambda t, ids: True)
     monkeypatch.setattr(sys, 'argv', ['pipe14', '--target', 'dev', '--repo', 'r',
                                       '--base', 'a', '--head', 'b'] + argv)
     return wrote
