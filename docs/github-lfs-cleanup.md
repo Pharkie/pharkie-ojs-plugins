@@ -10,10 +10,9 @@ store on the Mac (`$SEA_JOURNAL_PDFS/store/<sha256>.pdf`, default
 `~/dev/SEA/journal-pdfs`), a copy in R2, and `backfill/pdfs.sha256` in git
 (an LFS oid is the content sha256). A new PDF goes in with
 `tools/pdfs.sh add` in sea-ojs-private. The OJS stages here already read either
-layout through `backfill/lib/paths.py`. Untracking them (`git rm --cached`, the
-two `.gitattributes` lines) is a later cut-over in sea-ojs-private; their past
-LFS objects stay billed until history is cleared, which waits for a full restore
-from R2. The "should stay" below predates this.
+layout through `backfill/lib/paths.py`. They were untracked on 23 Nov (sea-ojs-private
+#185); their past LFS objects stay billed until history is cleared, which
+happens only after a FULL restore from R2 has been proved (not one hash). The "should stay" below predates this.
 
 ## What is actually stored
 

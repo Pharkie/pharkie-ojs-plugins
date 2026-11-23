@@ -69,8 +69,8 @@ backfill/private/output/37.1/
 ### Where the journal PDFs are
 
 The print issues (`input/<vol.iss>.pdf`) and the per-article PDFs
-(`output/<vol.iss>/*.pdf`, including a presaved `issue-galley.pdf`) are leaving
-git; the galleys, JATS and toc.json stay. After the cut-over in sea-ojs-private,
+(`output/<vol.iss>/*.pdf`, including a presaved `issue-galley.pdf`) are not in
+git (they left on 23 Nov); the galleys, JATS and toc.json stay.
 `backfill/pdfs.sha256` lists every PDF (shasum format, paths relative to
 `backfill/`) and the bytes are in `$SEA_JOURNAL_PDFS/store/<sha256>.pdf`
 (default `~/dev/SEA/journal-pdfs`). A PDF goes in with
@@ -78,10 +78,10 @@ git; the galleys, JATS and toc.json stay. After the cut-over in sea-ojs-private,
 tree.
 
 Every stage here reads a PDF through `backfill/lib/paths.py` (`resolve_pdf`), so
-it works with either layout:
+it also reads a ref from before the cut-over:
 
 1. the checkout's own manifest lists the path: the store file, re-hashed;
-2. else the file in the tree (before the cut-over); an un-smudged LFS pointer is
+2. else the file in the tree (a checkout from before the cut-over); an un-smudged LFS pointer is
    read from the store by its oid;
 3. neither, or the store lacks the listed hash: the stage **fails**, naming the
    path and hash. Nothing skips a missing PDF.
