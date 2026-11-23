@@ -18,6 +18,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+RESOLVE="$PROJECT_DIR/backfill/lib/paths.py"
 HOST=""
 DRY_RUN=""
 REPLACE=""
@@ -86,19 +87,16 @@ MAX_FAILURES=3
 IFS=$'\n' SORTED_DIRS=($(for d in "${ISSUE_DIRS[@]}"; do echo "$d"; done | sort -t/ -k$(echo "${ISSUE_DIRS[0]}" | tr '/' '\n' | wc -l | tr -d ' ') -V))
 unset IFS
 
-for ISSUE_DIR in "${SORTED_DIRS[@]}"; do
-  TOC="$ISSUE_DIR/toc.json"
-  if [ ! -f "$TOC" ]; then
-    echo "SKIP: No toc.json in $ISSUE_DIR"
-    SKIPPED=$((SKIPPED + 1))
-    continue
-  fi
-
+# Read an issue's toc.json and resolve its PDF: the presaved issue-galley.pdf
+# if the corpus has one, else the print issue, both through lib/paths.py (the
+# manifest and store after the cut-over). Sets VOL ISS DATE VOL_ISS PRESAVED
+# SOURCE_PDF; prints a FAIL naming the path and hash and returns 1 if missing.
+resolve_issue() {
   # Read metadata from toc.json
   read -r VOL ISS DATE < <(python3 -c "
 import json, re, sys
 from datetime import datetime
-d = json.load(open('$TOC'))
+d = json.load(open('$1/toc.json'))
 vol = d['volume']
 iss = d.get('issue', d.get('number', ''))
 raw = d.get('date_published', d.get('date', ''))
@@ -117,14 +115,55 @@ print(f'{vol} {iss} {date}')
     VOL_ISS="$VOL"
   fi
 
-  # Find source PDF
-  SOURCE_PDF="$PROJECT_DIR/backfill/private/input/${VOL_ISS}.pdf"
-  if [ ! -f "$SOURCE_PDF" ]; then
-    SOURCE_PDF="$PROJECT_DIR/backfill/private/input/${VOL}.pdf"
+  PRESAVED=""
+  SOURCE_PDF=""
+  if ! PRESAVED=$(python3 "$RESOLVE" resolve --optional "$1/issue-galley.pdf"); then
+    echo "FAIL: $VOL_ISS — presaved issue galley listed but unreadable (above)"
+    return 1
   fi
-  if [ ! -f "$SOURCE_PDF" ]; then
-    echo "SKIP: No source PDF for $VOL_ISS"
+  if [ -z "$PRESAVED" ]; then
+    for NAME in "${VOL_ISS}" "${VOL}"; do
+      if ! SOURCE_PDF=$(python3 "$RESOLVE" resolve --optional "$PROJECT_DIR/backfill/private/input/${NAME}.pdf"); then
+        SOURCE_PDF="!"
+        break
+      fi
+      [ -n "$SOURCE_PDF" ] && break
+    done
+    if [ "$SOURCE_PDF" = "!" ]; then
+      echo "FAIL: $VOL_ISS — source PDF listed but unreadable (above)"
+      return 1
+    fi
+    if [ -z "$SOURCE_PDF" ]; then
+      echo "FAIL: $VOL_ISS — no source PDF: neither backfill/private/input/${VOL_ISS}.pdf nor ${VOL}.pdf is in the tree or the manifest"
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+# Preflight: every issue's PDF must resolve before anything is written, so a
+# missing one cannot leave a live run half done.
+PREFAIL=0
+for ISSUE_DIR in "${SORTED_DIRS[@]}"; do
+  [ -f "$ISSUE_DIR/toc.json" ] || continue
+  resolve_issue "$ISSUE_DIR" || PREFAIL=$((PREFAIL + 1))
+done
+if [ "$PREFAIL" -ne 0 ]; then
+  echo "ERROR: $PREFAIL issue(s) have no readable PDF (above); nothing written."
+  exit 1
+fi
+
+for ISSUE_DIR in "${SORTED_DIRS[@]}"; do
+  TOC="$ISSUE_DIR/toc.json"
+  if [ ! -f "$TOC" ]; then
+    echo "SKIP: No toc.json in $ISSUE_DIR"
     SKIPPED=$((SKIPPED + 1))
+    continue
+  fi
+
+  if ! resolve_issue "$ISSUE_DIR"; then
+    FAILED=$((FAILED + 1))
     continue
   fi
 
@@ -158,9 +197,8 @@ print(f'{vol} {iss} {date}')
   fi
 
   # Use pre-saved cleaned PDF if available, otherwise re-save from source
-  PRESAVED="$ISSUE_DIR/issue-galley.pdf"
   CLEAN_PDF="/tmp/issue-galley-${VOL_ISS}.pdf"
-  if [ -f "$PRESAVED" ]; then
+  if [ -n "$PRESAVED" ]; then
     cp "$PRESAVED" "$CLEAN_PDF"
     CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
     RESULT="${CLEAN_SIZE}b (pre-saved)"
@@ -243,3 +281,4 @@ done
 
 echo ""
 echo "Done: $ADDED added, $SKIPPED skipped, $FAILED failed"
+[ "$FAILED" -eq 0 ] || exit 1
