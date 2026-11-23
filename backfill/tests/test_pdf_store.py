@@ -53,7 +53,9 @@ def corpus(tmp_path, manifest=None, tracked=False):
     issue = backfill / 'output' / '37.2'
     issue.mkdir(parents=True)
     (backfill / 'input').mkdir()
-    (issue / '01-editorial.jats.xml').write_text('<article/>')
+    (issue / '01-editorial.jats.xml').write_text(
+        '<article><back><ref-list><ref id="r1"><mixed-citation>Heidegger, M. (1927). '
+        'Being and Time.</mixed-citation></ref></ref-list></back></article>')
     (issue / '01-editorial.galley.html').write_text('<p>Editorial</p>')
     if tracked:
         (issue / '01-editorial.pdf').write_bytes(PDF)
@@ -101,6 +103,13 @@ def test_pipe6_embeds_the_store_copy(tmp_path, store):
 
     assert embedded_pdf(xml) == PDF
     assert '<name locale="en">01-editorial.pdf</name>' in xml
+    # The tree PDF is absent, but the JATS and galley HTML beside it are not:
+    # the article must keep all three galleys and its citations, or an import
+    # strips them from OJS (the 3 Aug 2026 failure).
+    assert 'extension="html"' in xml
+    assert 'extension="xml"' in xml
+    assert xml.count('<article_galley') == 3
+    assert 'Being and Time' in xml
 
 
 def test_the_manifest_wins_over_a_stale_tree_copy(tmp_path, store):
@@ -131,10 +140,26 @@ def test_without_a_manifest_the_tracked_file_is_used(tmp_path, store):
     assert embedded_pdf(xml) == PDF
 
 
-def test_a_path_the_manifest_does_not_list_falls_back_to_the_tree(tmp_path, store):
+def test_once_there_is_a_manifest_an_unlisted_tree_file_is_not_used(tmp_path, store):
+    """A file left on disk after `git rm --cached` is not part of the corpus."""
     _, issue, _ = corpus(tmp_path, {'input/37.2.pdf': put(store, b'x')}, tracked=True)
 
-    assert resolve_pdf(str(issue / '01-editorial.pdf')) == str(issue / '01-editorial.pdf')
+    with pytest.raises(MissingPdf, match='does not list it'):
+        resolve_pdf(str(issue / '01-editorial.pdf'))
+    assert resolve_pdf(str(issue / '01-editorial.pdf'), required=False) is None
+
+
+def test_the_cover_falls_back_to_a_presaved_issue_galley(tmp_path, store):
+    import fitz
+    doc = fitz.open()
+    doc.new_page()
+    cover_pdf = doc.tobytes()
+    _, _, toc = corpus(tmp_path, {'output/37.2/issue-galley.pdf': put(store, cover_pdf)})
+
+    from backfill.html_pipeline.pipe6_ojs_xml import generate_cover_image
+    name, data = generate_cover_image(str(toc), 37, 2)
+
+    assert name == 'cover-37-2.jpg' and data
 
 
 def test_an_unsmudged_lfs_pointer_reads_through_the_store(tmp_path, store):
@@ -233,7 +258,12 @@ def test_pipe9_resolves_every_pdf_through_paths_py():
     """pipe9 used to test `-f` on the input path and print SKIP."""
     src = open(os.path.join(os.path.dirname(__file__), '..', 'html_pipeline',
                             'pipe9_issue_galleys.sh'), encoding='utf-8').read()
-    assert 'resolve --optional "$ISSUE_DIR/issue-galley.pdf"' in src
+    assert 'resolve --optional "$1/issue-galley.pdf"' in src
+    # Every issue resolves before the loop that writes to OJS.
+    preflight = src.index('PREFAIL=0')
+    assert preflight < src.index('INSERT INTO issue_files')
+    assert preflight < src.index('copy_to_ojs "$CLEAN_PDF"')
+    assert 'nothing written."\n  exit 1' in src
     assert 'SKIP: No source PDF' not in src
     assert '[ -f "$PRESAVED" ]' not in src
 

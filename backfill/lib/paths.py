@@ -113,12 +113,13 @@ def _read_manifest(manifest_path):
     return entries
 
 
-def manifest_entry(path):
-    """(manifest_path, relpath, sha256) for a tree path, or None.
+def find_manifest(path):
+    """(manifest_path, relpath, sha256 or None) for a tree path, or None.
 
     The manifest is the nearest ``pdfs.sha256`` above the path (the checkout's
     own ``backfill/``), so a branch resolves to its own PDFs, never main's.
-    None when there is no manifest above it or it does not list the path.
+    None when there is no manifest above it; sha256 None when it does not list
+    the path.
     """
     path = os.path.abspath(path)
     d = os.path.dirname(path)
@@ -126,12 +127,17 @@ def manifest_entry(path):
         candidate = os.path.join(d, MANIFEST_NAME)
         if os.path.isfile(candidate):
             rel = os.path.relpath(path, d).replace(os.sep, '/')
-            digest = _read_manifest(candidate).get(rel)
-            return (candidate, rel, digest) if digest else None
+            return candidate, rel, _read_manifest(candidate).get(rel)
         parent = os.path.dirname(d)
         if parent == d:
             return None
         d = parent
+
+
+def manifest_entry(path):
+    """(manifest_path, relpath, sha256) when a manifest lists the path, else None."""
+    found = find_manifest(path)
+    return found if found and found[2] else None
 
 
 def _sha256(path):
@@ -172,19 +178,28 @@ def _from_store(tree_path, digest, why, verify):
 def resolve_pdf(path, required=True, verify=True):
     """The file holding the bytes of the PDF at tree path ``path``.
 
-    1. The checkout's manifest lists it: ``store/<sha256>.pdf``, re-hashed
-       (``verify``) because callers here install into OJS.
-    2. Else the file in the tree. An un-smudged LFS pointer is read through
-       the store by its oid (an LFS oid is the content sha256).
-    3. Neither: raise ``MissingPdf`` naming the path (and hash), unless
+    1. The checkout has a manifest: if it lists the path, ``store/<sha256>.pdf``,
+       re-hashed (``verify``) because callers here install into OJS. If it
+       does not, the PDF is not in the corpus: a file left in the tree (an
+       untracked leftover of the cut-over) is never used.
+    2. No manifest (before the cut-over): the file in the tree. An un-smudged
+       LFS pointer is read through the store by its oid (an LFS oid is the
+       content sha256).
+    3. Not found: raise ``MissingPdf`` naming the path (and hash), unless
        ``required`` is False, which returns None for a PDF that is simply
        not part of the corpus (e.g. an optional presaved issue galley).
     """
     path = os.path.abspath(path)
-    entry = manifest_entry(path)
-    if entry:
-        manifest, _, digest = entry
-        return _from_store(path, digest, manifest, verify)
+    found = find_manifest(path)
+    if found:
+        manifest, _, digest = found
+        if digest:
+            return _from_store(path, digest, manifest, verify)
+        if not required:
+            return None
+        leftover = ' (a file is in the tree, but it is not part of the corpus)' \
+            if os.path.exists(path) else ''
+        raise MissingPdf(f'{path}: {manifest} does not list it{leftover}')
     if os.path.isfile(path):
         oid = _lfs_oid(path)
         if oid:

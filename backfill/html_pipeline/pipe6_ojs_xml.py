@@ -176,8 +176,15 @@ def generate_cover_image(toc_json_path, vol, iss, required=True):
     if fitz is None or not toc_json_path:
         return None, None
 
-    prepared_pdf = find_issue_pdf(toc_json_path, vol, iss, required=required)
+    # The print issue; else a presaved issue galley, whose first page is the
+    # same cover (an issue may carry only the presaved one).
+    prepared_pdf = find_issue_pdf(toc_json_path, vol, iss, required=False)
     if not prepared_pdf:
+        issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
+        prepared_pdf = resolve_pdf(os.path.join(issue_dir, 'issue-galley.pdf'), required=False)
+    if not prepared_pdf:
+        if required:
+            find_issue_pdf(toc_json_path, vol, iss)  # raises MissingPdf, naming the paths
         return None, None
 
     doc = fitz.open(prepared_pdf)
@@ -295,10 +302,11 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
 def _load_jats_tree(pdf_path):
     """Load and parse the JATS XML file for an article.
 
-    Looks for {split_pdf_stem}.jats.xml next to the split PDF.
+    Looks for {split_pdf_stem}.jats.xml next to the split PDF. Gated on the
+    JATS file, not the PDF: after the cut-over the PDF is not in the tree.
     Returns an ElementTree or None if no JATS file exists.
     """
-    if not pdf_path or not os.path.exists(pdf_path):
+    if not pdf_path:
         return None
 
     jats_path = os.path.splitext(pdf_path)[0] + '.jats.xml'
@@ -456,7 +464,7 @@ def load_jats_galley(pdf_path):
     Looks for {split_pdf_stem}.jats.xml next to the split PDF.
     Returns JATS content string or None if no file exists.
     """
-    if not pdf_path or not os.path.exists(pdf_path):
+    if not pdf_path:
         return None
 
     jats_path = os.path.splitext(pdf_path)[0] + '.jats.xml'
@@ -474,7 +482,7 @@ def load_html_galley(pdf_path):
     Wraps the body content in a full HTML document for OJS import.
     Returns HTML string or None if no pre-generated file exists.
     """
-    if not pdf_path or not os.path.exists(pdf_path):
+    if not pdf_path:
         return None
 
     html_path = os.path.splitext(pdf_path)[0] + '.galley.html'
