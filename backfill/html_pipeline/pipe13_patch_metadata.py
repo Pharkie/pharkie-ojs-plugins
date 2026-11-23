@@ -91,7 +91,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from lib.paths import load_toc  # noqa: E402
+from lib.paths import MissingPdf, load_toc, resolve_pdf  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -947,14 +947,25 @@ def main():
             for label, dest, mime in galleys.get(art['submission_id'], []):
                 key = 'xml' if 'xml' in mime else mime
                 local = art['galley_sources'].get(key)
+                if key == 'application/pdf' and local:
+                    # After the cut-over the PDF is in the store, not the
+                    # tree. A PDF the corpus lists but cannot read stops the
+                    # run before anything is written.
+                    try:
+                        local = resolve_pdf(local)
+                    except MissingPdf as e:
+                        print(f'ERROR: missing PDF, nothing written: {e}',
+                              file=sys.stderr)
+                        sys.exit(1)
                 if not local or not os.path.exists(local):
                     blocked.append(f"[{art['n']:02d}] no local file for "
                                    f"'{label}' galley ({mime}) — expected "
                                    f'{local}')
                     continue
+                shown = os.path.basename(art['galley_sources'][key])
                 copies.append((local, dest,
                                f"[{art['n']:02d}] {label} galley "
-                               f'({os.path.basename(local)} -> {dest})'))
+                               f'({shown} -> {dest})'))
             changed_submissions.append(art['submission_id'])
 
     print(f'Compared {len(articles)} article(s) against {args.target}.\n')

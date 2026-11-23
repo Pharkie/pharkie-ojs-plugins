@@ -16,9 +16,27 @@ The split PDF is always a sibling of the toc.json that describes it, so that is
 what we resolve against; the stored path is used only for its filename. This is
 a copy of ``scripts/pipeline/lib/paths.py`` in the Harbour repo -- deliberately,
 because the two repos share no code and this file is fifteen lines.
+
+**Where a PDF's bytes are** is a separate question from where it sits in the
+tree (``resolve_pdf`` below). The journal PDFs are leaving git: a checkout then
+carries ``backfill/pdfs.sha256`` (shasum format, paths relative to
+``backfill/``) and the bytes live in a content-addressed store,
+``$SEA_JOURNAL_PDFS/store/<sha256>.pdf`` (default ``~/dev/SEA/journal-pdfs``).
+``split_pdf`` stays the TREE path, because every stage derives the article's
+.jats.xml and .galley.html from it; only code that reads the PDF's bytes calls
+``resolve_pdf``.
 """
 
+import hashlib
 import os
+
+MANIFEST_NAME = 'pdfs.sha256'
+DEFAULT_STORE = os.path.join('~', 'dev', 'SEA', 'journal-pdfs')
+LFS_POINTER_PREFIX = b'version https://git-lfs.github.com/spec/'
+
+
+class MissingPdf(FileNotFoundError):
+    """A PDF the corpus says exists cannot be read. Never skip one quietly."""
 
 
 def article_pdf(toc_path, article):
@@ -33,7 +51,8 @@ def article_pdf(toc_path, article):
 
     vol_dir = os.path.dirname(os.path.abspath(toc_path))
     sibling = os.path.join(vol_dir, os.path.basename(stored))
-    if os.path.exists(sibling):
+    # After the cut-over the sibling is not on disk, only in the manifest.
+    if os.path.exists(sibling) or manifest_entry(sibling) is not None:
         return sibling
 
     # Fall back to the stored path, so a toc.json that deliberately points
@@ -62,3 +81,149 @@ def load_toc(toc_path):
             article['split_pdf'] = resolved
 
     return toc
+
+
+def store_dir():
+    """The content-addressed PDF store: ``$SEA_JOURNAL_PDFS/store``."""
+    root = os.environ.get('SEA_JOURNAL_PDFS') or DEFAULT_STORE
+    return os.path.join(os.path.abspath(os.path.expanduser(root)), 'store')
+
+
+_manifests = {}
+
+
+def _read_manifest(manifest_path):
+    """{relpath: sha256} from a shasum-format file, cached by mtime."""
+    mtime = os.path.getmtime(manifest_path)
+    cached = _manifests.get(manifest_path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    entries = {}
+    with open(manifest_path, encoding='utf-8') as f:
+        for n, line in enumerate(f, 1):
+            line = line.rstrip('\n')
+            if not line.strip():
+                continue
+            digest, _, rel = line.partition(' ')
+            rel = rel.lstrip(' ').lstrip('*')
+            if len(digest) != 64 or not rel:
+                raise ValueError(f'{manifest_path}:{n}: not a shasum line: {line!r}')
+            entries[rel] = digest.lower()
+    _manifests[manifest_path] = (mtime, entries)
+    return entries
+
+
+def manifest_entry(path):
+    """(manifest_path, relpath, sha256) for a tree path, or None.
+
+    The manifest is the nearest ``pdfs.sha256`` above the path (the checkout's
+    own ``backfill/``), so a branch resolves to its own PDFs, never main's.
+    None when there is no manifest above it or it does not list the path.
+    """
+    path = os.path.abspath(path)
+    d = os.path.dirname(path)
+    while True:
+        candidate = os.path.join(d, MANIFEST_NAME)
+        if os.path.isfile(candidate):
+            rel = os.path.relpath(path, d).replace(os.sep, '/')
+            digest = _read_manifest(candidate).get(rel)
+            return (candidate, rel, digest) if digest else None
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _lfs_oid(path):
+    """The sha256 an un-smudged LFS pointer file names, or None."""
+    with open(path, 'rb') as f:
+        head = f.read(200)
+    if not head.startswith(LFS_POINTER_PREFIX):
+        return None
+    for line in head.decode('ascii', 'replace').splitlines():
+        if line.startswith('oid sha256:'):
+            return line[len('oid sha256:'):].strip()
+    return None
+
+
+def _from_store(tree_path, digest, why, verify):
+    stored = os.path.join(store_dir(), f'{digest}.pdf')
+    if not os.path.isfile(stored):
+        raise MissingPdf(
+            f'{tree_path}: {why} lists sha256 {digest}, but the store has no '
+            f'{stored} (set SEA_JOURNAL_PDFS, or restore it: tools/pdfs.sh fetch '
+            f'{digest} in sea-ojs-private)')
+    if verify:
+        actual = _sha256(stored)
+        if actual != digest:
+            raise MissingPdf(f'{tree_path}: store file {stored} hashes to {actual}, '
+                             f'not the {digest} {why} lists')
+    return stored
+
+
+def resolve_pdf(path, required=True, verify=True):
+    """The file holding the bytes of the PDF at tree path ``path``.
+
+    1. The checkout's manifest lists it: ``store/<sha256>.pdf``, re-hashed
+       (``verify``) because callers here install into OJS.
+    2. Else the file in the tree. An un-smudged LFS pointer is read through
+       the store by its oid (an LFS oid is the content sha256).
+    3. Neither: raise ``MissingPdf`` naming the path (and hash), unless
+       ``required`` is False, which returns None for a PDF that is simply
+       not part of the corpus (e.g. an optional presaved issue galley).
+    """
+    path = os.path.abspath(path)
+    entry = manifest_entry(path)
+    if entry:
+        manifest, _, digest = entry
+        return _from_store(path, digest, manifest, verify)
+    if os.path.isfile(path):
+        oid = _lfs_oid(path)
+        if oid:
+            return _from_store(path, oid, 'its git-lfs pointer', verify)
+        return path
+    if not required:
+        return None
+    raise MissingPdf(f'{path}: no such PDF in the tree, and no {MANIFEST_NAME} '
+                     f'above it lists it')
+
+
+def main(argv=None):
+    """``paths.py resolve [--optional] <path>``: print where its bytes are.
+
+    For shell stages (pipe9). Exit 0 and print the path; with --optional and
+    no such PDF, exit 0 and print nothing; a missing PDF exits 2 with the
+    reason on stderr.
+    """
+    import sys
+
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] != 'resolve':
+        print('usage: paths.py resolve [--optional] <path>', file=sys.stderr)
+        return 64
+    args = args[1:]
+    optional = '--optional' in args
+    args = [a for a in args if a != '--optional']
+    if len(args) != 1:
+        print('usage: paths.py resolve [--optional] <path>', file=sys.stderr)
+        return 64
+    try:
+        found = resolve_pdf(args[0], required=not optional)
+    except MissingPdf as e:
+        print(f'MISSING PDF: {e}', file=sys.stderr)
+        return 2
+    if found:
+        print(found)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

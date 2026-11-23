@@ -40,9 +40,18 @@ No API key is needed. `pipe1d` does not call a model.
 ## 1. Stage the PDF and write the TOC
 
 ```bash
-cp "<supplied file>.pdf" backfill/private/input/<vol>.<iss>.pdf
+cd private && tools/pdfs.sh add "<supplied file>.pdf" input/<vol>.<iss>.pdf && cd ..
 mkdir -p backfill/private/output/<vol>.<iss>
 ```
+
+The journal PDFs are not in git: `pdfs add` puts the file in the store
+(`$SEA_JOURNAL_PDFS`, default `~/dev/SEA/journal-pdfs`), copies it to R2 and
+writes its line in `backfill/pdfs.sha256`; commit that line. Every PDF this
+runbook writes (the print issue, each split, a presaved `issue-galley.pdf`) goes
+in the same way, with its path relative to `backfill/`. The stages read a PDF
+through `backfill/lib/paths.py`, which takes the manifest's hash first and fails,
+naming the path and hash, when the store lacks it. Until sea-ojs-private's
+cut-over lands, a file copied to `backfill/private/input/` still works.
 
 Write `backfill/private/output/<vol>.<iss>/toc.json` following
 [the TOC guide](backfill-toc-guide.md). Note the optional `access` field: an
@@ -76,7 +85,8 @@ of how much they tell you:
 
 ```bash
 # 1. Is the staged input the file you were actually sent?
-shasum -a 256 backfill/private/input/<vol>.<iss>.pdf "/path/to/what Dean sent.pdf"
+grep ' input/<vol>.<iss>.pdf$' backfill/private/pdfs.sha256
+shasum -a 256 "/path/to/what Dean sent.pdf"                  # same hash?
 
 # 2. Did the IDs get snapshotted? If every JATS carries BOTH, the import
 #    completed and a future reimport will preserve URLs and DOIs.
@@ -109,7 +119,10 @@ and nothing else moved:
 ```bash
 python3 - <<'EOF'
 import fitz, re, difflib
-old = fitz.open('backfill/private/input/<vol>.<iss>.pdf')          # the published one
+import subprocess
+published = subprocess.check_output(['python3', 'backfill/lib/paths.py', 'resolve',
+                                     'backfill/private/input/<vol>.<iss>.pdf'], text=True).strip()
+old = fitz.open(published)                                           # the published one
 new = fitz.open('<the new file>.pdf')
 flat = lambda t: re.sub(r'\s+', ' ', t).strip()
 real = [i for i in range(old.page_count)
@@ -162,12 +175,13 @@ In order:
    always does) and the issue was Haiku-extracted, edit those lines in the
    article's `raw.html` and set `_manual_html` with a dated note so pipe1
    never re-extracts over the hand edit. pipe1d issues rerun pipe1d instead.
-3. **If a re-typeset PDF arrived**: diff it (§1b), replace
-   `backfill/private/input/<vol>.<iss>.pdf`, re-split
-   (`split_issue.sh <input pdf>`). Then text-diff the splits against git —
-   only the corrected article may differ. The other 19 PDFs will still churn
-   at the byte level (PyMuPDF saves aren't deterministic): `git checkout`
-   them rather than committing noise.
+3. **If a re-typeset PDF arrived**: diff it (§1b), replace the print issue
+   with `private/tools/pdfs.sh add <new pdf> input/<vol>.<iss>.pdf`, re-split
+   to scratch (`split_issue.sh`, Harbour's pipeline). Then text-diff the
+   splits against the current ones — only the corrected article may differ.
+   The other 19 PDFs will still churn at the byte level (PyMuPDF saves aren't
+   deterministic): `pdfs add` only the corrected article's split, so the
+   manifest diff shows the one real change.
 4. **pipe2→pipe6 as a block** — all of §4's rules apply (never pipe4 alone;
    reconcile per-article ref counts before and after).
 5. **Patch OJS** — dev first when the dev stack is up, else dry-run against
@@ -300,6 +314,11 @@ the issue. Add just the new one. First used for 19 book reviews in November
 ```bash
 backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf
 ```
+
+The split runs in Harbour's pipeline now. Record each split PDF it writes with
+`private/tools/pdfs.sh add <file> output/<vol>.<iss>/<seq>-<slug>.pdf`: pipe6
+embeds the PDF galley from the store and stops, naming the path and hash, if a
+split listed in toc.json cannot be read.
 
 Check the report: every article should verify, and each split PDF should end on
 its author's byline or its reference list — not part-way through, and not

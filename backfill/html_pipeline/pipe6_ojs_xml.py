@@ -34,7 +34,7 @@ except ImportError:
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 from backfill.lib.doi_validate import check_volume_dir  # noqa: E402
-from backfill.lib.paths import load_toc  # noqa: E402
+from backfill.lib.paths import MissingPdf, load_toc, resolve_pdf  # noqa: E402
 
 
 # Section config: ref, title, abbreviation, access_status, seq
@@ -167,15 +167,16 @@ def encode_pdf(pdf_path):
         return base64.b64encode(f.read()).decode('ascii')
 
 
-def generate_cover_image(toc_json_path, vol, iss):
+def generate_cover_image(toc_json_path, vol, iss, required=True):
     """Extract first page of the issue PDF as a JPEG for the cover image.
 
-    Returns (filename, base64_data) or (None, None) if not available.
+    Returns (filename, base64_data), or (None, None) without PyMuPDF or, when
+    not ``required`` (a --no-issue-galley run), without an issue PDF.
     """
     if fitz is None or not toc_json_path:
         return None, None
 
-    prepared_pdf = find_issue_pdf(toc_json_path, vol, iss)
+    prepared_pdf = find_issue_pdf(toc_json_path, vol, iss, required=required)
     if not prepared_pdf:
         return None, None
 
@@ -191,22 +192,31 @@ def generate_cover_image(toc_json_path, vol, iss):
     return filename, b64_data
 
 
-def find_issue_pdf(toc_json_path, vol, iss):
-    """Find the source whole-issue PDF in backfill/private/input/.
+def find_issue_pdf(toc_json_path, vol, iss, required=True):
+    """Find the source whole-issue PDF: ``input/<vol.iss>.pdf`` (or ``<vol>.pdf``)
+    beside the output folder, through the manifest and store when there is one.
 
-    Returns the path or None if not found.
+    Returns the file holding its bytes. Raises MissingPdf when neither name is
+    in the tree or the manifest, or when the manifest lists it and the store
+    does not hold it. With ``required`` False an issue with no print PDF in
+    the corpus returns None; a listed PDF missing from the store still raises.
     """
     if not toc_json_path:
         return None
     issue_dir = os.path.dirname(os.path.abspath(toc_json_path))
     project_root = os.path.dirname(os.path.dirname(issue_dir))
     vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
-    prepared_pdf = os.path.join(project_root, 'input', f'{vol_iss}.pdf')
-    if not os.path.exists(prepared_pdf):
-        prepared_pdf = os.path.join(project_root, 'input', f'{vol}.pdf')
-    if not os.path.exists(prepared_pdf):
+    tried = []
+    for name in dict.fromkeys((vol_iss, str(vol))):
+        candidate = os.path.join(project_root, 'input', f'{name}.pdf')
+        tried.append(candidate)
+        found = resolve_pdf(candidate, required=False)
+        if found:
+            return found
+    if not required:
         return None
-    return prepared_pdf
+    raise MissingPdf(f'no source PDF for the issue galley of {vol_iss}: tried '
+                     f'{" and ".join(tried)} (--no-issue-galley to build without it)')
 
 
 def generate_issue_galley(toc_json_path, vol, iss, date_published):
@@ -224,8 +234,8 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
     vol_iss = f'{vol}.{iss}' if iss not in (0, '0') else str(vol)
 
     # Try pre-saved cleaned PDF first (in the issue's own output folder)
-    presaved_pdf = os.path.join(issue_dir, 'issue-galley.pdf')
-    if os.path.exists(presaved_pdf):
+    presaved_pdf = resolve_pdf(os.path.join(issue_dir, 'issue-galley.pdf'), required=False)
+    if presaved_pdf:
         with open(presaved_pdf, 'rb') as f:
             clean_pdf = f.read()
         clean_size = len(clean_pdf)
@@ -244,9 +254,6 @@ def generate_issue_galley(toc_json_path, vol, iss, date_published):
             return []
 
         source_pdf = find_issue_pdf(toc_json_path, vol, iss)
-        if not source_pdf:
-            print(f"WARNING: No source PDF found for issue galley (vol {vol} iss {iss})", file=sys.stderr)
-            return []
 
         try:
             doc = fitz.open(source_pdf)
@@ -518,8 +525,13 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
         author_pairs = []
 
     # PDF file
+    # pdf_path is the tree path (its sibling .jats.xml and .galley.html are
+    # read off it); pdf_bytes is where the PDF itself is, which after the
+    # cut-over is the store. A listed PDF that cannot be read raises
+    # MissingPdf rather than quietly building an article with no galleys.
     pdf_path = article.get('split_pdf')
-    has_pdf = pdf_path and os.path.exists(pdf_path)
+    pdf_bytes = resolve_pdf(pdf_path) if pdf_path else None
+    has_pdf = bool(pdf_bytes)
 
     # Sequential IDs for file references within the XML (placeholders, OJS assigns its own)
     # Publisher-id (OJS submission_id) lives in JATS only — restore_ids.py applies it post-import
@@ -543,8 +555,8 @@ def generate_article_xml(article, article_idx, date_published, indent='      ', 
     # Submission file (PDF)
     if has_pdf:
         pdf_name = escape(os.path.basename(pdf_path))
-        pdf_size = os.path.getsize(pdf_path)
-        pdf_b64 = encode_pdf(pdf_path)
+        pdf_size = os.path.getsize(pdf_bytes)
+        pdf_b64 = encode_pdf(pdf_bytes)
 
         lines.append(f'{i2}<submission_file xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
                      f' id="{submission_file_id}" created_at="{date_published}"'
@@ -851,7 +863,8 @@ def generate_xml(toc_data, toc_json_path=None, skip_issue_galley=False, only=Non
     lines.append(f'    </sections>')
 
     # Cover image (first page of issue PDF)
-    cover_filename, cover_b64 = (None, None) if only else generate_cover_image(toc_json_path, vol, iss)
+    cover_filename, cover_b64 = (None, None) if only else generate_cover_image(
+        toc_json_path, vol, iss, required=not skip_issue_galley)
     if cover_filename and cover_b64:
         lines.append(f'    <covers>')
         lines.append(f'      <cover locale="en">')
@@ -957,8 +970,12 @@ def main():
         pdfs = sum(1 for a in toc_data['articles'] if a.get('split_pdf'))
         print(f"PDFs to embed: {pdfs}", file=sys.stderr)
 
-    xml = generate_xml(toc_data, toc_json_path=args.toc_json,
-                       skip_issue_galley=args.no_issue_galley, only=only)
+    try:
+        xml = generate_xml(toc_data, toc_json_path=args.toc_json,
+                           skip_issue_galley=args.no_issue_galley, only=only)
+    except MissingPdf as e:
+        print(f"ERROR: missing PDF, no import XML written: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Validate generated XML
     try:

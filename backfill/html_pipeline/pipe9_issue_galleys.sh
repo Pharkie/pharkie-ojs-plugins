@@ -18,6 +18,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+RESOLVE="$PROJECT_DIR/backfill/lib/paths.py"
 HOST=""
 DRY_RUN=""
 REPLACE=""
@@ -117,15 +118,35 @@ print(f'{vol} {iss} {date}')
     VOL_ISS="$VOL"
   fi
 
-  # Find source PDF
-  SOURCE_PDF="$PROJECT_DIR/backfill/private/input/${VOL_ISS}.pdf"
-  if [ ! -f "$SOURCE_PDF" ]; then
-    SOURCE_PDF="$PROJECT_DIR/backfill/private/input/${VOL}.pdf"
-  fi
-  if [ ! -f "$SOURCE_PDF" ]; then
-    echo "SKIP: No source PDF for $VOL_ISS"
-    SKIPPED=$((SKIPPED + 1))
+  # Find the PDF: the presaved issue-galley.pdf if the corpus has one, else
+  # the print issue. Both go through lib/paths.py, which reads the manifest and
+  # store after the cut-over. A missing PDF is a FAIL naming the path and hash,
+  # never a skip.
+  PRESAVED=""
+  SOURCE_PDF=""
+  if ! PRESAVED=$(python3 "$RESOLVE" resolve --optional "$ISSUE_DIR/issue-galley.pdf"); then
+    echo "FAIL: $VOL_ISS — presaved issue galley listed but unreadable (above)"
+    FAILED=$((FAILED + 1))
     continue
+  fi
+  if [ -z "$PRESAVED" ]; then
+    for NAME in "${VOL_ISS}" "${VOL}"; do
+      if ! SOURCE_PDF=$(python3 "$RESOLVE" resolve --optional "$PROJECT_DIR/backfill/private/input/${NAME}.pdf"); then
+        SOURCE_PDF="!"
+        break
+      fi
+      [ -n "$SOURCE_PDF" ] && break
+    done
+    if [ "$SOURCE_PDF" = "!" ]; then
+      echo "FAIL: $VOL_ISS — source PDF listed but unreadable (above)"
+      FAILED=$((FAILED + 1))
+      continue
+    fi
+    if [ -z "$SOURCE_PDF" ]; then
+      echo "FAIL: $VOL_ISS — no source PDF: neither backfill/private/input/${VOL_ISS}.pdf nor ${VOL}.pdf is in the tree or the manifest"
+      FAILED=$((FAILED + 1))
+      continue
+    fi
   fi
 
   # Find issue ID in OJS
@@ -158,9 +179,8 @@ print(f'{vol} {iss} {date}')
   fi
 
   # Use pre-saved cleaned PDF if available, otherwise re-save from source
-  PRESAVED="$ISSUE_DIR/issue-galley.pdf"
   CLEAN_PDF="/tmp/issue-galley-${VOL_ISS}.pdf"
-  if [ -f "$PRESAVED" ]; then
+  if [ -n "$PRESAVED" ]; then
     cp "$PRESAVED" "$CLEAN_PDF"
     CLEAN_SIZE=$(wc -c < "$CLEAN_PDF" | tr -d ' ')
     RESULT="${CLEAN_SIZE}b (pre-saved)"
@@ -243,3 +263,4 @@ done
 
 echo ""
 echo "Done: $ADDED added, $SKIPPED skipped, $FAILED failed"
+[ "$FAILED" -eq 0 ] || exit 1

@@ -3,6 +3,18 @@
 **Status: PREPARED, NOT RUN.** Every command below is destructive in a way that
 needs a decision first. Nothing here has been executed.
 
+**Journal PDFs, 23 Nov 2026: they are leaving git too.** Adam decided the print
+issues (`backfill/input/*.pdf`) and the per-article PDFs
+(`backfill/output/**/*.pdf`) get their own data management: a content-addressed
+store on the Mac (`$SEA_JOURNAL_PDFS/store/<sha256>.pdf`, default
+`~/dev/SEA/journal-pdfs`), a copy in R2, and `backfill/pdfs.sha256` in git
+(an LFS oid is the content sha256). A new PDF goes in with
+`tools/pdfs.sh add` in sea-ojs-private. The OJS stages here already read either
+layout through `backfill/lib/paths.py`. Untracking them (`git rm --cached`, the
+two `.gitattributes` lines) is a later cut-over in sea-ojs-private; their past
+LFS objects stay billed until history is cleared, which waits for a full restore
+from R2. The "should stay" below predates this.
+
 ## What is actually stored
 
 Measured 2026-08-29 from a pointer-only clone (`GIT_LFS_SKIP_SMUDGE=1`), across

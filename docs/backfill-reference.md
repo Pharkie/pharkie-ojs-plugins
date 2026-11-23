@@ -66,6 +66,30 @@ backfill/private/output/37.1/
     16-book-review-why-in-the-world-not.pdf
 ```
 
+### Where the journal PDFs are
+
+The print issues (`input/<vol.iss>.pdf`) and the per-article PDFs
+(`output/<vol.iss>/*.pdf`, including a presaved `issue-galley.pdf`) are leaving
+git; the galleys, JATS and toc.json stay. After the cut-over in sea-ojs-private,
+`backfill/pdfs.sha256` lists every PDF (shasum format, paths relative to
+`backfill/`) and the bytes are in `$SEA_JOURNAL_PDFS/store/<sha256>.pdf`
+(default `~/dev/SEA/journal-pdfs`). A PDF goes in with
+`private/tools/pdfs.sh add <file> <relpath>`, never by copying a file into the
+tree.
+
+Every stage here reads a PDF through `backfill/lib/paths.py` (`resolve_pdf`), so
+it works with either layout:
+
+1. the checkout's own manifest lists the path: the store file, re-hashed;
+2. else the file in the tree (before the cut-over); an un-smudged LFS pointer is
+   read from the store by its oid;
+3. neither, or the store lacks the listed hash: the stage **fails**, naming the
+   path and hash. Nothing skips a missing PDF.
+
+`split_pdf` in toc.json stays the tree path: the `.jats.xml` and `.galley.html`
+beside it are found from it. To see where a PDF's bytes are:
+`python3 backfill/lib/paths.py resolve <tree path>`.
+
 ### toc.json schema
 
 Top-level fields:
@@ -243,10 +267,12 @@ After every run pipe7 chowns `/var/www/files/journals` and the Laravel cache to 
 
 ### pipe9_issue_galleys.sh
 
-Attaches whole-issue PDF galleys directly via SQL + file copy (no XML import). Skips issues that already have a galley. Source PDF resolution, in order:
+Attaches whole-issue PDF galleys directly via SQL + file copy (no XML import). Skips issues that already have a galley (unless `--replace`). Source PDF resolution, in order, each through the manifest and store (above):
 
-1. `backfill/private/output/<vol.iss>/issue-galley.pdf` — **presave slot**: a hand-corrected or re-typeset issue PDF placed here takes precedence and survives pipeline reruns. Use this for edited issue PDFs (e.g. 33.2's redacted/re-typeset version) — the archival `backfill/input/` scan stays untouched.
-2. `backfill/private/input/<vol.iss>.pdf` — the archival scan, cleaned via PyMuPDF on the fly.
+1. `backfill/private/output/<vol.iss>/issue-galley.pdf` — **presave slot**: a hand-corrected or re-typeset issue PDF takes precedence and survives pipeline reruns. Use this for edited issue PDFs (e.g. 33.2's redacted/re-typeset version) — the archival print issue stays untouched.
+2. `backfill/private/input/<vol.iss>.pdf` (or `<vol>.pdf`) — the archival scan, cleaned via PyMuPDF on the fly.
+
+An issue with neither, or whose listed PDF is not in the store, is a FAIL naming the path and hash, and the script exits non-zero. pipe6 behaves the same: a missing article PDF or print issue stops it before `import.xml` is written (`--no-issue-galley` builds without the print issue).
 
 Replacing an already-attached issue galley is manual: overwrite `files/journals/1/issues/<issue_id>/public/vol-X-iss-Y.pdf` in the container (chown `www-data`) — see issues log #37.
 
@@ -317,7 +343,7 @@ Two things to know before adding a heading here:
 ## Fixing a bad split or HTML galley
 
 1. Fix `pdf_page_start`/`pdf_page_end` in `backfill/private/output/<vol>.<iss>/toc.json`
-2. Re-split: `backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf`
+2. Re-split: `backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf` (Harbour's pipeline now; after the cut-over, record each re-cut PDF with `private/tools/pdfs.sh add <file> output/<vol>.<iss>/<seq>-<slug>.pdf`)
 3. Delete the affected galley file(s): `rm backfill/private/output/<vol>.<iss>/<seq>-<slug>.galley.html`
 4. Re-generate HTML: `python3 backfill/html_pipeline/pipe1_haiku_html.py backfill/private/output/<vol>.<iss>/toc.json --yes`
 5. Re-generate XML: `python3 backfill/html_pipeline/pipe6_ojs_xml.py backfill/private/output/<vol>.<iss>/toc.json`

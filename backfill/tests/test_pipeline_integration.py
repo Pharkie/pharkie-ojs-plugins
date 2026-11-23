@@ -272,7 +272,9 @@ class TestXmlWithEnrichment:
             with open(toc_path, 'w') as f:
                 json.dump(toc_data, f)
 
-            xml_str = generate_xml(toc_data, toc_json_path=toc_path)
+            # No print issue in this folder: a missing issue PDF now fails
+            # pipe6 loudly, so build without the issue galley.
+            xml_str = generate_xml(toc_data, toc_json_path=toc_path, skip_issue_galley=True)
             root = ET.fromstring(xml_str)
             articles = root.findall('.//pkp:article', NS)
             citations = articles[1].findall('.//pkp:citation', NS)
