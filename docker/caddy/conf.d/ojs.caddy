@@ -34,7 +34,8 @@
 		header_up X-Forwarded-For {client_ip}
 	}
 
-	# Retired joint book reviews (sea-ojs-private backfill/retired-dois.tsv): each
+	# Retired items (sea-ojs-private backfill/retired-dois.tsv: joint book reviews
+	# and two "Book reviews" stubs that repeated a review's opening): each
 	# retired item's page and galley downloads go to the kept review's page.
 	redir /ea/article/view/8501 /ea/article/view/8500 301
 	redir /ea/article/view/8501/* /ea/article/view/8500 301
@@ -90,6 +91,18 @@
 	redir /index.php/ea/article/view/8982 /ea/article/view/8981 301
 	redir /index.php/ea/article/view/8982/* /ea/article/view/8981 301
 	redir /index.php/ea/article/download/8982/* /ea/article/view/8981 301
+	redir /ea/article/view/9100 /ea/article/view/9101 301
+	redir /ea/article/view/9100/* /ea/article/view/9101 301
+	redir /ea/article/download/9100/* /ea/article/view/9101 301
+	redir /index.php/ea/article/view/9100 /ea/article/view/9101 301
+	redir /index.php/ea/article/view/9100/* /ea/article/view/9101 301
+	redir /index.php/ea/article/download/9100/* /ea/article/view/9101 301
+	redir /ea/article/view/9141 /ea/article/view/9142 301
+	redir /ea/article/view/9141/* /ea/article/view/9142 301
+	redir /ea/article/download/9141/* /ea/article/view/9142 301
+	redir /index.php/ea/article/view/9141 /ea/article/view/9142 301
+	redir /index.php/ea/article/view/9141/* /ea/article/view/9142 301
+	redir /index.php/ea/article/download/9141/* /ea/article/view/9142 301
 	redir /ea/article/view/9164 /ea/article/view/9163 301
 	redir /ea/article/view/9164/* /ea/article/view/9163 301
 	redir /ea/article/download/9164/* /ea/article/view/9163 301
