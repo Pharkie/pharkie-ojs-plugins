@@ -50,8 +50,9 @@ writes its line in `backfill/pdfs.sha256`; commit that line. Every PDF this
 runbook writes (the print issue, each split, a presaved `issue-galley.pdf`) goes
 in the same way, with its path relative to `backfill/`. The stages read a PDF
 through `backfill/lib/paths.py`, which takes the manifest's hash first and fails,
-naming the path and hash, when the store lacks it. Until sea-ojs-private's
-cut-over lands, a file copied to `backfill/private/input/` still works.
+naming the path and hash, when the store lacks it. Since the cut-over (23 Nov)
+nothing in `sea-ojs-private` is tracked as a PDF, so a file copied into the tree
+is ignored by git and is not the record: use `pdfs add`.
 
 Write `backfill/private/output/<vol>.<iss>/toc.json` following
 [the TOC guide](backfill-toc-guide.md). Note the optional `access` field: an
@@ -312,7 +313,7 @@ the issue. Add just the new one. First used for 19 book reviews in November
 ## 2. Split into per-article PDFs
 
 ```bash
-backfill/split_pipeline/split_issue.sh backfill/private/input/<vol>.<iss>.pdf
+backfill/split_pipeline/split_issue.sh "$(private/tools/pdfs.sh path input/<vol>.<iss>.pdf)"
 ```
 
 The split runs in Harbour's pipeline now. Record each split PDF it writes with
