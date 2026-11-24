@@ -1,7 +1,19 @@
 # Reclaiming the Git LFS storage in `sea-ojs-private`
 
-**Status: PREPARED, NOT RUN.** Every command below is destructive in a way that
-needs a decision first. Nothing here has been executed.
+**Status: RUN TWICE: 29 Aug 2026 (the database dumps) and 24 Nov 2026 (everything: the
+repository now holds NO LFS objects).** On 24 Nov the repo was rebuilt alongside as
+`sea-ojs-private-next` with the SAME commit IDs, pushed with `GIT_LFS_SKIP_PUSH=1`; Adam deleted the old
+one and the new one was renamed into place. The 29 Aug run had been undone by the branch
+`archive/pre-lfs-rewrite-main`, pushed back with all 139 dumps (10.05 GB). Before the delete: a FULL
+restore of the 1,489 current PDFs from R2, and the 210 superseded versions saved to the store and R2
+(`backfill/pdfs-history.sha256` in sea-ojs-private); PR pages #1-#191 are in its `docs/pr-archive/`.
+
+Lessons from 24 Nov: never push an archive branch of a rewritten history (it brings its LFS objects
+back); a commit before sea-ojs-private #185 needs `git lfs install --local --skip-smudge` once per
+clone (the pointers resolve from the store by hash); Renovate opens an onboarding PR on any new repo
+within minutes; `gh` needs the `delete_repo` scope to delete (Adam deleted in the web UI); reserve the
+old PR numbers on the new repo so docs that say "#N" stay right. The run list is
+`~/dev/SEA/repo-v2/SWITCH.md`. The sections below are the 29 Aug record.
 
 **Journal PDFs, 23 Nov 2026: they are leaving git too.** Adam decided the print
 issues (`backfill/input/*.pdf`) and the per-article PDFs
